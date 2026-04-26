@@ -174,3 +174,7 @@ PY
 
 LUNARWING_BASE_DIR="$BASE" ./target/debug/ironclaw run
 ```
+
+### See: ic/testing/lunarwing-xmpp/README.md for more information and latest instructions
+
+#### also check REPLv2_Client_and_Server.md for information on REPLv2 Server and Client repos...
