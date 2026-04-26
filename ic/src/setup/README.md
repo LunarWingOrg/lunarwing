@@ -78,9 +78,10 @@ and runs migrations silently. Falls back to interactive mode only when
 just the postgres feature is compiled and no `DATABASE_URL` is set.
 
 **`auto_setup_security()`:** Checks for existing `SECRETS_MASTER_KEY`
-env var or OS keychain key. If neither exists, generates a new key and
-stores it in the keychain (macOS) or env var (Linux/other). Zero prompts
-except unavoidable macOS keychain dialogs.
+env var or OS keychain key. On macOS it still prefers the OS keychain. On
+Linux/other it now defaults to an env-backed key in the selected instance
+`.env`, reusing and copying an existing keychain key there when one already
+exists. Zero prompts except unavoidable macOS keychain dialogs.
 
 **`.env` preservation (fix for #751):** `write_bootstrap_env()` now uses
 `upsert_bootstrap_vars()` instead of `save_bootstrap_env()`, preserving
@@ -149,6 +150,32 @@ For non-interactive prep, use:
 ```bash
 scripts/setup-instance.sh --database postgres --database-url 'postgres://user:pass@host:5432/db'
 ```
+
+The setup script can also preseed the most common runtime identity and secrets
+values:
+
+```bash
+scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing \
+  --database postgres \
+  --database-url 'postgres://user:pass@host:5432/db' \
+  --agent-name lunarwing \
+  --gateway-token 'replace-me-gateway-token' \
+  --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+```
+
+What each option writes:
+- `--agent-name` → `[agent].name` in `config.toml`
+- `--gateway-token` → `GATEWAY_AUTH_TOKEN` in `.env`
+- `--secrets-master-key` → `SECRETS_MASTER_KEY` in `.env`
+
+Use the env-backed master key when you want secret-management helpers and the
+encrypted secrets store to work without relying on the OS keychain. The value
+must be a 64-character hex string.
+
+On Linux/non-macOS, fresh onboarding now defaults to this env-backed mode and
+writes `SECRETS_MASTER_KEY` to the selected instance `.env` automatically.
+macOS retains the keychain-first behavior.
 
 ---
 

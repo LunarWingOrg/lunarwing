@@ -13,6 +13,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 
 #[cfg(feature = "postgres")]
@@ -203,6 +204,39 @@ pub struct SetupWizard {
 impl SetupWizard {
     fn owner_id(&self) -> &str {
         &self.owner_id
+    }
+
+    fn bootstrap_env_path_display() -> String {
+        crate::bootstrap::ironclaw_env_path().display().to_string()
+    }
+
+    fn generate_env_master_key_hex() -> String {
+        if let Ok(output) = Command::new("openssl").args(["rand", "-hex", "32"]).output()
+            && output.status.success()
+        {
+            let key_hex = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if key_hex.len() == 64 && key_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return key_hex;
+            }
+        }
+
+        crate::secrets::keychain::generate_master_key_hex()
+    }
+
+    fn configure_env_master_key(&mut self, key_hex: String) -> Result<(), SetupError> {
+        self.secrets_crypto = Some(Arc::new(
+            SecretsCrypto::new(SecretString::from(key_hex.clone()))
+                .map_err(|e| SetupError::Config(e.to_string()))?,
+        ));
+        crate::config::inject_single_var("SECRETS_MASTER_KEY", &key_hex);
+        self.settings.secrets_master_key_hex = Some(key_hex);
+        self.settings.secrets_master_key_source = KeySource::Env;
+        Ok(())
+    }
+
+    fn configure_env_master_key_from_bytes(&mut self, key_bytes: &[u8]) -> Result<(), SetupError> {
+        let key_hex: String = key_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        self.configure_env_master_key(key_hex)
     }
 
     fn fallback_with_default_owner(
@@ -1092,6 +1126,16 @@ impl SetupWizard {
         // (each access triggers macOS system dialogs).
         print_info("Checking OS keychain for existing master key...");
         if let Ok(keychain_key_bytes) = crate::secrets::keychain::get_master_key().await {
+            if !cfg!(target_os = "macos") {
+                print_info(&format!(
+                    "Existing master key found in OS keychain. Copying it to {}",
+                    Self::bootstrap_env_path_display()
+                ));
+                self.configure_env_master_key_from_bytes(&keychain_key_bytes)?;
+                print_success("Security configured (env var)");
+                return Ok(());
+            }
+
             let key_hex: String = keychain_key_bytes
                 .iter()
                 .map(|b| format!("{:02x}", b))
@@ -1110,6 +1154,23 @@ impl SetupWizard {
             // User declined the existing key; clear the cached crypto so a fresh
             // key can be generated below.
             self.secrets_crypto = None;
+        }
+
+        if !cfg!(target_os = "macos") {
+            let key_hex = Self::generate_env_master_key_hex();
+            self.configure_env_master_key(key_hex.clone())?;
+
+            println!();
+            print_info(&format!(
+                "Master key generated and will be saved to {}",
+                Self::bootstrap_env_path_display()
+            ));
+            println!();
+            println!("  SECRETS_MASTER_KEY={}", key_hex);
+            println!();
+            print_info("You can also copy this to another .env file or CI secrets.");
+            print_success("Configured for environment variable");
+            return Ok(());
         }
 
         // Offer options
@@ -1150,23 +1211,14 @@ impl SetupWizard {
             }
             1 => {
                 // Env var mode — generate key, init crypto, and persist to .env
-                let key_hex = crate::secrets::keychain::generate_master_key_hex();
-
-                // Initialize crypto so subsequent wizard steps (channel setup,
-                // API key storage) can encrypt secrets immediately.
-                self.secrets_crypto = Some(Arc::new(
-                    SecretsCrypto::new(SecretString::from(key_hex.clone()))
-                        .map_err(|e| SetupError::Config(e.to_string()))?,
-                ));
-
-                // Make visible to optional_env() for any subsequent config resolution.
-                crate::config::inject_single_var("SECRETS_MASTER_KEY", &key_hex);
-
-                // Store hex for write_bootstrap_env to persist to ~/.ironclaw/.env.
-                self.settings.secrets_master_key_hex = Some(key_hex.clone());
+                let key_hex = Self::generate_env_master_key_hex();
+                self.configure_env_master_key(key_hex.clone())?;
 
                 println!();
-                print_info("Master key generated and will be saved to ~/.ironclaw/.env");
+                print_info(&format!(
+                    "Master key generated and will be saved to {}",
+                    Self::bootstrap_env_path_display()
+                ));
                 println!();
                 println!("  SECRETS_MASTER_KEY={}", key_hex);
                 println!();
@@ -1272,6 +1324,25 @@ impl SetupWizard {
             return Ok(());
         }
 
+        if !cfg!(target_os = "macos") {
+            if let Ok(keychain_key_bytes) = crate::secrets::keychain::get_master_key().await {
+                self.configure_env_master_key_from_bytes(&keychain_key_bytes)?;
+                print_success(&format!(
+                    "Master key copied to {}",
+                    Self::bootstrap_env_path_display()
+                ));
+                return Ok(());
+            }
+
+            let key_hex = Self::generate_env_master_key_hex();
+            self.configure_env_master_key(key_hex)?;
+            print_success(&format!(
+                "Master key stored in {}",
+                Self::bootstrap_env_path_display()
+            ));
+            return Ok(());
+        }
+
         // Try existing keychain key (no prompts — get_master_key may show
         // OS dialogs on macOS, but that's unavoidable for keychain access)
         if let Ok(keychain_key_bytes) = crate::secrets::keychain::get_master_key().await {
@@ -1306,15 +1377,12 @@ impl SetupWizard {
         }
 
         // Keychain unavailable — fall back to env var mode
-        let key_hex = crate::secrets::keychain::generate_master_key_hex();
-        self.secrets_crypto = Some(Arc::new(
-            SecretsCrypto::new(SecretString::from(key_hex.clone()))
-                .map_err(|e| SetupError::Config(e.to_string()))?,
+        let key_hex = Self::generate_env_master_key_hex();
+        self.configure_env_master_key(key_hex)?;
+        print_success(&format!(
+            "Master key stored in {}",
+            Self::bootstrap_env_path_display()
         ));
-        crate::config::inject_single_var("SECRETS_MASTER_KEY", &key_hex);
-        self.settings.secrets_master_key_hex = Some(key_hex);
-        self.settings.secrets_master_key_source = KeySource::Env;
-        print_success("Master key stored in ~/.ironclaw/.env");
         Ok(())
     }
 

@@ -16,6 +16,8 @@ LLM_BACKEND="openai_compatible"
 AGENT_NAME="lunarwing"
 TIMEZONE="America/New_York"
 LLM_API_KEY=""
+GATEWAY_TOKEN=""
+SECRETS_MASTER_KEY=""
 BIN_PATH=""
 RUN_ONBOARD=0
 FORCE=0
@@ -38,7 +40,9 @@ Options:
   --llm-base-url URL         Default: http://192.168.1.157:3002
   --llm-model MODEL          Default: tensorzero::function_name::ironclaw
   --llm-api-key KEY          Optional. Use "unneeded" for placeholder-only endpoints
+  --gateway-token TOKEN      Optional. Writes GATEWAY_AUTH_TOKEN to .env
   --agent-name NAME          Default: lunarwing
+  --secrets-master-key HEX   Optional 64-hex env master key for encrypted secrets
   --timezone TZ              Default: America/New_York
   --bin PATH                 Path to ironclaw binary. Auto-detected if omitted
   --run-onboard              Launch `ironclaw onboard --quick` after seeding files
@@ -55,6 +59,8 @@ Examples:
     --base-dir /srv/lunarwing-dev \
     --database libsql \
     --libsql-path /srv/lunarwing-dev/ironclaw.db \
+    --gateway-token 'replace-me-gateway-token' \
+    --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
     --run-onboard
 EOF
 }
@@ -66,6 +72,12 @@ say() {
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
+}
+
+validate_hex_master_key() {
+  if [[ -n "$SECRETS_MASTER_KEY" && ! "$SECRETS_MASTER_KEY" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+    die "--secrets-master-key must be a 64-character hex string"
+  fi
 }
 
 escape_env_value() {
@@ -124,6 +136,12 @@ write_env_file() {
     if [[ -n "$LLM_API_KEY" ]]; then
       printf 'LLM_API_KEY=%s\n' "$(escape_env_value "$LLM_API_KEY")"
     fi
+    if [[ -n "$GATEWAY_TOKEN" ]]; then
+      printf 'GATEWAY_AUTH_TOKEN=%s\n' "$(escape_env_value "$GATEWAY_TOKEN")"
+    fi
+    if [[ -n "$SECRETS_MASTER_KEY" ]]; then
+      printf 'SECRETS_MASTER_KEY=%s\n' "$(escape_env_value "$SECRETS_MASTER_KEY")"
+    fi
   } >"$path"
 
   chmod 600 "$path" 2>/dev/null || true
@@ -179,6 +197,16 @@ print_summary() {
     say "  libsql -> $LIBSQL_PATH"
   fi
   say ""
+  if [[ -n "$GATEWAY_TOKEN" ]]; then
+    say "Gateway auth token:"
+    say "  configured in $BASE_DIR/.env"
+    say ""
+  fi
+  if [[ -n "$SECRETS_MASTER_KEY" ]]; then
+    say "Secrets master key:"
+    say "  configured in $BASE_DIR/.env"
+    say ""
+  fi
 
   if [[ -n "$bin" ]]; then
     say "Next steps:"
@@ -246,9 +274,19 @@ while [[ $# -gt 0 ]]; do
       LLM_API_KEY="$2"
       shift 2
       ;;
+    --gateway-token)
+      [[ $# -ge 2 ]] || die "--gateway-token requires a value"
+      GATEWAY_TOKEN="$2"
+      shift 2
+      ;;
     --agent-name)
       [[ $# -ge 2 ]] || die "--agent-name requires a value"
       AGENT_NAME="$2"
+      shift 2
+      ;;
+    --secrets-master-key)
+      [[ $# -ge 2 ]] || die "--secrets-master-key requires a value"
+      SECRETS_MASTER_KEY="$2"
       shift 2
       ;;
     --timezone)
@@ -294,6 +332,8 @@ fi
 if [[ "$DATABASE_KIND" == "libsql" && -z "$LIBSQL_PATH" ]]; then
   LIBSQL_PATH="$BASE_DIR/ironclaw.db"
 fi
+
+validate_hex_master_key
 
 mkdir -p "$BASE_DIR"
 write_env_file

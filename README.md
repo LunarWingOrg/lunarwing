@@ -76,6 +76,21 @@ ic/scripts/setup-instance.sh \
   --run-onboard
 ```
 
+To preseed the instance name, gateway token, and env-backed secrets master key
+as part of setup:
+
+```bash
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing-secure \
+  --database postgres \
+  --database-url 'postgres://user:pass@db:5432/lunarwing' \
+  --agent-name lunarwing \
+  --gateway-token 'replace-me-gateway-token' \
+  --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+  --llm-api-key unneeded \
+  --run-onboard
+```
+
 This writes:
 - `$LUNARWING_BASE_DIR/config.toml`
 - `$LUNARWING_BASE_DIR/.env`
@@ -89,6 +104,19 @@ Current seeded config defaults:
 - `openai_compatible_base_url = "http://192.168.1.157:3002"`
 - `selected_model = "tensorzero::function_name::ironclaw"`
 - `agent.name = "lunarwing"`
+
+Useful setup-time values:
+- `--agent-name` writes `[agent].name` to `config.toml`
+- `--gateway-token` writes `GATEWAY_AUTH_TOKEN` to `.env`
+- `--secrets-master-key` writes `SECRETS_MASTER_KEY` to `.env`
+
+`SECRETS_MASTER_KEY` must be a 64-character hex string. Use this when you want
+the encrypted secrets store and secret-management scripts to work without
+depending on the OS keychain.
+
+During `ironclaw onboard --quick`, Linux/non-macOS setups now generate and
+persist this value automatically to the selected instance `.env` when it is
+missing. macOS still prefers keychain storage by default.
 
 Those files are created automatically for a missing base dir on normal startup
 too, not only through the onboarding wizard.
