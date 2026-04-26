@@ -25,7 +25,7 @@ HKDF_INFO = b"near-agent-secrets-v1"
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://ironclaw@127.0.0.1:5432/ironclaw"
+    "postgresql://ironclaw:ironclaw@127.0.0.1:5432/ironclaw"
 )
 
 
@@ -36,6 +36,10 @@ def get_connection():
 
 def get_master_key():
     key = os.environ.get("IRONCLAW_MASTER_KEY")
+    if not key:
+        key = os.environ.get("LUNARWING_MASTER_KEY")
+    if not key:
+        key = os.environ.get("SECRETS_MASTER_KEY")
     if not key:
         import subprocess
         try:

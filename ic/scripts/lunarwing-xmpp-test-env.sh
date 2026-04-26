@@ -136,6 +136,14 @@ bridge_bin() {
   printf '%s/bridges/xmpp-bridge/target/%s/xmpp-bridge' "$REPO_ROOT" "$(profile_dir)"
 }
 
+replv2_client_dir() {
+  printf '%s/replv2git/git-ironclaw-unix-socket-client-repo' "$LUNARWING_ROOT"
+}
+
+replv2_client_bin() {
+  printf '%s/target/release/unix-socket-client-v2' "$(replv2_client_dir)"
+}
+
 generate_token() {
   if command -v od >/dev/null 2>&1; then
     dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n'
@@ -501,7 +509,7 @@ proxy_ready() {
   local code
   code="$(curl -sS -o /dev/null -w '%{http_code}' \
     "http://${PROXY_BIND}:${PROXY_PORT}/openai/v1/models" 2>/dev/null || true)"
-  [[ "$code" == "200" ]]
+  [[ -n "$code" && "$code" != "000" ]]
 }
 
 wait_for_proxy() {
@@ -880,6 +888,12 @@ build_bins() {
 
   say "building xmpp-bridge binary: $(bridge_bin)"
   (cd "$REPO_ROOT/bridges/xmpp-bridge" && cargo "${cargo_args[@]}")
+
+  local repl_dir
+  repl_dir="$(replv2_client_dir)"
+  [[ -f "$repl_dir/Cargo.toml" ]] || die "missing REPLv2 client repo at $repl_dir"
+  say "building REPLv2 client binary: $(replv2_client_bin)"
+  (cd "$repl_dir" && cargo build --release)
 
   if [[ "${1:-}" == "--with-wasm" ]]; then
     build_wasm
@@ -1266,6 +1280,11 @@ doctor() {
     say "xmpp-bridge: $(bridge_bin)"
   else
     say "xmpp-bridge: MISSING; run build"
+  fi
+  if [[ -x "$(replv2_client_bin)" ]]; then
+    say "REPLv2 client: $(replv2_client_bin)"
+  else
+    say "REPLv2 client: MISSING; run build"
   fi
   if [[ -f "$(proxy_bin)" ]]; then
     say "ironclaw-proxy: $(proxy_bin)"

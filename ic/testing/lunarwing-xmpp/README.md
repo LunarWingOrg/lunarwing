@@ -177,6 +177,15 @@ scripts/lunarwing-xmpp-test-env.sh gateway-status
 scripts/lunarwing-xmpp-test-env.sh verify
 ```
 
+`build` also compiles the actual REPLv2 client with `cargo build --release`
+from:
+
+- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo`
+
+The expected binary is:
+
+- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo/target/release/unix-socket-client-v2`
+
 If you only want bridge API smoke tests, leave `XMPP_PASSWORD` empty and skip
 live XMPP configuration until later.
 
@@ -608,9 +617,9 @@ Common issues:
   `XMPP_PASSWORD`.
 - If the generated systemd unit points at a missing binary, rerun `build` with
   the same `LUNARWING_TEST_PROFILE` used for `render-systemd`.
-- If `verify` only fails `TensorZero proxy responds at :3002`, the local proxy
-  may still be bound correctly. That check depends on the upstream
-  `TENSORZERO_URL` answering the proxy's `/openai/v1/models` readiness probe.
+- `verify` treats the proxy as healthy when `:3002` returns any HTTP response.
+  That confirms the local shim is running even if the upstream TensorZero
+  service returns `404` or `500` for `GET /openai/v1/models`.
 
 ## 10. Clean Up
 

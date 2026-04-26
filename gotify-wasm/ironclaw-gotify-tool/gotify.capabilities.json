@@ -6,13 +6,13 @@
   "tools": [
     {
       "name": "gotify",
-      "description": "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: Kageho), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}",
+      "description": "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: LunarWing Agent), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}",
       "parameters": {
         "type": "object",
         "properties": {
           "title": {
             "type": "string",
-            "description": "Notification title. Defaults to 'Kageho' if not provided."
+            "description": "Notification title. Defaults to 'LunarWing Agent' if not provided."
           },
           "message": {
             "type": "string",

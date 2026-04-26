@@ -12,8 +12,11 @@ Usage:
   python3 insert_secret.py --list [--user-id default]
 
 Environment:
-  DATABASE_URL  - PostgreSQL connection string (default: postgresql://ironclaw@127.0.0.1:5432/ironclaw)
-  IRONCLAW_MASTER_KEY - master encryption key (or will prompt)
+  DATABASE_URL  - PostgreSQL connection string
+                  (default: postgresql://ironclaw:ironclaw@127.0.0.1:5432/ironclaw)
+  IRONCLAW_MASTER_KEY - master encryption key
+  LUNARWING_MASTER_KEY - alias for the master encryption key
+  SECRETS_MASTER_KEY  - fallback master encryption key if IRONCLAW_MASTER_KEY is unset
 
 Example:
   python3 insert_secret.py gotify_app_token "Axxxxxxxxxx"
@@ -38,7 +41,7 @@ HKDF_INFO = b"near-agent-secrets-v1"
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://ironclaw@127.0.0.1:5432/ironclaw"
+    "postgresql://ironclaw:ironclaw@127.0.0.1:5432/ironclaw"
 )
 
 
@@ -51,6 +54,10 @@ def get_connection():
 def get_master_key():
     """Get master key from environment or prompt."""
     key = os.environ.get("IRONCLAW_MASTER_KEY")
+    if not key:
+        key = os.environ.get("LUNARWING_MASTER_KEY")
+    if not key:
+        key = os.environ.get("SECRETS_MASTER_KEY")
     if not key:
         # Try to read from keychain via secret-tool
         import subprocess

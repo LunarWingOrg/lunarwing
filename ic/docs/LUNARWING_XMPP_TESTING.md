@@ -23,6 +23,11 @@ scripts/lunarwing-xmpp-test-env.sh build
 scripts/lunarwing-xmpp-test-env.sh smoke
 ```
 
+`scripts/lunarwing-xmpp-test-env.sh build` also compiles the real REPLv2
+client with `cargo build --release` from:
+
+- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo`
+
 For a command-by-command setup walkthrough, see
 [`testing/lunarwing-xmpp/README.md`](../testing/lunarwing-xmpp/README.md).
 That guide now also includes copy-paste "Fresh Recreate Recipes" for both the
@@ -345,6 +350,6 @@ Common checks:
   `/api/extensions/tools` as `gotify-tool`.
 - A running system bridge on port `8787` can conflict with the harness bridge.
   Change `XMPP_BRIDGE_BIND` in the test env file when needed.
-- If `verify` only fails `TensorZero proxy responds at :3002`, the local proxy
-  may still be bound correctly. That check depends on the upstream
-  `TENSORZERO_URL` answering the proxy's `/openai/v1/models` readiness probe.
+- `verify` treats the proxy as healthy when `:3002` returns any HTTP response.
+  That confirms the local shim is running even if the upstream TensorZero
+  service returns `404` or `500` for `GET /openai/v1/models`.
