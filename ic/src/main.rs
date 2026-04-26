@@ -460,7 +460,8 @@ async fn async_main() -> anyhow::Result<()> {
     // attach to a running service (e.g. started via systemd).
     #[cfg(unix)]
     if !cli.cli_only {
-        let socket_path = std::env::var("IRONCLAW_SOCKET")
+        let socket_path = std::env::var("LUNARWING_SOCKET")
+            .or_else(|_| std::env::var("IRONCLAW_SOCKET"))
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| {
                 // Prefer $XDG_RUNTIME_DIR (always writable, even on read-only home).

@@ -73,6 +73,8 @@ Edit the generated env files, not the examples.
 The generated `env/lunarwing.env` is already seeded for the common private-lab
 stack used by this harness:
 
+- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
 - `DATABASE_BACKEND=postgres`
 - `DATABASE_SSLMODE=disable`
 - `PGSSLMODE=disable`
@@ -185,6 +187,22 @@ from:
 The expected binary is:
 
 - `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo/target/release/unix-socket-client-v2`
+
+To target the active harness daemon cleanly:
+
+```bash
+scripts/lunarwing-xmpp-test-env.sh repl
+```
+
+The socket filename remains `ironclaw.sock`, but the harness now places it
+under the per-instance `run/` directory, so parallel harness roots do not
+fight over a single global socket path.
+
+You can still pass explicit client flags through the helper:
+
+```bash
+scripts/lunarwing-xmpp-test-env.sh repl -- --socket /tmp/other.sock
+```
 
 If you only want bridge API smoke tests, leave `XMPP_PASSWORD` empty and skip
 live XMPP configuration until later.

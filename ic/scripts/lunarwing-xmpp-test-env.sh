@@ -59,6 +59,7 @@ Commands:
   bridge-status            call authenticated GET /v1/status
   bridge-auth-check        verify missing-token rejection and valid-token status
   lunarwing-status         show pid/log hints for the local LunarWing process
+  repl [-- args]           launch the standalone REPLv2 client for this harness
   smoke                    run bridge start/auth/status smoke test
   configure-bridge [args]  run scripts/xmpp-configure.sh with the test env
   rate-limit [args]        run scripts/xmpp-rate-limit.sh with the test env
@@ -144,6 +145,10 @@ replv2_client_bin() {
   printf '%s/target/release/unix-socket-client-v2' "$(replv2_client_dir)"
 }
 
+harness_socket_path() {
+  printf '%s/ironclaw.sock' "$RUN_DIR"
+}
+
 generate_token() {
   if command -v od >/dev/null 2>&1; then
     dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n'
@@ -197,6 +202,10 @@ ensure_lunarwing_env_defaults() {
   append_env_if_missing "$path" "ALLOW_PRIVATE_IPS" "1"
   append_env_if_missing "$path" "PGSSLMODE" "disable"
   append_env_if_missing "$path" "WASM_CHANNELS_ENABLED" "true"
+  append_env_if_missing "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
+  append_env_if_missing "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
+  replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
+  replace_env_value "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "LLM_MODEL" "tensorzero::function_name::ironclaw"
 }
 
@@ -214,6 +223,8 @@ write_lunarwing_env_if_missing() {
     umask 077
     {
       printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
+      printf 'IRONCLAW_SOCKET=%s\n' "$(harness_socket_path)"
+      printf 'LUNARWING_SOCKET=%s\n' "$(harness_socket_path)"
       printf '\n'
       printf '# Database — PostgreSQL (start with: start-postgres)\n'
       printf 'DATABASE_BACKEND=postgres\n'
@@ -313,6 +324,7 @@ init_env() {
   say "lunarwing env: $ENV_DIR/lunarwing.env"
   say "xmpp bridge env: $ENV_DIR/xmpp-bridge.env"
   say "proxy env: $ENV_DIR/proxy.env"
+  say "repl socket: $(harness_socket_path)"
   say "channels dir: $CHANNELS_DIR"
   say "tools dir: $TOOLS_DIR"
   say "edit the env files for live XMPP or agent credentials; secrets are not printed"
@@ -1154,6 +1166,24 @@ lunarwing_status() {
   say "state: $STATE_DIR"
 }
 
+launch_repl() {
+  ensure_env
+  load_lunarwing_env
+  local bin
+  bin="$(replv2_client_bin)"
+  require_binary "$bin" "build"
+
+  if [[ "${1:-}" == "--" ]]; then
+    shift
+  fi
+
+  if [[ "$#" -eq 0 ]]; then
+    say "launching REPLv2 client via socket ${LUNARWING_SOCKET:-${IRONCLAW_SOCKET:-$(harness_socket_path)}}"
+  fi
+
+  "$bin" "$@"
+}
+
 proxy_service_name() {
   normalize_service_name "${LUNARWING_TEST_PROXY_SERVICE_NAME:-ironclaw-proxy-test.service}"
 }
@@ -1286,6 +1316,7 @@ doctor() {
   else
     say "REPLv2 client: MISSING; run build"
   fi
+  say "REPL socket: $(harness_socket_path)"
   if [[ -f "$(proxy_bin)" ]]; then
     say "ironclaw-proxy: $(proxy_bin)"
   else
@@ -1481,6 +1512,9 @@ main() {
       ;;
     lunarwing-status)
       lunarwing_status
+      ;;
+    repl)
+      launch_repl "$@"
       ;;
     # --- Orchestration ---
     up)

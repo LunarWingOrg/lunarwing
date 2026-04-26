@@ -28,6 +28,17 @@ client with `cargo build --release` from:
 
 - `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo`
 
+When you source the generated harness env file, both the integrated CLI and the
+standalone REPLv2 client target the harness-specific Unix socket under
+`$LUNARWING_TEST_ROOT/run/ironclaw.sock` instead of the shared
+`/run/user/$UID/ironclaw.sock`.
+
+For convenience, the harness script can launch the standalone client directly:
+
+```bash
+scripts/lunarwing-xmpp-test-env.sh repl
+```
+
 For a command-by-command setup walkthrough, see
 [`testing/lunarwing-xmpp/README.md`](../testing/lunarwing-xmpp/README.md).
 That guide now also includes copy-paste "Fresh Recreate Recipes" for both the
@@ -56,6 +67,8 @@ and bridge tokens, so do not paste their contents into chat, issues, or logs.
 The generated `env/lunarwing.env` is already seeded for the common private-lab
 stack used by this harness:
 
+- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
 - `DATABASE_BACKEND=postgres`
 - `DATABASE_SSLMODE=disable`
 - `PGSSLMODE=disable`

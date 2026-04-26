@@ -53,7 +53,11 @@ pub struct ReplCommand {
 impl ReplCommand {
     pub async fn run(&self) -> anyhow::Result<()> {
         let socket_path = self.socket.clone().unwrap_or_else(|| {
-            if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+            if let Ok(path) = std::env::var("LUNARWING_SOCKET") {
+                std::path::PathBuf::from(path)
+            } else if let Ok(path) = std::env::var("IRONCLAW_SOCKET") {
+                std::path::PathBuf::from(path)
+            } else if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
                 std::path::PathBuf::from(runtime_dir).join("ironclaw.sock")
             } else {
                 crate::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
