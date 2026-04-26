@@ -121,6 +121,37 @@ database credentials and custom gateway/bridge tokens, use the documented
 recipe in
 [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
 
+### Watchdog Scheduler
+
+For production healthchecks, use:
+
+```bash
+sudo ic/scripts/install-lunarwing-watchdog.sh
+```
+
+Behavior depends on the detected service manager:
+
+- `systemd`: installs `lunarwing-watchdog.service` plus `lunarwing-watchdog.timer`
+- `OpenRC`: installs `lunarwing-watchdog-openrc` plus either an hourly hook or a
+  managed root `fcrontab` entry
+
+The OpenRC default is intentionally conservative:
+
+- if `cronie`, `crond`, or `dcron` is already present, the installer keeps the
+  cron-hourly path and does not switch you to `fcron`
+- if no cron-hourly daemon is present but `fcron` is available, the installer
+  uses `fcron` automatically
+
+Force a specific OpenRC mode with:
+
+```bash
+sudo LUNARWING_WATCHDOG_SCHEDULER=fcron ic/scripts/install-lunarwing-watchdog.sh
+sudo LUNARWING_WATCHDOG_SCHEDULER=hourly ic/scripts/install-lunarwing-watchdog.sh
+```
+
+Use `LUNARWING_WATCHDOG_CRON_DIR=/path/to/hourly-dir` when you need the
+hourly-hook path in a nonstandard directory layout.
+
 For a clean libSQL recreate with a custom gateway token:
 
 ```bash

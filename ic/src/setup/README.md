@@ -125,6 +125,25 @@ background-service installation:
 - Linux with OpenRC: system service under `/etc/init.d/` (requires root; the
   wizard prints the exact `sudo` command when needed)
 
+The watchdog installer follows the same service-manager split:
+
+```bash
+sudo scripts/install-lunarwing-watchdog.sh
+```
+
+- `systemd`: installs `lunarwing-watchdog.timer`
+- `OpenRC`: installs `lunarwing-watchdog-openrc` plus either an hourly hook or
+  a managed root `fcrontab` entry
+
+On OpenRC, the default `auto` mode avoids interfering with an existing
+`cronie`/`crond`/`dcron` hourly setup. It only falls back to `fcron` when no
+cron-hourly daemon is already present. Override with:
+
+```bash
+sudo LUNARWING_WATCHDOG_SCHEDULER=fcron scripts/install-lunarwing-watchdog.sh
+sudo LUNARWING_WATCHDOG_SCHEDULER=hourly scripts/install-lunarwing-watchdog.sh
+```
+
 For non-interactive prep, use:
 
 ```bash

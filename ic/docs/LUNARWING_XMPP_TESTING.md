@@ -274,19 +274,49 @@ sudo systemctl enable --now xmpp-bridge.service
 sudo systemctl enable --now lunarwing.service
 ```
 
-Install the production watchdog timer when you want systemd to check and restart
-`lunarwing.service` hourly:
+Install the production watchdog scheduler when you want the host to check and
+restart LunarWing hourly:
 
 ```bash
 sudo scripts/install-lunarwing-watchdog.sh
+```
+
+On systemd hosts, that installs `lunarwing-watchdog.service` plus
+`lunarwing-watchdog.timer` and you can inspect them with:
+
+```bash
 sudo systemctl status lunarwing-watchdog.timer --no-pager
 sudo journalctl -u lunarwing-watchdog.service -n 100 --no-pager
 ```
 
+On OpenRC hosts, the same installer now detects OpenRC and installs:
+
+- `/usr/local/sbin/lunarwing-watchdog-openrc`
+- `/etc/conf.d/lunarwing-watchdog`
+- either:
+  - an hourly hook under `/etc/cron.hourly/` or `/etc/periodic/hourly/`, or
+  - a managed root `fcrontab` entry
+
+The default `auto` mode is conservative:
+
+- if `cronie`, `crond`, or `dcron` is already present, the installer keeps the
+  cron-hourly path and does not switch you over to `fcron`
+- if no cron-hourly daemon is present but `fcron` is available, the installer
+  uses a managed `fcrontab` entry for root instead
+
+You can override the choice with:
+
+```bash
+sudo LUNARWING_WATCHDOG_SCHEDULER=fcron scripts/install-lunarwing-watchdog.sh
+sudo LUNARWING_WATCHDOG_SCHEDULER=hourly scripts/install-lunarwing-watchdog.sh
+```
+
+`LUNARWING_WATCHDOG_CRON_DIR` still applies when you explicitly want the hourly
+hook path in a nonstandard directory layout.
+
 Migration note: `install-lunarwing-watchdog.sh` disables and removes old
-`ironclaw-watchdog` units and the old `/usr/local/sbin/ironclaw-watchdog`
-binary before installing the renamed watchdog, so two watchdog timers do not
-run side by side.
+`ironclaw-watchdog` units, wrappers, and hourly hooks before installing the
+renamed watchdog so duplicate checks do not run side by side.
 
 The current app binary is still named `ironclaw`. If you install a renamed
 `lunarwing` binary, change `ExecStart=` in `systemd/lunarwing.service`.

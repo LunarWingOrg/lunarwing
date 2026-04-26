@@ -551,16 +551,38 @@ The committed `lunarwing.service` and OpenRC templates already seed
 OpenAI-compatible lab setups. Override those in `/etc/lunarwing/lunarwing.env`
 only when your deployment needs different SSL or network behavior.
 
-Install the production watchdog timer with:
+Install the production watchdog scheduler with:
 
 ```bash
 sudo scripts/install-lunarwing-watchdog.sh
-sudo systemctl status lunarwing-watchdog.timer --no-pager
 ```
 
-Migration note: the installer disables/removes old `ironclaw-watchdog` units and
-the old `/usr/local/sbin/ironclaw-watchdog` binary before installing the renamed
-watchdog.
+On systemd hosts, that installs `lunarwing-watchdog.timer` and
+`lunarwing-watchdog.service`.
+
+On OpenRC hosts, the same installer now detects OpenRC and installs the
+OpenRC wrapper plus either an hourly scheduler hook or a managed root
+`fcrontab` entry.
+
+The default `auto` mode is conservative:
+
+- if `cronie`, `crond`, or `dcron` is already present, the installer keeps the
+  cron-hourly path and does not switch you over to `fcron`
+- if no cron-hourly daemon is present but `fcron` is available, the installer
+  uses `fcron` instead
+
+Force one mode explicitly with:
+
+```bash
+sudo LUNARWING_WATCHDOG_SCHEDULER=fcron scripts/install-lunarwing-watchdog.sh
+sudo LUNARWING_WATCHDOG_SCHEDULER=hourly scripts/install-lunarwing-watchdog.sh
+```
+
+`LUNARWING_WATCHDOG_CRON_DIR` still applies when you want the hourly-hook path
+in a nonstandard directory layout.
+
+Migration note: the installer disables/removes old `ironclaw-watchdog` units,
+wrappers, and hourly hooks before installing the renamed watchdog.
 
 ## 9. Troubleshoot
 
