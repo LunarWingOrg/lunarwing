@@ -38,6 +38,50 @@ fn runtime_overrides() -> &'static Mutex<HashMap<String, String>> {
     RUNTIME_ENV_OVERRIDES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn aliased_env_keys(key: &str) -> (&str, Option<&str>) {
+    match key {
+        "IRONCLAW_OAUTH_CALLBACK_URL" | "LUNARWING_OAUTH_CALLBACK_URL" => (
+            "LUNARWING_OAUTH_CALLBACK_URL",
+            Some("IRONCLAW_OAUTH_CALLBACK_URL"),
+        ),
+        "IRONCLAW_OAUTH_EXCHANGE_URL" | "LUNARWING_OAUTH_EXCHANGE_URL" => (
+            "LUNARWING_OAUTH_EXCHANGE_URL",
+            Some("IRONCLAW_OAUTH_EXCHANGE_URL"),
+        ),
+        "IRONCLAW_OAUTH_PROXY_AUTH_TOKEN" | "LUNARWING_OAUTH_PROXY_AUTH_TOKEN" => (
+            "LUNARWING_OAUTH_PROXY_AUTH_TOKEN",
+            Some("IRONCLAW_OAUTH_PROXY_AUTH_TOKEN"),
+        ),
+        "IRONCLAW_OWNER_ID" | "LUNARWING_OWNER_ID" => {
+            ("LUNARWING_OWNER_ID", Some("IRONCLAW_OWNER_ID"))
+        }
+        "IRONCLAW_IN_DOCKER" | "LUNARWING_IN_DOCKER" => {
+            ("LUNARWING_IN_DOCKER", Some("IRONCLAW_IN_DOCKER"))
+        }
+        "IRONCLAW_DISABLE_RESTART" | "LUNARWING_DISABLE_RESTART" => (
+            "LUNARWING_DISABLE_RESTART",
+            Some("IRONCLAW_DISABLE_RESTART"),
+        ),
+        "IRONCLAW_RESTART_DELAY" | "LUNARWING_RESTART_DELAY" => {
+            ("LUNARWING_RESTART_DELAY", Some("IRONCLAW_RESTART_DELAY"))
+        }
+        "IRONCLAW_MAX_FAILURES" | "LUNARWING_MAX_FAILURES" => {
+            ("LUNARWING_MAX_FAILURES", Some("IRONCLAW_MAX_FAILURES"))
+        }
+        "IRONCLAW_SERVICE_MANAGER" | "LUNARWING_SERVICE_MANAGER" => (
+            "LUNARWING_SERVICE_MANAGER",
+            Some("IRONCLAW_SERVICE_MANAGER"),
+        ),
+        "IRONCLAW_INSTANCE_ID" | "LUNARWING_INSTANCE_ID" => {
+            ("LUNARWING_INSTANCE_ID", Some("IRONCLAW_INSTANCE_ID"))
+        }
+        "IRONCLAW_INSTANCE_NAME" | "LUNARWING_INSTANCE_NAME" => {
+            ("LUNARWING_INSTANCE_NAME", Some("IRONCLAW_INSTANCE_NAME"))
+        }
+        _ => (key, None),
+    }
+}
+
 /// Set a runtime environment override (thread-safe alternative to `std::env::set_var`).
 ///
 /// Values set here are visible to `optional_env()`, `env_or_override()`, and
@@ -59,70 +103,83 @@ pub fn set_runtime_env(key: &str, value: &str) {
 /// Use this instead of `std::env::var()` when the value might have been set
 /// via `set_runtime_env()` (e.g., `NEARAI_API_KEY` during interactive login).
 pub fn env_or_override(key: &str) -> Option<String> {
-    // Real env vars always win
-    if let Ok(val) = std::env::var(key)
-        && !val.is_empty()
-    {
-        return Some(val);
+    let (preferred_key, legacy_key) = aliased_env_keys(key);
+
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        // Real env vars always win
+        if let Ok(val) = std::env::var(candidate)
+            && !val.is_empty()
+        {
+            return Some(val);
+        }
     }
 
     // Check runtime overrides (skip empty values for consistency with optional_env)
-    if let Some(val) = runtime_overrides()
+    let runtime_overrides = runtime_overrides()
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(key)
-        .filter(|v| !v.is_empty())
-        .cloned()
-    {
-        return Some(val);
+        .unwrap_or_else(|e| e.into_inner());
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        if let Some(val) = runtime_overrides
+            .get(candidate)
+            .filter(|v| !v.is_empty())
+            .cloned()
+        {
+            return Some(val);
+        }
     }
 
     // Check INJECTED_VARS (secrets from DB, set once at startup)
-    if let Some(val) = INJECTED_VARS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(key)
-        .filter(|v| !v.is_empty())
-        .cloned()
-    {
-        return Some(val);
+    let injected_vars = INJECTED_VARS.lock().unwrap_or_else(|e| e.into_inner());
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        if let Some(val) = injected_vars
+            .get(candidate)
+            .filter(|v| !v.is_empty())
+            .cloned()
+        {
+            return Some(val);
+        }
     }
 
     None
 }
 
 pub(crate) fn optional_env(key: &str) -> Result<Option<String>, ConfigError> {
+    let (preferred_key, legacy_key) = aliased_env_keys(key);
+
     // Check real env vars first (always win over injected secrets)
-    match std::env::var(key) {
-        Ok(val) if val.is_empty() => {}
-        Ok(val) => return Ok(Some(val)),
-        Err(std::env::VarError::NotPresent) => {}
-        Err(e) => {
-            return Err(ConfigError::ParseError(format!(
-                "failed to read {key}: {e}"
-            )));
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        match std::env::var(candidate) {
+            Ok(val) if val.is_empty() => {}
+            Ok(val) => return Ok(Some(val)),
+            Err(std::env::VarError::NotPresent) => {}
+            Err(e) => {
+                return Err(ConfigError::ParseError(format!(
+                    "failed to read {candidate}: {e}"
+                )));
+            }
         }
     }
 
     // Fall back to runtime overrides (set via set_runtime_env)
-    if let Some(val) = runtime_overrides()
+    let runtime_overrides = runtime_overrides()
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(key)
-        .filter(|v| !v.is_empty())
-        .cloned()
-    {
-        return Ok(Some(val));
+        .unwrap_or_else(|e| e.into_inner());
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        if let Some(val) = runtime_overrides
+            .get(candidate)
+            .filter(|v| !v.is_empty())
+            .cloned()
+        {
+            return Ok(Some(val));
+        }
     }
 
     // Fall back to thread-safe overlay (secrets injected from DB)
-    if let Some(val) = INJECTED_VARS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(key)
-        .cloned()
-    {
-        return Ok(Some(val));
+    let injected_vars = INJECTED_VARS.lock().unwrap_or_else(|p| p.into_inner());
+    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+        if let Some(val) = injected_vars.get(candidate).cloned() {
+            return Ok(Some(val));
+        }
     }
 
     Ok(None)
@@ -390,6 +447,64 @@ mod tests {
 
         // Now the runtime override is visible again
         assert_eq!(env_or_override(key), Some("override_value".to_string()));
+    }
+
+    #[test]
+    fn env_or_override_prefers_lunarwing_alias() {
+        let _guard = lock_env();
+        let old_lunarwing = std::env::var("LUNARWING_IN_DOCKER").ok();
+        let old_ironclaw = std::env::var("IRONCLAW_IN_DOCKER").ok();
+        unsafe {
+            std::env::set_var("LUNARWING_IN_DOCKER", "true");
+            std::env::set_var("IRONCLAW_IN_DOCKER", "false");
+        }
+
+        assert_eq!(
+            env_or_override("IRONCLAW_IN_DOCKER"),
+            Some("true".to_string())
+        );
+        assert_eq!(
+            env_or_override("LUNARWING_IN_DOCKER"),
+            Some("true".to_string())
+        );
+
+        match old_lunarwing {
+            Some(val) => unsafe { std::env::set_var("LUNARWING_IN_DOCKER", val) },
+            None => unsafe { std::env::remove_var("LUNARWING_IN_DOCKER") },
+        }
+        match old_ironclaw {
+            Some(val) => unsafe { std::env::set_var("IRONCLAW_IN_DOCKER", val) },
+            None => unsafe { std::env::remove_var("IRONCLAW_IN_DOCKER") },
+        }
+    }
+
+    #[test]
+    fn optional_env_falls_back_to_legacy_alias() {
+        let _guard = lock_env();
+        let old_lunarwing = std::env::var("LUNARWING_OWNER_ID").ok();
+        let old_ironclaw = std::env::var("IRONCLAW_OWNER_ID").ok();
+        unsafe {
+            std::env::remove_var("LUNARWING_OWNER_ID");
+            std::env::set_var("IRONCLAW_OWNER_ID", "legacy-owner");
+        }
+
+        assert_eq!(
+            optional_env("LUNARWING_OWNER_ID").unwrap(),
+            Some("legacy-owner".to_string())
+        );
+        assert_eq!(
+            optional_env("IRONCLAW_OWNER_ID").unwrap(),
+            Some("legacy-owner".to_string())
+        );
+
+        match old_lunarwing {
+            Some(val) => unsafe { std::env::set_var("LUNARWING_OWNER_ID", val) },
+            None => unsafe { std::env::remove_var("LUNARWING_OWNER_ID") },
+        }
+        match old_ironclaw {
+            Some(val) => unsafe { std::env::set_var("IRONCLAW_OWNER_ID", val) },
+            None => unsafe { std::env::remove_var("IRONCLAW_OWNER_ID") },
+        }
     }
 
     // --- lock_env poison recovery (regression for env mutex cascade) ---

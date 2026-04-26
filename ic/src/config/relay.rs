@@ -57,13 +57,22 @@ impl RelayConfig {
 
     /// Internal constructor that reads values through a closure, enabling safe testing.
     fn from_env_reader(env: impl Fn(&str) -> Option<String>) -> Option<Self> {
+        let aliased_env = |preferred: &str, legacy: &str| {
+            env(preferred)
+                .filter(|value| !value.is_empty())
+                .or_else(|| env(legacy).filter(|value| !value.is_empty()))
+        };
+
         let url = env("CHANNEL_RELAY_URL")?;
         let api_key = SecretString::from(env("CHANNEL_RELAY_API_KEY")?);
         Some(Self {
             url,
             api_key,
-            callback_url: env("IRONCLAW_OAUTH_CALLBACK_URL"),
-            instance_id: env("IRONCLAW_INSTANCE_ID"),
+            callback_url: aliased_env(
+                "LUNARWING_OAUTH_CALLBACK_URL",
+                "IRONCLAW_OAUTH_CALLBACK_URL",
+            ),
+            instance_id: aliased_env("LUNARWING_INSTANCE_ID", "IRONCLAW_INSTANCE_ID"),
             request_timeout_secs: env("RELAY_REQUEST_TIMEOUT_SECS")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(30),
@@ -132,6 +141,26 @@ mod tests {
         assert_eq!(config.instance_id.as_deref(), Some("my-instance"));
         assert_eq!(config.request_timeout_secs, 60);
         assert_eq!(config.webhook_path, "/custom/events");
+    }
+
+    #[test]
+    fn from_env_reader_prefers_lunarwing_aliases() {
+        let config = RelayConfig::from_env_reader(|key| match key {
+            "CHANNEL_RELAY_URL" => Some("http://relay:3001".into()),
+            "CHANNEL_RELAY_API_KEY" => Some("secret".into()),
+            "LUNARWING_OAUTH_CALLBACK_URL" => Some("https://lunar.example.com".into()),
+            "IRONCLAW_OAUTH_CALLBACK_URL" => Some("https://legacy.example.com".into()),
+            "LUNARWING_INSTANCE_ID" => Some("lunar-instance".into()),
+            "IRONCLAW_INSTANCE_ID" => Some("legacy-instance".into()),
+            _ => None,
+        })
+        .expect("config should be Some");
+
+        assert_eq!(
+            config.callback_url.as_deref(),
+            Some("https://lunar.example.com")
+        );
+        assert_eq!(config.instance_id.as_deref(), Some("lunar-instance"));
     }
 
     #[test]

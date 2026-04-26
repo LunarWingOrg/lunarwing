@@ -730,8 +730,9 @@ fn oauth_error_page(label: &str) -> axum::response::Response {
 /// redirect the user's browser here. The `state` query parameter correlates
 /// the callback with a pending OAuth flow registered by `start_wasm_oauth()`.
 ///
-/// Used on hosted instances where `IRONCLAW_OAUTH_CALLBACK_URL` points to
-/// the gateway (e.g., `https://kind-deer.agent1.near.ai/oauth/callback`).
+/// Used on hosted instances where `LUNARWING_OAUTH_CALLBACK_URL` (or legacy
+/// `IRONCLAW_OAUTH_CALLBACK_URL`) points to the gateway (e.g.,
+/// `https://kind-deer.agent1.near.ai/oauth/callback`).
 /// Local/desktop mode continues to use the TCP listener on port 9876.
 async fn oauth_callback_handler(
     State(state): State<Arc<GatewayState>>,
@@ -2750,7 +2751,7 @@ async fn gateway_status_handler(
         (None, None, None)
     };
 
-    let restart_enabled = std::env::var("IRONCLAW_IN_DOCKER")
+    let restart_enabled = crate::config::helpers::env_or_override("LUNARWING_IN_DOCKER")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
 

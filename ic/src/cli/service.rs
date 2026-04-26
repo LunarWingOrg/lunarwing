@@ -6,7 +6,7 @@ use crate::service::ServiceAction;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum ServiceCommand {
-    /// Install the OS service (launchd on macOS, systemd on Linux).
+    /// Install the OS service (launchd on macOS, systemd/OpenRC on Linux).
     Install,
     /// Start the installed service.
     Start,

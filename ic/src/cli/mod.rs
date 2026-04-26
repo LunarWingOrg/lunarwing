@@ -208,7 +208,7 @@ pub enum Command {
     )]
     Pairing(PairingCommand),
 
-    /// Manage OS service (launchd / systemd)
+    /// Manage OS service (launchd / systemd / OpenRC)
     #[command(
         subcommand,
         about = "Manage OS service",
@@ -395,7 +395,10 @@ pub async fn run_routines_cli(
         .await
         .map_err(|e| anyhow::anyhow!("{e:#}"))?;
 
-    let user_id = std::env::var("IRONCLAW_OWNER_ID").unwrap_or_else(|_| "default".to_string());
+    let user_id = crate::config::helpers::env_or_override("LUNARWING_OWNER_ID")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "default".to_string());
     run_routines_command(routines_cmd.clone(), db, &user_id).await
 }
 

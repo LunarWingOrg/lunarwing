@@ -12,6 +12,7 @@
 //! 9. Heartbeat (background tasks)
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::Arc;
 
 #[cfg(feature = "postgres")]
@@ -44,6 +45,45 @@ use crate::setup::prompts::{
 // const CHANNEL_INDEX_CLI: usize = 0;
 const CHANNEL_INDEX_HTTP: usize = 1;
 const CHANNEL_INDEX_SIGNAL: usize = 2;
+const DEFAULT_INSTANCE_CONFIG_TOML: &str = include_str!("../../deploy/config.toml");
+const DEFAULT_WORKSPACE_TEMPLATE_FILES: &[(&str, &str)] = &[
+    (
+        "AGENTS.md",
+        include_str!("../../deploy/workspace-template/AGENTS.md"),
+    ),
+    (
+        "BOOTSTRAP.md",
+        include_str!("../../deploy/workspace-template/BOOTSTRAP.md"),
+    ),
+    (
+        "HEARTBEAT.md",
+        include_str!("../../deploy/workspace-template/HEARTBEAT.md"),
+    ),
+    (
+        "IDENTITY.md",
+        include_str!("../../deploy/workspace-template/IDENTITY.md"),
+    ),
+    (
+        "MEMORY.md",
+        include_str!("../../deploy/workspace-template/MEMORY.md"),
+    ),
+    (
+        "README.md",
+        include_str!("../../deploy/workspace-template/README.md"),
+    ),
+    (
+        "SOUL.md",
+        include_str!("../../deploy/workspace-template/SOUL.md"),
+    ),
+    (
+        "TOOLS.md",
+        include_str!("../../deploy/workspace-template/TOOLS.md"),
+    ),
+    (
+        "USER.md",
+        include_str!("../../deploy/workspace-template/USER.md"),
+    ),
+];
 const ALLOWED_GLOBAL_EXTENSION_SETUP_SETTING_PATHS: &[&str] = &[
     "llm_backend",
     "selected_model",
@@ -66,6 +106,44 @@ fn validate_extension_setup_setting_path(name: &str, setting_path: &str) -> Resu
         "Invalid setting_path '{}' for extension '{}': only 'extensions.{}.*' or approved settings may be written",
         setting_path, name, name
     )))
+}
+
+fn maybe_seed_default_instance_assets() {
+    let onboard_completed = std::env::var("ONBOARD_COMPLETED")
+        .map(|value| value == "true")
+        .unwrap_or(false);
+    if onboard_completed {
+        return;
+    }
+
+    let base_dir = ironclaw_base_dir();
+    if let Err(err) = seed_default_instance_assets_to(&base_dir) {
+        tracing::debug!(
+            "Could not seed default instance assets into {}: {}",
+            base_dir.display(),
+            err
+        );
+    }
+}
+
+fn seed_default_instance_assets_to(base_dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(base_dir)?;
+
+    let config_path = base_dir.join("config.toml");
+    if !config_path.exists() {
+        std::fs::write(&config_path, DEFAULT_INSTANCE_CONFIG_TOML)?;
+    }
+
+    let template_dir = base_dir.join("workspace-template");
+    std::fs::create_dir_all(&template_dir)?;
+    for (file_name, contents) in DEFAULT_WORKSPACE_TEMPLATE_FILES {
+        let path = template_dir.join(file_name);
+        if !path.exists() {
+            std::fs::write(path, contents)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Setup wizard error.
@@ -175,6 +253,7 @@ impl SetupWizard {
 
     /// Create a new setup wizard.
     pub fn new() -> Self {
+        maybe_seed_default_instance_assets();
         let settings = crate::config::load_bootstrap_settings(None).unwrap_or_default();
         Self::from_bootstrap_settings(SetupConfig::default(), settings.clone()).unwrap_or_else(
             |e| Self::fallback_with_default_owner(SetupConfig::default(), settings, &e),
@@ -183,6 +262,7 @@ impl SetupWizard {
 
     /// Create a wizard with custom configuration.
     pub fn with_config(config: SetupConfig) -> Self {
+        maybe_seed_default_instance_assets();
         let settings = crate::config::load_bootstrap_settings(None).unwrap_or_default();
         Self::from_bootstrap_settings(config.clone(), settings.clone())
             .unwrap_or_else(|e| Self::fallback_with_default_owner(config, settings, &e))
@@ -193,6 +273,9 @@ impl SetupWizard {
         config: SetupConfig,
         toml_path: Option<&std::path::Path>,
     ) -> Result<Self, crate::error::ConfigError> {
+        if toml_path.is_none() {
+            maybe_seed_default_instance_assets();
+        }
         let settings = crate::config::load_bootstrap_settings(toml_path)?;
         Self::from_bootstrap_settings(config, settings)
     }
@@ -412,6 +495,25 @@ impl SetupWizard {
                     print_info(&format!("Using default model: {default}"));
                 }
                 self.persist_after_step().await;
+            } else if self.settings.llm_backend.as_deref() == Some("openai_compatible")
+                && self.settings.openai_compatible_base_url.is_some()
+            {
+                print_info("OpenAI-compatible config found — using configured provider");
+                if let Ok(api_key) = std::env::var("LLM_API_KEY")
+                    && !api_key.is_empty()
+                {
+                    self.llm_api_key = Some(SecretString::from(api_key));
+                }
+                let registry = crate::llm::ProviderRegistry::load();
+                if self.settings.selected_model.is_none() {
+                    let default = registry
+                        .find("openai_compatible")
+                        .map(|d| d.default_model.as_str())
+                        .unwrap_or("gpt-4o-mini");
+                    self.settings.selected_model = Some(default.to_string());
+                    print_info(&format!("Using default model: {default}"));
+                }
+                self.persist_after_step().await;
             } else {
                 print_step(1, 2, "Inference Provider");
                 self.step_inference_provider().await?;
@@ -490,6 +592,11 @@ impl SetupWizard {
 
         // Save settings and print summary
         self.save_and_summarize().await?;
+        if self.should_offer_service_install()
+            && let Err(err) = self.offer_service_install()
+        {
+            tracing::debug!("Could not complete service install prompt: {}", err);
+        }
 
         Ok(())
     }
@@ -3566,6 +3673,48 @@ impl SetupWizard {
 
         Ok(())
     }
+
+    fn should_offer_service_install(&self) -> bool {
+        self.config.steps.is_empty() && !self.config.channels_only && !self.config.provider_only
+    }
+
+    fn offer_service_install(&self) -> Result<(), SetupError> {
+        let Some(offer) = crate::service::setup_service_offer().map_err(|e| {
+            SetupError::Config(format!("Failed to inspect service manager support: {}", e))
+        })?
+        else {
+            return Ok(());
+        };
+
+        println!();
+
+        if offer.can_install_now {
+            print_info(&format!(
+                "Optional: install a {} service so LunarWing can keep running in the background.",
+                offer.manager.display_name()
+            ));
+            if confirm(
+                &format!("Install the {} service now?", offer.manager.display_name()),
+                false,
+            )
+            .map_err(SetupError::Io)?
+            {
+                match crate::service::handle_command(&crate::service::ServiceAction::Install) {
+                    Ok(()) => print_success("Background service installed."),
+                    Err(err) => print_error(&format!("Service install failed: {}", err)),
+                }
+            }
+        } else if let Some(command) = offer.install_command {
+            print_info(&format!(
+                "{} detected. Installing the background service requires root.",
+                offer.manager.display_name()
+            ));
+            print_info("Run this after onboarding:");
+            println!("  {}", command);
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for SetupWizard {
@@ -3903,6 +4052,59 @@ mod tests {
         };
         let wizard = SetupWizard::with_config(config);
         assert!(wizard.config.skip_auth);
+    }
+
+    #[test]
+    fn test_should_offer_service_install_for_full_setup() {
+        let wizard = SetupWizard::with_config(SetupConfig::default());
+        assert!(wizard.should_offer_service_install());
+    }
+
+    #[test]
+    fn test_should_not_offer_service_install_for_partial_modes() {
+        let channels_only = SetupWizard::with_config(SetupConfig {
+            channels_only: true,
+            ..Default::default()
+        });
+        assert!(!channels_only.should_offer_service_install());
+
+        let provider_only = SetupWizard::with_config(SetupConfig {
+            provider_only: true,
+            ..Default::default()
+        });
+        assert!(!provider_only.should_offer_service_install());
+
+        let selective = SetupWizard::with_config(SetupConfig {
+            steps: vec!["provider".to_string()],
+            ..Default::default()
+        });
+        assert!(!selective.should_offer_service_install());
+    }
+
+    #[test]
+    fn test_seed_default_instance_assets_writes_config_and_workspace_template() {
+        let dir = tempdir().unwrap();
+
+        seed_default_instance_assets_to(dir.path()).expect("seed should succeed");
+
+        assert!(dir.path().join("config.toml").exists());
+        assert!(dir.path().join("workspace-template/SOUL.md").exists());
+
+        let identity = std::fs::read_to_string(dir.path().join("workspace-template/IDENTITY.md"))
+            .expect("identity template should exist");
+        assert!(identity.contains("LunarWing"));
+    }
+
+    #[test]
+    fn test_seed_default_instance_assets_preserves_existing_config() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        std::fs::write(&config_path, "llm_backend = \"openai\"\n").unwrap();
+
+        seed_default_instance_assets_to(dir.path()).expect("seed should succeed");
+
+        let current = std::fs::read_to_string(config_path).expect("config should still exist");
+        assert_eq!(current, "llm_backend = \"openai\"\n");
     }
 
     #[test]

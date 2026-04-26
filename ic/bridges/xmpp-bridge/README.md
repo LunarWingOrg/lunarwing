@@ -24,12 +24,16 @@ For an isolated LunarWing/XMPP bridge test harness, including local API smoke
 tests, live configuration wrappers, and generated user-systemd units, see
 [`docs/LUNARWING_XMPP_TESTING.md`](../../docs/LUNARWING_XMPP_TESTING.md).
 
-## systemd
+## Services
 
-On Linux, `ironclaw service install` installs `lunarwing.service` and a
-companion `xmpp-bridge.service` user unit when the bridge binary is available
-next to the current checkout. `ironclaw service start` and
-`ironclaw service stop` manage both units together.
+On Linux, `ironclaw service install` detects the host service manager:
+
+- systemd: installs `lunarwing.service` and, when available, a companion
+  `xmpp-bridge.service` user unit under `~/.config/systemd/user/`
+- OpenRC: installs `/etc/init.d/lunarwing` and `/etc/init.d/xmpp-bridge`
+
+`ironclaw service start` and `ironclaw service stop` manage both services
+together when the bridge binary is available.
 
 If you run LunarWing as a system service instead of a user service, use the
 production templates in:

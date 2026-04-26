@@ -565,27 +565,14 @@ fn check_secrets(settings: &Settings) -> CheckResult {
 // ── Service ─────────────────────────────────────────────────
 
 fn check_service_installed() -> CheckResult {
-    if cfg!(target_os = "macos") {
-        let plist =
-            dirs::home_dir().map(|h| h.join("Library/LaunchAgents/com.lunarwing.daemon.plist"));
-        match plist {
-            Some(path) if path.exists() => {
-                CheckResult::Pass(format!("launchd plist installed ({})", path.display()))
-            }
-            Some(_) => CheckResult::Skip("not installed (run `ironclaw service install`)".into()),
-            None => CheckResult::Skip("cannot determine home directory".into()),
-        }
-    } else if cfg!(target_os = "linux") {
-        let unit = dirs::home_dir().map(|h| h.join(".config/systemd/user/lunarwing.service"));
-        match unit {
-            Some(path) if path.exists() => {
-                CheckResult::Pass(format!("systemd unit installed ({})", path.display()))
-            }
-            Some(_) => CheckResult::Skip("not installed (run `ironclaw service install`)".into()),
-            None => CheckResult::Skip("cannot determine home directory".into()),
-        }
-    } else {
-        CheckResult::Skip("service management not supported on this platform".into())
+    match crate::service::service_installation() {
+        Ok(installation) if installation.path.exists() => CheckResult::Pass(format!(
+            "{} installed ({})",
+            installation.manager.install_artifact(),
+            installation.path.display()
+        )),
+        Ok(_) => CheckResult::Skip("not installed (run `ironclaw service install`)".into()),
+        Err(err) => CheckResult::Skip(err.to_string()),
     }
 }
 

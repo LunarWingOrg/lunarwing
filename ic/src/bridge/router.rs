@@ -311,8 +311,14 @@ async fn revert_always_allow(
 
     let key = format!("tool_permissions.{}", pending.action_name);
     let result = match prior {
-        Some(ref value) => store.set_setting(&pending.user_id, &key, value).await.map(|_| ()),
-        None => store.delete_setting(&pending.user_id, &key).await.map(|_| ()),
+        Some(ref value) => store
+            .set_setting(&pending.user_id, &key, value)
+            .await
+            .map(|_| ()),
+        None => store
+            .delete_setting(&pending.user_id, &key)
+            .await
+            .map(|_| ()),
     };
 
     if let Err(error) = result {

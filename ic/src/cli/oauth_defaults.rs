@@ -519,11 +519,11 @@ pub fn new_pending_oauth_registry() -> PendingOAuthRegistry {
 /// Returns `true` if OAuth callbacks should be routed through the web gateway
 /// instead of the local TCP listener.
 ///
-/// This is the case when `IRONCLAW_OAUTH_CALLBACK_URL` is set to a non-loopback
-/// URL, meaning the user's browser will redirect to a hosted gateway rather than
-/// localhost.
+/// This is the case when `LUNARWING_OAUTH_CALLBACK_URL` (or legacy
+/// `IRONCLAW_OAUTH_CALLBACK_URL`) is set to a non-loopback URL, meaning the
+/// user's browser will redirect to a hosted gateway rather than localhost.
 pub fn use_gateway_callback() -> bool {
-    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_CALLBACK_URL")
+    crate::config::helpers::env_or_override("LUNARWING_OAUTH_CALLBACK_URL")
         .map(|raw| {
             url::Url::parse(&raw)
                 .ok()
@@ -537,7 +537,8 @@ pub fn use_gateway_callback() -> bool {
 /// Returns the configured OAuth proxy auth token, if any.
 ///
 /// New hosted infra can inject a dedicated shared proxy secret via
-/// `IRONCLAW_OAUTH_PROXY_AUTH_TOKEN`. Existing hosted instances continue to
+/// `LUNARWING_OAUTH_PROXY_AUTH_TOKEN` (legacy
+/// `IRONCLAW_OAUTH_PROXY_AUTH_TOKEN`). Existing hosted instances continue to
 /// work by falling back to `GATEWAY_AUTH_TOKEN`.
 pub fn oauth_proxy_auth_token() -> Option<String> {
     fn normalized_env_value(key: &str) -> Option<String> {
@@ -546,13 +547,13 @@ pub fn oauth_proxy_auth_token() -> Option<String> {
             .filter(|value| !value.is_empty())
     }
 
-    normalized_env_value("IRONCLAW_OAUTH_PROXY_AUTH_TOKEN")
+    normalized_env_value("LUNARWING_OAUTH_PROXY_AUTH_TOKEN")
         .or_else(|| normalized_env_value("GATEWAY_AUTH_TOKEN"))
 }
 
 /// Returns the configured OAuth token-exchange proxy URL, if any.
 pub fn exchange_proxy_url() -> Option<String> {
-    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_EXCHANGE_URL")
+    crate::config::helpers::env_or_override("LUNARWING_OAUTH_EXCHANGE_URL")
         .map(|url| url.trim().to_string())
         .filter(|url| !url.is_empty())
 }
@@ -590,7 +591,7 @@ struct HostedOAuthStatePayload {
 }
 
 fn current_instance_name() -> Option<String> {
-    crate::config::helpers::env_or_override("IRONCLAW_INSTANCE_NAME")
+    crate::config::helpers::env_or_override("LUNARWING_INSTANCE_NAME")
         .or_else(|| crate::config::helpers::env_or_override("OPENCLAW_INSTANCE_NAME"))
         .filter(|v| !v.is_empty())
 }

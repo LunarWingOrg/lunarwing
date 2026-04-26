@@ -528,11 +528,11 @@ impl Agent {
                     ));
                 }
                 // Environment check: restart is only available in Docker containers
-                let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+                let in_docker = crate::config::helpers::env_or_override("LUNARWING_IN_DOCKER")
                     .map(|v| v.to_lowercase() == "true")
                     .unwrap_or(false);
 
-                tracing::debug!("[commands::restart] IRONCLAW_IN_DOCKER={}", in_docker);
+                tracing::debug!("[commands::restart] LUNARWING_IN_DOCKER={}", in_docker);
 
                 if !in_docker {
                     tracing::warn!(
@@ -540,7 +540,7 @@ impl Agent {
                     );
                     return Ok(SubmissionResult::error(
                         "Restart is not available in this environment. \
-                         The IRONCLAW_IN_DOCKER environment variable must be set to 'true' for Docker deployments."
+                         The LUNARWING_IN_DOCKER environment variable (or legacy IRONCLAW_IN_DOCKER) must be set to 'true' for Docker deployments."
                             .to_string(),
                     ));
                 }

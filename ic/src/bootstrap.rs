@@ -9,7 +9,8 @@
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-const IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
+const LUNARWING_BASE_DIR_ENV: &str = "LUNARWING_BASE_DIR";
+const LEGACY_IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
 
 /// Lazily computed IronClaw base directory, cached for the lifetime of the process.
 static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_ironclaw_base_dir);
@@ -20,14 +21,28 @@ static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_ironclaw_bas
 /// `ironclaw_base_dir()` function (which caches the result) and tests
 /// (which need to verify different configurations).
 pub fn compute_ironclaw_base_dir() -> PathBuf {
-    std::env::var(IRONCLAW_BASE_DIR_ENV)
+    let lunarwing_base_dir = std::env::var(LUNARWING_BASE_DIR_ENV).ok();
+    let legacy_ironclaw_base_dir = std::env::var(LEGACY_IRONCLAW_BASE_DIR_ENV).ok();
+
+    if let (Some(lunarwing), Some(legacy)) = (&lunarwing_base_dir, &legacy_ironclaw_base_dir)
+        && !lunarwing.is_empty()
+        && !legacy.is_empty()
+        && lunarwing != legacy
+    {
+        eprintln!(
+            "Warning: {LUNARWING_BASE_DIR_ENV} and {LEGACY_IRONCLAW_BASE_DIR_ENV} differ; using {LUNARWING_BASE_DIR_ENV}"
+        );
+    }
+
+    lunarwing_base_dir
+        .or(legacy_ironclaw_base_dir)
         .map(PathBuf::from)
         .map(|path| {
             if path.as_os_str().is_empty() {
                 default_base_dir()
             } else if !path.is_absolute() {
                 eprintln!(
-                    "Warning: IRONCLAW_BASE_DIR is a relative path '{}', resolved against current directory",
+                    "Warning: base directory env var is a relative path '{}', resolved against current directory",
                     path.display()
                 );
                 path
@@ -35,7 +50,7 @@ pub fn compute_ironclaw_base_dir() -> PathBuf {
                 path
             }
         })
-        .unwrap_or_else(|_| default_base_dir())
+        .unwrap_or_else(default_base_dir)
 }
 
 /// Get the default IronClaw base directory (~/.ironclaw).
@@ -55,15 +70,17 @@ fn default_base_dir() -> PathBuf {
 
 /// Get the IronClaw base directory.
 ///
-/// Override with `IRONCLAW_BASE_DIR` environment variable.
+/// Override with `LUNARWING_BASE_DIR` environment variable.
+/// Legacy `IRONCLAW_BASE_DIR` is still accepted as a fallback.
 /// Defaults to `~/.ironclaw` (or `./.ironclaw` if home directory cannot be determined).
 ///
 /// Thread-safe: the value is computed once and cached in a `LazyLock`.
 ///
 /// # Environment Variable Behavior
-/// - If `IRONCLAW_BASE_DIR` is set to a non-empty path, that path is used.
-/// - If `IRONCLAW_BASE_DIR` is set to an empty string, it is treated as unset.
-/// - If `IRONCLAW_BASE_DIR` contains null bytes, a warning is printed and the default is used.
+/// - If `LUNARWING_BASE_DIR` is set to a non-empty path, that path is used.
+/// - Otherwise, if `IRONCLAW_BASE_DIR` is set to a non-empty path, that path is used.
+/// - If the selected base-dir variable is set to an empty string, it is treated as unset.
+/// - If the selected base-dir variable contains null bytes, a warning is printed and the default is used.
 /// - If the home directory cannot be determined, a warning is printed and the current directory is used.
 ///
 /// # Returns
@@ -76,6 +93,11 @@ pub fn ironclaw_base_dir() -> PathBuf {
 /// Path to the IronClaw-specific `.env` file: `~/.ironclaw/.env`.
 pub fn ironclaw_env_path() -> PathBuf {
     ironclaw_base_dir().join(".env")
+}
+
+/// Path to the default workspace template directory inside the base dir.
+pub fn ironclaw_workspace_template_dir() -> PathBuf {
+    ironclaw_base_dir().join("workspace-template")
 }
 
 /// Load env vars from `~/.ironclaw/.env` (in addition to the standard `.env`).
@@ -111,10 +133,7 @@ pub fn load_ironclaw_env() {
     // This avoids the chicken-and-egg problem on cloud instances where no
     // DATABASE_URL is configured but ironclaw.db is already present.
     if std::env::var("DATABASE_BACKEND").is_err() {
-        let default_db = dirs::home_dir()
-            .unwrap_or_default()
-            .join(".ironclaw")
-            .join("ironclaw.db");
+        let default_db = ironclaw_base_dir().join("ironclaw.db");
         if default_db.exists() {
             if tokio::runtime::Handle::try_current().is_ok() {
                 // Tokio runtime is active (multi-threaded); std::env::set_var is UB here.
@@ -670,7 +689,9 @@ INJECTED="pwned"#;
         // Use compute_ironclaw_base_dir() directly to avoid LazyLock caching,
         // which can be poisoned by whichever test initializes it first.
         let _guard = lock_env();
-        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+        let old_lunarwing = std::env::var("LUNARWING_BASE_DIR").ok();
+        let old_ironclaw = std::env::var("IRONCLAW_BASE_DIR").ok();
+        unsafe { std::env::remove_var("LUNARWING_BASE_DIR") };
         // SAFETY: Under lock_env(), no concurrent env access.
         unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
 
@@ -681,8 +702,37 @@ INJECTED="pwned"#;
             path.display()
         );
 
-        if let Some(val) = old_val {
+        if let Some(val) = old_lunarwing {
+            unsafe { std::env::set_var("LUNARWING_BASE_DIR", val) };
+        }
+        if let Some(val) = old_ironclaw {
             unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+        }
+    }
+
+    #[test]
+    fn test_lunarwing_base_dir_alias_is_preferred() {
+        let _guard = lock_env();
+        let old_lunarwing = std::env::var("LUNARWING_BASE_DIR").ok();
+        let old_ironclaw = std::env::var("IRONCLAW_BASE_DIR").ok();
+
+        unsafe {
+            std::env::set_var("LUNARWING_BASE_DIR", "/tmp/lunarwing-base");
+            std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/ironclaw-base");
+        }
+
+        let path = compute_ironclaw_base_dir();
+        assert_eq!(path, PathBuf::from("/tmp/lunarwing-base"));
+
+        if let Some(val) = old_lunarwing {
+            unsafe { std::env::set_var("LUNARWING_BASE_DIR", val) };
+        } else {
+            unsafe { std::env::remove_var("LUNARWING_BASE_DIR") };
+        }
+        if let Some(val) = old_ironclaw {
+            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+        } else {
+            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
         }
     }
 

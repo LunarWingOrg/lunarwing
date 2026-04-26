@@ -28,6 +28,10 @@ the wizard). Otherwise triggers when no database is configured:
 
 Auto-triggered onboarding uses **quick mode** by default.
 
+`config.toml` is loaded later during normal config resolution, but it does
+**not** by itself suppress first-run onboarding. Fresh instances still need the
+bootstrap `.env` / database setup that the wizard creates.
+
 The `--no-onboard` CLI flag suppresses auto-detection.
 
 ---
@@ -82,7 +86,41 @@ except unavoidable macOS keychain dialogs.
 `upsert_bootstrap_vars()` instead of `save_bootstrap_env()`, preserving
 user-added variables like `HTTP_HOST` across re-onboarding.
 
+**Fresh-instance defaults:** On first onboarding against a new
+base directory (`LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR`), the wizard seeds:
+- `config.toml`
+- `workspace-template/*.md` (including `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`)
+
+The runtime automatically imports `workspace-template/*.md` on first boot when
+`WORKSPACE_IMPORT_DIR` is not set. This gives fresh installs an editable,
+on-disk default persona and memory template.
+
+**Seed source locations in the repo:**
+- Runtime config template: `deploy/config.toml`
+- Workspace seed templates: `deploy/workspace-template/*.md`
+
+**Seed destination inside an instance:**
+- `$LUNARWING_BASE_DIR/config.toml`
+- `$LUNARWING_BASE_DIR/workspace-template/`
+
+That means `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, `MEMORY.md`,
+`USER.md`, `AGENTS.md`, `HEARTBEAT.md`, and `README.md` all come from
+`deploy/workspace-template/` and can be edited per instance after seeding.
+
 The full 9-step wizard remains available via `ironclaw onboard`.
+
+After a successful full or quick onboarding run, the wizard offers optional
+background-service installation:
+- macOS: launchd
+- Linux with systemd: user unit under `~/.config/systemd/user/`
+- Linux with OpenRC: system service under `/etc/init.d/` (requires root; the
+  wizard prints the exact `sudo` command when needed)
+
+For non-interactive prep, use:
+
+```bash
+scripts/setup-instance.sh --database postgres --database-url 'postgres://user:pass@host:5432/db'
+```
 
 ---
 
@@ -665,11 +703,12 @@ local browser.
    and the encrypted secrets store. Uses the OpenAI-compatible
    ChatCompletions API mode.
 
-2. **Custom callback URL:** Set `IRONCLAW_OAUTH_CALLBACK_URL` to a
-   publicly accessible URL (e.g., via SSH tunnel or reverse proxy) that
+2. **Custom callback URL:** Set `LUNARWING_OAUTH_CALLBACK_URL` to a
+   publicly accessible URL (legacy `IRONCLAW_OAUTH_CALLBACK_URL` still works),
+   for example via SSH tunnel or reverse proxy, that
    forwards to port 9876 on the server:
    ```bash
-   export IRONCLAW_OAUTH_CALLBACK_URL=https://myserver.example.com:9876
+   export LUNARWING_OAUTH_CALLBACK_URL=https://myserver.example.com:9876
    ```
 
 The `callback_url()` function in `oauth_defaults.rs` checks this env var

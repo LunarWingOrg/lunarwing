@@ -512,7 +512,9 @@ impl EffectBridgeAdapter {
                     });
                 }
                 ApprovalRequirement::UnlessAutoApproved => {
-                    let is_approved = self.is_tool_auto_approved(&context.user_id, lookup_name).await;
+                    let is_approved = self
+                        .is_tool_auto_approved(&context.user_id, lookup_name)
+                        .await;
                     if !is_approved && !approval_already_granted {
                         // Credential presence alone does NOT bypass approval.
                         // Credentials indicate the call *can* be authenticated,
@@ -1273,7 +1275,13 @@ mod tests {
             .await;
 
         assert!(
-            matches!(result, Ok(ActionResult { is_error: false, .. })),
+            matches!(
+                result,
+                Ok(ActionResult {
+                    is_error: false,
+                    ..
+                })
+            ),
             "persisted AlwaysAllow should bypass approval gate, got: {result:?}"
         );
     }

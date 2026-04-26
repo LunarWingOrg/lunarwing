@@ -3,8 +3,10 @@
 //! ## Architecture
 //!
 //! IronClaw runs inside a Docker container with an entrypoint loop that monitors exit codes:
-//! - **Exit code 0** (clean): Reset failure counter, wait `IRONCLAW_RESTART_DELAY` (default 5s), restart
-//! - **Exit code ≠ 0** (failure): Increment failure counter, exit after `IRONCLAW_MAX_FAILURES` (default 10)
+//! - **Exit code 0** (clean): Reset failure counter, wait `LUNARWING_RESTART_DELAY`
+//!   (legacy `IRONCLAW_RESTART_DELAY`) and restart
+//! - **Exit code ≠ 0** (failure): Increment failure counter, exit after
+//!   `LUNARWING_MAX_FAILURES` (legacy `IRONCLAW_MAX_FAILURES`)
 //!
 //! This tool triggers a restart by calling `std::process::exit(0)` after a brief delay, allowing
 //! the HTTP response to be flushed before the process terminates. The entrypoint loop then
@@ -71,14 +73,15 @@ impl Tool for RestartTool {
         tracing::info!("[RestartTool::execute] Restart tool invoked");
         let start = std::time::Instant::now();
 
-        // Check if running inside a Docker container via IRONCLAW_IN_DOCKER env var.
-        // The Docker entrypoint sets this to "true". For local development, it's unset or "false".
+        // Check if running inside a Docker container via LUNARWING_IN_DOCKER
+        // (legacy IRONCLAW_IN_DOCKER). The Docker entrypoint sets this to "true".
+        // For local development, it's unset or "false".
         // The entrypoint restart loop only works inside a Docker container (ironclaw-worker).
-        let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+        let in_docker = crate::config::helpers::env_or_override("LUNARWING_IN_DOCKER")
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
 
-        tracing::debug!("[RestartTool::execute] IRONCLAW_IN_DOCKER={}", in_docker);
+        tracing::debug!("[RestartTool::execute] LUNARWING_IN_DOCKER={}", in_docker);
 
         if !in_docker {
             tracing::error!("[RestartTool::execute] Not in Docker, rejecting restart");
@@ -103,9 +106,9 @@ impl Tool for RestartTool {
         //
         // - The ironclaw-worker Docker container runs an entrypoint loop that monitors
         //   the exit code of the `ironclaw run` process:
-        //   * Exit code 0 = clean restart: reset failure counter, wait IRONCLAW_RESTART_DELAY
+        //   * Exit code 0 = clean restart: reset failure counter, wait LUNARWING_RESTART_DELAY
         //     (default 5s), then restart the process
-        //   * Exit code ≠ 0 = failure: increment counter, exit after IRONCLAW_MAX_FAILURES
+        //   * Exit code ≠ 0 = failure: increment counter, exit after LUNARWING_MAX_FAILURES
         //     (default 10 failures)
         //
         // - std::process::exit(0) is a hard exit (no destructors, no graceful shutdown).
@@ -119,7 +122,7 @@ impl Tool for RestartTool {
         //   to properly drain Axum, close DB connections, and checkpoint jobs.
         // Check if restart is disabled (e.g., in tests). This allows tests to verify
         // parameter parsing and output without actually terminating the process.
-        let restart_disabled = std::env::var("IRONCLAW_DISABLE_RESTART")
+        let restart_disabled = crate::config::helpers::env_or_override("LUNARWING_DISABLE_RESTART")
             .map(|v| {
                 let v = v.to_lowercase();
                 v == "1" || v == "true"
@@ -139,7 +142,7 @@ impl Tool for RestartTool {
                 std::process::exit(0);
             } else {
                 tracing::info!(
-                    "[RestartTool] Exit disabled (IRONCLAW_DISABLE_RESTART set), skipping std::process::exit(0)"
+                    "[RestartTool] Exit disabled (LUNARWING_DISABLE_RESTART or legacy alias set), skipping std::process::exit(0)"
                 );
             }
         });
@@ -169,7 +172,8 @@ mod tests {
     /// Helper to simulate Docker environment for testing
     fn enable_docker_env() {
         unsafe {
-            std::env::set_var("IRONCLAW_IN_DOCKER", "true");
+            std::env::set_var("LUNARWING_IN_DOCKER", "true");
+            std::env::remove_var("IRONCLAW_IN_DOCKER");
         }
     }
 
@@ -465,18 +469,19 @@ mod tests {
 
     #[test]
     fn test_restart_tool_requires_docker_environment() {
-        // Test that restart is rejected when not in Docker (IRONCLAW_IN_DOCKER not set or false)
+        // Test that restart is rejected when not in Docker (LUNARWING_IN_DOCKER /
+        // IRONCLAW_IN_DOCKER not set or false)
         // Uses sync test to avoid async/env var ordering issues with test parallelization.
-        let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+        let in_docker = crate::config::helpers::env_or_override("LUNARWING_IN_DOCKER")
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
 
         // Verify logic: when not in Docker, env var should be false/unset
         if !in_docker {
-            // Simulating what the tool would do when IRONCLAW_IN_DOCKER is not set
+            // Simulating what the tool would do when neither Docker flag is set
             assert!(
                 !in_docker,
-                "Test environment should have IRONCLAW_IN_DOCKER unset or false"
+                "Test environment should have LUNARWING_IN_DOCKER / IRONCLAW_IN_DOCKER unset or false"
             );
         }
     }

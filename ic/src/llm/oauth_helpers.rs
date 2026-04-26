@@ -35,11 +35,12 @@ pub enum OAuthCallbackError {
 
 /// Returns the OAuth callback base URL.
 ///
-/// Checks `IRONCLAW_OAUTH_CALLBACK_URL` env var first (useful for remote/VPS
-/// deployments where `127.0.0.1` is unreachable from the user's browser),
-/// then falls back to `http://{callback_host()}:{OAUTH_CALLBACK_PORT}`.
+/// Checks `LUNARWING_OAUTH_CALLBACK_URL` first (legacy
+/// `IRONCLAW_OAUTH_CALLBACK_URL` also works), which is useful for remote/VPS
+/// deployments where `127.0.0.1` is unreachable from the user's browser, then
+/// falls back to `http://{callback_host()}:{OAUTH_CALLBACK_PORT}`.
 pub fn callback_url() -> String {
-    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_CALLBACK_URL")
+    crate::config::helpers::env_or_override("LUNARWING_OAUTH_CALLBACK_URL")
         .unwrap_or_else(|| format!("http://{}:{}", callback_host(), OAUTH_CALLBACK_PORT))
 }
 

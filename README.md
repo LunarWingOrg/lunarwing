@@ -51,3 +51,50 @@ LunarWing and its core contributers are not affiliated with NearAI.
 Our scope is large and is mainly concerned with adding many essential features from Upstream which are still missing, including more advanced health checking and self-repair mechanisms. The LunarWing team is more interested in providing useful features instead of support for proprietary chinese document editing tools or other unecessary crapware. Our vision for LunarWing is expressed in our MANIFESTO.
 
 #### Our core team utilizes a self-hoste Vikunja kanban board to keep track of tasks.
+
+## Instance Setup Defaults
+
+LunarWing supports a preseeded instance layout for fresh installs. The easiest
+way to prepare one is:
+
+```bash
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing \
+  --database postgres \
+  --database-url 'postgres://user:pass@db:5432/lunarwing' \
+  --llm-api-key unneeded \
+  --run-onboard
+```
+
+For a local libSQL setup:
+
+```bash
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing-dev \
+  --database libsql \
+  --libsql-path /srv/lunarwing-dev/ironclaw.db \
+  --run-onboard
+```
+
+This writes:
+- `$LUNARWING_BASE_DIR/config.toml`
+- `$LUNARWING_BASE_DIR/.env`
+- `$LUNARWING_BASE_DIR/workspace-template/*.md`
+
+Preferred env var: `LUNARWING_BASE_DIR`
+Legacy alias still accepted: `IRONCLAW_BASE_DIR`
+
+Current seeded config defaults:
+- `llm_backend = "openai_compatible"`
+- `openai_compatible_base_url = "http://192.168.1.157:3002"`
+- `selected_model = "tensorzero::function_name::ironclaw"`
+- `agent.name = "lunarwing"`
+
+Seed source files in this repository:
+- Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
+- Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
+
+At runtime those workspace files are imported from
+`$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so
+files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and
+`USER.md` can be customized on disk per instance.

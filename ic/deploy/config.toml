@@ -1,0 +1,18 @@
+# Ready-to-use LunarWing config for a fresh instance.
+#
+# Place this file at:
+#   $LUNARWING_BASE_DIR/config.toml
+#
+# Companion workspace defaults live in:
+#   $LUNARWING_BASE_DIR/workspace-template/
+#
+# If your OpenAI-compatible endpoint insists on a key, set it at launch time:
+#   LLM_API_KEY=unneeded ironclaw run
+
+llm_backend = "openai_compatible"
+selected_model = "tensorzero::function_name::ironclaw"
+openai_compatible_base_url = "http://192.168.1.157:3002"
+
+[agent]
+name = "lunarwing"
+default_timezone = "America/New_York"

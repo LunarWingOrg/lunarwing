@@ -3157,8 +3157,7 @@ mod tests {
 
         assert!(!result.resolved.is_empty(), "has user credentials"); // safety: test code only
         assert_eq!(
-            result.resolved[0].secret_value,
-            "user_specific_token",
+            result.resolved[0].secret_value, "user_specific_token",
             "user token"
         ); // safety: test code only
     }

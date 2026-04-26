@@ -3194,7 +3194,9 @@ That's my plan."#;
     #[test]
     fn test_user_signals_execution_intent() {
         assert!(user_signals_execution_intent("run it"));
-        assert!(user_signals_execution_intent("Please execute the migration"));
+        assert!(user_signals_execution_intent(
+            "Please execute the migration"
+        ));
         assert!(user_signals_execution_intent(
             "after that, deploy the service"
         ));
@@ -3202,8 +3204,6 @@ That's my plan."#;
         assert!(!user_signals_execution_intent(
             "the docs say \"run the tests\""
         ));
-        assert!(!user_signals_execution_intent(
-            "```\nrun the tests\n```"
-        ));
+        assert!(!user_signals_execution_intent("```\nrun the tests\n```"));
     }
 }

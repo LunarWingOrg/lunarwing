@@ -315,7 +315,10 @@ fn redact_json_value(value: &mut serde_json::Value) {
         serde_json::Value::Object(map) => {
             for (key, value) in map.iter_mut() {
                 let lower = key.to_ascii_lowercase();
-                if SENSITIVE_BODY_KEYS.iter().any(|sensitive| *sensitive == lower) {
+                if SENSITIVE_BODY_KEYS
+                    .iter()
+                    .any(|sensitive| *sensitive == lower)
+                {
                     *value = serde_json::Value::String("[REDACTED]".to_string());
                 } else {
                     redact_json_value(value);
@@ -348,7 +351,10 @@ fn redact_form_urlencoded(body: &str) -> Option<String> {
         .into_iter()
         .map(|(key, value)| {
             let lower = key.to_ascii_lowercase();
-            if SENSITIVE_BODY_KEYS.iter().any(|sensitive| *sensitive == lower) {
+            if SENSITIVE_BODY_KEYS
+                .iter()
+                .any(|sensitive| *sensitive == lower)
+            {
                 any_redacted = true;
                 (key, "[REDACTED]".to_string())
             } else {
@@ -1177,7 +1183,14 @@ mod tests {
         assert!(recorded.request.url.contains("page=1"));
         assert!(!recorded.request.url.contains("secret"));
         assert!(!recorded.request.url.contains("access_token=abc"));
-        assert!(!recorded.request.body.as_deref().unwrap_or("").contains("hunter2"));
+        assert!(
+            !recorded
+                .request
+                .body
+                .as_deref()
+                .unwrap_or("")
+                .contains("hunter2")
+        );
         assert_eq!(recorded.response.headers[0].1, "[REDACTED]");
         assert!(!recorded.response.body.contains("xyz"));
         assert!(recorded.response.body.contains("3600"));

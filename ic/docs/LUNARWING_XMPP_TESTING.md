@@ -179,11 +179,16 @@ service name, so LunarWing service stops can also stop the bridge. Do not
 assume the bridge caused a LunarWing stop just because both units changed state
 together.
 
-The built-in Rust service manager also uses the LunarWing name now:
-`ironclaw service install` installs `~/.config/systemd/user/lunarwing.service`
-and a companion `xmpp-bridge.service` when the bridge binary is available. During
-install it attempts to disable the legacy user unit `ironclaw.service` if that
-old unit file exists, preventing both daemon names from being enabled together.
+The built-in Rust service manager also uses the LunarWing name now.
+`ironclaw service install` detects the host service manager:
+
+- systemd: installs `~/.config/systemd/user/lunarwing.service` and, when the
+  bridge binary is available, `xmpp-bridge.service`
+- OpenRC: installs `/etc/init.d/lunarwing` and `/etc/init.d/xmpp-bridge`
+
+During systemd installs it attempts to disable the legacy user unit
+`ironclaw.service` if that old unit file exists, preventing both daemon names
+from being enabled together.
 
 ## System Service Method
 

@@ -371,7 +371,7 @@ pub(crate) fn load_bootstrap_settings(
 }
 
 pub(crate) fn resolve_owner_id(settings: &Settings) -> Result<String, ConfigError> {
-    let env_owner_id = self::helpers::optional_env("IRONCLAW_OWNER_ID")?;
+    let env_owner_id = self::helpers::optional_env("LUNARWING_OWNER_ID")?;
     let settings_owner_id = settings.owner_id.clone();
     let configured_owner_id = env_owner_id.clone().or(settings_owner_id.clone());
 
@@ -388,7 +388,7 @@ pub(crate) fn resolve_owner_id(settings: &Settings) -> Result<String, ConfigErro
     {
         WARNED_EXPLICIT_DEFAULT_OWNER_ID.call_once(|| {
             tracing::warn!(
-                "IRONCLAW_OWNER_ID resolved to the legacy 'default' scope explicitly; durable state will keep legacy owner behavior"
+                "LUNARWING_OWNER_ID (or legacy IRONCLAW_OWNER_ID) resolved to the legacy 'default' scope explicitly; durable state will keep legacy owner behavior"
             );
         });
     }

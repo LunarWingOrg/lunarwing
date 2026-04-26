@@ -331,8 +331,11 @@ The bridge unit has `PartOf=lunarwing-test.service`, so LunarWing service stops
 can also stop the bridge.
 
 The built-in Rust service installer is separate from this test renderer. Running
-`ironclaw service install` now installs the user unit as `lunarwing.service` and
-attempts to disable the legacy `ironclaw.service` user unit when it exists.
+`ironclaw service install` now detects the host service manager:
+
+- systemd: installs the user unit as `lunarwing.service` and attempts to disable
+  the legacy `ironclaw.service` user unit when it exists
+- OpenRC: installs `/etc/init.d/lunarwing` and `/etc/init.d/xmpp-bridge`
 
 For production system services, use the committed templates instead of the
 generated user-service units:

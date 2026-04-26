@@ -842,19 +842,37 @@ impl AppBuilder {
             // the generic seeds. Only imports files that don't already exist
             // in the database — never overwrites user edits.
             //
+            // If WORKSPACE_IMPORT_DIR is unset, fall back to
+            // $IRONCLAW_BASE_DIR/workspace-template/ when it exists.
+            //
             // Runs before seed_if_empty() so that custom templates take priority
             // over generic seeds. seed_if_empty() then fills any remaining gaps.
-            if let Ok(import_dir) = std::env::var("WORKSPACE_IMPORT_DIR") {
-                let import_path = std::path::Path::new(&import_dir);
-                match ws.import_from_directory(import_path).await {
+            let import_dir = std::env::var("WORKSPACE_IMPORT_DIR")
+                .ok()
+                .map(std::path::PathBuf::from)
+                .or_else(|| {
+                    let default_dir = crate::bootstrap::ironclaw_workspace_template_dir();
+                    if default_dir.is_dir() {
+                        Some(default_dir)
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some(import_path) = import_dir {
+                match ws.import_from_directory(&import_path).await {
                     Ok(count) if count > 0 => {
-                        tracing::debug!("Imported {} workspace file(s) from {}", count, import_dir);
+                        tracing::debug!(
+                            "Imported {} workspace file(s) from {}",
+                            count,
+                            import_path.display()
+                        );
                     }
                     Ok(_) => {}
                     Err(e) => {
                         tracing::warn!(
                             "Failed to import workspace files from {}: {}",
-                            import_dir,
+                            import_path.display(),
                             e
                         );
                     }
