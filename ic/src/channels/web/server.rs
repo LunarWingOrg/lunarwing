@@ -752,14 +752,14 @@ async fn oauth_callback_handler(
     let state_param = match params.get("state") {
         Some(s) if !s.is_empty() => s.clone(),
         _ => {
-            return oauth_error_page("IronClaw");
+            return oauth_error_page("LunarWing");
         }
     };
 
     let code = match params.get("code") {
         Some(c) if !c.is_empty() => c.clone(),
         _ => {
-            return oauth_error_page("IronClaw");
+            return oauth_error_page("LunarWing");
         }
     };
 
@@ -767,7 +767,7 @@ async fn oauth_callback_handler(
     let ext_mgr = match state.extension_manager.as_ref() {
         Some(mgr) => mgr,
         None => {
-            return oauth_error_page("IronClaw");
+            return oauth_error_page("LunarWing");
         }
     };
 
@@ -781,7 +781,7 @@ async fn oauth_callback_handler(
                 "OAuth callback received with malformed state"
             );
             clear_auth_mode(&state, &state.owner_id).await;
-            return oauth_error_page("IronClaw");
+            return oauth_error_page("LunarWing");
         }
     };
     let lookup_key = decoded_state.flow_id.clone();
@@ -802,7 +802,7 @@ async fn oauth_callback_handler(
                 lookup_key = %redacted_lookup_key,
                 "OAuth callback received with unknown or expired state"
             );
-            return oauth_error_page("IronClaw");
+            return oauth_error_page("LunarWing");
         }
     };
 
@@ -1211,7 +1211,7 @@ async fn slack_relay_oauth_callback_handler(
         axum::response::Html(
             "<html><body style='font-family: system-ui; text-align: center; padding: 60px;'>\
              <h2>Slack Connected!</h2>\
-             <p>You can close this tab and return to IronClaw.</p>\
+             <p>You can close this tab and return to LunarWing.</p>\
              <script>window.close()</script>\
              </body></html>"
                 .to_string(),

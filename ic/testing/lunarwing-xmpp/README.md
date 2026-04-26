@@ -70,6 +70,179 @@ Use the example files in this directory only as references:
 
 Edit the generated env files, not the examples.
 
+The generated `env/lunarwing.env` is already seeded for the common private-lab
+stack used by this harness:
+
+- `DATABASE_BACKEND=postgres`
+- `DATABASE_SSLMODE=disable`
+- `PGSSLMODE=disable`
+- `ALLOW_PRIVATE_IPS=1`
+- `LLM_BACKEND=openai_compatible`
+- `LLM_BASE_URL=http://127.0.0.1:3002/openai/v1`
+- `LLM_MODEL=tensorzero::function_name::ironclaw`
+- `WASM_CHANNELS_ENABLED=true`
+
+Do not remove those defaults unless you are intentionally changing the test
+network, database SSL mode, or provider path.
+
+## Fresh Recreate Recipes
+
+### PostgreSQL + user-systemd harness
+
+Use this when you want a full clean harness with custom database credentials,
+custom gateway and bridge tokens, and fresh user-systemd units.
+
+The built-in `start-postgres` helper still creates `ironclaw:ironclaw@.../ironclaw`.
+If you need custom PostgreSQL credentials, create the container yourself and
+point `LUNARWING_TEST_DATABASE_URL` at it as shown below.
+
+```bash
+cd /home/cmc/lunarwing/ic
+
+export LUNARWING_TEST_ROOT=/tmp/lunarwing-fresh-harness
+export PG_CONTAINER=lunarwing-test-postgres
+export PG_PORT=55432
+export PG_USER=lunarwing
+export PG_PASS='replace-me-db-pass'
+export PG_DB=lunarwing
+export GATEWAY_TOKEN='replace-me-gateway-token'
+export BRIDGE_TOKEN='replace-me-bridge-token'
+export XMPP_PASSWORD='replace-me-xmpp-password'
+export LLM_API_KEY='unneeded'
+
+systemctl --user stop lunarwing-test.service xmpp-bridge-test.service ironclaw-proxy-test.service 2>/dev/null || true
+rm -f ~/.config/systemd/user/lunarwing-test.service ~/.config/systemd/user/xmpp-bridge-test.service ~/.config/systemd/user/ironclaw-proxy-test.service
+systemctl --user daemon-reload
+docker rm -f "$PG_CONTAINER" 2>/dev/null || true
+rm -rf "$LUNARWING_TEST_ROOT"
+
+docker run -d \
+  --name "$PG_CONTAINER" \
+  -e POSTGRES_USER="$PG_USER" \
+  -e POSTGRES_PASSWORD="$PG_PASS" \
+  -e POSTGRES_DB="$PG_DB" \
+  -p "127.0.0.1:${PG_PORT}:5432" \
+  pgvector/pgvector:pg16
+
+until docker exec "$PG_CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; do sleep 1; done
+
+export LUNARWING_TEST_PG_CONTAINER="$PG_CONTAINER"
+export LUNARWING_TEST_PG_PORT="$PG_PORT"
+export LUNARWING_TEST_DATABASE_URL="postgres://${PG_USER}:${PG_PASS}@127.0.0.1:${PG_PORT}/${PG_DB}"
+
+scripts/lunarwing-xmpp-test-env.sh init
+
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+root = Path(os.environ["LUNARWING_TEST_ROOT"])
+updates = {
+    root / "env/lunarwing.env": {
+        "LLM_API_KEY": os.environ["LLM_API_KEY"],
+        "GATEWAY_AUTH_TOKEN": os.environ["GATEWAY_TOKEN"],
+    },
+    root / "env/xmpp-bridge.env": {
+        "XMPP_BRIDGE_TOKEN": os.environ["BRIDGE_TOKEN"],
+        "XMPP_PASSWORD": os.environ["XMPP_PASSWORD"],
+    },
+}
+
+for path, values in updates.items():
+    lines = path.read_text().splitlines()
+    seen = set()
+    out = []
+    for line in lines:
+        if "=" in line and not line.lstrip().startswith("#"):
+            key, _ = line.split("=", 1)
+            if key in values:
+                out.append(f"{key}={values[key]}")
+                seen.add(key)
+                continue
+        out.append(line)
+    for key, value in values.items():
+        if key not in seen:
+            out.append(f"{key}={value}")
+    path.write_text("\n".join(out) + "\n")
+PY
+
+scripts/lunarwing-xmpp-test-env.sh build --with-wasm
+scripts/lunarwing-xmpp-test-env.sh install-wasm
+scripts/lunarwing-xmpp-test-env.sh render-systemd
+mkdir -p ~/.config/systemd/user
+cp "$LUNARWING_TEST_ROOT/systemd/"*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user restart lunarwing-test.service
+scripts/lunarwing-xmpp-test-env.sh gateway-status
+scripts/lunarwing-xmpp-test-env.sh verify
+```
+
+If you only want bridge API smoke tests, leave `XMPP_PASSWORD` empty and skip
+live XMPP configuration until later.
+
+### libSQL fresh instance
+
+The XMPP harness is PostgreSQL-first. For a clean libSQL recreate, use the
+instance bootstrap script instead of `lunarwing-xmpp-test-env.sh`.
+There is no database password in this mode; the only secrets below are the
+gateway token and optional LLM API key.
+
+```bash
+cd /home/cmc/lunarwing/ic
+
+export BASE=/tmp/lunarwing-libsql
+export GATEWAY_TOKEN='replace-me-gateway-token'
+export LLM_API_KEY='unneeded'
+
+rm -rf "$BASE"
+
+scripts/setup-instance.sh \
+  --base-dir "$BASE" \
+  --database libsql \
+  --libsql-path "$BASE/ironclaw.db" \
+  --llm-base-url http://127.0.0.1:3002/openai/v1 \
+  --llm-model tensorzero::function_name::ironclaw \
+  --llm-api-key "$LLM_API_KEY" \
+  --agent-name lunarwing \
+  --run-onboard
+
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["BASE"]) / ".env"
+values = {
+    "LUNARWING_BASE_DIR": os.environ["BASE"],
+    "GATEWAY_ENABLED": "true",
+    "GATEWAY_HOST": "127.0.0.1",
+    "GATEWAY_PORT": "8765",
+    "GATEWAY_AUTH_TOKEN": os.environ["GATEWAY_TOKEN"],
+}
+
+lines = path.read_text().splitlines()
+seen = set()
+out = []
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, _ = line.split("=", 1)
+        if key in values:
+            out.append(f"{key}={values[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+for key, value in values.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n")
+PY
+
+LUNARWING_BASE_DIR="$BASE" ./target/debug/ironclaw run
+```
+
+That flow still seeds `config.toml` plus `workspace-template/` from `deploy/`,
+so `SOUL.md`, `IDENTITY.md`, `HEARTBEAT.md`, and the other instance files start
+from the LunarWing templates.
+
 ## 3. Build the Test Binaries
 
 Build both the current LunarWing binary and the bridge:
@@ -97,6 +270,13 @@ scripts/lunarwing-xmpp-test-env.sh build
 
 Use the same `LUNARWING_TEST_PROFILE` for later `start-*`, `smoke`, and
 `render-systemd` commands.
+
+For the full extension set used by the current harness docs, build and install
+the WASM artifacts before trying a service-backed run:
+
+```bash
+scripts/lunarwing-xmpp-test-env.sh build --with-wasm
+```
 
 ## Service Names
 
@@ -250,7 +430,12 @@ The harness starts LunarWing with the isolated `IRONCLAW_BASE_DIR` from
 ```bash
 scripts/lunarwing-xmpp-test-env.sh start-lunarwing
 scripts/lunarwing-xmpp-test-env.sh lunarwing-status
+scripts/lunarwing-xmpp-test-env.sh gateway-status
 ```
+
+If you built and installed the WASM channel artifacts first, `gateway-status`
+should report `enabled_channels` containing `gateway` plus installed channels
+such as `xmpp` and `weechat`.
 
 Stop it with:
 
@@ -284,6 +469,10 @@ scripts/lunarwing-xmpp-test-env.sh start-lunarwing -- --no-onboard --no-db run
 
 ## 8. Generate User-Systemd Units
 
+This is the preferred install-style test path on systemd hosts. It keeps the
+Postgres-backed harness alive after the invoking shell exits, which is more
+reliable than leaving `up` running from an interactive or agent-managed shell.
+
 Generate test units using the current checkout, test root, and profile:
 
 ```bash
@@ -298,18 +487,21 @@ cp "${LUNARWING_TEST_ROOT:-/tmp/lunarwing-xmpp-test}/systemd/"*.service ~/.confi
 systemctl --user daemon-reload
 ```
 
-Start the bridge service first:
+Before using the full Postgres-backed path, make sure Docker is running because
+the harness starts PostgreSQL in a local container.
+
+The generated units inherit the current harness env file, including
+`ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable`.
+
+Starting `lunarwing-test.service` is enough; it already pulls in
+`xmpp-bridge-test.service` and `ironclaw-proxy-test.service` through
+`Wants=` / `After=`:
 
 ```bash
-systemctl --user start xmpp-bridge-test.service
-systemctl --user status xmpp-bridge-test.service
-```
-
-Then start LunarWing:
-
-```bash
-systemctl --user start lunarwing-test.service
+systemctl --user restart lunarwing-test.service
 systemctl --user status lunarwing-test.service
+systemctl --user status xmpp-bridge-test.service
+systemctl --user status ironclaw-proxy-test.service
 ```
 
 Use read-only diagnostics first:
@@ -329,6 +521,9 @@ systemctl --user stop xmpp-bridge-test.service
 
 The bridge unit has `PartOf=lunarwing-test.service`, so LunarWing service stops
 can also stop the bridge.
+
+If the test stack is already running from manual `start-*` commands, stop those
+first so the service-managed units can bind the same ports cleanly.
 
 The built-in Rust service installer is separate from this test renderer. Running
 `ironclaw service install` now detects the host service manager:
@@ -350,6 +545,11 @@ sudo systemctl enable --now lunarwing.service
 
 Those templates expect `/etc/lunarwing/lunarwing.env` and
 `/etc/lunarwing/xmpp-bridge.env` for production config and secrets.
+
+The committed `lunarwing.service` and OpenRC templates already seed
+`ALLOW_PRIVATE_IPS=1` and `PGSSLMODE=disable` for private-network Postgres and
+OpenAI-compatible lab setups. Override those in `/etc/lunarwing/lunarwing.env`
+only when your deployment needs different SSL or network behavior.
 
 Install the production watchdog timer with:
 
@@ -375,12 +575,20 @@ Common issues:
 
 - `HTTP 000` from `doctor` means nothing is listening on the bridge port.
 - `401` or `403` from `bridge-status` usually means the wrong token or env file.
+- `gateway-status` missing `xmpp` or `weechat` usually means WASM channels were
+  not installed yet; rerun `build --with-wasm` or `install-wasm`.
+- `gateway-status` now reports the requested harness channels as `xmpp`,
+  `weechat`, and `darkirc`. The Gotify tool shows up in
+  `/api/extensions/tools` as `gotify-tool`.
 - A system bridge may already be using `127.0.0.1:8787`; change
   `XMPP_BRIDGE_BIND` in the generated bridge env file.
 - `configure-bridge` requires `jq`, `curl`, `XMPP_BRIDGE_TOKEN`, and
   `XMPP_PASSWORD`.
 - If the generated systemd unit points at a missing binary, rerun `build` with
   the same `LUNARWING_TEST_PROFILE` used for `render-systemd`.
+- If `verify` only fails `TensorZero proxy responds at :3002`, the local proxy
+  may still be bound correctly. That check depends on the upstream
+  `TENSORZERO_URL` answering the proxy's `/openai/v1/models` readiness probe.
 
 ## 10. Clean Up
 

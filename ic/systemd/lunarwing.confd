@@ -17,6 +17,8 @@ lunarwing_output_log="/var/log/lunarwing/lunarwing.log"
 lunarwing_error_log="/var/log/lunarwing/lunarwing.err"
 lunarwing_env_file="/etc/lunarwing/lunarwing.env"
 lunarwing_cli_enabled="false"
+lunarwing_allow_private_ips="1"
+lunarwing_pgsslmode="disable"
 lunarwing_base_dir="/var/lib/lunarwing"
 lunarwing_rust_log="ironclaw=info,lunarwing=info"
 

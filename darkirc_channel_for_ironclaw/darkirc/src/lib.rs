@@ -26,7 +26,7 @@
 
 wit_bindgen::generate!({
     world: "sandboxed-channel",
-    path: "../../wit/channel.wit",
+    path: "../../ic/wit/channel.wit",
 });
 
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ struct DarkIrcConfig {
     dm_policy: String,
 
     /// Allowlisted DarkIRC nicks.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec_or_empty")]
     allow_from: Vec<String>,
 
     /// Poll interval in seconds (minimum 3).
@@ -99,6 +99,32 @@ fn default_dm_policy() -> String {
 
 fn default_poll_interval() -> u32 {
     3
+}
+
+fn deserialize_string_vec_or_empty<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringVecOrEmpty {
+        Vec(Vec<String>),
+        String(String),
+    }
+
+    Ok(match StringVecOrEmpty::deserialize(deserializer)? {
+        StringVecOrEmpty::Vec(values) => values
+            .into_iter()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .collect(),
+        StringVecOrEmpty::String(value) => value
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .collect(),
+    })
 }
 
 // ============================================================================
@@ -142,15 +168,18 @@ impl Guest for DarkIrcChannel {
 
         channel_host::log(
             channel_host::LogLevel::Info,
-            &format!("DarkIRC channel starting, adapter at {}", config.adapter_url),
+            &format!(
+                "DarkIRC channel starting, adapter at {}",
+                config.adapter_url
+            ),
         );
 
         // Persist config for subsequent callbacks
         let _ = channel_host::workspace_write(ADAPTER_URL_PATH, &config.adapter_url);
         let _ = channel_host::workspace_write(DM_POLICY_PATH, &config.dm_policy);
 
-        let allow_from_json = serde_json::to_string(&config.allow_from)
-            .unwrap_or_else(|_| "[]".to_string());
+        let allow_from_json =
+            serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
         let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &allow_from_json);
 
         // Validate adapter connectivity (non-fatal — adapter may start later)
@@ -206,22 +235,17 @@ impl Guest for DarkIrcChannel {
         let poll_url = format!("{}/poll", adapter_url);
         let headers_json = serde_json::json!({}).to_string();
 
-        let response = match channel_host::http_request(
-            "GET",
-            &poll_url,
-            &headers_json,
-            None,
-            Some(5_000),
-        ) {
-            Ok(r) => r,
-            Err(e) => {
-                channel_host::log(
-                    channel_host::LogLevel::Debug,
-                    &format!("Adapter poll failed: {}", e),
-                );
-                return;
-            }
-        };
+        let response =
+            match channel_host::http_request("GET", &poll_url, &headers_json, None, Some(5_000)) {
+                Ok(r) => r,
+                Err(e) => {
+                    channel_host::log(
+                        channel_host::LogLevel::Debug,
+                        &format!("Adapter poll failed: {}", e),
+                    );
+                    return;
+                }
+            };
 
         if response.status != 200 {
             channel_host::log(
@@ -264,49 +288,11 @@ impl Guest for DarkIrcChannel {
         let metadata: DarkIrcMessageMetadata = serde_json::from_str(&response.metadata_json)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
-        let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(default_adapter_url);
+        send_response_to_nick(&metadata.nick, &response.content)
+    }
 
-        // Split long responses into IRC-friendly chunks
-        let chunks = split_message(&response.content, 400);
-
-        let mut successful_chunks = 0;
-        let mut last_error = None;
-
-        for chunk in &chunks {
-            match adapter_send(&adapter_url, &metadata.nick, chunk) {
-                Ok(()) => {
-                    successful_chunks += 1;
-                }
-                Err(e) => {
-                    channel_host::log(
-                        channel_host::LogLevel::Warn,
-                        &format!("Failed to send chunk {} to '{}': {}", successful_chunks + 1, metadata.nick, e),
-                    );
-                    last_error = Some(e);
-                    // Continue trying to send remaining chunks
-                }
-            }
-        }
-
-        channel_host::log(
-            channel_host::LogLevel::Debug,
-            &format!(
-                "Sent {} of {} chunk(s) to '{}' ({} chars total)",
-                successful_chunks,
-                chunks.len(),
-                metadata.nick,
-                response.content.len(),
-            ),
-        );
-
-        // If we sent at least one chunk successfully, consider it a partial success
-        if successful_chunks > 0 {
-            Ok(())
-        } else {
-            Err(last_error.unwrap_or_else(|| "Failed to send any chunks".to_string()))
-        }
+    fn on_broadcast(user_id: String, response: AgentResponse) -> Result<(), String> {
+        send_response_to_nick(&user_id, &response.content)
     }
 
     /// Forward actionable status updates to the DarkIRC user.
@@ -374,8 +360,8 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
     let nick = &msg.from;
 
     // --- DM policy enforcement ---
-    let dm_policy = channel_host::workspace_read(DM_POLICY_PATH)
-        .unwrap_or_else(|| "pairing".to_string());
+    let dm_policy =
+        channel_host::workspace_read(DM_POLICY_PATH).unwrap_or_else(|| "pairing".to_string());
 
     if dm_policy != "open" {
         // Build effective allow list: config allow_from + pairing-approved store
@@ -398,10 +384,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
                     Ok(result) => {
                         channel_host::log(
                             channel_host::LogLevel::Info,
-                            &format!(
-                                "Pairing request for '{}': code {}",
-                                nick, result.code
-                            ),
+                            &format!("Pairing request for '{}': code {}", nick, result.code),
                         );
 
                         if result.created {
@@ -440,12 +423,9 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
     }
 
     // --- Emit to agent ---
-    let metadata = DarkIrcMessageMetadata {
-        nick: nick.clone(),
-    };
+    let metadata = DarkIrcMessageMetadata { nick: nick.clone() };
 
-    let metadata_json =
-        serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string());
+    let metadata_json = serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string());
 
     channel_host::emit_message(&EmittedMessage {
         user_id: nick.clone(),
@@ -453,6 +433,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
         content: msg.text.clone(),
         thread_id: Some(format!("darkirc:dm:{}", nick)),
         metadata_json,
+        attachments: Vec::new(),
     });
 
     channel_host::log(
@@ -470,13 +451,7 @@ fn adapter_health(adapter_url: &str) -> Result<bool, String> {
     let url = format!("{}/health", adapter_url);
     let headers_json = serde_json::json!({}).to_string();
 
-    let response = channel_host::http_request(
-        "GET",
-        &url,
-        &headers_json,
-        None,
-        Some(3_000),
-    )?;
+    let response = channel_host::http_request("GET", &url, &headers_json, None, Some(3_000))?;
 
     if response.status != 200 {
         return Err(format!("HTTP {}", response.status));
@@ -487,10 +462,57 @@ fn adapter_health(adapter_url: &str) -> Result<bool, String> {
         irc_connected: Option<bool>,
     }
 
-    let health: HealthResponse = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("parse error: {}", e))?;
+    let health: HealthResponse =
+        serde_json::from_slice(&response.body).map_err(|e| format!("parse error: {}", e))?;
 
     Ok(health.irc_connected.unwrap_or(false))
+}
+
+fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
+    let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(default_adapter_url);
+
+    let chunks = split_message(content, 400);
+    let mut successful_chunks = 0;
+    let mut last_error = None;
+
+    for chunk in &chunks {
+        match adapter_send(&adapter_url, nick, chunk) {
+            Ok(()) => {
+                successful_chunks += 1;
+            }
+            Err(e) => {
+                channel_host::log(
+                    channel_host::LogLevel::Warn,
+                    &format!(
+                        "Failed to send chunk {} to '{}': {}",
+                        successful_chunks + 1,
+                        nick,
+                        e
+                    ),
+                );
+                last_error = Some(e);
+            }
+        }
+    }
+
+    channel_host::log(
+        channel_host::LogLevel::Debug,
+        &format!(
+            "Sent {} of {} chunk(s) to '{}' ({} chars total)",
+            successful_chunks,
+            chunks.len(),
+            nick,
+            content.len(),
+        ),
+    );
+
+    if successful_chunks > 0 {
+        Ok(())
+    } else {
+        Err(last_error.unwrap_or_else(|| "Failed to send any chunks".to_string()))
+    }
 }
 
 /// Send a DM via the adapter.
@@ -508,13 +530,8 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
     })
     .to_string();
 
-    let response = channel_host::http_request(
-        "POST",
-        &url,
-        &headers_json,
-        Some(&payload),
-        Some(5_000),
-    )?;
+    let response =
+        channel_host::http_request("POST", &url, &headers_json, Some(&payload), Some(5_000))?;
 
     if response.status == 503 {
         return Err("IRC not connected".to_string());
@@ -552,11 +569,7 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
             end -= 1;
         }
         if end == 0 {
-            let first_char_len = remaining
-                .chars()
-                .next()
-                .map(|c| c.len_utf8())
-                .unwrap_or(1);
+            let first_char_len = remaining.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
             chunks.push(remaining[..first_char_len].to_string());
             remaining = &remaining[first_char_len..];
             continue;

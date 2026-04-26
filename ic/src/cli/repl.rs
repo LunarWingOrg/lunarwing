@@ -1,4 +1,4 @@
-//! `ironclaw repl` — connect to a running Ironclaw daemon via Unix socket.
+//! `ironclaw repl` — connect to a running LunarWing daemon via Unix socket.
 //!
 //! The daemon must already be running (e.g. via `systemctl start ironclaw`)
 //! and listening on its Unix socket (default: `~/.ironclaw/ironclaw.sock`).
@@ -36,9 +36,9 @@ enum ReplMessage {
     Pong,
 }
 
-/// Connect to a running Ironclaw service via its Unix socket REPL.
+/// Connect to a running LunarWing service via its Unix socket REPL.
 ///
-/// The Ironclaw daemon must be running (e.g. `ironclaw run` or via systemd).
+/// The LunarWing daemon must be running (e.g. `ironclaw run` or via systemd).
 /// This command does not start a new instance.
 #[derive(Parser, Debug)]
 pub struct ReplCommand {
@@ -62,7 +62,7 @@ impl ReplCommand {
 
         let stream = UnixStream::connect(&socket_path).await.map_err(|e| {
             anyhow::anyhow!(
-                "Failed to connect to Ironclaw REPL at {}: {}.\n\
+                "Failed to connect to LunarWing REPL at {}: {}.\n\
                  Make sure the daemon is running (`ironclaw run` or `systemctl start ironclaw`).",
                 socket_path.display(),
                 e

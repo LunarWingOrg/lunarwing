@@ -34,6 +34,8 @@ pub use prompts::{
     print_success, secret_input, select_many, select_one,
 };
 #[cfg(any(feature = "postgres", feature = "libsql"))]
+pub use wizard::maybe_seed_default_instance_assets;
+#[cfg(any(feature = "postgres", feature = "libsql"))]
 pub use wizard::{SetupConfig, SetupError, SetupWizard};
 
 /// Check if onboarding is needed and return the reason.

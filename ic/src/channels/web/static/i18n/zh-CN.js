@@ -1,8 +1,8 @@
-// 中文语言包 for IronClaw
+// 中文语言包 for LunarWing
 
 I18n.register('zh-CN', {
   // 认证页面
-  'auth.title': 'IronClaw',
+  'auth.title': 'LunarWing',
   'auth.tagline': '安全可靠的 AI 助手',
   'auth.tokenLabel': '网关令牌',
   'auth.tokenPlaceholder': '粘贴你的网关令牌',
@@ -15,12 +15,12 @@ I18n.register('zh-CN', {
   'chat.inputPlaceholder': '输入消息或 / 以使用命令...',
   
   // 重启弹窗
-  'restart.title': '重启 IronClaw 实例',
-  'restart.description': '确定要重启 IronClaw 实例吗？这将优雅地重启进程。',
+  'restart.title': '重启 LunarWing 实例',
+  'restart.description': '确定要重启 LunarWing 实例吗？这将优雅地重启进程。',
   'restart.warning': '正在运行的任务可能会中断。重启将在几秒钟内完成。',
   'restart.cancel': '取消',
   'restart.confirm': '确认重启',
-  'restart.progressTitle': '正在重启 IronClaw',
+  'restart.progressTitle': '正在重启 LunarWing',
   'restart.progressSubtitle': '请等待进程重启...',
   'restart.checkLogs': '重启完成后，请查看日志标签页了解详情。',
   
@@ -352,7 +352,7 @@ I18n.register('zh-CN', {
   
   // 配置
   'config.title': '配置 {name}',
-  'config.telegramOwnerHint': '保存后，IronClaw 会显示一次性验证码。将 `/start CODE` 发送给你的 Telegram 机器人，IronClaw 会自动完成设置。',
+  'config.telegramOwnerHint': '保存后，LunarWing 会显示一次性验证码。将 `/start CODE` 发送给你的 Telegram 机器人，LunarWing 会自动完成设置。',
   'config.telegramChallengeTitle': 'Telegram 所有者验证',
   'config.telegramOwnerWaiting': '正在等待 Telegram 所有者验证...',
   'config.telegramCommandLabel': '请在 Telegram 中发送：',
@@ -527,7 +527,7 @@ I18n.register('zh-CN', {
 
   // Welcome Card
   'welcome.heading': '有什么可以帮助您的？',
-  'welcome.description': 'IronClaw 是您的安全 AI 助手。选择下方的建议或输入您自己的消息。',
+  'welcome.description': 'LunarWing 是您的安全 AI 助手。选择下方的建议或输入您自己的消息。',
   'welcome.runTool': '运行工具',
   'welcome.checkJobs': '查看任务状态',
   'welcome.searchMemory': '搜索记忆',
@@ -542,7 +542,7 @@ I18n.register('zh-CN', {
 
   // Messages
   'message.you': '你',
-  'message.assistant': 'IronClaw',
+  'message.assistant': 'LunarWing',
   'message.system': '系统',
   'message.copy': '复制',
   'message.copied': '已复制！',

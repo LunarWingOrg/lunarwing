@@ -593,7 +593,7 @@ pub struct AgentSettings {
 }
 
 fn default_agent_name() -> String {
-    "ironclaw".to_string()
+    "lunarwing".to_string()
 }
 
 fn default_max_parallel_jobs() -> u32 {
@@ -1157,7 +1157,7 @@ impl Settings {
             .map_err(|e| format!("failed to serialize settings: {}", e))?;
 
         let content = format!(
-            "# IronClaw configuration file.\n\
+            "# LunarWing configuration file.\n\
              #\n\
              # Priority: env var > this file > database settings > defaults.\n\
              # Uncomment and edit values to override defaults.\n\
@@ -1436,7 +1436,7 @@ mod tests {
     fn test_get_setting() {
         let settings = Settings::default();
 
-        assert_eq!(settings.get("agent.name"), Some("ironclaw".to_string()));
+        assert_eq!(settings.get("agent.name"), Some("lunarwing".to_string()));
         assert_eq!(
             settings.get("agent.max_parallel_jobs"),
             Some("5".to_string())
@@ -1465,7 +1465,7 @@ mod tests {
 
         settings.agent.name = "custom".to_string();
         settings.reset("agent.name").unwrap();
-        assert_eq!(settings.agent.name, "ironclaw");
+        assert_eq!(settings.agent.name, "lunarwing");
     }
 
     #[test]
@@ -1807,7 +1807,7 @@ mod tests {
         Settings::default().save_toml(&path).unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
 
-        assert!(content.starts_with("# IronClaw configuration file."));
+        assert!(content.starts_with("# LunarWing configuration file."));
         assert!(content.contains("[agent]"));
         assert!(content.contains("[heartbeat]"));
     }

@@ -25,6 +25,8 @@ scripts/lunarwing-xmpp-test-env.sh smoke
 
 For a command-by-command setup walkthrough, see
 [`testing/lunarwing-xmpp/README.md`](../testing/lunarwing-xmpp/README.md).
+That guide now also includes copy-paste "Fresh Recreate Recipes" for both the
+Postgres-backed user-systemd harness and the separate libSQL bootstrap path.
 
 The default test root is `/tmp/lunarwing-xmpp-test`. Export an override when
 you want the state to survive reboots:
@@ -45,6 +47,21 @@ Generated files:
 
 The env files are created with mode `0600`. They may contain live XMPP passwords
 and bridge tokens, so do not paste their contents into chat, issues, or logs.
+
+The generated `env/lunarwing.env` is already seeded for the common private-lab
+stack used by this harness:
+
+- `DATABASE_BACKEND=postgres`
+- `DATABASE_SSLMODE=disable`
+- `PGSSLMODE=disable`
+- `ALLOW_PRIVATE_IPS=1`
+- `LLM_BACKEND=openai_compatible`
+- `LLM_BASE_URL=http://127.0.0.1:3002/openai/v1`
+- `LLM_MODEL=tensorzero::function_name::ironclaw`
+- `WASM_CHANNELS_ENABLED=true`
+
+Do not remove those defaults unless you are intentionally changing the test
+network, database SSL mode, or provider path.
 
 ## Bridge API Smoke Tests
 
@@ -132,6 +149,10 @@ scripts/lunarwing-xmpp-test-env.sh start-lunarwing -- --no-onboard --no-db run
 
 ## User Systemd Method
 
+This is the preferred install-style test path on systemd hosts. It keeps the
+Postgres-backed harness alive after the invoking shell exits, which is more
+reliable than leaving `up` running from an interactive or agent-managed shell.
+
 Generate user-service units from your current checkout and test root:
 
 ```bash
@@ -139,8 +160,7 @@ scripts/lunarwing-xmpp-test-env.sh render-systemd
 mkdir -p ~/.config/systemd/user
 cp /tmp/lunarwing-xmpp-test/systemd/*.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user start xmpp-bridge-test.service
-systemctl --user start lunarwing-test.service
+systemctl --user restart lunarwing-test.service
 ```
 
 The default generated service names are deliberately test-scoped:
@@ -165,6 +185,16 @@ For generated user services, `configure-bridge --restart` uses `systemctl --user
 by default. For machine-level services, set
 `LUNARWING_TEST_SYSTEMCTL_SCOPE=system`.
 
+Before using the full Postgres-backed path, make sure Docker is running because
+the harness starts PostgreSQL in a local container.
+
+The generated units inherit the current harness env file, including
+`ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable`.
+
+Starting `lunarwing-test.service` is enough; it already pulls in
+`xmpp-bridge-test.service` and `ironclaw-proxy-test.service` through
+`Wants=` / `After=`.
+
 Use read-only diagnostics before restarting anything:
 
 ```bash
@@ -173,6 +203,9 @@ systemctl --user show xmpp-bridge-test.service
 journalctl --user -u xmpp-bridge-test.service -n 100 --no-pager
 scripts/lunarwing-xmpp-test-env.sh bridge-status
 ```
+
+If the test stack is already running from manual `start-*` commands, stop those
+first so the service-managed units can bind the same ports cleanly.
 
 The generated bridge unit has `PartOf=` pointing at the configured LunarWing
 service name, so LunarWing service stops can also stop the bridge. Do not
@@ -217,6 +250,11 @@ Keep secrets in root-readable env files:
 
 - `/etc/lunarwing/lunarwing.env`
 - `/etc/lunarwing/xmpp-bridge.env`
+
+The committed `lunarwing.service` and OpenRC templates already seed
+`ALLOW_PRIVATE_IPS=1` and `PGSSLMODE=disable` for private-network Postgres and
+OpenAI-compatible lab setups. Override those in `/etc/lunarwing/lunarwing.env`
+only when your deployment needs different SSL or network behavior.
 
 Use `EnvironmentFile=` instead of inline `Environment=` entries for tokens,
 database URLs, provider keys, webhook secrets, or XMPP passwords. The bridge
@@ -272,5 +310,11 @@ Common checks:
 - `cargo` is required for `build`.
 - `bridge-status` returning `401` or `403` usually means the wrong token or env
   file is being used.
+- `gateway-status` now reports the requested harness channels as `xmpp`,
+  `weechat`, and `darkirc`. The Gotify tool shows up in
+  `/api/extensions/tools` as `gotify-tool`.
 - A running system bridge on port `8787` can conflict with the harness bridge.
   Change `XMPP_BRIDGE_BIND` in the test env file when needed.
+- If `verify` only fails `TensorZero proxy responds at :3002`, the local proxy
+  may still be bound correctly. That check depends on the upstream
+  `TENSORZERO_URL` answering the proxy's `/openai/v1/models` readiness probe.

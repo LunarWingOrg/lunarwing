@@ -108,14 +108,7 @@ fn validate_extension_setup_setting_path(name: &str, setting_path: &str) -> Resu
     )))
 }
 
-fn maybe_seed_default_instance_assets() {
-    let onboard_completed = std::env::var("ONBOARD_COMPLETED")
-        .map(|value| value == "true")
-        .unwrap_or(false);
-    if onboard_completed {
-        return;
-    }
-
+pub fn maybe_seed_default_instance_assets() {
     let base_dir = ironclaw_base_dir();
     if let Err(err) = seed_default_instance_assets_to(&base_dir) {
         tracing::debug!(
@@ -294,7 +287,7 @@ impl SetupWizard {
     /// connection, so users don't have to re-enter everything.
     pub async fn run(&mut self) -> Result<(), SetupError> {
         print_banner();
-        print_header("IronClaw Setup Wizard");
+        print_header("LunarWing Setup Wizard");
 
         if !self.config.steps.is_empty() {
             // Selective step mode: reconnect to existing DB and load settings,
@@ -867,7 +860,7 @@ impl SetupWizard {
         }
 
         println!();
-        print_info("IronClaw uses an embedded SQLite database (libSQL).");
+        print_info("LunarWing uses an embedded SQLite database (libSQL).");
         print_info("No external database server required.");
         println!();
 
@@ -966,7 +959,7 @@ impl SetupWizard {
 
         if major_version < MIN_PG_MAJOR_VERSION {
             return Err(SetupError::Database(format!(
-                "PostgreSQL {} detected. IronClaw requires PostgreSQL {} or later for pgvector support.\n\
+                "PostgreSQL {} detected. LunarWing requires PostgreSQL {} or later for pgvector support.\n\
                  Upgrade: https://www.postgresql.org/download/",
                 version_str, MIN_PG_MAJOR_VERSION
             )));
@@ -1771,7 +1764,7 @@ impl SetupWizard {
             .await
             .map_err(|e| SetupError::Auth(e.to_string()))?;
 
-        print_info("Authorize IronClaw with GitHub Copilot in your browser.");
+        print_info("Authorize LunarWing with GitHub Copilot in your browser.");
         print_info(&format!("Verification URL: {}", device.verification_uri));
         print_info(&format!("One-time code: {}", device.user_code));
 
@@ -3091,7 +3084,7 @@ impl SetupWizard {
 
     /// Step 8: Docker Sandbox -- check Docker installation and availability.
     async fn step_docker_sandbox(&mut self) -> Result<(), SetupError> {
-        print_info("IronClaw can execute code, run builds, and use tools inside Docker");
+        print_info("LunarWing can execute code, run builds, and use tools inside Docker");
         print_info("containers. This keeps your system safe -- commands from the LLM run");
         print_info("in an isolated sandbox with no access to your credentials, limited");
         print_info("filesystem access, and network traffic restricted to an allowlist.");

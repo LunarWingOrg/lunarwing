@@ -459,7 +459,7 @@ fn print_help() {
     let hi = fmt::hint();
 
     println!();
-    println!("  {h}IronClaw REPL{r}");
+    println!("  {h}LunarWing REPL{r}");
     println!();
     println!("  {h}Quick start{r}");
     println!("    {c}/new{r}         {hi}Start a new thread{r}");
@@ -553,7 +553,7 @@ impl Channel for ReplChannel {
 
             if !suppress_banner.load(Ordering::Relaxed) {
                 println!(
-                    "{}IronClaw{}  /help for commands, /quit to exit",
+                    "{}LunarWing{}  /help for commands, /quit to exit",
                     fmt::bold(),
                     fmt::reset()
                 );

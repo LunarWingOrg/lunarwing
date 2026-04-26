@@ -74,6 +74,7 @@ type SessionMap = Arc<RwLock<HashMap<String, OwnedWriteHalf>>>;
 pub struct UnixSocketReplChannel {
     socket_path: PathBuf,
     max_connections: usize,
+    agent_name: String,
     /// Owner user ID forwarded to the agent for persistence scoping.
     owner_id: String,
     sessions: SessionMap,
@@ -87,11 +88,13 @@ impl UnixSocketReplChannel {
     pub fn new(
         socket_path: impl Into<PathBuf>,
         max_connections: usize,
+        agent_name: impl Into<String>,
         owner_id: impl Into<String>,
     ) -> Self {
         Self {
             socket_path: socket_path.into(),
             max_connections,
+            agent_name: agent_name.into(),
             owner_id: owner_id.into(),
             sessions: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -121,6 +124,7 @@ impl UnixSocketReplChannel {
         message_tx: mpsc::Sender<IncomingMessage>,
         sessions: SessionMap,
         max_connections: usize,
+        agent_name: String,
         owner_id: String,
     ) {
         let session_id = uuid::Uuid::new_v4().simple().to_string();
@@ -176,7 +180,7 @@ impl UnixSocketReplChannel {
 
             // Send welcome before inserting so we own `write` exclusively here
             let welcome = ReplMessage::Response {
-                content: format!("Connected to Ironclaw REPL. Session: {session_id}"),
+                content: format!("Connected to {} REPL. Session: {session_id}", agent_name),
                 session_id: Some(session_id.clone()),
                 is_complete: true,
             };
@@ -266,6 +270,7 @@ impl Channel for UnixSocketReplChannel {
         let (msg_tx, msg_rx) = mpsc::channel(64);
         let sessions = Arc::clone(&self.sessions);
         let max_connections = self.max_connections;
+        let agent_name = self.agent_name.clone();
         let owner_id = self.owner_id.clone();
 
         tokio::spawn(async move {
@@ -275,6 +280,7 @@ impl Channel for UnixSocketReplChannel {
                         let (read, write) = stream.into_split();
                         let tx = msg_tx.clone();
                         let sessions = Arc::clone(&sessions);
+                        let agent_name = agent_name.clone();
                         let owner_id = owner_id.clone();
                         tokio::spawn(async move {
                             Self::handle_connection(
@@ -283,6 +289,7 @@ impl Channel for UnixSocketReplChannel {
                                 tx,
                                 sessions,
                                 max_connections,
+                                agent_name.clone(),
                                 owner_id,
                             )
                             .await;

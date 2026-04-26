@@ -47,7 +47,7 @@ impl Tool for RestartTool {
     }
 
     fn description(&self) -> &str {
-        "Restart the IronClaw agent process. The process exits cleanly (code 0) and the \
+        "Restart the LunarWing agent process. The process exits cleanly (code 0) and the \
          container entrypoint loop restarts it automatically within a few seconds."
     }
 
@@ -87,7 +87,7 @@ impl Tool for RestartTool {
             tracing::error!("[RestartTool::execute] Not in Docker, rejecting restart");
             return Err(ToolError::ExecutionFailed(
                 "Restart is only available when running inside the Docker container. \
-                 For local development, please restart IronClaw manually."
+                 For local development, please restart LunarWing manually."
                     .to_string(),
             ));
         }
@@ -149,7 +149,7 @@ impl Tool for RestartTool {
 
         let msg = format!(
             "Restarting in {delay} second(s). The process will exit cleanly and the \
-             entrypoint restart loop will bring IronClaw back online."
+             entrypoint restart loop will bring LunarWing back online."
         );
         tracing::info!("[RestartTool::execute] Returning success response: {}", msg);
         Ok(ToolOutput::text(msg, start.elapsed()))
@@ -267,7 +267,7 @@ mod tests {
         let tool = RestartTool;
         let desc = tool.description();
         assert!(desc.contains("Restart"));
-        assert!(desc.contains("IronClaw"));
+        assert!(desc.contains("LunarWing"));
         assert!(desc.contains("exits cleanly"));
         assert!(desc.contains("code 0"));
     }

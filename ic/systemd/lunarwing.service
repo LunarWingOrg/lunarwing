@@ -24,6 +24,9 @@ WorkingDirectory=/var/lib/lunarwing
 
 # Non-secret defaults. EnvironmentFile values can override these.
 Environment=CLI_ENABLED=false
+Environment=AGENT_NAME=lunarwing
+Environment=ALLOW_PRIVATE_IPS=1
+Environment=PGSSLMODE=disable
 Environment=IRONCLAW_BASE_DIR=/var/lib/lunarwing
 Environment=RUST_LOG=ironclaw=info,lunarwing=info
 

@@ -43,6 +43,7 @@ Commands:
   down                     tear down full stack
   status                   show status of all components
   verify                   run health checks against running stack
+  gateway-status           call authenticated GET /api/gateway/status
 
   start-postgres           start PostgreSQL container (pgvector/pg16)
   stop-postgres            stop PostgreSQL container (preserves data)
@@ -163,9 +164,38 @@ init_dirs() {
   chmod 700 "$ENV_DIR" "$RUN_DIR" "$STATE_DIR" 2>/dev/null || true
 }
 
+append_env_if_missing() {
+  local path="$1"
+  local key="$2"
+  local value="$3"
+  if ! grep -q "^${key}=" "$path" 2>/dev/null; then
+    printf '%s=%s\n' "$key" "$value" >>"$path"
+  fi
+}
+
+replace_env_value() {
+  local path="$1"
+  local key="$2"
+  local value="$3"
+  if [[ ! -f "$path" ]]; then
+    return 0
+  fi
+  sed -i "s|^${key}=.*|${key}=${value}|" "$path"
+}
+
+ensure_lunarwing_env_defaults() {
+  local path="$1"
+  append_env_if_missing "$path" "AGENT_NAME" "lunarwing"
+  append_env_if_missing "$path" "ALLOW_PRIVATE_IPS" "1"
+  append_env_if_missing "$path" "PGSSLMODE" "disable"
+  append_env_if_missing "$path" "WASM_CHANNELS_ENABLED" "true"
+  replace_env_value "$path" "LLM_MODEL" "tensorzero::function_name::ironclaw"
+}
+
 write_lunarwing_env_if_missing() {
   local path="$ENV_DIR/lunarwing.env"
   if [[ -f "$path" ]]; then
+    ensure_lunarwing_env_defaults "$path"
     return 0
   fi
 
@@ -181,15 +211,21 @@ write_lunarwing_env_if_missing() {
       printf 'DATABASE_BACKEND=postgres\n'
       printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
       printf 'DATABASE_SSLMODE=disable\n'
+      printf 'PGSSLMODE=disable\n'
       printf '\n'
       printf '# LLM — TensorZero proxy (start with: start-proxy)\n'
       printf 'LLM_BACKEND=openai_compatible\n'
       printf 'LLM_BASE_URL=http://%s:%s/openai/v1\n' "$PROXY_BIND" "$PROXY_PORT"
       printf 'LLM_API_KEY=token-integration-test\n'
-      printf 'LLM_MODEL=ironclaw\n'
+      printf 'LLM_MODEL=tensorzero::function_name::ironclaw\n'
+      printf 'ALLOW_PRIVATE_IPS=1\n'
+      printf '\n'
+      printf '# Runtime identity\n'
+      printf 'AGENT_NAME=lunarwing\n'
       printf '\n'
       printf '# WASM channels and tools (build with: build-wasm, install with: install-wasm)\n'
       printf 'WASM_ENABLED=true\n'
+      printf 'WASM_CHANNELS_ENABLED=true\n'
       printf 'WASM_TOOLS_DIR=%s\n' "$TOOLS_DIR"
       printf 'WASM_CHANNELS_DIR=%s\n' "$CHANNELS_DIR"
       printf '\n'
@@ -206,6 +242,8 @@ write_lunarwing_env_if_missing() {
       printf 'RUST_LOG=ironclaw=info,lunarwing=info\n'
     } >"$path"
   )
+
+  ensure_lunarwing_env_defaults "$path"
 }
 
 write_proxy_env_if_missing() {
@@ -786,6 +824,9 @@ verify_stack() {
   _check "LunarWing gateway responds at :${gw_port}" \
     lunarwing_gateway_ready
 
+  _check "Gateway status API responds" \
+    gateway_status_json
+
   local ch_count tool_count
   ch_count=0
   tool_count=0
@@ -800,6 +841,26 @@ verify_stack() {
 
   _check "WASM tools installed: ${tool_count}" \
     test "$tool_count" -gt 0
+
+  if [[ -f "$CHANNELS_DIR/xmpp.wasm" ]]; then
+    _check "Gateway reports xmpp channel active" \
+      gateway_has_channel xmpp
+  fi
+
+  if [[ -f "$CHANNELS_DIR/weechat.wasm" ]]; then
+    _check "Gateway reports weechat channel active" \
+      gateway_has_channel weechat
+  fi
+
+  if [[ -f "$CHANNELS_DIR/darkirc.wasm" ]]; then
+    _check "Gateway reports darkirc channel active" \
+      gateway_has_channel darkirc
+  fi
+
+  if [[ -f "$TOOLS_DIR/gotify-tool.wasm" ]]; then
+    _check "Gateway reports gotify tool available" \
+      gateway_has_tool gotify-tool
+  fi
 
   printf '\n%s/%s checks passed\n' "$pass" "$((pass + fail))"
   [[ "$fail" -eq 0 ]]
@@ -895,12 +956,78 @@ maybe_jq() {
   fi
 }
 
+gateway_status_base() {
+  load_lunarwing_env
+  local host="${GATEWAY_HOST:-127.0.0.1}"
+  local port="${GATEWAY_PORT:-8765}"
+  printf 'http://%s:%s' "$host" "$port"
+}
+
+gateway_status_json() {
+  ensure_env
+  load_lunarwing_env
+  require_cmd curl
+  curl -fsS "$(gateway_status_base)/api/gateway/status" \
+    -H "Authorization: Bearer ${GATEWAY_AUTH_TOKEN:-}"
+}
+
+gateway_enabled_channels() {
+  local payload
+  payload="$(gateway_status_json)"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$payload" | jq -r '.enabled_channels[]?'
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$payload" | python3 -c 'import json,sys; [print(x) for x in json.load(sys.stdin).get("enabled_channels", [])]'
+    return 0
+  fi
+  printf '%s' "$payload" | tr -d '\n' | sed -n 's/.*"enabled_channels":[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+    | tr ',' '\n' | tr -d ' "'
+}
+
+gateway_has_channel() {
+  local channel_name="$1"
+  gateway_enabled_channels | grep -Fxq "$channel_name"
+}
+
+gateway_tools_json() {
+  ensure_env
+  load_lunarwing_env
+  require_cmd curl
+  curl -fsS "$(gateway_status_base)/api/extensions/tools" \
+    -H "Authorization: Bearer ${GATEWAY_AUTH_TOKEN:-}"
+}
+
+gateway_enabled_tools() {
+  local payload
+  payload="$(gateway_tools_json)"
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$payload" | jq -r '.tools[]?.name'
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$payload" | python3 -c 'import json,sys; [print(x.get("name","")) for x in json.load(sys.stdin).get("tools", []) if x.get("name")]'
+    return 0
+  fi
+  printf '%s' "$payload" | tr -d '\n' | sed -n 's/.*"name":"\([^"]*\)".*/\1/p'
+}
+
+gateway_has_tool() {
+  local tool_name="$1"
+  gateway_enabled_tools | grep -Fxq "$tool_name"
+}
+
 bridge_status() {
   ensure_env
   load_bridge_env
   require_cmd curl
   curl -sS "$(bridge_base)/v1/status" \
     -H "Authorization: Bearer $XMPP_BRIDGE_TOKEN" | maybe_jq
+}
+
+gateway_status() {
+  gateway_status_json | maybe_jq
 }
 
 bridge_auth_check() {
@@ -1207,6 +1334,29 @@ doctor() {
   fi
   say "channels installed: $ch_count (in $CHANNELS_DIR)"
   say "tools installed: $tool_count (in $TOOLS_DIR)"
+  if pid_alive "$RUN_DIR/lunarwing.pid"; then
+    local enabled_channels
+    if enabled_channels="$(gateway_enabled_channels 2>/dev/null | paste -sd ',' - | sed 's/,/, /g')"; then
+      if [[ -n "$enabled_channels" ]]; then
+        say "gateway active channels: $enabled_channels"
+      else
+        say "gateway active channels: unavailable"
+      fi
+    else
+      say "gateway active channels: unavailable"
+    fi
+
+    local enabled_tools
+    if enabled_tools="$(gateway_enabled_tools 2>/dev/null | paste -sd ',' - | sed 's/,/, /g')"; then
+      if [[ -n "$enabled_tools" ]]; then
+        say "gateway active tools: $enabled_tools"
+      else
+        say "gateway active tools: unavailable"
+      fi
+    else
+      say "gateway active tools: unavailable"
+    fi
+  fi
 
   # Systemd
   if command -v systemctl >/dev/null 2>&1; then
@@ -1296,6 +1446,9 @@ main() {
       ;;
     bridge-status)
       bridge_status
+      ;;
+    gateway-status)
+      gateway_status
       ;;
     bridge-auth-check)
       bridge_auth_check

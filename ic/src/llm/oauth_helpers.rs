@@ -302,7 +302,7 @@ pub fn landing_html(provider_name: &str, success: bool) -> String {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IronClaw - {heading}</title>
+<title>LunarWing - {heading}</title>
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box }}
   body {{
@@ -348,7 +348,7 @@ pub fn landing_html(provider_name: &str, success: bool) -> String {
     {icon}
     <h1>{heading}</h1>
     <p>{subtitle}</p>
-    <div class="brand">IronClaw</div>
+    <div class="brand">LunarWing</div>
   </div>
 </body>
 </html>"#,

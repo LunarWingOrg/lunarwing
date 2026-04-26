@@ -260,7 +260,7 @@ fn channel_auth_instructions(
 ) -> String {
     if channel_name == TELEGRAM_CHANNEL_NAME && secret.name == "telegram_bot_token" {
         return format!(
-            "{} After you submit it, IronClaw will show a one-time verification code. Send `/start CODE` to your bot in Telegram and IronClaw will finish setup automatically.",
+            "{} After you submit it, LunarWing will show a one-time verification code. Send `/start CODE` to your bot in Telegram and LunarWing will finish setup automatically.",
             secret.prompt
         );
     }
@@ -294,11 +294,11 @@ fn telegram_verification_deep_link(bot_username: Option<&str>, code: &str) -> Op
 fn telegram_verification_instructions(bot_username: Option<&str>, code: &str) -> String {
     if let Some(username) = bot_username.filter(|username| !username.trim().is_empty()) {
         return format!(
-            "Send `/start {code}` to @{username} in Telegram. IronClaw will finish setup automatically."
+            "Send `/start {code}` to @{username} in Telegram. LunarWing will finish setup automatically."
         );
     }
 
-    format!("Send `/start {code}` to your Telegram bot. IronClaw will finish setup automatically.")
+    format!("Send `/start {code}` to your Telegram bot. LunarWing will finish setup automatically.")
 }
 
 fn telegram_message_matches_verification_code(text: &str, code: &str) -> bool {
@@ -1684,7 +1684,7 @@ impl ExtensionManager {
                 }
 
                 Ok(format!(
-                    "Removed channel '{}'. Restart IronClaw for the change to take effect.",
+                    "Removed channel '{}'. Restart LunarWing for the change to take effect.",
                     name
                 ))
             }
@@ -6901,7 +6901,7 @@ mod tests {
                 Ok(TelegramBindingResult::Pending(VerificationChallenge {
                     code: "iclaw-7qk2m9".to_string(),
                     instructions:
-                        "Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. IronClaw will finish setup automatically."
+                        "Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. LunarWing will finish setup automatically."
                             .to_string(),
                     deep_link: Some("https://t.me/test_hot_bot?start=iclaw-7qk2m9".to_string()),
                 }))

@@ -90,6 +90,21 @@ Current seeded config defaults:
 - `selected_model = "tensorzero::function_name::ironclaw"`
 - `agent.name = "lunarwing"`
 
+Those files are created automatically for a missing base dir on normal startup
+too, not only through the onboarding wizard.
+
+For a simple local launcher wrapper, use:
+
+```bash
+cd ic
+LUNARWING_BASE_DIR=/path/to/instance ./run.sh
+```
+
+`ic/run.sh` defaults `AGENT_NAME=lunarwing` and will pass through any explicit
+`AGENT_NAME`, `LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR` you export.
+It does not inject LLM URL or model defaults, so fresh instances use
+`config.toml` unless you explicitly override them with env vars.
+
 Seed source files in this repository:
 - Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
 - Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
@@ -98,3 +113,64 @@ At runtime those workspace files are imported from
 `$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so
 files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and
 `USER.md` can be customized on disk per instance.
+
+### Fresh Recreate Recipes
+
+For the full PostgreSQL + XMPP + user-systemd harness, including custom
+database credentials and custom gateway/bridge tokens, use the documented
+recipe in
+[ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
+
+For a clean libSQL recreate with a custom gateway token:
+
+```bash
+cd ic
+
+export BASE=/tmp/lunarwing-libsql
+export GATEWAY_TOKEN='replace-me-gateway-token'
+export LLM_API_KEY='unneeded'
+
+rm -rf "$BASE"
+
+scripts/setup-instance.sh \
+  --base-dir "$BASE" \
+  --database libsql \
+  --libsql-path "$BASE/ironclaw.db" \
+  --llm-base-url http://127.0.0.1:3002/openai/v1 \
+  --llm-model tensorzero::function_name::ironclaw \
+  --llm-api-key "$LLM_API_KEY" \
+  --agent-name lunarwing \
+  --run-onboard
+
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["BASE"]) / ".env"
+values = {
+    "LUNARWING_BASE_DIR": os.environ["BASE"],
+    "GATEWAY_ENABLED": "true",
+    "GATEWAY_HOST": "127.0.0.1",
+    "GATEWAY_PORT": "8765",
+    "GATEWAY_AUTH_TOKEN": os.environ["GATEWAY_TOKEN"],
+}
+
+lines = path.read_text().splitlines()
+seen = set()
+out = []
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, _ = line.split("=", 1)
+        if key in values:
+            out.append(f"{key}={values[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+for key, value in values.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n")
+PY
+
+LUNARWING_BASE_DIR="$BASE" ./target/debug/ironclaw run
+```

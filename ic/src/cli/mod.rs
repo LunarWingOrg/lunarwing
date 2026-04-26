@@ -71,7 +71,7 @@ use clap::{ColorChoice, Parser, Subcommand};
     about = "Secure personal AI assistant that protects your data and expands its capabilities"
 )]
 #[command(
-    long_about = "IronClaw is a secure AI assistant. Use 'ironclaw <subcommand> --help' for details.\nExamples:\n  ironclaw run  # Start the agent\n  ironclaw config list  # List configs"
+    long_about = "LunarWing is a secure AI assistant. Use 'ironclaw <subcommand> --help' for details.\nExamples:\n  ironclaw run  # Start the agent\n  ironclaw config list  # List configs"
 )]
 #[command(version)]
 #[command(color = ColorChoice::Auto)] // Enable auto-color for help (if the terminal supports it)
@@ -112,7 +112,7 @@ pub enum Command {
     /// Run the agent (default if no subcommand given)
     #[command(
         about = "Run the AI agent",
-        long_about = "Starts the IronClaw agent in default mode.\nExample: ironclaw run"
+        long_about = "Starts the LunarWing agent in default mode.\nExample: ironclaw run"
     )]
     Run,
 

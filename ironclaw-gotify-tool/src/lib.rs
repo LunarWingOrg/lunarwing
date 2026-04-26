@@ -6,7 +6,7 @@
 
 wit_bindgen::generate!({
     world: "sandboxed-tool",
-    path: "wit/tool.wit",
+    path: "../ic/wit/tool.wit",
 });
 
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ impl tool::Guest for GotifyTool {
         .to_string()
     }
 
-fn description() -> String {
+    fn description() -> String {
         "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: Kageho), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}".to_string()
     }
 }
@@ -111,7 +111,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
                 priority: default_priority(),
             }
         }
-    };    
+    };
 
     if !near::agent::host::secret_exists("gotify_app_token") {
         return Err("Secret 'gotify_app_token' not configured.".into());

@@ -46,6 +46,8 @@ fn main() -> anyhow::Result<()> {
 
     let _ = dotenvy::dotenv();
     ironclaw::bootstrap::load_ironclaw_env();
+    #[cfg(any(feature = "postgres", feature = "libsql"))]
+    ironclaw::setup::maybe_seed_default_instance_assets();
 
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -291,7 +293,7 @@ async fn async_main() -> anyhow::Result<()> {
         Ok(lock) => Some(lock),
         Err(ironclaw::bootstrap::PidLockError::AlreadyRunning { pid }) => {
             anyhow::bail!(
-                "Another IronClaw instance is already running (PID {}). \
+                "Another LunarWing instance is already running (PID {}). \
                  If this is incorrect, remove the stale PID file: {}",
                 pid,
                 ironclaw::bootstrap::pid_lock_path().display()
@@ -468,7 +470,12 @@ async fn async_main() -> anyhow::Result<()> {
                     ironclaw::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
                 }
             });
-        let unix_repl = UnixSocketReplChannel::new(socket_path, 10, config.owner_id.clone());
+        let unix_repl = UnixSocketReplChannel::new(
+            socket_path,
+            10,
+            config.agent.name.clone(),
+            config.owner_id.clone(),
+        );
         channels.add(Box::new(unix_repl)).await;
         channel_names.push("unix_socket_repl".to_string());
         tracing::debug!("Unix socket REPL enabled");

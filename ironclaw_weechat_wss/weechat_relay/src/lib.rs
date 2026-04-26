@@ -37,7 +37,7 @@
 
 wit_bindgen::generate!({
     world: "sandboxed-channel",
-    path: "../../wit/channel.wit",
+    path: "../../ic/wit/channel.wit",
 });
 
 use serde::{Deserialize, Serialize};
@@ -127,11 +127,11 @@ struct WeechatConfig {
     ws_adapter_url: String,
 
     /// Networks to monitor (empty = all networks)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec_or_empty")]
     networks: Vec<String>,
 
     /// Networks to exclude
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec_or_empty")]
     exclude_networks: Vec<String>,
 
     /// Regex filter for buffer names (applied to full_name)
@@ -147,7 +147,7 @@ struct WeechatConfig {
     group_policy: String,
 
     /// Allowlisted sender IDs (nick or nick!user@host)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec_or_empty")]
     allow_from: Vec<String>,
 
     /// Max characters per IRC message chunk
@@ -169,6 +169,32 @@ fn default_relay_url() -> String {
 
 fn default_connection_mode() -> String {
     "auto".to_string()
+}
+
+fn deserialize_string_vec_or_empty<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringVecOrEmpty {
+        Vec(Vec<String>),
+        String(String),
+    }
+
+    Ok(match StringVecOrEmpty::deserialize(deserializer)? {
+        StringVecOrEmpty::Vec(values) => values
+            .into_iter()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .collect(),
+        StringVecOrEmpty::String(value) => value
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .collect(),
+    })
 }
 
 fn default_ws_adapter_url() -> String {
@@ -225,9 +251,9 @@ const DM_POLICY_PATH: &str = "state/dm_policy";
 const GROUP_POLICY_PATH: &str = "state/group_policy";
 const ALLOW_FROM_PATH: &str = "state/allow_from";
 const MAX_CHUNK_LENGTH_PATH: &str = "state/max_chunk_length";
-const LAST_SEEN_DATES_PATH: &str = "state/last_seen_dates";  // JSON: {buffer: timestamp_ms} (unused, kept for migration)
-const LAST_SEEN_IDS_PATH: &str = "state/last_seen_ids";      // JSON: {buffer: last_line_id}
-const BUFFER_LIST_PATH: &str = "state/buffer_list";  // JSON: [BufferInfo]
+const LAST_SEEN_DATES_PATH: &str = "state/last_seen_dates"; // JSON: {buffer: timestamp_ms} (unused, kept for migration)
+const LAST_SEEN_IDS_PATH: &str = "state/last_seen_ids"; // JSON: {buffer: last_line_id}
+const BUFFER_LIST_PATH: &str = "state/buffer_list"; // JSON: [BufferInfo]
 const WS_ADAPTER_URL_PATH: &str = "state/ws_adapter_url";
 const VERBOSE_DROPS_PATH: &str = "state/verbose_drops";
 
@@ -239,8 +265,8 @@ struct WeechatRelayChannel;
 
 impl Guest for WeechatRelayChannel {
     fn on_broadcast(_user_id: String, _response: AgentResponse) -> Result<(), String> {
-     Ok(())
-    } 
+        Ok(())
+    }
     /// Initialize the channel. Persist config to workspace and verify connectivity.
     fn on_start(config_json: String) -> Result<ChannelConfig, String> {
         channel_host::log(
@@ -253,7 +279,10 @@ impl Guest for WeechatRelayChannel {
 
         channel_host::log(
             channel_host::LogLevel::Info,
-            &format!("WeeChat Relay channel starting, relay at {}", config.relay_url),
+            &format!(
+                "WeeChat Relay channel starting, relay at {}",
+                config.relay_url
+            ),
         );
 
         // Normalize relay URL (strip trailing slashes, /api suffix)
@@ -269,16 +298,29 @@ impl Guest for WeechatRelayChannel {
         let _ = channel_host::workspace_write(WS_ADAPTER_URL_PATH, &config.ws_adapter_url);
         let _ = channel_host::workspace_write(DM_POLICY_PATH, &config.dm_policy);
         let _ = channel_host::workspace_write(GROUP_POLICY_PATH, &config.group_policy);
-        let _ = channel_host::workspace_write(MAX_CHUNK_LENGTH_PATH, &config.max_chunk_length.to_string());
-        let _ = channel_host::workspace_write(VERBOSE_DROPS_PATH, if config.verbose_drops { "true" } else { "false" });
+        let _ = channel_host::workspace_write(
+            MAX_CHUNK_LENGTH_PATH,
+            &config.max_chunk_length.to_string(),
+        );
+        let _ = channel_host::workspace_write(
+            VERBOSE_DROPS_PATH,
+            if config.verbose_drops {
+                "true"
+            } else {
+                "false"
+            },
+        );
 
-        let networks_json = serde_json::to_string(&config.networks).unwrap_or_else(|_| "[]".to_string());
+        let networks_json =
+            serde_json::to_string(&config.networks).unwrap_or_else(|_| "[]".to_string());
         let _ = channel_host::workspace_write(NETWORKS_PATH, &networks_json);
 
-        let exclude_json = serde_json::to_string(&config.exclude_networks).unwrap_or_else(|_| "[]".to_string());
+        let exclude_json =
+            serde_json::to_string(&config.exclude_networks).unwrap_or_else(|_| "[]".to_string());
         let _ = channel_host::workspace_write(EXCLUDE_NETWORKS_PATH, &exclude_json);
 
-        let allow_from_json = serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
+        let allow_from_json =
+            serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
         let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &allow_from_json);
 
         if let Some(filter) = &config.buffer_filter {
@@ -290,8 +332,10 @@ impl Guest for WeechatRelayChannel {
             Ok(version_info) => {
                 channel_host::log(
                     channel_host::LogLevel::Info,
-                    &format!("Connected to WeeChat {} (API v{})",
-                        version_info.0, version_info.1),
+                    &format!(
+                        "Connected to WeeChat {} (API v{})",
+                        version_info.0, version_info.1
+                    ),
                 );
             }
             Err(e) => {
@@ -343,7 +387,7 @@ impl Guest for WeechatRelayChannel {
 
         Ok(ChannelConfig {
             display_name: "WeeChat Relay".to_string(),
-            http_endpoints: vec![],  // No inbound webhooks needed
+            http_endpoints: vec![], // No inbound webhooks needed
             poll: Some(PollConfig {
                 interval_ms,
                 enabled: true,
@@ -366,16 +410,16 @@ impl Guest for WeechatRelayChannel {
     /// In "websocket" mode: always uses the adapter (logs warning if unavailable).
     /// In "http" mode: polls WeeChat relay directly (classic behavior).
     fn on_poll() {
-        let relay_url = channel_host::workspace_read(RELAY_URL_PATH)
-            .unwrap_or_else(default_relay_url);
-        let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH)
-            .unwrap_or_default();
+        let relay_url =
+            channel_host::workspace_read(RELAY_URL_PATH).unwrap_or_else(default_relay_url);
+        let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH).unwrap_or_default();
         let connection_mode = channel_host::workspace_read(CONNECTION_MODE_PATH)
             .unwrap_or_else(default_connection_mode);
         let adapter_url = channel_host::workspace_read(WS_ADAPTER_URL_PATH)
             .unwrap_or_else(default_ws_adapter_url);
 
-        let poll_url = resolve_poll_url(&connection_mode, &relay_url, &adapter_url, &relay_password);
+        let poll_url =
+            resolve_poll_url(&connection_mode, &relay_url, &adapter_url, &relay_password);
         do_poll(&poll_url, &relay_url, &relay_password);
     }
 
@@ -388,10 +432,9 @@ impl Guest for WeechatRelayChannel {
         let metadata: WeechatMessageMetadata = serde_json::from_str(&response.metadata_json)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
-        let relay_url = channel_host::workspace_read(RELAY_URL_PATH)
-            .unwrap_or_else(default_relay_url);
-        let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH)
-            .unwrap_or_default();
+        let relay_url =
+            channel_host::workspace_read(RELAY_URL_PATH).unwrap_or_else(default_relay_url);
+        let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH).unwrap_or_default();
 
         let max_chunk = channel_host::workspace_read(MAX_CHUNK_LENGTH_PATH)
             .and_then(|s| s.parse::<usize>().ok())
@@ -405,7 +448,14 @@ impl Guest for WeechatRelayChannel {
 
         for chunk in &chunks {
             let result = if metadata.is_dm {
-                send_dm(&relay_url, &relay_password, &metadata.buffer, &metadata.network, &metadata.target, chunk)
+                send_dm(
+                    &relay_url,
+                    &relay_password,
+                    &metadata.buffer,
+                    &metadata.network,
+                    &metadata.target,
+                    chunk,
+                )
             } else {
                 send_input(&relay_url, &relay_password, &metadata.buffer, chunk)
             };
@@ -417,8 +467,12 @@ impl Guest for WeechatRelayChannel {
                 Err(e) => {
                     channel_host::log(
                         channel_host::LogLevel::Warn,
-                        &format!("Failed to send chunk {} to '{}': {}",
-                            successful_chunks + 1, metadata.buffer, e),
+                        &format!(
+                            "Failed to send chunk {} to '{}': {}",
+                            successful_chunks + 1,
+                            metadata.buffer,
+                            e
+                        ),
                     );
                     last_error = Some(e);
                 }
@@ -460,15 +514,16 @@ impl Guest for WeechatRelayChannel {
                     return;
                 }
 
-                let metadata: WeechatMessageMetadata = match serde_json::from_str(&update.metadata_json) {
-                    Ok(m) => m,
-                    Err(_) => return,
-                };
+                let metadata: WeechatMessageMetadata =
+                    match serde_json::from_str(&update.metadata_json) {
+                        Ok(m) => m,
+                        Err(_) => return,
+                    };
 
-                let relay_url = channel_host::workspace_read(RELAY_URL_PATH)
-                    .unwrap_or_else(default_relay_url);
-                let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH)
-                    .unwrap_or_default();
+                let relay_url =
+                    channel_host::workspace_read(RELAY_URL_PATH).unwrap_or_else(default_relay_url);
+                let relay_password =
+                    channel_host::workspace_read(RELAY_PASSWORD_PATH).unwrap_or_default();
 
                 let truncated = if message.len() > 400 {
                     format!("{}...", &message[..397])
@@ -479,7 +534,14 @@ impl Guest for WeechatRelayChannel {
                 let status_text = format!("[status] {}", truncated);
 
                 let send_result = if metadata.is_dm {
-                    send_dm(&relay_url, &relay_password, &metadata.buffer, &metadata.network, &metadata.target, &status_text)
+                    send_dm(
+                        &relay_url,
+                        &relay_password,
+                        &metadata.buffer,
+                        &metadata.network,
+                        &metadata.target,
+                        &status_text,
+                    )
                 } else {
                     send_input(&relay_url, &relay_password, &metadata.buffer, &status_text)
                 };
@@ -521,9 +583,7 @@ fn drop_log(_verbose: bool, reason: &str) {
 /// - "auto": probe adapter; use it if healthy, else fall back to relay_url
 fn resolve_poll_url(mode: &str, relay_url: &str, adapter_url: &str, password: &str) -> String {
     match mode {
-        "http" => {
-            relay_url.to_string()
-        }
+        "http" => relay_url.to_string(),
         "websocket" => {
             if adapter_url.is_empty() {
                 channel_host::log(
@@ -552,7 +612,10 @@ fn resolve_poll_url(mode: &str, relay_url: &str, adapter_url: &str, password: &s
             } else {
                 channel_host::log(
                     channel_host::LogLevel::Debug,
-                    &format!("auto mode: adapter health check failed for {}, using relay_url directly", adapter_url),
+                    &format!(
+                        "auto mode: adapter health check failed for {}, using relay_url directly",
+                        adapter_url
+                    ),
                 );
                 relay_url.to_string()
             }
@@ -578,7 +641,6 @@ fn is_adapter_healthy(adapter_url: &str, password: &str) -> bool {
 /// (websocket/auto mode). In both cases the HTTP API shape is identical.
 /// relay_url is always used for sending responses (POST /api/input).
 fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
-
     // Always fetch config from ws_adapter's /api/config so changes to
     // weechat_local_config.json are picked up without removing the channel.
     {
@@ -627,9 +689,14 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
             Ok(new_buffers) => {
                 channel_host::log(
                     channel_host::LogLevel::Info,
-                    &format!("Fetched {} total buffers: {:?}",
+                    &format!(
+                        "Fetched {} total buffers: {:?}",
                         new_buffers.len(),
-                        new_buffers.iter().filter_map(|b| b.full_name.as_deref()).collect::<Vec<_>>()),
+                        new_buffers
+                            .iter()
+                            .filter_map(|b| b.full_name.as_deref())
+                            .collect::<Vec<_>>()
+                    ),
                 );
                 let irc_buffers = filter_irc_buffers(&new_buffers);
                 channel_host::log(
@@ -676,8 +743,16 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
                     if !new_lines.is_empty() {
                         channel_host::log(
                             channel_host::LogLevel::Info,
-                            &format!("Buffer {}: {} new lines{}", full_name, new_lines.len(),
-                                if first_time { " (seeding watermark, not emitting)" } else { "" }),
+                            &format!(
+                                "Buffer {}: {} new lines{}",
+                                full_name,
+                                new_lines.len(),
+                                if first_time {
+                                    " (seeding watermark, not emitting)"
+                                } else {
+                                    ""
+                                }
+                            ),
                         );
                     }
                     for (line, line_id) in new_lines {
@@ -745,16 +820,23 @@ fn poll_buffer(
     }
 
     // Response is a bare JSON array of line objects
-    let line_values: Vec<serde_json::Value> = serde_json::from_slice(&response.body)
-        .unwrap_or_default();
-    let lines: Vec<LineInfo> = line_values.iter().map(|v| LineInfo {
-        id: v["id"].as_i64(),
-        date: v["date"].as_str().map(String::from),
-        date_printed: v["date_printed"].as_str().map(String::from),
-        tags: v["tags"].as_array().map(|a| a.iter().filter_map(|t| t.as_str().map(String::from)).collect()),
-        prefix: v["prefix"].as_str().map(String::from),
-        message: v["message"].as_str().map(String::from),
-    }).collect();
+    let line_values: Vec<serde_json::Value> =
+        serde_json::from_slice(&response.body).unwrap_or_default();
+    let lines: Vec<LineInfo> = line_values
+        .iter()
+        .map(|v| LineInfo {
+            id: v["id"].as_i64(),
+            date: v["date"].as_str().map(String::from),
+            date_printed: v["date_printed"].as_str().map(String::from),
+            tags: v["tags"].as_array().map(|a| {
+                a.iter()
+                    .filter_map(|t| t.as_str().map(String::from))
+                    .collect()
+            }),
+            prefix: v["prefix"].as_str().map(String::from),
+            message: v["message"].as_str().map(String::from),
+        })
+        .collect();
 
     if lines.is_empty() {
         return Ok(vec![]);
@@ -773,18 +855,33 @@ fn poll_buffer(
 
         // Skip already-seen lines by ID
         if line_id <= last_seen_id {
-            drop_log(verbose, &format!("line skipped (id watermark): id {} <= last_seen {} in {}", line_id, last_seen_id, buffer_name));
+            drop_log(
+                verbose,
+                &format!(
+                    "line skipped (id watermark): id {} <= last_seen {} in {}",
+                    line_id, last_seen_id, buffer_name
+                ),
+            );
             continue;
         }
 
         // Filter for PRIVMSG only
         if let Some(tags) = &line.tags {
             if !tags.iter().any(|t| t == "irc_privmsg") {
-                drop_log(verbose, &format!("line skipped (not irc_privmsg): tags={:?} in {}", tags, buffer_name));
+                drop_log(
+                    verbose,
+                    &format!(
+                        "line skipped (not irc_privmsg): tags={:?} in {}",
+                        tags, buffer_name
+                    ),
+                );
                 continue;
             }
             if tags.iter().any(|t| t == "self_msg" || t == "no_log") {
-                drop_log(verbose, &format!("line skipped (self_msg or no_log) in {}", buffer_name));
+                drop_log(
+                    verbose,
+                    &format!("line skipped (self_msg or no_log) in {}", buffer_name),
+                );
                 continue;
             }
         }
@@ -794,7 +891,6 @@ fn poll_buffer(
 
     Ok(new_lines)
 }
-
 
 // ============================================================================
 // Inbound Message Handling
@@ -809,7 +905,10 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
     // Parse buffer name: irc.<network>.<target>
     let parts: Vec<&str> = buffer_name.split('.').collect();
     if parts.len() < 3 || parts[0] != "irc" {
-        drop_log(verbose, &format!("line dropped (invalid buffer name format): {}", buffer_name));
+        drop_log(
+            verbose,
+            &format!("line dropped (invalid buffer name format): {}", buffer_name),
+        );
         return;
     }
 
@@ -822,7 +921,13 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
         .unwrap_or_default();
 
     if !networks.is_empty() && !networks.iter().any(|n| n == network) {
-        drop_log(verbose, &format!("line dropped (network not in allowlist): network={}, allowed={:?}", network, networks));
+        drop_log(
+            verbose,
+            &format!(
+                "line dropped (network not in allowlist): network={}, allowed={:?}",
+                network, networks
+            ),
+        );
         return;
     }
 
@@ -831,7 +936,10 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
         .unwrap_or_default();
 
     if exclude_networks.iter().any(|n| n == network) {
-        drop_log(verbose, &format!("line dropped (network excluded): network={}", network));
+        drop_log(
+            verbose,
+            &format!("line dropped (network excluded): network={}", network),
+        );
         return;
     }
 
@@ -853,7 +961,13 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
     let text = strip_irc_formatting(message);
 
     if text.trim().is_empty() {
-        drop_log(verbose, &format!("line dropped (empty message after formatting strip): {}", buffer_name));
+        drop_log(
+            verbose,
+            &format!(
+                "line dropped (empty message after formatting strip): {}",
+                buffer_name
+            ),
+        );
         return;
     }
 
@@ -861,11 +975,17 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
 
     // Apply DM/group policy
     if is_dm {
-        let dm_policy = channel_host::workspace_read(DM_POLICY_PATH)
-            .unwrap_or_else(|| "open".to_string());
+        let dm_policy =
+            channel_host::workspace_read(DM_POLICY_PATH).unwrap_or_else(|| "open".to_string());
 
         if !check_sender_allowed(nick, &hostmask, &dm_policy) {
-            drop_log(verbose, &format!("line held (sender not allowed, triggering pairing): nick={}", nick));
+            drop_log(
+                verbose,
+                &format!(
+                    "line held (sender not allowed, triggering pairing): nick={}",
+                    nick
+                ),
+            );
             handle_pairing_request(buffer_name, nick);
             return;
         }
@@ -874,7 +994,10 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
             .unwrap_or_else(|| "allowlist".to_string());
 
         if group_policy == "deny" {
-            drop_log(verbose, &format!("line dropped (group policy=deny): {}", buffer_name));
+            drop_log(
+                verbose,
+                &format!("line dropped (group policy=deny): {}", buffer_name),
+            );
             return;
         }
 
@@ -883,10 +1006,19 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
             .unwrap_or_default();
 
         if group_policy == "allowlist" && !check_sender_allowed(nick, &hostmask, "allowlist") {
-            drop_log(verbose, &format!("line dropped (group allowlist): nick={} not in {:?}", nick, allow_from));
+            drop_log(
+                verbose,
+                &format!(
+                    "line dropped (group allowlist): nick={} not in {:?}",
+                    nick, allow_from
+                ),
+            );
             channel_host::log(
                 channel_host::LogLevel::Debug,
-                &format!("Dropping group message from '{}' in {} (not in allowlist)", nick, buffer_name),
+                &format!(
+                    "Dropping group message from '{}' in {} (not in allowlist)",
+                    nick, buffer_name
+                ),
             );
             return;
         }
@@ -921,7 +1053,12 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
 
     channel_host::log(
         channel_host::LogLevel::Debug,
-        &format!("Emitted message from '{}' in {} ({} chars)", nick, buffer_name, message.len()),
+        &format!(
+            "Emitted message from '{}' in {} ({} chars)",
+            nick,
+            buffer_name,
+            message.len()
+        ),
     );
 }
 
@@ -936,8 +1073,7 @@ fn check_sender_allowed(nick: &str, hostmask: &str, policy: &str) -> bool {
         .unwrap_or_default();
 
     // Also check pairing store
-    let pairing_allowed = channel_host::pairing_read_allow_from(CHANNEL_NAME)
-        .unwrap_or_default();
+    let pairing_allowed = channel_host::pairing_read_allow_from(CHANNEL_NAME).unwrap_or_default();
 
     let in_allow_from = allow_from.iter().any(|a| {
         if a == "*" {
@@ -959,7 +1095,8 @@ fn handle_pairing_request(buffer_name: &str, nick: &str) {
     let meta = serde_json::json!({
         "buffer": buffer_name,
         "nick": nick,
-    }).to_string();
+    })
+    .to_string();
 
     match channel_host::pairing_upsert_request(CHANNEL_NAME, nick, &meta) {
         Ok(result) => {
@@ -969,10 +1106,10 @@ fn handle_pairing_request(buffer_name: &str, nick: &str) {
             );
 
             if result.created {
-                let relay_url = channel_host::workspace_read(RELAY_URL_PATH)
-                    .unwrap_or_else(default_relay_url);
-                let relay_password = channel_host::workspace_read(RELAY_PASSWORD_PATH)
-                    .unwrap_or_default();
+                let relay_url =
+                    channel_host::workspace_read(RELAY_URL_PATH).unwrap_or_else(default_relay_url);
+                let relay_password =
+                    channel_host::workspace_read(RELAY_PASSWORD_PATH).unwrap_or_default();
 
                 let reply = format!(
                     "To pair with this agent, run: ironclaw pairing approve {} {}",
@@ -982,7 +1119,14 @@ fn handle_pairing_request(buffer_name: &str, nick: &str) {
                 // Extract network from buffer name (irc.<network>.<nick>)
                 let network = buffer_name.split('.').nth(1).unwrap_or("");
                 let send_result = if !network.is_empty() {
-                    send_dm(&relay_url, &relay_password, buffer_name, network, nick, &reply)
+                    send_dm(
+                        &relay_url,
+                        &relay_password,
+                        buffer_name,
+                        network,
+                        nick,
+                        &reply,
+                    )
                 } else {
                     send_input(&relay_url, &relay_password, buffer_name, &reply)
                 };
@@ -1016,11 +1160,15 @@ fn check_relay_health(relay_url: &str, relay_password: &str) -> Result<(String, 
         return Err(format!("HTTP {}", response.status));
     }
 
-    let version: VersionResponse = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("parse error: {}", e))?;
+    let version: VersionResponse =
+        serde_json::from_slice(&response.body).map_err(|e| format!("parse error: {}", e))?;
 
-    let weechat_version = version.weechat_version.unwrap_or_else(|| "unknown".to_string());
-    let api_version = version.relay_api_version.unwrap_or_else(|| "unknown".to_string());
+    let weechat_version = version
+        .weechat_version
+        .unwrap_or_else(|| "unknown".to_string());
+    let api_version = version
+        .relay_api_version
+        .unwrap_or_else(|| "unknown".to_string());
 
     Ok((weechat_version, api_version))
 }
@@ -1035,16 +1183,24 @@ fn fetch_buffer_list(relay_url: &str, relay_password: &str) -> Result<Vec<Buffer
     }
 
     // WeeChat API v2 returns a bare array; parse via serde_json::Value for resilience
-    let values: Vec<serde_json::Value> = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("parse error: {}", e))?;
-    let buffers = values.into_iter().filter_map(|v| {
-        let id = v["id"].as_i64();
-        let full_name = v["name"].as_str()
-            .or_else(|| v["full_name"].as_str())
-            .map(String::from);
-        let short_name = v["short_name"].as_str().map(String::from);
-        Some(BufferInfo { id, full_name, short_name })
-    }).collect();
+    let values: Vec<serde_json::Value> =
+        serde_json::from_slice(&response.body).map_err(|e| format!("parse error: {}", e))?;
+    let buffers = values
+        .into_iter()
+        .filter_map(|v| {
+            let id = v["id"].as_i64();
+            let full_name = v["name"]
+                .as_str()
+                .or_else(|| v["full_name"].as_str())
+                .map(String::from);
+            let short_name = v["short_name"].as_str().map(String::from);
+            Some(BufferInfo {
+                id,
+                full_name,
+                short_name,
+            })
+        })
+        .collect();
     Ok(buffers)
 }
 
@@ -1065,7 +1221,10 @@ fn send_dm(
             let msg_cmd = format!("/msg {} {}", nick, text);
             channel_host::log(
                 channel_host::LogLevel::Info,
-                &format!("DM buffer '{}' not found, routing via '{}'", buffer_name, server_buffer),
+                &format!(
+                    "DM buffer '{}' not found, routing via '{}'",
+                    buffer_name, server_buffer
+                ),
             );
             send_input(relay_url, relay_password, &server_buffer, &msg_cmd)
         }
@@ -1085,7 +1244,8 @@ fn send_input(
     let payload = serde_json::to_vec(&InputRequest {
         buffer_name: buffer_name.to_string(),
         command: text.to_string(),
-    }).map_err(|e| format!("serialize error: {}", e))?;
+    })
+    .map_err(|e| format!("serialize error: {}", e))?;
 
     let response = http_post(&url, relay_password, &payload, 5_000)?;
 
@@ -1110,7 +1270,9 @@ fn seed_watermarks(relay_url: &str, relay_password: &str, buffers: &[BufferInfo]
             if let Ok(response) = http_get(&url, relay_password, 3_000) {
                 if response.status == 200 {
                     // Response is a bare JSON array
-                    if let Ok(lines) = serde_json::from_slice::<Vec<serde_json::Value>>(&response.body) {
+                    if let Ok(lines) =
+                        serde_json::from_slice::<Vec<serde_json::Value>>(&response.body)
+                    {
                         if let Some(line) = lines.first() {
                             let line_id = line["id"].as_i64().unwrap_or(-1);
                             watermarks.insert(full_name.clone(), line_id);
@@ -1134,31 +1296,29 @@ fn seed_watermarks(relay_url: &str, relay_password: &str, buffers: &[BufferInfo]
 }
 
 /// Perform HTTP GET request.
-fn http_get(url: &str, _password: &str, timeout_ms: u32) -> Result<channel_host::HttpResponse, String> {
+fn http_get(
+    url: &str,
+    _password: &str,
+    timeout_ms: u32,
+) -> Result<channel_host::HttpResponse, String> {
     let headers_json = serde_json::json!({}).to_string();
 
-    channel_host::http_request(
-        "GET",
-        url,
-        &headers_json,
-        None,
-        Some(timeout_ms),
-    )
+    channel_host::http_request("GET", url, &headers_json, None, Some(timeout_ms))
 }
 
 /// Perform HTTP POST request.
-fn http_post(url: &str, _password: &str, body: &[u8], timeout_ms: u32) -> Result<channel_host::HttpResponse, String> {
+fn http_post(
+    url: &str,
+    _password: &str,
+    body: &[u8],
+    timeout_ms: u32,
+) -> Result<channel_host::HttpResponse, String> {
     let headers_json = serde_json::json!({
         "Content-Type": "application/json"
-    }).to_string();
+    })
+    .to_string();
 
-    channel_host::http_request(
-        "POST",
-        url,
-        &headers_json,
-        Some(body),
-        Some(timeout_ms),
-    )
+    channel_host::http_request("POST", url, &headers_json, Some(body), Some(timeout_ms))
 }
 
 // ============================================================================
@@ -1175,7 +1335,8 @@ fn normalize_relay_url(url: &str) -> String {
 
 /// Filter buffer list to IRC buffers only.
 fn filter_irc_buffers(buffers: &[BufferInfo]) -> Vec<BufferInfo> {
-    buffers.iter()
+    buffers
+        .iter()
         .filter(|b| {
             if let Some(name) = &b.full_name {
                 let parts: Vec<&str> = name.split('.').collect();
@@ -1278,7 +1439,8 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
 
         // Try to break at newline or space
         let chunk = &remaining[..end];
-        let break_at = chunk.rfind('\n')
+        let break_at = chunk
+            .rfind('\n')
             .or_else(|| chunk.rfind(' '))
             .unwrap_or(end);
 
@@ -1405,14 +1567,26 @@ mod tests {
 
     #[test]
     fn test_normalize_relay_url() {
-        assert_eq!(normalize_relay_url("http://127.0.0.1:9001/"), "http://127.0.0.1:9001");
-        assert_eq!(normalize_relay_url("http://127.0.0.1:9001/api"), "http://127.0.0.1:9001");
-        assert_eq!(normalize_relay_url("ws://localhost:9001"), "http://localhost:9001");
+        assert_eq!(
+            normalize_relay_url("http://127.0.0.1:9001/"),
+            "http://127.0.0.1:9001"
+        );
+        assert_eq!(
+            normalize_relay_url("http://127.0.0.1:9001/api"),
+            "http://127.0.0.1:9001"
+        );
+        assert_eq!(
+            normalize_relay_url("ws://localhost:9001"),
+            "http://localhost:9001"
+        );
     }
 
     #[test]
     fn test_encode_buffer_name() {
-        assert_eq!(encode_buffer_name("irc.libera.#openclaw"), "irc.libera.%23openclaw");
+        assert_eq!(
+            encode_buffer_name("irc.libera.#openclaw"),
+            "irc.libera.%23openclaw"
+        );
     }
 
     #[test]
@@ -1446,7 +1620,10 @@ mod tests {
 
         let filtered = filter_irc_buffers(&buffers);
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].full_name.as_ref().unwrap(), "irc.libera.#openclaw");
+        assert_eq!(
+            filtered[0].full_name.as_ref().unwrap(),
+            "irc.libera.#openclaw"
+        );
     }
 
     #[test]

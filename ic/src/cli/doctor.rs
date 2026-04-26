@@ -13,7 +13,7 @@ use crate::settings::Settings;
 /// Run all diagnostic checks and print results.
 pub async fn run_doctor_command() -> anyhow::Result<()> {
     println!();
-    println!("  {}IronClaw Doctor{}", fmt::bold(), fmt::reset());
+    println!("  {}LunarWing Doctor{}", fmt::bold(), fmt::reset());
 
     let mut passed = 0u32;
     let mut failed = 0u32;

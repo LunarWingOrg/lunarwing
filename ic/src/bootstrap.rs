@@ -518,7 +518,7 @@ pub struct PidLock {
 /// Errors from PID lock acquisition.
 #[derive(Debug, thiserror::Error)]
 pub enum PidLockError {
-    #[error("Another IronClaw instance is already running (PID {pid})")]
+    #[error("Another LunarWing instance is already running (PID {pid})")]
     AlreadyRunning { pid: u32 },
     #[error("Failed to acquire PID lock: {0}")]
     Io(#[from] std::io::Error),

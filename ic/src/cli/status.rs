@@ -40,7 +40,7 @@ pub async fn run_status_command() -> anyhow::Result<()> {
     let settings = load_settings();
 
     println!();
-    println!("  {}IronClaw Status{}", fmt::bold(), fmt::reset());
+    println!("  {}LunarWing Status{}", fmt::bold(), fmt::reset());
     println!();
 
     // Version
@@ -48,7 +48,7 @@ pub async fn run_status_command() -> anyhow::Result<()> {
         "{}",
         fmt::kv_line(
             "Version",
-            &format!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            &format!("LunarWing v{}", env!("CARGO_PKG_VERSION")),
             12,
         )
     );

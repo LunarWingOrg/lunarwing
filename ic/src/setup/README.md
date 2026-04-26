@@ -95,6 +95,15 @@ The runtime automatically imports `workspace-template/*.md` on first boot when
 `WORKSPACE_IMPORT_DIR` is not set. This gives fresh installs an editable,
 on-disk default persona and memory template.
 
+Normal startup now also ensures those files exist when they are missing, even
+if onboarding is skipped via `ONBOARD_COMPLETED=true`, `--no-onboard`, or a
+service/harness launch path.
+
+Config precedence still applies after seeding:
+`env vars > config.toml > database > defaults`.
+That means service env files, `.env`, or wrapper scripts can still override the
+seeded `selected_model`, `openai_compatible_base_url`, or other TOML values.
+
 **Seed source locations in the repo:**
 - Runtime config template: `deploy/config.toml`
 - Workspace seed templates: `deploy/workspace-template/*.md`

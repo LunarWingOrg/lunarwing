@@ -1,4 +1,4 @@
-// IronClaw Web Gateway - Client
+// LunarWing Web Gateway - Client
 
 // --- Theme Management (dark / light / system) ---
 // Icon switching is handled by pure CSS via data-theme-mode on <html>.
@@ -3376,7 +3376,7 @@ function submitConfigureModal(name, fields, options) {
           openOAuthUrl(res.auth_url);
           refreshCurrentSettingsTab();
         } else if (res.needs_restart) {
-          showToast('Configured ' + name + '. Restart IronClaw to apply all changes.', 'info');
+          showToast('Configured ' + name + '. Restart LunarWing to apply all changes.', 'info');
         }
         // For non-OAuth success: the server always broadcasts auth_completed SSE,
         // which will show the toast and refresh extensions — no need to do it here too.
@@ -4381,7 +4381,7 @@ function fetchGatewayStatus() {
 
     // Version
     if (data.version) {
-      html += '<div class="gw-section-label">IronClaw v' + escapeHtml(data.version) + '</div>';
+      html += '<div class="gw-section-label">LunarWing v' + escapeHtml(data.version) + '</div>';
       html += '<div class="gw-divider"></div>';
     }
 

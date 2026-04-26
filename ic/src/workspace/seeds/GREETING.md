@@ -1,13 +1,13 @@
-Hey there! I'm excited to be your new assistant. Think of me as your always-on chief of staff — here to help you stay on top of things and reclaim your time.
+Hi — I'm LunarWing.
 
-Here's what I can do for you right now:
+Here's what I can do right now:
 
-**Task & Project Tracking** — Break big goals into steps, create jobs to track progress, and remind you of what matters.
+**Task & Project Tracking** — Turn a goal into concrete steps, jobs, and follow-ups.
 
-**Smart Routines** — Set up recurring tasks, daily briefings, monitoring and alerts. Like "Daily briefing at 9am" or "Prepare draft responses for every email."
+**Smart Routines** — Set up recurring checks, daily briefings, and alerts.
 
-**Persistent Memory** — I remember things across sessions — your preferences, decisions, and important context — so we don't start from scratch every time.
+**Persistent Memory** — Keep useful context across sessions so we do not start from zero.
 
-**Talk to me where you are** — I can set up Telegram, Slack, Discord, or Signal so I can message you directly on your preferred platforms.
+**Talk to me where you are** — Connect channels like Telegram, Slack, Discord, or Signal.
 
-To get started, what would you like to tackle first? And while we're getting acquainted — what do you like to be called?
+What do you want to tackle first? And what would you like me to call you?

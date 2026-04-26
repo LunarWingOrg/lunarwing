@@ -1,8 +1,8 @@
-// English Language Pack for IronClaw
+// English Language Pack for LunarWing
 
 I18n.register('en', {
   // Auth Page
-  'auth.title': 'IronClaw',
+  'auth.title': 'LunarWing',
   'auth.tagline': 'Secure AI Assistant',
   'auth.tokenLabel': 'Gateway Token',
   'auth.tokenPlaceholder': 'Paste your token',
@@ -15,12 +15,12 @@ I18n.register('en', {
   'chat.inputPlaceholder': 'Message or / for commands...',
   
   // Restart Modal
-  'restart.title': 'Restart IronClaw Instance',
-  'restart.description': 'Are you sure you want to restart IronClaw? This will gracefully restart the process.',
+  'restart.title': 'Restart LunarWing Instance',
+  'restart.description': 'Are you sure you want to restart LunarWing? This will gracefully restart the process.',
   'restart.warning': 'Running tasks may be interrupted. Restart will complete in a few seconds.',
   'restart.cancel': 'Cancel',
   'restart.confirm': 'Confirm Restart',
-  'restart.progressTitle': 'Restarting IronClaw',
+  'restart.progressTitle': 'Restarting LunarWing',
   'restart.progressSubtitle': 'Please wait for the process to restart...',
   'restart.checkLogs': 'Check the Logs tab for details after restart completes.',
   
@@ -352,7 +352,7 @@ I18n.register('en', {
   
   // Configure
   'config.title': 'Configure {name}',
-  'config.telegramOwnerHint': 'After saving, IronClaw will show a one-time code. Send `/start CODE` to your bot in Telegram and IronClaw will finish setup automatically.',
+  'config.telegramOwnerHint': 'After saving, LunarWing will show a one-time code. Send `/start CODE` to your bot in Telegram and LunarWing will finish setup automatically.',
   'config.telegramChallengeTitle': 'Telegram owner verification',
   'config.telegramOwnerWaiting': 'Waiting for Telegram owner verification...',
   'config.telegramCommandLabel': 'Send this in Telegram:',
@@ -528,7 +528,7 @@ I18n.register('en', {
 
   // Welcome Card
   'welcome.heading': 'What can I help you with?',
-  'welcome.description': 'IronClaw is your secure AI assistant. Choose a suggestion below or type your own message.',
+  'welcome.description': 'LunarWing is your secure AI assistant. Choose a suggestion below or type your own message.',
   'welcome.runTool': 'Run a tool',
   'welcome.checkJobs': 'Check job status',
   'welcome.searchMemory': 'Search memory',
@@ -543,7 +543,7 @@ I18n.register('en', {
 
   // Messages
   'message.you': 'You',
-  'message.assistant': 'IronClaw',
+  'message.assistant': 'LunarWing',
   'message.system': 'System',
   'message.copy': 'Copy',
   'message.copied': 'Copied!',

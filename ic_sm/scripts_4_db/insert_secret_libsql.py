@@ -32,7 +32,7 @@ NONCE_SIZE = 12
 SALT_SIZE = 32
 HKDF_INFO = b"near-agent-secrets-v1"
 
-DB_PATH = os.path.expanduser("~/.ironclaw/ironclaw.db")
+DB_PATH = os.path.expanduser("/home/sun/lw_workspace/lunarwing-agent-20260425-235935/ironclaw.db")
 
 
 def get_master_key():

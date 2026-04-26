@@ -28,6 +28,11 @@ const OPENRC_LUNARWING_INIT: &str = include_str!("../systemd/lunarwing.openrc");
 const OPENRC_XMPP_BRIDGE_INIT: &str = include_str!("../systemd/xmpp-bridge.openrc");
 const OPENRC_LUNARWING_ENV_TEMPLATE: &str = "# Optional environment overrides for LunarWing.\n\
 # Add secrets or one-off overrides here when they must not live in config.toml.\n\
+# Example to override the runtime banner / agent identity:\n\
+# AGENT_NAME=lunarwing\n\
+# Example defaults used by the launcher and service path for local/private infra:\n\
+# ALLOW_PRIVATE_IPS=1\n\
+# PGSSLMODE=disable\n\
 # Example for OpenAI-compatible endpoints that insist on a placeholder key:\n\
 # LLM_API_KEY=unneeded\n";
 const OPENRC_XMPP_BRIDGE_ENV_TEMPLATE: &str =
@@ -594,6 +599,9 @@ fn linux_unit_content(exe: &Path, include_xmpp_bridge: bool) -> String {
          Type=simple\n\
          # Disable interactive CLI/REPL in daemon mode to prevent blocking on stdin\n\
          Environment=\"CLI_ENABLED=false\"\n\
+         Environment=\"AGENT_NAME=lunarwing\"\n\
+         Environment=\"ALLOW_PRIVATE_IPS=1\"\n\
+         Environment=\"PGSSLMODE=disable\"\n\
          ExecStart=\"{exe}\" run\n\
          Restart=always\n\
          RestartSec=3\n\
@@ -678,6 +686,9 @@ fn linux_openrc_confd_content(
          lunarwing_error_log={error_log}\n\
          lunarwing_env_file='/etc/lunarwing/lunarwing.env'\n\
          lunarwing_cli_enabled='false'\n\
+         lunarwing_agent_name='lunarwing'\n\
+         lunarwing_allow_private_ips='1'\n\
+         lunarwing_pgsslmode='disable'\n\
          lunarwing_base_dir={base_dir}\n\
          lunarwing_rust_log='ironclaw=info,lunarwing=info'\n",
         command = shell_quote(&exe.display().to_string()),
