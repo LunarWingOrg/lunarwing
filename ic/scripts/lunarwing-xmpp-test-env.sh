@@ -14,10 +14,12 @@ CHANNELS_DIR="$STATE_DIR/channels"
 TOOLS_DIR="$STATE_DIR/tools"
 PROFILE="${LUNARWING_TEST_PROFILE:-debug}"
 
-# PostgreSQL
+# Database
+DB_KIND="${LUNARWING_TEST_DATABASE_KIND:-postgres}"
 PG_CONTAINER="${LUNARWING_TEST_PG_CONTAINER:-lunarwing-test-postgres}"
 PG_PORT="${LUNARWING_TEST_PG_PORT:-5432}"
 DATABASE_URL="${LUNARWING_TEST_DATABASE_URL:-postgres://ironclaw:ironclaw@127.0.0.1:${PG_PORT}/ironclaw}"
+LIBSQL_PATH="${LUNARWING_TEST_LIBSQL_PATH:-$STATE_DIR/ironclaw.db}"
 
 # TensorZero proxy
 PROXY_PORT="${LUNARWING_TEST_PROXY_PORT:-3002}"
@@ -70,9 +72,11 @@ Environment:
   LUNARWING_TEST_ROOT      default: ${TMPDIR:-/tmp}/lunarwing-xmpp-test
   LUNARWING_TEST_PROFILE   debug or release; default: debug
 
+  LUNARWING_TEST_DATABASE_KIND   postgres or libsql; default: postgres
   LUNARWING_TEST_PG_CONTAINER    default: lunarwing-test-postgres
   LUNARWING_TEST_PG_PORT         default: 5432
   LUNARWING_TEST_DATABASE_URL    override full postgres connection URL
+  LUNARWING_TEST_LIBSQL_PATH     default: $LUNARWING_TEST_ROOT/state/ironclaw.db
 
   LUNARWING_TEST_PROXY_PORT      default: 3002
   LUNARWING_TEST_PROXY_BIND      default: 127.0.0.1
@@ -157,6 +161,109 @@ generate_token() {
   fi
 }
 
+database_kind() {
+  case "$DB_KIND" in
+    postgres|libsql)
+      printf '%s' "$DB_KIND"
+      ;;
+    *)
+      die "LUNARWING_TEST_DATABASE_KIND must be 'postgres' or 'libsql'"
+      ;;
+  esac
+}
+
+env_value_from_file() {
+  local path="$1"
+  local key="$2"
+  [[ -f "$path" ]] || return 1
+  awk -F= -v key="$key" '
+    $1 == key {
+      sub(/^[^=]*=/, "", $0)
+      print
+      exit
+    }
+  ' "$path"
+}
+
+shared_xmpp_jid() {
+  local value="${LUNARWING_TEST_XMPP_JID:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/lunarwing.env" "XMPP_JID" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/xmpp-bridge.env" "XMPP_JID" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  printf 'lw-%s@harness.invalid' "$(generate_token | cut -c1-12)"
+}
+
+shared_xmpp_password() {
+  local value="${LUNARWING_TEST_XMPP_PASSWORD:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/lunarwing.env" "XMPP_PASSWORD" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/xmpp-bridge.env" "XMPP_PASSWORD" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  printf '%s' "$(generate_token | cut -c1-32)"
+}
+
+shared_xmpp_bridge_token() {
+  local value="${LUNARWING_TEST_XMPP_BRIDGE_TOKEN:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/lunarwing.env" "XMPP_BRIDGE_TOKEN" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/xmpp-bridge.env" "XMPP_BRIDGE_TOKEN" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  printf '%s' "$(generate_token)"
+}
+
+shared_secrets_master_key() {
+  local value="${LUNARWING_TEST_SECRETS_MASTER_KEY:-}"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value="$(env_value_from_file "$ENV_DIR/lunarwing.env" "SECRETS_MASTER_KEY" 2>/dev/null || true)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  else
+    generate_token
+  fi
+}
+
+shared_xmpp_allow_from_json() {
+  printf '["%s"]' "$(shared_xmpp_jid)"
+}
+
 # Map channel directory name to crate binary name (per bundled.rs KNOWN_CHANNELS).
 channel_crate_name() {
   case "$1" in
@@ -200,13 +307,60 @@ ensure_lunarwing_env_defaults() {
   local path="$1"
   append_env_if_missing "$path" "AGENT_NAME" "lunarwing"
   append_env_if_missing "$path" "ALLOW_PRIVATE_IPS" "1"
-  append_env_if_missing "$path" "PGSSLMODE" "disable"
+  append_env_if_missing "$path" "SECRETS_MASTER_KEY" "$(shared_secrets_master_key)"
+  if [[ "$(database_kind)" == "postgres" ]]; then
+    append_env_if_missing "$path" "DATABASE_BACKEND" "postgres"
+    append_env_if_missing "$path" "DATABASE_URL" "$DATABASE_URL"
+    append_env_if_missing "$path" "DATABASE_SSLMODE" "disable"
+    append_env_if_missing "$path" "PGSSLMODE" "disable"
+    replace_env_value "$path" "DATABASE_BACKEND" "postgres"
+    replace_env_value "$path" "DATABASE_URL" "$DATABASE_URL"
+    replace_env_value "$path" "DATABASE_SSLMODE" "disable"
+    replace_env_value "$path" "PGSSLMODE" "disable"
+  else
+    append_env_if_missing "$path" "DATABASE_BACKEND" "libsql"
+    append_env_if_missing "$path" "LIBSQL_PATH" "$LIBSQL_PATH"
+    replace_env_value "$path" "DATABASE_BACKEND" "libsql"
+    replace_env_value "$path" "LIBSQL_PATH" "$LIBSQL_PATH"
+  fi
   append_env_if_missing "$path" "WASM_CHANNELS_ENABLED" "true"
+  append_env_if_missing "$path" "XMPP_BRIDGE_URL" "$(bridge_base)"
+  append_env_if_missing "$path" "XMPP_BRIDGE_TOKEN" "$(shared_xmpp_bridge_token)"
+  append_env_if_missing "$path" "XMPP_JID" "$(shared_xmpp_jid)"
+  append_env_if_missing "$path" "XMPP_PASSWORD" "$(shared_xmpp_password)"
+  append_env_if_missing "$path" "XMPP_DM_POLICY" "allowlist"
+  append_env_if_missing "$path" "XMPP_ALLOW_FROM" "$(shared_xmpp_jid)"
+  append_env_if_missing "$path" "XMPP_ALLOW_ROOMS" ""
+  append_env_if_missing "$path" "XMPP_ENCRYPTED_ROOMS" ""
+  append_env_if_missing "$path" "XMPP_OMEMO_DEVICE_ID" "0"
+  append_env_if_missing "$path" "XMPP_OMEMO_STORE_DIR" "$STATE_DIR/xmpp"
+  append_env_if_missing "$path" "XMPP_ALLOW_PLAINTEXT_FALLBACK" "true"
+  append_env_if_missing "$path" "XMPP_RESOURCE" "lunarwing-test"
   append_env_if_missing "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
   append_env_if_missing "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "LLM_MODEL" "tensorzero::function_name::ironclaw"
+}
+
+ensure_bridge_env_defaults() {
+  local path="$1"
+  append_env_if_missing "$path" "IRONCLAW_BASE_DIR" "$STATE_DIR"
+  append_env_if_missing "$path" "XMPP_BRIDGE_BIND" "127.0.0.1:8787"
+  append_env_if_missing "$path" "XMPP_BRIDGE_TOKEN" "$(shared_xmpp_bridge_token)"
+  append_env_if_missing "$path" "XMPP_BRIDGE_MAX_MESSAGES" "256"
+  append_env_if_missing "$path" "RUST_LOG" "xmpp_bridge=info,info"
+  append_env_if_missing "$path" "XMPP_JID" "$(shared_xmpp_jid)"
+  append_env_if_missing "$path" "XMPP_PASSWORD" "$(shared_xmpp_password)"
+  append_env_if_missing "$path" "XMPP_DM_POLICY" "allowlist"
+  append_env_if_missing "$path" "XMPP_ALLOW_FROM_JSON" "$(shared_xmpp_allow_from_json)"
+  append_env_if_missing "$path" "XMPP_ALLOW_ROOMS_JSON" "[]"
+  append_env_if_missing "$path" "XMPP_ENCRYPTED_ROOMS_JSON" "[]"
+  append_env_if_missing "$path" "XMPP_DEVICE_ID" "0"
+  append_env_if_missing "$path" "XMPP_OMEMO_STORE_DIR" "$STATE_DIR/xmpp"
+  append_env_if_missing "$path" "XMPP_ALLOW_PLAINTEXT_FALLBACK" "true"
+  append_env_if_missing "$path" "XMPP_RESOURCE" "lunarwing-test"
+  append_env_if_missing "$path" "XMPP_BRIDGE_WAIT_SECONDS" "15"
 }
 
 write_lunarwing_env_if_missing() {
@@ -226,11 +380,17 @@ write_lunarwing_env_if_missing() {
       printf 'IRONCLAW_SOCKET=%s\n' "$(harness_socket_path)"
       printf 'LUNARWING_SOCKET=%s\n' "$(harness_socket_path)"
       printf '\n'
-      printf '# Database — PostgreSQL (start with: start-postgres)\n'
-      printf 'DATABASE_BACKEND=postgres\n'
-      printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
-      printf 'DATABASE_SSLMODE=disable\n'
-      printf 'PGSSLMODE=disable\n'
+      if [[ "$(database_kind)" == "postgres" ]]; then
+        printf '# Database — PostgreSQL (start with: start-postgres)\n'
+        printf 'DATABASE_BACKEND=postgres\n'
+        printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+        printf 'DATABASE_SSLMODE=disable\n'
+        printf 'PGSSLMODE=disable\n'
+      else
+        printf '# Database — libSQL\n'
+        printf 'DATABASE_BACKEND=libsql\n'
+        printf 'LIBSQL_PATH=%s\n' "$LIBSQL_PATH"
+      fi
       printf '\n'
       printf '# LLM — TensorZero proxy (start with: start-proxy)\n'
       printf 'LLM_BACKEND=openai_compatible\n'
@@ -241,6 +401,21 @@ write_lunarwing_env_if_missing() {
       printf '\n'
       printf '# Runtime identity\n'
       printf 'AGENT_NAME=lunarwing\n'
+      printf 'SECRETS_MASTER_KEY=%s\n' "$(shared_secrets_master_key)"
+      printf '\n'
+      printf '# XMPP — seeded so the WASM channel has a full config on first boot\n'
+      printf 'XMPP_BRIDGE_URL=%s\n' "$(bridge_base)"
+      printf 'XMPP_BRIDGE_TOKEN=%s\n' "$(shared_xmpp_bridge_token)"
+      printf 'XMPP_JID=%s\n' "$(shared_xmpp_jid)"
+      printf 'XMPP_PASSWORD=%s\n' "$(shared_xmpp_password)"
+      printf 'XMPP_DM_POLICY=allowlist\n'
+      printf 'XMPP_ALLOW_FROM=%s\n' "$(shared_xmpp_jid)"
+      printf 'XMPP_ALLOW_ROOMS=\n'
+      printf 'XMPP_ENCRYPTED_ROOMS=\n'
+      printf 'XMPP_OMEMO_DEVICE_ID=0\n'
+      printf 'XMPP_OMEMO_STORE_DIR=%s/xmpp\n' "$STATE_DIR"
+      printf 'XMPP_ALLOW_PLAINTEXT_FALLBACK=true\n'
+      printf 'XMPP_RESOURCE=lunarwing-test\n'
       printf '\n'
       printf '# WASM channels and tools (build with: build-wasm, install with: install-wasm)\n'
       printf 'WASM_ENABLED=true\n'
@@ -284,26 +459,24 @@ write_proxy_env_if_missing() {
 write_bridge_env_if_missing() {
   local path="$ENV_DIR/xmpp-bridge.env"
   if [[ -f "$path" ]]; then
+    ensure_bridge_env_defaults "$path"
     return 0
   fi
-
-  local token
-  token="$(generate_token)"
 
   (
     umask 077
     {
       printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
       printf 'XMPP_BRIDGE_BIND=127.0.0.1:8787\n'
-      printf 'XMPP_BRIDGE_TOKEN=%s\n' "$token"
+      printf 'XMPP_BRIDGE_TOKEN=%s\n' "$(shared_xmpp_bridge_token)"
       printf 'XMPP_BRIDGE_MAX_MESSAGES=256\n'
       printf 'RUST_LOG=xmpp_bridge=info,info\n'
       printf '\n'
-      printf '# Live XMPP credentials. Leave empty for local bridge API smoke tests.\n'
-      printf 'XMPP_JID=\n'
-      printf 'XMPP_PASSWORD=\n'
+      printf '# Seeded XMPP placeholders for bridge configure tests.\n'
+      printf 'XMPP_JID=%s\n' "$(shared_xmpp_jid)"
+      printf 'XMPP_PASSWORD=%s\n' "$(shared_xmpp_password)"
       printf 'XMPP_DM_POLICY=allowlist\n'
-      printf 'XMPP_ALLOW_FROM_JSON=[]\n'
+      printf 'XMPP_ALLOW_FROM_JSON=%s\n' "$(shared_xmpp_allow_from_json)"
       printf 'XMPP_ALLOW_ROOMS_JSON=[]\n'
       printf 'XMPP_ENCRYPTED_ROOMS_JSON=[]\n'
       printf 'XMPP_DEVICE_ID=0\n'
@@ -313,6 +486,8 @@ write_bridge_env_if_missing() {
       printf 'XMPP_BRIDGE_WAIT_SECONDS=15\n'
     } >"$path"
   )
+
+  ensure_bridge_env_defaults "$path"
 }
 
 init_env() {
@@ -439,12 +614,20 @@ wait_for_bridge() {
 # --- PostgreSQL management ---
 
 pg_container_state() {
+  if [[ "$(database_kind)" == "libsql" ]]; then
+    printf 'not-used'
+    return 0
+  fi
   local state
   state="$(docker inspect -f '{{.State.Status}}' "$PG_CONTAINER" 2>/dev/null)" || state="not-created"
   printf '%s' "$state"
 }
 
 start_postgres() {
+  if [[ "$(database_kind)" == "libsql" ]]; then
+    say "database backend is libsql; no PostgreSQL container to start"
+    return 0
+  fi
   require_cmd docker
 
   local state
@@ -486,6 +669,10 @@ wait_for_postgres() {
 }
 
 stop_postgres() {
+  if [[ "$(database_kind)" == "libsql" ]]; then
+    say "database backend is libsql; no PostgreSQL container to stop"
+    return 0
+  fi
   require_cmd docker
   local state
   state="$(pg_container_state)"
@@ -499,6 +686,10 @@ stop_postgres() {
 }
 
 reset_postgres() {
+  if [[ "$(database_kind)" == "libsql" ]]; then
+    say "database backend is libsql; no PostgreSQL container to remove"
+    return 0
+  fi
   require_cmd docker
   local state
   state="$(pg_container_state)"
@@ -746,8 +937,13 @@ stack_up() {
 
   say "=== bringing up full stack ==="
 
-  say "--- PostgreSQL ---"
-  start_postgres || die "PostgreSQL failed to start"
+  if [[ "$(database_kind)" == "postgres" ]]; then
+    say "--- PostgreSQL ---"
+    start_postgres || die "PostgreSQL failed to start"
+  else
+    say "--- libSQL ---"
+    say "libSQL path: $LIBSQL_PATH"
+  fi
 
   say "--- TensorZero proxy ---"
   start_proxy || die "proxy failed to start"
@@ -773,9 +969,15 @@ stack_down() {
 }
 
 status_all() {
-  local pg_state
-  pg_state="$(pg_container_state)"
-  printf 'PostgreSQL:    %s (container %s, port %s)\n' "$pg_state" "$PG_CONTAINER" "$PG_PORT"
+  if [[ "$(database_kind)" == "postgres" ]]; then
+    local pg_state
+    pg_state="$(pg_container_state)"
+    printf 'PostgreSQL:    %s (container %s, port %s)\n' "$pg_state" "$PG_CONTAINER" "$PG_PORT"
+  else
+    local libsql_state="missing"
+    [[ -f "$LIBSQL_PATH" ]] && libsql_state="present"
+    printf 'libSQL:        %s (%s)\n' "$libsql_state" "$LIBSQL_PATH"
+  fi
 
   if pid_alive "$RUN_DIR/proxy.pid"; then
     printf 'Proxy:         running (pid %s, port %s)\n' "$(<"$RUN_DIR/proxy.pid")" "$PROXY_PORT"
@@ -826,8 +1028,13 @@ verify_stack() {
     fi
   }
 
-  _check "PostgreSQL is reachable" \
-    docker exec "$PG_CONTAINER" pg_isready -U ironclaw
+  if [[ "$(database_kind)" == "postgres" ]]; then
+    _check "PostgreSQL is reachable" \
+      docker exec "$PG_CONTAINER" pg_isready -U ironclaw
+  else
+    _check "libSQL database file exists" \
+      test -f "$LIBSQL_PATH"
+  fi
 
   _check "TensorZero proxy responds at :${PROXY_PORT}" \
     proxy_ready
@@ -1271,6 +1478,12 @@ doctor() {
   say "repo root: $REPO_ROOT"
   say "lunarwing root: $LUNARWING_ROOT"
   say "profile: $(profile_dir)"
+  say "database backend: $(database_kind)"
+  if [[ "$(database_kind)" == "libsql" ]]; then
+    say "libsql path: $LIBSQL_PATH"
+  else
+    say "postgres url: $DATABASE_URL"
+  fi
 
   say ""
   say "=== commands ==="

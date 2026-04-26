@@ -342,6 +342,29 @@ The current app binary is still named `ironclaw`. If you install a renamed
 Inspect `systemctl status`, `systemctl show`, `journalctl`, and `/v1/status`
 before restarting services.
 
+## Future Targeted Checks
+
+Keep these as follow-up harness checks when the current setup work is stable:
+
+- `Live XMPP end-to-end`: use a real test JID/password plus one DM target or
+  room to prove `/v1/configure`, polling, and outbound send work against a real
+  XMPP service.
+- `Secrets-only XMPP password`: remove `XMPP_PASSWORD` from `lunarwing.env`,
+  insert it through the secret-management scripts, restart, and confirm the
+  channel still loads from the secrets store.
+- `Gotify real send`: add a real `gotify_app_token`, set `gotify_url`, and make
+  the tool send one notification.
+- `Dual-instance socket isolation`: run two harness roots at once and confirm
+  each gets its own `run/ironclaw.sock` and `repl` attaches to the correct
+  daemon.
+- `Init idempotence`: run `init` twice on the same root after customizing env
+  values and confirm the harness preserves user-edited tokens, DB mode, agent
+  name, and XMPP fields.
+- `DB parity`: repeat the same secret insert, restart, and verify flow once on
+  `libsql` and once on `postgres` to catch backend-specific regressions.
+- `Service restart behavior`: restart only `lunarwing-test.service` and confirm
+  the DB, seeded docs, REPL socket, and XMPP migration all recover cleanly.
+
 ## Troubleshooting
 
 Run:
