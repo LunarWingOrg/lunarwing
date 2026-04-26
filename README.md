@@ -26,7 +26,8 @@ The LunarWing project adds real privacy respecting tools and channels, with full
 * Weechat (Channel, utilize weechat as an IRC client for an agent to communicate, WASM)
 * DarkIRC (Channel, Darkfi WASM)
 * XMPP with OMEMO (wasm channel, bridge service, and core code changes had to be made to accomodate properly)
-* Persistent Codex Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Woker Container)
+* Persistent Codex (developed primarily by OpenAI) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Woker Container)
+* Persistent Nanocode (developed and maintained by the NanoGPT community) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Worker container)
 
 LunarWing developers actually care about your freedom as a user. This means that we simply do not support adding tools and channels to our official repository which we do not think allign with our values (see MANIFESTO). We do not force users to shy away from said tools and channels, but we will not be supporting them in our main monorepo here. All wasm tools and channels that develepors wish to create and maintain for LunarWing can be done so elsewhere. We simply do not have the time or patience or willingness to develop and support certain proprietary platforms for LunarWing. Especially not when we feel there is so much more important work to accomplish for this project. What we DO care about is self-hostable communciation layers. We will NOT continue to develop or support proprietary channels such as Slack, Telegram, or Discord due to ethical reasons but also because we feel that it is not our place to do so.
 
