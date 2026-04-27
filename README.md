@@ -23,11 +23,14 @@ The LunarWing project was created with free open source software in mind. The Lu
 
 The LunarWing project adds real privacy respecting tools and channels, with full secret support, right out of the box. These include, but are not limited to:
 * Gotify (Tool, WASM, agents can send notifications via gotify)
-* Weechat (Channel, utilize weechat as an IRC client for an agent to communicate, WASM)
-* DarkIRC (Channel, Darkfi WASM)
+* Weechat (Channel, allows Lunarwing agent to utilize Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client for an agent to communicate, WASM)
+* DarkIRC (Channel, Darkfi WASM) 
 * XMPP with OMEMO (wasm channel, bridge service, and core code changes had to be made to accomodate properly)
+* Superior REPL Server and Client with better output formatting, better subagent support, polite reminders stating that the agent is still processing. Completely optional to use the new advanced REPLv2
 * Persistent Codex (developed primarily by OpenAI) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Woker Container)
 * Persistent Nanocode (developed and maintained by the NanoGPT community) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Worker container)
+* An eventual agnostic coding worker container as well
+* Plan to introduce advanced character trait functionality
 
 LunarWing developers actually care about your freedom as a user. This means that we simply do not support adding tools and channels to our official repository which we do not think allign with our values (see MANIFESTO). We do not force users to shy away from said tools and channels, but we will not be supporting them in our main monorepo here. All wasm tools and channels that develepors wish to create and maintain for LunarWing can be done so elsewhere. We simply do not have the time or patience or willingness to develop and support certain proprietary platforms for LunarWing. Especially not when we feel there is so much more important work to accomplish for this project. What we DO care about is self-hostable communciation layers. We will NOT continue to develop or support proprietary channels such as Slack, Telegram, or Discord due to ethical reasons but also because we feel that it is not our place to do so.
 
@@ -38,13 +41,14 @@ LunarWing and its core contributers are not affiliated with NearAI.
 ## A Partial List of Brand New Additional Features which LunarWing introduces which are not in the upstream repository:
 
 * Specialized secret management wrapper scripts for both Postgres (we've enhanced postgres with finer tuned controls in our project) and LibSQL. See Secrets_Manager for more details.
-* Optional systemd and openrc services for Lunarwing, channel bridges, and Healthcheck services (Please note that utilizing some of the new channel bridges currently breaks multi-tenancy in certain ways. This is still being worked on)
-* Improved Scheduling System designed by Ruffles
+* Optional systemd and openrc services for Lunarwing, channel bridges, and Healthcheck services
+* Improved Scheduling System
 * Support for external agentic coding tools developed independently from upstream.
-* Better support for logging common errors which still plague the upstream project.
+* Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
 * Self healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and even optional self healing solutions for routines in the case of routine failures.
-* Automated Testing Suite for development work
-* Function calls, Inference, and feedback for models (see Tensorzero for examples)
+* Automated Testing Suite for development work.
+* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services or OpenRC. 
+* Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents. 
 
 ## Additionally, we support custom HTTP proxies for TensorZero routing setups with optimized tool_choice routing for open source coding agent applications as well as other various purposes.
 ### The Project Scope:
@@ -55,7 +59,7 @@ Our scope is large and is mainly concerned with adding many essential features f
 ## Instance Setup Defaults
 
 LunarWing supports a preseeded instance layout for fresh installs. The easiest
-way to prepare one is:
+wto prepare one is:
 
 ```bash
 ic/scripts/setup-instance.sh \
