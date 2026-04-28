@@ -42,7 +42,7 @@ LunarWing and its core contributers are not affiliated with NearAI.
 
 * Specialized secret management wrapper scripts for both Postgres (we've enhanced postgres with finer tuned controls in our project) and LibSQL. See Secrets_Manager for more details.
 * Optional systemd and openrc services for Lunarwing, channel bridges, and Healthcheck services
-* Improved Scheduling System
+* Improved Scheduling System. Automatic retries, failovers, and other incredibly important things that NearAI doesnt care about apparently
 * Support for external agentic coding tools developed independently from upstream.
 * Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
 * Self healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and even optional self healing solutions for routines in the case of routine failures.
