@@ -90,6 +90,29 @@ stack used by this harness:
 Do not remove those defaults unless you are intentionally changing the test
 network, database SSL mode, or provider path.
 
+## macOS Setup
+
+On macOS, the WASM toolchain requires additional setup before the first `build --with-wasm` or `mt-up`:
+
+```bash
+# Both WASM targets are needed (wasip1 for channels/tools, wasip2 for some components)
+rustup target add wasm32-wasip1 wasm32-wasip2
+
+# WASM build tools
+cargo install wasm-tools cargo-component --locked
+```
+
+**PATH ordering matters.** Homebrew installs its own `rustc` which lacks WASM targets. The rustup-managed toolchain must come first:
+
+```bash
+export PATH="$HOME/.rustup/toolchains/stable-$(rustc -vV | awk '/host/{print $2}')/bin:$HOME/.cargo/bin:$PATH"
+which rustc   # must show ~/.rustup/toolchains/... not /opt/homebrew/bin/rustc
+```
+
+If `rustc` resolves to the Homebrew copy, all `cargo component build` invocations will fail with `can't find crate for 'core'`.
+
+Docker Desktop must be running. If the `pgvector/pgvector:pg16` image is not cached locally, `mt-up` will pull it on first run. For multi-tenant harness usage, see `MULTITENANCY-HARNESS.md`.
+
 ## Fresh Recreate Recipes
 
 ### PostgreSQL + harness (all platforms)

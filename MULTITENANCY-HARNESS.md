@@ -77,23 +77,42 @@ The harness is cross-platform. Init system detection is automatic:
 | Linux (OpenRC) | rc-service (direct) | direct process management fallback |
 | Other | direct PID management | — |
 
+### macOS Prerequisites
+
+Before running `mt-up` on macOS, ensure the WASM toolchain is set up:
+
+```bash
+# 1. Both WASM targets are required (wasip1 for channels/tools, wasip2 for the daemon)
+rustup target add wasm32-wasip1 wasm32-wasip2
+
+# 2. Install WASM build tools
+cargo install wasm-tools cargo-component --locked
+
+# 3. Ensure rustup's rustc precedes Homebrew's in PATH.
+#    Homebrew's rustc does NOT ship WASM targets — if it's found first, all
+#    cargo component builds will fail with "can't find crate for `core`".
+export PATH="$HOME/.rustup/toolchains/stable-$(rustc -vV | awk '/host/{print $2}')/bin:$HOME/.cargo/bin:$PATH"
+which rustc   # must show ~/.rustup/toolchains/...
+```
+
+Docker Desktop must be running (for PostgreSQL containers). If `docker pull` fails on first run, pull the image manually:
+
+```bash
+docker pull pgvector/pgvector:pg16
+```
+
 ### macOS Quick Start
 
 ```bash
 cd ic
 scripts/lunarwing-xmpp-test-env.sh mt-init
-
-# Render launchd plists (generated into each tenant's launchd/ dir)
-scripts/lunarwing-xmpp-test-env.sh mt-render-launchd
-
-# Bring up both tenants (detects macOS, uses launchd automatically)
-scripts/lunarwing-xmpp-test-env.sh mt-up
-
+scripts/lunarwing-xmpp-test-env.sh build --with-wasm  # builds daemon, bridge, + all 20 WASM
+scripts/lunarwing-xmpp-test-env.sh mt-up              # auto-detects macOS, renders + loads plists
 scripts/lunarwing-xmpp-test-env.sh mt-verify
 scripts/lunarwing-xmpp-test-env.sh mt-down
 ```
 
-On macOS, `mt-up` auto-renders plists, installs them to `~/Library/LaunchAgents/`, and starts services via `launchctl load`. `mt-down` unloads and removes the agents.
+`mt-up` automatically renders launchd plists and calls `launchctl load` — you do not need to run `mt-render-launchd` separately. Plists are tenant-scoped (`com.lunarwing.test.mt-a.*`, `com.lunarwing.test.mt-b.*`) so both tenants coexist in `~/Library/LaunchAgents/` without label conflicts. `mt-down` unloads all agents and removes them.
 
 ### Single-tenant on macOS
 

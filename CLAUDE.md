@@ -231,6 +231,8 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 - `LAUNCHD_DIR` (`$TEST_ROOT/launchd/`) mirrors `SYSTEMD_DIR` for plist artifacts
 - `render-launchd` / `mt-render-launchd` generate validated plist files (all env vars from env files are embedded inline, since launchd has no `EnvironmentFile=` equivalent)
 - `CLI_ENABLED=false` is always injected into launchd plists (prevents blocking stdin in daemon mode)
+- Launchd plist labels are tenant-scoped (`com.lunarwing.test.mt-a.daemon`, `com.lunarwing.test.mt-b.daemon`) derived from the test root basename — both tenants coexist in `~/Library/LaunchAgents/` without conflict. Single-tenant plists use the bare label (`com.lunarwing.test.daemon`)
+- WASM builds on macOS require `wasm32-wasip1` and `wasm32-wasip2` targets plus `cargo-component` and `wasm-tools`. Homebrew's `rustc` lacks WASM targets — the rustup toolchain bin dir must precede `/opt/homebrew/bin` in `PATH`
 
 **`doctor` command** reports service status for whichever init system is present:
 - macOS: launchd agent load status
