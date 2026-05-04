@@ -26,6 +26,16 @@ PROXY_PORT="${LUNARWING_TEST_PROXY_PORT:-3002}"
 PROXY_BIND="${LUNARWING_TEST_PROXY_BIND:-127.0.0.1}"
 TENSORZERO_URL="${LUNARWING_TEST_TENSORZERO_URL:-http://192.168.1.157:3000}"
 
+# LunarWing service ports
+GATEWAY_PORT="${LUNARWING_TEST_GATEWAY_PORT:-8765}"
+HTTP_PORT="${LUNARWING_TEST_HTTP_PORT:-9098}"
+
+# XMPP bridge
+BRIDGE_BIND="${LUNARWING_TEST_BRIDGE_BIND:-127.0.0.1:8787}"
+
+# Weechat relay (future)
+WEECHAT_PORT="${LUNARWING_TEST_WEECHAT_PORT:-9001}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -68,6 +78,13 @@ Commands:
   render-systemd           write systemd --user unit files under the test root
   logs [lines]             tail all test logs (including docker)
 
+  mt-init                  init two isolated tenants (A + B) with offset ports
+  mt-up                    bring up both tenant stacks
+  mt-verify                check port isolation and service health for both
+  mt-down                  tear down both tenant stacks (preserves state)
+  mt-status                show status of both tenants
+  mt-tokens                print gateway auth tokens for both tenants
+
 Environment:
   LUNARWING_TEST_ROOT      default: ${TMPDIR:-/tmp}/lunarwing-xmpp-test
   LUNARWING_TEST_PROFILE   debug or release; default: debug
@@ -81,6 +98,14 @@ Environment:
   LUNARWING_TEST_PROXY_PORT      default: 3002
   LUNARWING_TEST_PROXY_BIND      default: 127.0.0.1
   LUNARWING_TEST_TENSORZERO_URL  default: http://192.168.1.157:3000
+
+  LUNARWING_TEST_GATEWAY_PORT    default: 8765
+  LUNARWING_TEST_HTTP_PORT       default: 9098
+  LUNARWING_TEST_BRIDGE_BIND     default: 127.0.0.1:8787
+  LUNARWING_TEST_WEECHAT_PORT    default: 9001 (reserved, future use)
+
+  LUNARWING_MT_ROOT              base path for mt-* commands; default: $TMPDIR/lunarwing-mt
+                                 tenants get -a and -b suffixes
 
   LUNARWING_TEST_SERVICE_NAME    default: lunarwing-test.service
   LUNARWING_TEST_BRIDGE_SERVICE_NAME
@@ -336,6 +361,8 @@ ensure_lunarwing_env_defaults() {
   append_env_if_missing "$path" "XMPP_OMEMO_STORE_DIR" "$STATE_DIR/xmpp"
   append_env_if_missing "$path" "XMPP_ALLOW_PLAINTEXT_FALLBACK" "true"
   append_env_if_missing "$path" "XMPP_RESOURCE" "lunarwing-test"
+  append_env_if_missing "$path" "GATEWAY_PORT" "$GATEWAY_PORT"
+  append_env_if_missing "$path" "HTTP_PORT" "$HTTP_PORT"
   append_env_if_missing "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
   append_env_if_missing "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
@@ -346,7 +373,7 @@ ensure_lunarwing_env_defaults() {
 ensure_bridge_env_defaults() {
   local path="$1"
   append_env_if_missing "$path" "IRONCLAW_BASE_DIR" "$STATE_DIR"
-  append_env_if_missing "$path" "XMPP_BRIDGE_BIND" "127.0.0.1:8787"
+  append_env_if_missing "$path" "XMPP_BRIDGE_BIND" "$BRIDGE_BIND"
   append_env_if_missing "$path" "XMPP_BRIDGE_TOKEN" "$(shared_xmpp_bridge_token)"
   append_env_if_missing "$path" "XMPP_BRIDGE_MAX_MESSAGES" "256"
   append_env_if_missing "$path" "RUST_LOG" "xmpp_bridge=info,info"
@@ -426,8 +453,11 @@ write_lunarwing_env_if_missing() {
       printf '# Gateway\n'
       printf 'GATEWAY_ENABLED=true\n'
       printf 'GATEWAY_HOST=127.0.0.1\n'
-      printf 'GATEWAY_PORT=8765\n'
+      printf 'GATEWAY_PORT=%s\n' "$GATEWAY_PORT"
       printf 'GATEWAY_AUTH_TOKEN=%s\n' "$gateway_token"
+      printf '\n'
+      printf '# HTTP webhook\n'
+      printf 'HTTP_PORT=%s\n' "$HTTP_PORT"
       printf '\n'
       printf '# Daemon mode\n'
       printf 'CLI_ENABLED=false\n'
@@ -467,7 +497,7 @@ write_bridge_env_if_missing() {
     umask 077
     {
       printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
-      printf 'XMPP_BRIDGE_BIND=127.0.0.1:8787\n'
+      printf 'XMPP_BRIDGE_BIND=%s\n' "$BRIDGE_BIND"
       printf 'XMPP_BRIDGE_TOKEN=%s\n' "$(shared_xmpp_bridge_token)"
       printf 'XMPP_BRIDGE_MAX_MESSAGES=256\n'
       printf 'RUST_LOG=xmpp_bridge=info,info\n'
@@ -535,10 +565,10 @@ ensure_env() {
 }
 
 bridge_base() {
-  local bind="${XMPP_BRIDGE_BIND:-127.0.0.1:8787}"
+  local bind="${XMPP_BRIDGE_BIND:-$BRIDGE_BIND}"
   local port="${bind##*:}"
   if [[ "$port" == "$bind" || -z "$port" ]]; then
-    port="8787"
+    port="${BRIDGE_BIND##*:}"
   fi
   printf 'http://127.0.0.1:%s' "$port"
 }
@@ -1655,6 +1685,433 @@ logs() {
   fi
 }
 
+# ── Multi-tenancy ──────────────────────────────────────────────────────────────
+# Manages two isolated tenant instances with offset ports.
+# Commands: mt-init, mt-up, mt-verify, mt-down, mt-status
+
+_mt_base_root() {
+  printf '%s' "${LUNARWING_MT_ROOT:-${TMPDIR:-/tmp}/lunarwing-mt}"
+}
+
+_mt_env_a() {
+  local root
+  root="$(_mt_base_root)-a"
+  cat <<EOF
+LUNARWING_TEST_ROOT=$root
+LUNARWING_TEST_PG_PORT=15432
+LUNARWING_TEST_PG_CONTAINER=lunarwing-mt-postgres-a
+LUNARWING_TEST_PROXY_PORT=13002
+LUNARWING_TEST_GATEWAY_PORT=18765
+LUNARWING_TEST_HTTP_PORT=19098
+LUNARWING_TEST_BRIDGE_BIND=127.0.0.1:18787
+LUNARWING_TEST_WEECHAT_PORT=19001
+LUNARWING_TEST_DATABASE_KIND=${LUNARWING_MT_DATABASE_KIND:-postgres}
+LUNARWING_TEST_SERVICE_NAME=lunarwing-mt-a.service
+LUNARWING_TEST_BRIDGE_SERVICE_NAME=xmpp-bridge-mt-a.service
+LUNARWING_TEST_PROXY_SERVICE_NAME=ironclaw-proxy-mt-a.service
+EOF
+}
+
+_mt_env_b() {
+  local root
+  root="$(_mt_base_root)-b"
+  cat <<EOF
+LUNARWING_TEST_ROOT=$root
+LUNARWING_TEST_PG_PORT=15433
+LUNARWING_TEST_PG_CONTAINER=lunarwing-mt-postgres-b
+LUNARWING_TEST_PROXY_PORT=13003
+LUNARWING_TEST_GATEWAY_PORT=18766
+LUNARWING_TEST_HTTP_PORT=19099
+LUNARWING_TEST_BRIDGE_BIND=127.0.0.1:18788
+LUNARWING_TEST_WEECHAT_PORT=19002
+LUNARWING_TEST_DATABASE_KIND=${LUNARWING_MT_DATABASE_KIND:-postgres}
+LUNARWING_TEST_SERVICE_NAME=lunarwing-mt-b.service
+LUNARWING_TEST_BRIDGE_SERVICE_NAME=xmpp-bridge-mt-b.service
+LUNARWING_TEST_PROXY_SERVICE_NAME=ironclaw-proxy-mt-b.service
+EOF
+}
+
+_mt_run_a() {
+  local -a envs=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && envs+=("$line")
+  done < <(_mt_env_a)
+  env "${envs[@]}" "$SCRIPT_DIR/lunarwing-xmpp-test-env.sh" "$@"
+}
+
+_mt_run_b() {
+  local -a envs=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && envs+=("$line")
+  done < <(_mt_env_b)
+  env "${envs[@]}" "$SCRIPT_DIR/lunarwing-xmpp-test-env.sh" "$@"
+}
+
+_mt_seed_tenant() {
+  local root="$1" name="$2" resource="$3" jid="$4"
+  local env_file="$root/env/lunarwing.env"
+  local bridge_file="$root/env/xmpp-bridge.env"
+
+  [[ -f "$env_file" ]] || return 0
+
+  # Patch agent name
+  if grep -q "^AGENT_NAME=" "$env_file"; then
+    sed -i "s|^AGENT_NAME=.*|AGENT_NAME=$name|" "$env_file"
+  else
+    printf 'AGENT_NAME=%s\n' "$name" >>"$env_file"
+  fi
+
+  # Patch XMPP resource (unique per tenant)
+  if grep -q "^XMPP_RESOURCE=" "$env_file"; then
+    sed -i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$env_file"
+  fi
+
+  # Patch XMPP JID if desired
+  if [[ -n "$jid" ]]; then
+    if grep -q "^XMPP_JID=" "$env_file"; then
+      sed -i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$env_file"
+    fi
+  fi
+
+  # Patch bridge resource too
+  if [[ -f "$bridge_file" ]]; then
+    if grep -q "^XMPP_RESOURCE=" "$bridge_file"; then
+      sed -i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$bridge_file"
+    fi
+    if [[ -n "$jid" ]] && grep -q "^XMPP_JID=" "$bridge_file"; then
+      sed -i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$bridge_file"
+    fi
+  fi
+
+  # Set unique RUST_LOG prefix for differentiation in logs
+  if grep -q "^RUST_LOG=" "$env_file"; then
+    sed -i "s|^RUST_LOG=.*|RUST_LOG=ironclaw=info,lunarwing=info,$name=debug|" "$env_file"
+  fi
+}
+
+mt_init() {
+  say "=== Multi-tenancy init ==="
+  say "Tenant A root: $(_mt_base_root)-a"
+  say "Tenant B root: $(_mt_base_root)-b"
+  say ""
+
+  say "--- Initializing Tenant A ---"
+  _mt_run_a init || die "Tenant A init failed"
+
+  say "--- Initializing Tenant B ---"
+  _mt_run_b init || die "Tenant B init failed"
+
+  # Seed distinct identities
+  say ""
+  say "--- Seeding tenant identities ---"
+  _mt_seed_tenant "$(_mt_base_root)-a" "lunarwing-alpha" "alpha-mt" "alpha@xmpp.localhost"
+  _mt_seed_tenant "$(_mt_base_root)-b" "lunarwing-beta" "beta-mt" "beta@xmpp.localhost"
+  say "  Tenant A: agent=lunarwing-alpha, resource=alpha-mt, jid=alpha@xmpp.localhost"
+  say "  Tenant B: agent=lunarwing-beta, resource=beta-mt, jid=beta@xmpp.localhost"
+
+  say ""
+  say "Both tenants initialized. Use mt-up to bring them up."
+  say ""
+  say "Tenant A ports: gateway=18765 http=19098 bridge=18787 pg=15432 proxy=13002"
+  say "Tenant B ports: gateway=18766 http=19099 bridge=18788 pg=15433 proxy=13003"
+  say ""
+  say "Render systemd units: mt-render-systemd"
+}
+
+_mt_detect_init() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user status >/dev/null 2>&1; then
+    echo "systemd"
+  elif command -v rc-service >/dev/null 2>&1; then
+    echo "openrc"
+  else
+    echo "direct"
+  fi
+}
+
+_mt_install_systemd_units() {
+  local tenant="$1" root="$2"
+  local user_unit_dir="$HOME/.config/systemd/user"
+  mkdir -p "$user_unit_dir"
+
+  say "  installing systemd user units for tenant $tenant"
+  for unit_file in "$root/systemd/"*.service; do
+    [[ -f "$unit_file" ]] || continue
+    cp "$unit_file" "$user_unit_dir/"
+    say "    -> $(basename "$unit_file")"
+  done
+  systemctl --user daemon-reload
+}
+
+_mt_start_systemd_tenant() {
+  local tenant="$1"
+  local main_svc="lunarwing-mt-${tenant}.service"
+  say "  starting $main_svc (pulls in bridge + proxy via Wants=)"
+  systemctl --user start "$main_svc"
+  sleep 2
+  if systemctl --user is-active --quiet "$main_svc"; then
+    say "  $main_svc is active"
+  else
+    say "  WARNING: $main_svc failed to start" >&2
+    systemctl --user status "$main_svc" --no-pager >&2 || true
+    return 1
+  fi
+}
+
+_mt_stop_systemd_tenant() {
+  local tenant="$1"
+  local main_svc="lunarwing-mt-${tenant}.service"
+  local bridge_svc="xmpp-bridge-mt-${tenant}.service"
+  local proxy_svc="ironclaw-proxy-mt-${tenant}.service"
+
+  for svc in "$main_svc" "$bridge_svc" "$proxy_svc"; do
+    if systemctl --user is-active --quiet "$svc" 2>/dev/null; then
+      say "  stopping $svc"
+      systemctl --user stop "$svc"
+    fi
+  done
+}
+
+_mt_uninstall_systemd_units() {
+  local tenant="$1"
+  local user_unit_dir="$HOME/.config/systemd/user"
+  for svc in "lunarwing-mt-${tenant}.service" "xmpp-bridge-mt-${tenant}.service" "ironclaw-proxy-mt-${tenant}.service"; do
+    rm -f "$user_unit_dir/$svc"
+  done
+  systemctl --user daemon-reload
+}
+
+mt_up() {
+  say "=== Multi-tenancy up ==="
+
+  # Ensure binaries are built before attempting to start
+  local main_bin bridge_bin_path
+  main_bin="$(lunarwing_bin)"
+  bridge_bin_path="$REPO_ROOT/bridges/xmpp-bridge/target/${PROFILE}/xmpp-bridge"
+
+  if [[ ! -x "$main_bin" ]]; then
+    say "--- Building LunarWing binary ---"
+    (cd "$REPO_ROOT" && cargo build --bin ironclaw) || die "LunarWing build failed"
+  fi
+
+  if [[ ! -x "$bridge_bin_path" ]]; then
+    say "--- Building XMPP bridge binary ---"
+    (cd "$REPO_ROOT/bridges/xmpp-bridge" && cargo build) || die "XMPP bridge build failed"
+  fi
+
+  local init_system
+  init_system="$(_mt_detect_init)"
+  say "detected init system: $init_system"
+  say ""
+
+  if [[ "$init_system" == "systemd" ]]; then
+    # Render units first (idempotent)
+    say "--- Rendering systemd units ---"
+    _mt_run_a render-systemd || die "Tenant A render-systemd failed"
+    _mt_run_b render-systemd || die "Tenant B render-systemd failed"
+    say ""
+
+    # Start PostgreSQL containers (not managed by systemd units)
+    say "--- Starting databases ---"
+    _mt_run_a start-postgres || die "Tenant A postgres failed"
+    _mt_run_b start-postgres || die "Tenant B postgres failed"
+    say ""
+
+    # Install and start via systemd
+    say "--- Installing & starting Tenant A ---"
+    _mt_install_systemd_units "a" "$(_mt_base_root)-a"
+    _mt_start_systemd_tenant "a" || die "Tenant A failed to start"
+    say ""
+    say "--- Installing & starting Tenant B ---"
+    _mt_install_systemd_units "b" "$(_mt_base_root)-b"
+    _mt_start_systemd_tenant "b" || die "Tenant B failed to start"
+  else
+    # Fallback: direct process management
+    say "--- Starting Tenant A (direct) ---"
+    _mt_run_a up || die "Tenant A failed to start"
+    say ""
+    say "--- Starting Tenant B (direct) ---"
+    _mt_run_b up || die "Tenant B failed to start"
+  fi
+
+  say ""
+  say "Both tenants running ($init_system). Use mt-verify to check health, mt-down to tear down."
+  say ""
+  mt_tokens
+}
+
+mt_verify() {
+  local pass=0 fail=0
+
+  _mt_check() {
+    local label="$1"
+    shift
+    if "$@" >/dev/null 2>&1; then
+      printf '[PASS] %s\n' "$label"
+      pass=$((pass + 1))
+    else
+      printf '[FAIL] %s\n' "$label"
+      fail=$((fail + 1))
+    fi
+  }
+
+  say "=== Multi-tenancy verification ==="
+  say ""
+
+  # ── Env file port isolation ─────────────────────────────────────────────────
+  local root_a root_b
+  root_a="$(_mt_base_root)-a"
+  root_b="$(_mt_base_root)-b"
+
+  say "--- Env file port isolation ---"
+
+  _mt_check "Tenant A env exists" test -f "$root_a/env/lunarwing.env"
+  _mt_check "Tenant B env exists" test -f "$root_b/env/lunarwing.env"
+
+  if [[ -f "$root_a/env/lunarwing.env" && -f "$root_b/env/lunarwing.env" ]]; then
+    _mt_check "Tenant A gateway port = 18765" \
+      grep -q "GATEWAY_PORT=18765" "$root_a/env/lunarwing.env"
+    _mt_check "Tenant B gateway port = 18766" \
+      grep -q "GATEWAY_PORT=18766" "$root_b/env/lunarwing.env"
+
+    _mt_check "Tenant A HTTP port = 19098" \
+      grep -q "HTTP_PORT=19098" "$root_a/env/lunarwing.env"
+    _mt_check "Tenant B HTTP port = 19099" \
+      grep -q "HTTP_PORT=19099" "$root_b/env/lunarwing.env"
+
+    _mt_check "Tenant A DB port = 15432" \
+      grep -q "15432" "$root_a/env/lunarwing.env"
+    _mt_check "Tenant B DB port = 15433" \
+      grep -q "15433" "$root_b/env/lunarwing.env"
+  fi
+
+  if [[ -f "$root_a/env/xmpp-bridge.env" && -f "$root_b/env/xmpp-bridge.env" ]]; then
+    _mt_check "Tenant A bridge bind = 127.0.0.1:18787" \
+      grep -q "XMPP_BRIDGE_BIND=127.0.0.1:18787" "$root_a/env/xmpp-bridge.env"
+    _mt_check "Tenant B bridge bind = 127.0.0.1:18788" \
+      grep -q "XMPP_BRIDGE_BIND=127.0.0.1:18788" "$root_b/env/xmpp-bridge.env"
+  fi
+
+  # ── Live service checks (only if stacks are running) ────────────────────────
+  say ""
+  say "--- Live service checks ---"
+
+  # Gateway: any HTTP response means the server is up (auth may block 2xx)
+  _mt_check "Tenant A gateway responds on :18765" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:18765/api/gateway/status" | grep -qE "^[2-5]"'
+  _mt_check "Tenant B gateway responds on :18766" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:18766/api/gateway/status" | grep -qE "^[2-5]"'
+
+  # Proxy: any HTTP response means the proxy is listening (upstream may be down)
+  _mt_check "Tenant A proxy responds on :13002" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:13002/health" | grep -qE "^[2-5]"'
+  _mt_check "Tenant B proxy responds on :13003" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:13003/health" | grep -qE "^[2-5]"'
+
+  # Bridge: 401 is expected without auth — any HTTP response proves reachability
+  _mt_check "Tenant A bridge port :18787 reachable" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:18787/v1/status" | grep -qE "^[2-5]"'
+  _mt_check "Tenant B bridge port :18788 reachable" \
+    bash -c 'curl -so /dev/null --max-time 3 -w "%{http_code}" "http://127.0.0.1:18788/v1/status" | grep -qE "^[2-5]"'
+
+  # ── Results ─────────────────────────────────────────────────────────────────
+  say ""
+  say "=== Results ==="
+  say "  passed: $pass"
+  say "  failed: $fail"
+
+  if [[ $fail -gt 0 ]]; then
+    say ""
+    say "MULTI-TENANCY VERIFY: SOME CHECKS FAILED"
+    say "(Live checks are expected to fail if stacks are not running — use mt-up first)"
+    return 1
+  fi
+
+  say ""
+  say "MULTI-TENANCY VERIFY: ALL CHECKS PASSED"
+}
+
+mt_down() {
+  say "=== Multi-tenancy down ==="
+
+  local init_system
+  init_system="$(_mt_detect_init)"
+  say "detected init system: $init_system"
+  say ""
+
+  if [[ "$init_system" == "systemd" ]]; then
+    say "--- Stopping Tenant A (systemd) ---"
+    _mt_stop_systemd_tenant "a"
+    _mt_uninstall_systemd_units "a"
+    say ""
+    say "--- Stopping Tenant B (systemd) ---"
+    _mt_stop_systemd_tenant "b"
+    _mt_uninstall_systemd_units "b"
+    say ""
+    # Stop DB containers (not managed by systemd)
+    say "--- Stopping databases ---"
+    _mt_run_a stop-postgres || true
+    _mt_run_b stop-postgres || true
+  else
+    say "--- Stopping Tenant A ---"
+    _mt_run_a down || true
+    say ""
+    say "--- Stopping Tenant B ---"
+    _mt_run_b down || true
+  fi
+
+  say ""
+  say "Both tenants stopped. State preserved at:"
+  say "  Tenant A: $(_mt_base_root)-a"
+  say "  Tenant B: $(_mt_base_root)-b"
+  say ""
+  say "To remove state: rm -rf $(_mt_base_root)-a $(_mt_base_root)-b"
+}
+
+mt_status() {
+  say "=== Multi-tenancy status ==="
+  say ""
+  say "--- Tenant A ---"
+  _mt_run_a status || true
+  say ""
+  say "--- Tenant B ---"
+  _mt_run_b status || true
+}
+
+mt_tokens() {
+  local root_a root_b token_a token_b
+  root_a="$(_mt_base_root)-a"
+  root_b="$(_mt_base_root)-b"
+
+  token_a="$(grep -s '^GATEWAY_AUTH_TOKEN=' "$root_a/env/lunarwing.env" | cut -d= -f2-)"
+  token_b="$(grep -s '^GATEWAY_AUTH_TOKEN=' "$root_b/env/lunarwing.env" | cut -d= -f2-)"
+
+  say "=== Multi-tenancy gateway tokens ==="
+  say ""
+  say "Tenant A (port 18765): ${token_a:-<not set>}"
+  say "Tenant B (port 18766): ${token_b:-<not set>}"
+  say ""
+  say "Access:"
+  say "  http://127.0.0.1:18765  (token: ${token_a:-n/a})"
+  say "  http://127.0.0.1:18766  (token: ${token_b:-n/a})"
+}
+
+mt_render_systemd() {
+  say "=== Multi-tenancy render-systemd ==="
+  say ""
+  say "--- Tenant A ---"
+  _mt_run_a render-systemd || die "Tenant A render-systemd failed"
+  say ""
+  say "--- Tenant B ---"
+  _mt_run_b render-systemd || die "Tenant B render-systemd failed"
+  say ""
+  say "Install both for user-mode testing with:"
+  say "  cp $(_mt_base_root)-a/systemd/*.service ~/.config/systemd/user/"
+  say "  cp $(_mt_base_root)-b/systemd/*.service ~/.config/systemd/user/"
+  say "  systemctl --user daemon-reload"
+  say "  systemctl --user start lunarwing-mt-a.service"
+  say "  systemctl --user start lunarwing-mt-b.service"
+}
+
 main() {
   local command_name="${1:-}"
   if [[ -z "$command_name" ]]; then
@@ -1757,6 +2214,28 @@ main() {
       ;;
     logs)
       logs "$@"
+      ;;
+    # --- Multi-tenancy ---
+    mt-init)
+      mt_init
+      ;;
+    mt-up)
+      mt_up
+      ;;
+    mt-verify)
+      mt_verify
+      ;;
+    mt-down)
+      mt_down
+      ;;
+    mt-status)
+      mt_status
+      ;;
+    mt-render-systemd)
+      mt_render_systemd
+      ;;
+    mt-tokens)
+      mt_tokens
       ;;
     *)
       die "unknown command: $command_name"

@@ -1,7 +1,73 @@
-# Notes
+# Multi-Tenancy Harness
 
-## Want to add these to set up harness
+How to run multiple isolated LunarWing instances on the same host using the test harness.
 
-1. Add method in testing harness protocol to define ports for lunarwing services. http port. gateway port.
-2. add method in testing harness protocol to define ports for XMPP Bridge and other channel bridges.
-3. add method in testing harness protocol to define port used for weechat relay
+## Port Map
+
+Every port used by the harness is now configurable via `LUNARWING_TEST_*` env vars.
+Set them before running `init` to generate env files with your chosen ports.
+
+| Service | Variable | Default | Description |
+|---------|----------|---------|-------------|
+| PostgreSQL | `LUNARWING_TEST_PG_PORT` | 5432 | Postgres container host port |
+| TensorZero proxy | `LUNARWING_TEST_PROXY_PORT` | 3002 | Local LLM routing proxy |
+| TensorZero proxy bind | `LUNARWING_TEST_PROXY_BIND` | 127.0.0.1 | Proxy listen address |
+| Gateway (REST API) | `LUNARWING_TEST_GATEWAY_PORT` | 8765 | LunarWing gateway HTTP |
+| HTTP webhook | `LUNARWING_TEST_HTTP_PORT` | 9098 | Inbound webhook listener |
+| XMPP bridge | `LUNARWING_TEST_BRIDGE_BIND` | 127.0.0.1:8787 | Bridge HTTP bind (host:port) |
+| Weechat relay | `LUNARWING_TEST_WEECHAT_PORT` | 9001 | Weechat relay port (future) |
+
+## Example: Two Instances Side-by-Side
+
+### Instance A (defaults)
+
+```bash
+cd ic
+scripts/lunarwing-xmpp-test-env.sh init
+scripts/lunarwing-xmpp-test-env.sh up
+```
+
+### Instance B (all ports shifted)
+
+```bash
+cd ic
+export LUNARWING_TEST_ROOT=/tmp/lunarwing-tenant-b
+export LUNARWING_TEST_PG_PORT=5433
+export LUNARWING_TEST_PG_CONTAINER=lunarwing-test-postgres-b
+export LUNARWING_TEST_PROXY_PORT=3003
+export LUNARWING_TEST_GATEWAY_PORT=8766
+export LUNARWING_TEST_HTTP_PORT=9099
+export LUNARWING_TEST_BRIDGE_BIND=127.0.0.1:8788
+export LUNARWING_TEST_WEECHAT_PORT=9002
+
+scripts/lunarwing-xmpp-test-env.sh init
+scripts/lunarwing-xmpp-test-env.sh up
+```
+
+Both stacks run independently with no port conflicts.
+
+## Secret Management Instructions:
+
+# For tenant A:                                                                                                       
+  source /tmp/lunarwing-mt-a/env/lunarwing.env                                                                          
+  python3 ic_sm/scripts_4_db/insert_secret_pg.py ...                                                                  
+                                                            
+  # For tenant B:                                           
+  source /tmp/lunarwing-mt-b/env/lunarwing.env                                                                          
+  python3 ic_sm/scripts_4_db/insert_secret_pg.py ...
+
+### Each tenant will have own master key and its own database on its own port so source the env vars is the way to go here.
+
+## Notes
+
+- Each instance needs its own `LUNARWING_TEST_ROOT` for isolated state/env/logs/pids.
+- Each instance needs its own `LUNARWING_TEST_PG_CONTAINER` name to avoid Docker container conflicts.
+- The `DATABASE_URL` is auto-derived from `PG_PORT` unless you override `LUNARWING_TEST_DATABASE_URL` explicitly.
+- For libSQL instances, port conflicts are only on the service ports (no database container).
+- Systemd unit names are also configurable via `LUNARWING_TEST_SERVICE_NAME`, `LUNARWING_TEST_BRIDGE_SERVICE_NAME`, and `LUNARWING_TEST_PROXY_SERVICE_NAME`.
+
+## Future Work
+
+- Weechat relay port integration (currently reserved, no harness plumbing yet)
+- Per-instance worker container ports (nanocode4ironclaw, codex4ironclaw)
+- Automatic port conflict detection in `doctor` command
