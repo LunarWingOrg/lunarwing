@@ -47,7 +47,7 @@ LunarWing and its core contributers are not affiliated with NearAI.
 * Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
 * Self-healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and the routines system (stuck-run sweeper, lightweight timeout enforcement). Infrastructure health checks auto-detect init system and run the appropriate checks (systemd or OpenRC).
 * Automated Testing Suite for development work.
-* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services or OpenRC.
+* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services, OpenRC, or launchd (macOS). The test harness (`lunarwing-xmpp-test-env.sh`) is fully cross-platform: direct PID management on all platforms, launchd user agent generation on macOS (`render-launchd`, `mt-render-launchd`), and a `doctor` command that reports service status for all three init systems (systemd, OpenRC, launchd) plus watchdog installation state.
 * Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, flock-serialized builds, and support for both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md`.
 * Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents. 
 

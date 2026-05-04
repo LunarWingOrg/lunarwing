@@ -16,7 +16,9 @@ Use this harness when you want to test:
 - bearer-token enforcement on the bridge
 - live XMPP bridge configuration
 - LunarWing running against isolated state
-- user-systemd service behavior
+- service behavior (systemd user units on Linux, launchd agents on macOS, direct PID management everywhere)
+
+The harness is cross-platform. Single-tenant `up`/`down` uses direct PID management on all platforms. Multi-tenant commands (`mt-*`) auto-detect the init system and use launchd on macOS, systemd on Linux, or fall back to direct management. The `doctor` command reports service status for the detected platform.
 
 The `customic/` tree is not part of this setup.
 
@@ -54,7 +56,8 @@ $LUNARWING_TEST_ROOT/
   run/
   state/
     xmpp/
-  systemd/
+  systemd/    # systemd unit files (Linux)
+  launchd/    # launchd plist files (macOS)
 ```
 
 If `LUNARWING_TEST_ROOT` is not set, replace it with
@@ -89,10 +92,12 @@ network, database SSL mode, or provider path.
 
 ## Fresh Recreate Recipes
 
-### PostgreSQL + user-systemd harness
+### PostgreSQL + harness (all platforms)
 
 Use this when you want a full clean harness with custom database credentials,
-custom gateway and bridge tokens, and fresh user-systemd units.
+custom gateway and bridge tokens. The harness auto-detects the platform and
+uses the appropriate service management (launchd on macOS, systemd or OpenRC on Linux,
+direct PID management otherwise).
 
 The built-in `start-postgres` helper still creates `ironclaw:ironclaw@.../ironclaw`.
 If you need custom PostgreSQL credentials, create the container yourself and
@@ -112,9 +117,13 @@ export BRIDGE_TOKEN='replace-me-bridge-token'
 export XMPP_PASSWORD='replace-me-xmpp-password'
 export LLM_API_KEY='unneeded'
 
+# Linux (systemd): stop and remove old units
 systemctl --user stop lunarwing-test.service xmpp-bridge-test.service ironclaw-proxy-test.service 2>/dev/null || true
 rm -f ~/.config/systemd/user/lunarwing-test.service ~/.config/systemd/user/xmpp-bridge-test.service ~/.config/systemd/user/ironclaw-proxy-test.service
-systemctl --user daemon-reload
+systemctl --user daemon-reload 2>/dev/null || true
+# macOS: remove old launchd agents (if any)
+launchctl unload ~/Library/LaunchAgents/com.lunarwing.test.*.plist 2>/dev/null || true
+rm -f ~/Library/LaunchAgents/com.lunarwing.test.*.plist 2>/dev/null || true
 docker rm -f "$PG_CONTAINER" 2>/dev/null || true
 rm -rf "$LUNARWING_TEST_ROOT"
 

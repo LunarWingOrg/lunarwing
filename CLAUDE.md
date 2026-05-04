@@ -67,7 +67,7 @@ Env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
 ## Integration Test Harness
 
-`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness. It manages PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon in an isolated environment.
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness. It manages PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon in an isolated environment. Works on Linux and macOS.
 
 ```bash
 cd ic
@@ -76,10 +76,13 @@ scripts/lunarwing-xmpp-test-env.sh build          # build all binaries
 scripts/lunarwing-xmpp-test-env.sh up             # bring up full stack
 scripts/lunarwing-xmpp-test-env.sh verify         # health checks
 scripts/lunarwing-xmpp-test-env.sh down           # tear down
-scripts/lunarwing-xmpp-test-env.sh doctor         # diagnose dependencies
+scripts/lunarwing-xmpp-test-env.sh doctor         # diagnose dependencies (platform-aware)
+scripts/lunarwing-xmpp-test-env.sh render-launchd # generate launchd plists (macOS)
 ```
 
-Key env vars: `LUNARWING_TEST_ROOT` (default `/tmp/lunarwing-xmpp-test`), `LUNARWING_TEST_DATABASE_KIND` (`postgres`|`libsql`), `LUNARWING_TEST_PROFILE` (`debug`|`release`).
+Multi-tenant commands (`mt-init`, `mt-up`, `mt-verify`, `mt-down`) auto-detect the init system: launchd on macOS, systemd on Linux, OpenRC fallback to direct PID management.
+
+Key env vars: `LUNARWING_TEST_ROOT` (default `$TMPDIR/lunarwing-xmpp-test`), `LUNARWING_TEST_DATABASE_KIND` (`postgres`|`libsql`), `LUNARWING_TEST_PROFILE` (`debug`|`release`).
 
 See `ic/testing/lunarwing-xmpp/README.md` for full recipes.
 
@@ -210,7 +213,30 @@ Override init system detection with `LUNARWING_SERVICE_MANAGER=systemd` or `LUNA
 
 Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
 
-The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development. See `MULTITENANCY-HARNESS.md`.
+The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development and is fully cross-platform. See `MULTITENANCY-HARNESS.md`.
+
+## Test Harness (`lunarwing-xmpp-test-env.sh`)
+
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack integration test harness. It is cross-platform (Linux and macOS):
+
+- **Single-tenant** (`up`/`down`): always uses direct PID-file process management — works on all platforms
+- **Multi-tenant** (`mt-up`/`mt-down`): auto-detects init system via `_mt_detect_init()` and uses the appropriate path:
+  - **macOS**: `launchd` — generates `.plist` files in `$TEST_ROOT/launchd/`, installs to `~/Library/LaunchAgents/`
+  - **Linux systemd**: user units in `~/.config/systemd/user/`
+  - **Linux OpenRC**: system-level init scripts via `rc-service`
+  - **Fallback**: direct process management
+
+**Key cross-platform notes:**
+- `sed -i` portability: use `_sed_i()` helper (wraps `sed -i ''` on macOS, `sed -i` on Linux) — never call `sed -i` directly
+- `LAUNCHD_DIR` (`$TEST_ROOT/launchd/`) mirrors `SYSTEMD_DIR` for plist artifacts
+- `render-launchd` / `mt-render-launchd` generate validated plist files (all env vars from env files are embedded inline, since launchd has no `EnvironmentFile=` equivalent)
+- `CLI_ENABLED=false` is always injected into launchd plists (prevents blocking stdin in daemon mode)
+
+**`doctor` command** reports service status for whichever init system is present:
+- macOS: launchd agent load status
+- Linux systemd: `systemctl --user status`
+- Linux OpenRC: `rc-service status`, default runlevel registration, watchdog installation (script, conf.d, cron.hourly/fcrontab)
+- None detected: reports PID-file-only mode
 
 ## Harness Environment Defaults
 

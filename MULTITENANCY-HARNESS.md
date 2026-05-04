@@ -66,6 +66,39 @@ Both stacks run independently with no port conflicts.
 - For libSQL instances, port conflicts are only on the service ports (no database container).
 - Systemd unit names are also configurable via `LUNARWING_TEST_SERVICE_NAME`, `LUNARWING_TEST_BRIDGE_SERVICE_NAME`, and `LUNARWING_TEST_PROXY_SERVICE_NAME`.
 
+## Platform Support
+
+The harness is cross-platform. Init system detection is automatic:
+
+| Platform | `mt-up`/`mt-down` method | Service unit format |
+|----------|--------------------------|---------------------|
+| macOS | launchd user agents | `.plist` in `$TEST_ROOT/launchd/` → `~/Library/LaunchAgents/` |
+| Linux (systemd) | systemd user units | `.service` in `$TEST_ROOT/systemd/` → `~/.config/systemd/user/` |
+| Linux (OpenRC) | rc-service (direct) | direct process management fallback |
+| Other | direct PID management | — |
+
+### macOS Quick Start
+
+```bash
+cd ic
+scripts/lunarwing-xmpp-test-env.sh mt-init
+
+# Render launchd plists (generated into each tenant's launchd/ dir)
+scripts/lunarwing-xmpp-test-env.sh mt-render-launchd
+
+# Bring up both tenants (detects macOS, uses launchd automatically)
+scripts/lunarwing-xmpp-test-env.sh mt-up
+
+scripts/lunarwing-xmpp-test-env.sh mt-verify
+scripts/lunarwing-xmpp-test-env.sh mt-down
+```
+
+On macOS, `mt-up` auto-renders plists, installs them to `~/Library/LaunchAgents/`, and starts services via `launchctl load`. `mt-down` unloads and removes the agents.
+
+### Single-tenant on macOS
+
+Single-tenant `up`/`down` uses direct PID management on all platforms — no launchd involvement needed. Docker (or colima) must be running for the PostgreSQL container.
+
 ## Production Multi-Tenancy
 
 For production per-user multi-tenancy with OS-level isolation, see `docs/MULTITENANCY-PRODUCTION.md` and the admin script `ic/scripts/lunarwing-mt-admin.sh`. The production system provides dedicated OS users, registry-allocated port blocks, flock-serialized builds, and per-tenant PostgreSQL containers. It supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon).
