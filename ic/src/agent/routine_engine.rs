@@ -1152,6 +1152,9 @@ async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) 
     // Decrement running count
     ctx.running_count.fetch_sub(1, Ordering::Relaxed);
 
+    // Capture retryability before consuming the result.
+    let is_retryable_error = matches!(&result, Err(e) if e.is_retryable());
+
     // Process result
     let (status, summary, tokens) = match result {
         Ok(execution) => execution,
@@ -1172,20 +1175,27 @@ async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) 
 
     // Update routine runtime state
     let now = Utc::now();
-    let next_fire = if let Trigger::Cron {
-        ref schedule,
-        ref timezone,
-    } = routine.trigger
-    {
-        next_cron_fire(schedule, timezone.as_deref()).unwrap_or(None)
-    } else {
-        None
-    };
-
     let new_failures = if status == RunStatus::Failed {
         routine.consecutive_failures + 1
     } else {
         0
+    };
+
+    let next_fire = if status == RunStatus::Failed && is_retryable_error {
+        if let Some(delay) = routine.guardrails.retry.compute_delay(new_failures) {
+            tracing::info!(
+                routine = %routine.name,
+                attempt = new_failures,
+                max = routine.guardrails.retry.max_retries,
+                delay_secs = delay.as_secs(),
+                "Scheduling retry after transient failure"
+            );
+            Some(now + chrono::Duration::from_std(delay).unwrap_or_default())
+        } else {
+            compute_normal_next_fire(&routine)
+        }
+    } else {
+        compute_normal_next_fire(&routine)
     };
 
     if let Err(e) = ctx
@@ -1959,6 +1969,18 @@ pub fn spawn_cron_ticker(
             }
         }
     })
+}
+
+fn compute_normal_next_fire(routine: &Routine) -> Option<chrono::DateTime<Utc>> {
+    if let Trigger::Cron {
+        ref schedule,
+        ref timezone,
+    } = routine.trigger
+    {
+        next_cron_fire(schedule, timezone.as_deref()).unwrap_or(None)
+    } else {
+        None
+    }
 }
 
 fn truncate(s: &str, max: usize) -> String {

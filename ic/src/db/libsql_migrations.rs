@@ -472,6 +472,10 @@ CREATE TABLE IF NOT EXISTS routines (
     next_fire_at TEXT,
     run_count INTEGER NOT NULL DEFAULT 0,
     consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    retry_max_retries INTEGER NOT NULL DEFAULT 3,
+    retry_initial_delay_secs INTEGER NOT NULL DEFAULT 60,
+    retry_backoff_multiplier REAL NOT NULL DEFAULT 2.0,
+    retry_max_delay_secs INTEGER NOT NULL DEFAULT 3600,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     UNIQUE (user_id, name)
@@ -875,13 +879,25 @@ CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_identities_email ON user_identities(email) WHERE email IS NOT NULL;
 "#,
     ),
+    (
+        18,
+        "routine_retry",
+        r#"
+ALTER TABLE routines ADD COLUMN retry_max_retries INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE routines ADD COLUMN retry_initial_delay_secs INTEGER NOT NULL DEFAULT 60;
+ALTER TABLE routines ADD COLUMN retry_backoff_multiplier REAL NOT NULL DEFAULT 2.0;
+ALTER TABLE routines ADD COLUMN retry_max_delay_secs INTEGER NOT NULL DEFAULT 3600;
+"#,
+    ),
 ];
 
 /// Migrations whose ADD COLUMN should be skipped when the column already
 /// exists (e.g. because the base SCHEMA was updated to include it).
 /// Each entry is `(version, table_name, column_name)`.
-const IDEMPOTENT_ADD_COLUMN_MIGRATIONS: &[(i64, &str, &str)] =
-    &[(15, "conversations", "source_channel")];
+const IDEMPOTENT_ADD_COLUMN_MIGRATIONS: &[(i64, &str, &str)] = &[
+    (15, "conversations", "source_channel"),
+    (18, "routines", "retry_max_retries"),
+];
 
 /// Check whether `table` already contains `column` via `pragma_table_info`.
 async fn column_exists(

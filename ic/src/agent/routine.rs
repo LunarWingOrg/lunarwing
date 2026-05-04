@@ -406,6 +406,9 @@ pub struct RoutineGuardrails {
     pub max_concurrent: u32,
     /// Window for content-hash dedup (event triggers). None = no dedup.
     pub dedup_window: Option<Duration>,
+    /// Retry policy for transient failures.
+    #[serde(default)]
+    pub retry: RetryPolicy,
 }
 
 impl Default for RoutineGuardrails {
@@ -414,7 +417,51 @@ impl Default for RoutineGuardrails {
             cooldown: Duration::from_secs(300),
             max_concurrent: 1,
             dedup_window: None,
+            retry: RetryPolicy::default(),
         }
+    }
+}
+
+/// Retry policy with exponential backoff for transient routine failures.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryPolicy {
+    /// Max automatic retries before giving up (0 = no retry).
+    pub max_retries: u32,
+    /// Initial delay in seconds before the first retry.
+    pub initial_delay_secs: u64,
+    /// Multiplier applied to the delay after each retry.
+    pub backoff_multiplier: f64,
+    /// Maximum delay in seconds (caps exponential growth).
+    pub max_delay_secs: u64,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            initial_delay_secs: 60,
+            backoff_multiplier: 2.0,
+            max_delay_secs: 3600,
+        }
+    }
+}
+
+impl RetryPolicy {
+    /// Compute the retry delay for the given failure count.
+    /// Returns `None` if no retry should be attempted (failures == 0 or exhausted).
+    pub fn compute_delay(&self, consecutive_failures: u32) -> Option<Duration> {
+        if self.max_retries == 0
+            || consecutive_failures == 0
+            || consecutive_failures > self.max_retries
+        {
+            return None;
+        }
+        let delay_secs = (self.initial_delay_secs as f64)
+            * self
+                .backoff_multiplier
+                .powi((consecutive_failures - 1) as i32);
+        let clamped = delay_secs.min(self.max_delay_secs as f64) as u64;
+        Some(Duration::from_secs(clamped))
     }
 }
 

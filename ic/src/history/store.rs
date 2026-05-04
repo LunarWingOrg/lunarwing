@@ -1042,7 +1042,8 @@ impl Store {
 
 #[cfg(feature = "postgres")]
 use crate::agent::routine::{
-    NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus, Trigger,
+    NotifyConfig, RetryPolicy, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus,
+    Trigger,
 };
 
 #[cfg(feature = "postgres")]
@@ -1057,6 +1058,10 @@ impl Store {
         let cooldown_secs = routine.guardrails.cooldown.as_secs() as i32;
         let max_concurrent = routine.guardrails.max_concurrent as i32;
         let dedup_window_secs = routine.guardrails.dedup_window.map(|d| d.as_secs() as i32);
+        let retry_max_retries = routine.guardrails.retry.max_retries as i32;
+        let retry_initial_delay = routine.guardrails.retry.initial_delay_secs as i32;
+        let retry_backoff = routine.guardrails.retry.backoff_multiplier;
+        let retry_max_delay = routine.guardrails.retry.max_delay_secs as i32;
 
         conn.execute(
             r#"
@@ -1065,13 +1070,17 @@ impl Store {
                 trigger_type, trigger_config, action_type, action_config,
                 cooldown_secs, max_concurrent, dedup_window_secs,
                 notify_channel, notify_user, notify_on_success, notify_on_failure, notify_on_attention,
-                state, next_fire_at, created_at, updated_at
+                state, next_fire_at,
+                retry_max_retries, retry_initial_delay_secs, retry_backoff_multiplier, retry_max_delay_secs,
+                created_at, updated_at
             ) VALUES (
                 $1, $2, $3, $4, $5,
                 $6, $7, $8, $9,
                 $10, $11, $12,
                 $13, $14, $15, $16, $17,
-                $18, $19, $20, $21
+                $18, $19,
+                $20, $21, $22, $23,
+                $24, $25
             )
             "#,
             &[
@@ -1094,6 +1103,10 @@ impl Store {
                 &routine.notify.on_attention,
                 &routine.state,
                 &routine.next_fire_at,
+                &retry_max_retries,
+                &retry_initial_delay,
+                &retry_backoff,
+                &retry_max_delay,
                 &routine.created_at,
                 &routine.updated_at,
             ],
@@ -1216,6 +1229,10 @@ impl Store {
         let cooldown_secs = routine.guardrails.cooldown.as_secs() as i32;
         let max_concurrent = routine.guardrails.max_concurrent as i32;
         let dedup_window_secs = routine.guardrails.dedup_window.map(|d| d.as_secs() as i32);
+        let retry_max_retries = routine.guardrails.retry.max_retries as i32;
+        let retry_initial_delay = routine.guardrails.retry.initial_delay_secs as i32;
+        let retry_backoff = routine.guardrails.retry.backoff_multiplier;
+        let retry_max_delay = routine.guardrails.retry.max_delay_secs as i32;
 
         conn.execute(
             r#"
@@ -1227,6 +1244,8 @@ impl Store {
                 notify_channel = $12, notify_user = $13,
                 notify_on_success = $14, notify_on_failure = $15, notify_on_attention = $16,
                 state = $17, next_fire_at = $18,
+                retry_max_retries = $19, retry_initial_delay_secs = $20,
+                retry_backoff_multiplier = $21, retry_max_delay_secs = $22,
                 updated_at = now()
             WHERE id = $1
             "#,
@@ -1249,6 +1268,10 @@ impl Store {
                 &routine.notify.on_attention,
                 &routine.state,
                 &routine.next_fire_at,
+                &retry_max_retries,
+                &retry_initial_delay,
+                &retry_backoff,
+                &retry_max_delay,
             ],
         )
         .await?;
@@ -1519,6 +1542,12 @@ fn row_to_routine(row: &tokio_postgres::Row) -> Result<Routine, DatabaseError> {
             cooldown: std::time::Duration::from_secs(cooldown_secs as u64),
             max_concurrent: max_concurrent as u32,
             dedup_window: dedup_window_secs.map(|s| std::time::Duration::from_secs(s as u64)),
+            retry: RetryPolicy {
+                max_retries: row.get::<_, i32>("retry_max_retries") as u32,
+                initial_delay_secs: row.get::<_, i32>("retry_initial_delay_secs") as u64,
+                backoff_multiplier: row.get::<_, f64>("retry_backoff_multiplier"),
+                max_delay_secs: row.get::<_, i32>("retry_max_delay_secs") as u64,
+            },
         },
         notify: NotifyConfig {
             channel: row.get("notify_channel"),

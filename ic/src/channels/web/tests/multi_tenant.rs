@@ -166,6 +166,7 @@ fn make_routine(user_id: &str, name: &str) -> crate::agent::routine::Routine {
             cooldown: Duration::from_secs(60),
             max_concurrent: 1,
             dedup_window: None,
+            retry: Default::default(),
         },
         notify: crate::agent::routine::NotifyConfig {
             channel: None,

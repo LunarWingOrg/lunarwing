@@ -358,6 +358,7 @@ async fn create(
             cooldown: std::time::Duration::from_secs(cooldown_secs),
             max_concurrent: 1,
             dedup_window: None,
+            retry: Default::default(),
         },
         notify: cli_notify_config(notify_channel),
         last_run_at: None,

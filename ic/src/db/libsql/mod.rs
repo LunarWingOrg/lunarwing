@@ -26,7 +26,8 @@ use libsql::{Connection, Database as LibSqlDatabase};
 use rust_decimal::Decimal;
 
 use crate::agent::routine::{
-    NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus, Trigger,
+    NotifyConfig, RetryPolicy, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus,
+    Trigger,
 };
 use crate::context::JobState;
 use crate::db::Database;
@@ -44,6 +45,7 @@ pub(crate) const ROUTINE_COLUMNS: &str = "\
     cooldown_secs, max_concurrent, dedup_window_secs, \
     notify_channel, notify_user, notify_on_success, notify_on_failure, notify_on_attention, \
     state, last_run_at, next_fire_at, run_count, consecutive_failures, \
+    retry_max_retries, retry_initial_delay_secs, retry_backoff_multiplier, retry_max_delay_secs, \
     created_at, updated_at";
 
 /// Explicit column list for routine_runs table (matches positional access in `row_to_routine_run_libsql`).
@@ -396,6 +398,12 @@ pub(crate) fn row_to_routine_libsql(row: &libsql::Row) -> Result<Routine, Databa
             cooldown: std::time::Duration::from_secs(cooldown_secs as u64),
             max_concurrent: max_concurrent as u32,
             dedup_window: dedup_window_secs.map(|s| std::time::Duration::from_secs(s as u64)),
+            retry: RetryPolicy {
+                max_retries: row.get::<i64>(22).unwrap_or(3) as u32,
+                initial_delay_secs: row.get::<i64>(23).unwrap_or(60) as u64,
+                backoff_multiplier: row.get::<f64>(24).unwrap_or(2.0),
+                max_delay_secs: row.get::<i64>(25).unwrap_or(3600) as u64,
+            },
         },
         notify: NotifyConfig {
             channel: get_opt_text(row, 12),
@@ -409,8 +417,8 @@ pub(crate) fn row_to_routine_libsql(row: &libsql::Row) -> Result<Routine, Databa
         next_fire_at: get_opt_ts(row, 19),
         run_count: get_i64(row, 20) as u64,
         consecutive_failures: get_i64(row, 21) as u32,
-        created_at: get_ts(row, 22),
-        updated_at: get_ts(row, 23),
+        created_at: get_ts(row, 26),
+        updated_at: get_ts(row, 27),
     })
 }
 

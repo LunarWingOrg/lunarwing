@@ -50,6 +50,7 @@ mod tests {
                 cooldown: std::time::Duration::from_secs(0),
                 max_concurrent: 1,
                 dedup_window: None,
+                retry: Default::default(),
             },
             notify: Default::default(),
             last_run_at: None,

@@ -27,6 +27,7 @@ impl RoutineStore for LibSqlBackend {
         let max_concurrent = routine.guardrails.max_concurrent as i64;
         let dedup_window_secs = routine.guardrails.dedup_window.map(|d| d.as_secs() as i64);
 
+        let retry = &routine.guardrails.retry;
         conn.execute(
                 r#"
                 INSERT INTO routines (
@@ -34,13 +35,17 @@ impl RoutineStore for LibSqlBackend {
                     trigger_type, trigger_config, action_type, action_config,
                     cooldown_secs, max_concurrent, dedup_window_secs,
                     notify_channel, notify_user, notify_on_success, notify_on_failure, notify_on_attention,
-                    state, next_fire_at, created_at, updated_at
+                    state, next_fire_at,
+                    retry_max_retries, retry_initial_delay_secs, retry_backoff_multiplier, retry_max_delay_secs,
+                    created_at, updated_at
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5,
                     ?6, ?7, ?8, ?9,
                     ?10, ?11, ?12,
                     ?13, ?14, ?15, ?16, ?17,
-                    ?18, ?19, ?20, ?21
+                    ?18, ?19,
+                    ?20, ?21, ?22, ?23,
+                    ?24, ?25
                 )
                 "#,
                 params![
@@ -63,6 +68,10 @@ impl RoutineStore for LibSqlBackend {
                     routine.notify.on_attention as i64,
                     routine.state.to_string(),
                     fmt_opt_ts(&routine.next_fire_at),
+                    retry.max_retries as i64,
+                    retry.initial_delay_secs as i64,
+                    retry.backoff_multiplier,
+                    retry.max_delay_secs as i64,
                     fmt_ts(&routine.created_at),
                     fmt_ts(&routine.updated_at),
                 ],
@@ -222,6 +231,7 @@ impl RoutineStore for LibSqlBackend {
         let cooldown_secs = routine.guardrails.cooldown.as_secs() as i64;
         let max_concurrent = routine.guardrails.max_concurrent as i64;
         let dedup_window_secs = routine.guardrails.dedup_window.map(|d| d.as_secs() as i64);
+        let retry = &routine.guardrails.retry;
         let now = fmt_ts(&Utc::now());
 
         conn.execute(
@@ -234,7 +244,9 @@ impl RoutineStore for LibSqlBackend {
                     notify_channel = ?12, notify_user = ?13,
                     notify_on_success = ?14, notify_on_failure = ?15, notify_on_attention = ?16,
                     state = ?17, next_fire_at = ?18,
-                    updated_at = ?19
+                    retry_max_retries = ?19, retry_initial_delay_secs = ?20,
+                    retry_backoff_multiplier = ?21, retry_max_delay_secs = ?22,
+                    updated_at = ?23
                 WHERE id = ?1
                 "#,
             params![
@@ -256,6 +268,10 @@ impl RoutineStore for LibSqlBackend {
                 routine.notify.on_attention as i64,
                 routine.state.to_string(),
                 fmt_opt_ts(&routine.next_fire_at),
+                retry.max_retries as i64,
+                retry.initial_delay_secs as i64,
+                retry.backoff_multiplier,
+                retry.max_delay_secs as i64,
                 now,
             ],
         )

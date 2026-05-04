@@ -1120,6 +1120,7 @@ impl Tool for RoutineCreateTool {
                 cooldown: Duration::from_secs(normalized.cooldown_secs),
                 max_concurrent: 1,
                 dedup_window: None,
+                retry: Default::default(),
             },
             notify: NotifyConfig {
                 channel: normalized.delivery.channel.clone(),

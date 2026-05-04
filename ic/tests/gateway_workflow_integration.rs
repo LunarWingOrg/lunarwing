@@ -292,6 +292,7 @@ mod tests {
                 cooldown: Duration::from_secs(0),
                 max_concurrent: 1,
                 dedup_window: None,
+                retry: Default::default(),
             },
             notify: NotifyConfig::default(),
             last_run_at: None,
