@@ -442,9 +442,9 @@ PGSSLMODE=disable
 
 # LLM — TensorZero proxy
 LLM_BACKEND=openai_compatible
-LLM_BASE_URL=http://127.0.0.1:${proxy_port}/openai/v1
+LLM_BASE_URL=http://127.0.0.1:${proxy_port}/v1
 LLM_API_KEY=token-${name}
-LLM_MODEL=tensorzero::function_name::ironclaw
+LLM_MODEL=tensorzero::function_name::lunarwing
 ALLOW_PRIVATE_IPS=1
 
 # Runtime identity

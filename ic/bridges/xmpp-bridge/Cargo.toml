@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 anyhow = "1"
 axum = "0.8"
 futures = "0.3"
-ironclaw = { path = "../.." }
+lunarwing = { path = "../.." }
 openclaw-xmpp-bridge-contract = { path = "../../openclaw-ports/xmpp/bridge" }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 secrecy = "0.10"

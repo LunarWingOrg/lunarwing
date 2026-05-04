@@ -9,9 +9,9 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures::StreamExt;
-use ironclaw::bootstrap::ironclaw_base_dir;
-use ironclaw::channels::{Channel, IncomingMessage, OutgoingResponse, XmppChannel};
-use ironclaw::config::XmppConfig;
+use lunarwing::bootstrap::lunarwing_base_dir;
+use lunarwing::channels::{Channel, IncomingMessage, OutgoingResponse, XmppChannel};
+use lunarwing::config::XmppConfig;
 use openclaw_xmpp_bridge_contract::{
     BridgeMessage, BridgeStatusResponse, ConfigureRequest, ConfigureResponse, MessagesQuery,
     MessagesResponse, OutboundRateLimitRequest, OutboundRateLimitResponse, SendRequest,
@@ -464,7 +464,7 @@ fn normalize_config(request: &ConfigureRequest) -> Result<NormalizedConfig, Brid
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| ironclaw_base_dir().join("xmpp"));
+        .unwrap_or_else(|| lunarwing_base_dir().join("xmpp"));
 
     Ok(NormalizedConfig {
         jid,

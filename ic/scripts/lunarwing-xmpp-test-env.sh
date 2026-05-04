@@ -379,7 +379,7 @@ ensure_lunarwing_env_defaults() {
   append_env_if_missing "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
-  replace_env_value "$path" "LLM_MODEL" "tensorzero::function_name::ironclaw"
+  replace_env_value "$path" "LLM_MODEL" "tensorzero::function_name::lunarwing"
 }
 
 ensure_bridge_env_defaults() {
@@ -433,9 +433,9 @@ write_lunarwing_env_if_missing() {
       printf '\n'
       printf '# LLM — TensorZero proxy (start with: start-proxy)\n'
       printf 'LLM_BACKEND=openai_compatible\n'
-      printf 'LLM_BASE_URL=http://%s:%s/openai/v1\n' "$PROXY_BIND" "$PROXY_PORT"
+      printf 'LLM_BASE_URL=http://%s:%s/v1\n' "$PROXY_BIND" "$PROXY_PORT"
       printf 'LLM_API_KEY=token-integration-test\n'
-      printf 'LLM_MODEL=tensorzero::function_name::ironclaw\n'
+      printf 'LLM_MODEL=tensorzero::function_name::lunarwing\n'
       printf 'ALLOW_PRIVATE_IPS=1\n'
       printf '\n'
       printf '# Runtime identity\n'

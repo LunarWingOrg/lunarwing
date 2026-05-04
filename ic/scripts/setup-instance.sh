@@ -10,8 +10,8 @@ BASE_DIR="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-${HOME}/.ironclaw}}"
 DATABASE_KIND="libsql"
 DATABASE_URL=""
 LIBSQL_PATH=""
-LLM_BASE_URL="http://192.168.1.157:3002"
-LLM_MODEL="tensorzero::function_name::ironclaw"
+LLM_BASE_URL="http://192.168.1.157:3002/v1"
+LLM_MODEL="tensorzero::function_name::lunarwing"
 LLM_BACKEND="openai_compatible"
 AGENT_NAME="lunarwing"
 TIMEZONE="America/New_York"
@@ -37,8 +37,8 @@ Options:
   --database KIND            postgres or libsql. Default: libsql
   --database-url URL         Required when --database postgres
   --libsql-path PATH         libSQL database path. Default: <base-dir>/lunarwing.db
-  --llm-base-url URL         Default: http://192.168.1.157:3002
-  --llm-model MODEL          Default: tensorzero::function_name::ironclaw
+  --llm-base-url URL         Default: http://192.168.1.157:3002/v1
+  --llm-model MODEL          Default: tensorzero::function_name::lunarwing
   --llm-api-key KEY          Optional. Use "unneeded" for placeholder-only endpoints
   --gateway-token TOKEN      Optional. Writes GATEWAY_AUTH_TOKEN to .env
   --agent-name NAME          Default: lunarwing

@@ -11,7 +11,7 @@ The LunarWing project is a hard fork of the Ironclaw project originally develope
 
 LunarWing adds much needed features to the project. There are far too many improvements to merge them all upstream.
 
-## Why "LunarWing"?: 
+## Why "LunarWing"?:
 
 ### `Lunar` - We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information as well as the philosophical journal, `Agorism in the 21st Century`
 
@@ -24,7 +24,7 @@ The LunarWing project was created with free open source software in mind. The Lu
 The LunarWing project adds real privacy respecting tools and channels, with full secret support, right out of the box. These include, but are not limited to:
 * Gotify (Tool, WASM, agents can send notifications via gotify)
 * Weechat (Channel, allows Lunarwing agent to utilize Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client for an agent to communicate, WASM)
-* DarkIRC (Channel, Darkfi WASM) 
+* DarkIRC (Channel, Darkfi WASM)
 * XMPP with OMEMO (wasm channel, bridge service, and core code changes had to be made to accomodate properly)
 * Superior REPL Server and Client with better output formatting, better subagent support, polite reminders stating that the agent is still processing. Completely optional to use the new advanced REPLv2
 * Persistent Codex (developed primarily by OpenAI) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Woker Container)
@@ -49,7 +49,7 @@ LunarWing and its core contributers are not affiliated with NearAI.
 * Automated Testing Suite for development work.
 * Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services, OpenRC, or launchd (macOS). The test harness (`lunarwing-xmpp-test-env.sh`) is fully cross-platform: direct PID management on all platforms, launchd user agent generation on macOS (`render-launchd`, `mt-render-launchd`), and a `doctor` command that reports service status for all three init systems (systemd, OpenRC, launchd) plus watchdog installation state.
 * Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, flock-serialized builds, and support for both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md`.
-* Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents. 
+* Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents.
 
 ## Additionally, we support custom HTTP proxies for TensorZero routing setups with optimized tool_choice routing for open source coding agent applications as well as other various purposes.
 ### The Project Scope:
@@ -77,7 +77,7 @@ For a local libSQL setup:
 ic/scripts/setup-instance.sh \
   --base-dir /srv/lunarwing-dev \
   --database libsql \
-  --libsql-path /srv/lunarwing-dev/ironclaw.db \
+  --libsql-path /srv/lunarwing-dev/lunarwing.db \
   --run-onboard
 ```
 
@@ -107,7 +107,7 @@ Legacy alias still accepted: `IRONCLAW_BASE_DIR`
 Current seeded config defaults:
 - `llm_backend = "openai_compatible"`
 - `openai_compatible_base_url = "http://192.168.1.157:3002"`
-- `selected_model = "tensorzero::function_name::ironclaw"`
+- `selected_model = "tensorzero::function_name::lunarwing"`
 - `agent.name = "lunarwing"`
 
 Useful setup-time values:
@@ -119,7 +119,7 @@ Useful setup-time values:
 the encrypted secrets store and secret-management scripts to work without
 depending on the OS keychain.
 
-During `ironclaw onboard --quick`, Linux/non-macOS setups now generate and
+During `lunarwing onboard --quick`, Linux/non-macOS setups now generate and
 persist this value automatically to the selected instance `.env` when it is
 missing. macOS still prefers keychain storage by default.
 
@@ -199,9 +199,9 @@ rm -rf "$BASE"
 scripts/setup-instance.sh \
   --base-dir "$BASE" \
   --database libsql \
-  --libsql-path "$BASE/ironclaw.db" \
+  --libsql-path "$BASE/lunarwing.db" \
   --llm-base-url http://127.0.0.1:3002/openai/v1 \
-  --llm-model tensorzero::function_name::ironclaw \
+  --llm-model tensorzero::function_name::lunarwing \
   --llm-api-key "$LLM_API_KEY" \
   --agent-name lunarwing \
   --run-onboard
@@ -236,7 +236,7 @@ for key, value in values.items():
 path.write_text("\n".join(out) + "\n")
 PY
 
-LUNARWING_BASE_DIR="$BASE" ./target/debug/ironclaw run
+LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 ```
 
 ### See: ic/testing/lunarwing-xmpp/README.md for more information and latest instructions
