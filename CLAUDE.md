@@ -192,9 +192,13 @@ RUST_LOG=ironclaw=debug,tower_http=debug cargo run       # + HTTP request loggin
 
 ## Routine System
 
-Lightweight routines are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`). A stuck-run sweeper runs on every cron tick to recover lightweight runs that remain in `running` state beyond the timeout. FullJob runs have separate crash recovery via `sync_dispatched_runs()`. Both mechanisms prevent a single failed run from permanently blocking its routine.
+**Retry with backoff:** Failed routines with retryable errors (LLM timeouts, empty responses, execution timeouts) are automatically retried with exponential backoff. The per-routine `RetryPolicy` (stored in `RoutineGuardrails`) controls: `max_retries` (default 3), `initial_delay_secs` (default 60), `backoff_multiplier` (default 2.0), `max_delay_secs` (default 3600). Retries use the existing `next_fire_at` column — no new scheduler loop. After exhausting retries, the routine falls back to its normal cron schedule. Non-retryable errors (auth, config, DB) skip retry entirely. `RoutineError::is_retryable()` classifies errors.
+
+**Stuck-run recovery:** Lightweight routines are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`). A stuck-run sweeper runs on every cron tick to recover lightweight runs that remain in `running` state beyond the timeout. FullJob runs have separate crash recovery via `sync_dispatched_runs()`. Both mechanisms prevent a single failed run from permanently blocking its routine.
 
 Key config env vars: `ROUTINES_ENABLED`, `ROUTINES_MAX_CONCURRENT` (default 10), `ROUTINES_CRON_INTERVAL` (default 15s), `ROUTINES_DEFAULT_COOLDOWN` (default 300s), `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS` (default 300s).
+
+DB migration `V18__routine_retry.sql` adds retry policy columns to the `routines` table. Both PostgreSQL and libSQL backends support the new fields.
 
 ## Infrastructure Health Checks
 

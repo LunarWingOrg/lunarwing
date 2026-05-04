@@ -420,8 +420,9 @@ The init system detection can be forced via `LUNARWING_SERVICE_MANAGER=systemd` 
 
 ## Routine System Improvements
 
-All tenants benefit from the routine stuck-run recovery system:
+All tenants benefit from the routine resilience features:
 
+- **Native retry with backoff**: When a routine fails with a retryable error (LLM timeout, empty response, execution timeout), it is automatically retried with exponential backoff. Per-routine `RetryPolicy` defaults: 3 retries, 60s initial delay, 2x backoff, 1h max delay. Retries use the existing `next_fire_at` column and cron ticker — no extra infrastructure. Non-retryable errors (auth, config, DB) skip retry entirely.
 - **Lightweight timeout**: Lightweight routine executions are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`)
 - **Stuck-run sweeper**: On every cron tick, the engine sweeps lightweight runs stuck in `running` beyond the timeout threshold and marks them as failed, unblocking the routine for future fires
 - **FullJob crash recovery**: `sync_dispatched_runs()` recovers orphaned full-job runs from previous process crashes

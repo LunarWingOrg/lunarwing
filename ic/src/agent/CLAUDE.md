@@ -22,8 +22,8 @@ Core agent logic. This is the most complex subsystem — read this before workin
 | `heartbeat.rs` | Proactive periodic execution. Reads `HEARTBEAT.md`, notifies via channel if findings. |
 | `submission.rs` | Parses all user submissions into typed variants before routing. |
 | `undo.rs` | Turn-based undo/redo with checkpoints. Checkpoints store message lists (max 20 by default). |
-| `routine.rs` | `Routine` types: `Trigger` (cron/event/system_event/manual) + `RoutineAction` (lightweight/full_job) + `RoutineGuardrails`. |
-| `routine_engine.rs` | Cron ticker and event matcher. Fires routines when triggers match. Lightweight runs inline; full_job dispatches to `Scheduler`. |
+| `routine.rs` | `Routine` types: `Trigger` (cron/event/system_event/manual) + `RoutineAction` (lightweight/full_job) + `RoutineGuardrails` + `RetryPolicy`. |
+| `routine_engine.rs` | Cron ticker, event matcher, retry scheduling, stuck-run sweeper. Fires routines when triggers match. Lightweight runs inline with timeout; full_job dispatches to `Scheduler`. Retryable failures schedule automatic retry via `next_fire_at` with exponential backoff. |
 | `task.rs` | Task types for the scheduler: `Job`, `ToolExec`, `Background`. Used by `spawn_subtask` and `spawn_batch`. |
 | `cost_guard.rs` | LLM spend and action-rate enforcement. Tracks daily budget (cents) and hourly call rate. Lives in `AgentDeps`. |
 | `job_monitor.rs` | Subscribes to SSE broadcast and injects Claude Code (container) output back into the agent loop as `IncomingMessage`. |

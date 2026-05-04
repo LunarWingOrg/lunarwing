@@ -42,7 +42,7 @@ LunarWing and its core contributers are not affiliated with NearAI.
 
 * Specialized secret management wrapper scripts for both Postgres (we've enhanced postgres with finer tuned controls in our project) and LibSQL. See Secrets_Manager for more details.
 * Optional systemd and OpenRC services for LunarWing, channel bridges, and healthcheck services
-* Improved Scheduling System with stuck-run recovery, configurable lightweight execution timeouts (`ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`), and automatic sweeping of orphaned routine runs. Future work includes native retry with exponential backoff, fallback actions, and priority ordering.
+* Improved Scheduling System with native retry and exponential backoff for transient failures (`RetryPolicy`: max_retries, initial_delay, backoff_multiplier, max_delay), stuck-run recovery, configurable lightweight execution timeouts (`ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`), and automatic sweeping of orphaned routine runs. Retries piggyback on the existing cron ticker via `next_fire_at` — no extra scheduler needed.
 * Support for external agentic coding tools developed independently from upstream.
 * Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
 * Self-healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and the routines system (stuck-run sweeper, lightweight timeout enforcement). Infrastructure health checks auto-detect init system and run the appropriate checks (systemd or OpenRC).
