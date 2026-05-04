@@ -1898,6 +1898,15 @@ mt_up() {
     (cd "$REPO_ROOT/bridges/xmpp-bridge" && cargo build) || die "XMPP bridge build failed"
   fi
 
+  # Build and install WASM extensions (once globally, install per-tenant)
+  say "--- Building WASM extensions ---"
+  _mt_run_a build-wasm || say "WARNING: WASM build had failures (non-fatal)"
+  say ""
+  say "--- Installing WASM extensions ---"
+  _mt_run_a install-wasm || say "WARNING: Tenant A WASM install had issues"
+  _mt_run_b install-wasm || say "WARNING: Tenant B WASM install had issues"
+  say ""
+
   local init_system
   init_system="$(_mt_detect_init)"
   say "detected init system: $init_system"

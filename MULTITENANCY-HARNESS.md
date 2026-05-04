@@ -71,3 +71,4 @@ Both stacks run independently with no port conflicts.
 - Weechat relay port integration (currently reserved, no harness plumbing yet)
 - Per-instance worker container ports (nanocode4ironclaw, codex4ironclaw)
 - Automatic port conflict detection in `doctor` command
+- PER USER MT
