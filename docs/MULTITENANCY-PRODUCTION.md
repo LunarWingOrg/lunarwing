@@ -407,6 +407,27 @@ The production admin script (`lunarwing-mt-admin.sh`) is for persistent deployme
 | PostgreSQL | Shared or per-tenant containers | Per-tenant containers |
 | Lifecycle | Ephemeral (test and discard) | Persistent (survives reboot) |
 
+## Health Checks
+
+The infrastructure health check suite (`ic-infrastructure-health-check/`) auto-detects the init system and runs the appropriate service health check:
+
+- **systemd**: runs `health-systemd.sh` (checks unit active state, restart count, timer metadata)
+- **OpenRC**: runs `health-openrc.sh` (checks `rc-service` status, PID liveness)
+
+On OpenRC, `health-openrc.sh` auto-discovers multi-tenant services by scanning `/etc/init.d/` for `lunarwing-*`, `xmpp-bridge-*`, and `ironclaw-proxy-*` patterns. No configuration needed — all tenants are automatically monitored. Override with `SERVICES="svc1 svc2"` if needed.
+
+The init system detection can be forced via `LUNARWING_SERVICE_MANAGER=systemd` or `LUNARWING_SERVICE_MANAGER=openrc`.
+
+## Routine System Improvements
+
+All tenants benefit from the routine stuck-run recovery system:
+
+- **Lightweight timeout**: Lightweight routine executions are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`)
+- **Stuck-run sweeper**: On every cron tick, the engine sweeps lightweight runs stuck in `running` beyond the timeout threshold and marks them as failed, unblocking the routine for future fires
+- **FullJob crash recovery**: `sync_dispatched_runs()` recovers orphaned full-job runs from previous process crashes
+
+These mechanisms prevent a single failed routine from permanently blocking itself due to a stale `running` status in the database.
+
 ## Troubleshooting
 
 ### Services don't start after reboot

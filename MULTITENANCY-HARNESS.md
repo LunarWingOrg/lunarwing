@@ -66,9 +66,14 @@ Both stacks run independently with no port conflicts.
 - For libSQL instances, port conflicts are only on the service ports (no database container).
 - Systemd unit names are also configurable via `LUNARWING_TEST_SERVICE_NAME`, `LUNARWING_TEST_BRIDGE_SERVICE_NAME`, and `LUNARWING_TEST_PROXY_SERVICE_NAME`.
 
+## Production Multi-Tenancy
+
+For production per-user multi-tenancy with OS-level isolation, see `docs/MULTITENANCY-PRODUCTION.md` and the admin script `ic/scripts/lunarwing-mt-admin.sh`. The production system provides dedicated OS users, registry-allocated port blocks, flock-serialized builds, and per-tenant PostgreSQL containers. It supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon).
+
+The test harness documented here is for development/testing only. See the comparison table in `docs/MULTITENANCY-PRODUCTION.md` for the full list of differences.
+
 ## Future Work
 
 - Weechat relay port integration (currently reserved, no harness plumbing yet)
 - Per-instance worker container ports (nanocode4ironclaw, codex4ironclaw)
 - Automatic port conflict detection in `doctor` command
-- PER USER MT - IN PROGRESS NOW! DOCS GETTIN UPDATED

@@ -7,7 +7,7 @@
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
 
-The LunarWing project is a hard fork of the Ironclaw project originally developed by NearAI. The fork was initially started in Febuary 2026 and continues to expand far beyond what NearAI's project is currently capable of.
+The LunarWing project is a hard fork of the Ironclaw project originally developed by NearAI. The fork was initially started in February 2026 and continues to expand far beyond what NearAI's project is currently capable of.
 
 LunarWing adds much needed features to the project. There are far too many improvements to merge them all upstream.
 
@@ -41,25 +41,26 @@ LunarWing and its core contributers are not affiliated with NearAI.
 ## A Partial List of Brand New Additional Features which LunarWing introduces which are not in the upstream repository:
 
 * Specialized secret management wrapper scripts for both Postgres (we've enhanced postgres with finer tuned controls in our project) and LibSQL. See Secrets_Manager for more details.
-* Optional systemd and openrc services for Lunarwing, channel bridges, and Healthcheck services
-* Improved Scheduling System. Automatic retries, failovers, and other incredibly important things that NearAI doesnt care about apparently
+* Optional systemd and OpenRC services for LunarWing, channel bridges, and healthcheck services
+* Improved Scheduling System with stuck-run recovery, configurable lightweight execution timeouts (`ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`), and automatic sweeping of orphaned routine runs. Future work includes native retry with exponential backoff, fallback actions, and priority ordering.
 * Support for external agentic coding tools developed independently from upstream.
 * Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
-* Self healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and even optional self healing solutions for routines in the case of routine failures.
+* Self-healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and the routines system (stuck-run sweeper, lightweight timeout enforcement). Infrastructure health checks auto-detect init system and run the appropriate checks (systemd or OpenRC).
 * Automated Testing Suite for development work.
-* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services or OpenRC. 
+* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services or OpenRC.
+* Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, flock-serialized builds, and support for both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md`.
 * Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents. 
 
 ## Additionally, we support custom HTTP proxies for TensorZero routing setups with optimized tool_choice routing for open source coding agent applications as well as other various purposes.
 ### The Project Scope:
 Our scope is large and is mainly concerned with adding many essential features from Upstream which are still missing, including more advanced health checking and self-repair mechanisms. The LunarWing team is more interested in providing useful features instead of support for proprietary chinese document editing tools or other unecessary crapware. Our vision for LunarWing is expressed in our MANIFESTO.
 
-#### Our core team utilizes a self-hoste Vikunja kanban board to keep track of tasks.
+#### Our core team utilizes a self-hosted Vikunja kanban board to keep track of tasks.
 
 ## Instance Setup Defaults
 
 LunarWing supports a preseeded instance layout for fresh installs. The easiest
-wto prepare one is:
+way to prepare one is:
 
 ```bash
 ic/scripts/setup-instance.sh \

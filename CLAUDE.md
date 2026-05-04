@@ -95,11 +95,11 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   migrations/               # Refinery DB migrations (PostgreSQL + libSQL)
   tests/                    # Integration + E2E tests
   testing/lunarwing-xmpp/   # Full-stack test harness docs
-  systemd/                  # Systemd unit files
+  systemd/                  # Systemd unit files + OpenRC init scripts (.openrc, .confd)
   scripts/                  # Operational + build scripts
 codex4ironclaw/             # Persistent Codex Worker container — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
-ic-infrastructure-health-check/  # Health check service
+ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
 tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
 replv2git/                  # REPLv2 related tooling
 xmpp_bridge/                # XMPP bridge support resources
@@ -127,6 +127,8 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Workspace / memory | `ic/src/workspace/README.md` |
 | E2E tests | `ic/tests/e2e/CLAUDE.md` |
 | Network security policy | `ic/src/NETWORK_SECURITY.md` |
+| Multi-tenancy (production) | `docs/MULTITENANCY-PRODUCTION.md` |
+| Multi-tenancy (test harness) | `MULTITENANCY-HARNESS.md` |
 
 ## Architecture Overview
 
@@ -134,7 +136,7 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 - **Agent** owns session/turn handling, the LLM↔tool loop, approvals, and routines.
 - **AppBuilder** is the composition root — wires DB, secrets, LLMs, tools, workspace, extensions, hooks before the agent starts.
 - **Web gateway** is a browser-facing API/UI over the same agent/session/tool systems, not a separate product path.
-- **XMPP bridge** runs as a separate systemd service; OMEMO happens in the bridge, not the main daemon.
+- **XMPP bridge** runs as a separate service (systemd or OpenRC); OMEMO happens in the bridge, not the main daemon.
 - **WASM sandbox** (wasmtime) provides isolated execution for third-party tools and channels.
 - **Dual DB backend**: PostgreSQL (primary) + libSQL/Turso. All new persistence must support both.
 - **TensorZero proxy** routes LLM calls via `openai_compatible` backend, enabling function-call routing and model training feedback loops. Default local endpoint: `http://192.168.1.157:3002`.
@@ -149,9 +151,10 @@ Do not break without explicit approval:
 - XMPP group chat self-message suppression and live rate-limit control
 - Gotify WASM tool usage
 - WASM channel/tool loading
-- Scheduled routines and manual routine runs
+- Scheduled routines, manual routine runs, and stuck-run recovery
 - Gateway status/config endpoints
-- Systemd deployment units and watchdog service/timer
+- Systemd and OpenRC deployment units and watchdog service/timer
+- Infrastructure health check init-system auto-detection
 
 ## Service Operations
 
@@ -186,9 +189,24 @@ RUST_LOG=ironclaw=trace cargo run                        # verbose all modules
 RUST_LOG=ironclaw::agent=debug cargo run                 # agent loop only
 RUST_LOG=ironclaw=debug,tower_http=debug cargo run       # + HTTP request logging
 ```
-## Harness Mare
 
-I'm CLAAAAAAAAAAAUDING!
+## Routine System
+
+Lightweight routines are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`). A stuck-run sweeper runs on every cron tick to recover lightweight runs that remain in `running` state beyond the timeout. FullJob runs have separate crash recovery via `sync_dispatched_runs()`. Both mechanisms prevent a single failed run from permanently blocking its routine.
+
+Key config env vars: `ROUTINES_ENABLED`, `ROUTINES_MAX_CONCURRENT` (default 10), `ROUTINES_CRON_INTERVAL` (default 15s), `ROUTINES_DEFAULT_COOLDOWN` (default 300s), `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS` (default 300s).
+
+## Infrastructure Health Checks
+
+`ic-infrastructure-health-check/infrastructure-health-check.sh` orchestrates 8 parallel health checks. It auto-detects the init system and conditionally runs either `health-systemd.sh` or `health-openrc.sh` (never both). On OpenRC, `health-openrc.sh` auto-discovers multi-tenant services by scanning `/etc/init.d/` for tenant-specific init scripts.
+
+Override init system detection with `LUNARWING_SERVICE_MANAGER=systemd` or `LUNARWING_SERVICE_MANAGER=openrc`.
+
+## Multi-Tenancy
+
+Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
+
+The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development. See `MULTITENANCY-HARNESS.md`.
 
 ## Harness Environment Defaults
 
