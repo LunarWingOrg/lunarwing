@@ -20,6 +20,11 @@ Use this harness when you want to test:
 
 The harness is cross-platform. Single-tenant `up`/`down` uses direct PID management on all platforms. Multi-tenant commands (`mt-*`) auto-detect the init system and use launchd on macOS, systemd on Linux, or fall back to direct management. The `doctor` command reports service status for the detected platform.
 
+**Platform testing status:**
+- macOS (launchd): tested end-to-end — `mt-init`, `build --with-wasm`, `mt-up`, `mt-verify`, `mt-down` all verified
+- Linux (systemd): implemented, not recently re-verified with current harness version
+- Linux (OpenRC): **implemented but not FULLY tested end-to-end on a real Gentoo machine yet (will be done very soon though)** — the code path exists but has never been run on a real OpenRC system yet (Gentoo, Alpine, Artix, postmarketOS, Devuan, Hyberbola, etc.); treat as best-effort until validated...
+
 The `customic/` tree is not part of this setup.
 
 ## 1. Pick a Test Root

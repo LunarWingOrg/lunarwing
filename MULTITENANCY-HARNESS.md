@@ -2,6 +2,8 @@
 
 How to run multiple isolated LunarWing instances on the same host using the test harness.
 
+For a single instance, see [`HARNESS-SINGLE-TENANT.md`](HARNESS-SINGLE-TENANT.md).
+
 ## Port Map
 
 Every port used by the harness is now configurable via `LUNARWING_TEST_*` env vars.
@@ -76,6 +78,8 @@ The harness is cross-platform. Init system detection is automatic:
 | Linux (systemd) | systemd user units | `.service` in `$TEST_ROOT/systemd/` → `~/.config/systemd/user/` |
 | Linux (OpenRC) | rc-service (direct) | direct process management fallback |
 | Other | direct PID management | — |
+
+> **Note — OpenRC not yet been FULLY validated:** The OpenRC path has been implemented but has not been tested end-to-end on a real OpenRC system. (However, this task WILL be completed very soon...) `_mt_detect_init()` correctly identifies OpenRC and `doctor` reports `rc-service` status, but neither `mt-up`/`mt-down` nor single-tenant `up`/`down` have been run on Gentoo, Alpine, or any other OpenRC host. Treat the OpenRC path as best-effort until a full test is completed.
 
 ### macOS Prerequisites
 

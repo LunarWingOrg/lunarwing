@@ -69,22 +69,13 @@ Env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
 `ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness. It manages PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon in an isolated environment. Works on Linux and macOS.
 
-```bash
-cd ic
-scripts/lunarwing-xmpp-test-env.sh init           # create isolated env
-scripts/lunarwing-xmpp-test-env.sh build          # build all binaries
-scripts/lunarwing-xmpp-test-env.sh up             # bring up full stack
-scripts/lunarwing-xmpp-test-env.sh verify         # health checks
-scripts/lunarwing-xmpp-test-env.sh down           # tear down
-scripts/lunarwing-xmpp-test-env.sh doctor         # diagnose dependencies (platform-aware)
-scripts/lunarwing-xmpp-test-env.sh render-launchd # generate launchd plists (macOS)
-```
+Single-tenant quick start — see `HARNESS-SINGLE-TENANT.md`. Multi-tenant quick start — see `MULTITENANCY-HARNESS.md`.
 
-Multi-tenant commands (`mt-init`, `mt-up`, `mt-verify`, `mt-down`) auto-detect the init system: launchd on macOS, systemd on Linux, OpenRC fallback to direct PID management.
+Key difference: `up` (single-tenant) does **not** auto-build; `build --with-wasm` and `install-wasm` must be run first. `mt-up` auto-builds and installs WASM before starting services.
 
 Key env vars: `LUNARWING_TEST_ROOT` (default `$TMPDIR/lunarwing-xmpp-test`), `LUNARWING_TEST_DATABASE_KIND` (`postgres`|`libsql`), `LUNARWING_TEST_PROFILE` (`debug`|`release`).
 
-See `ic/testing/lunarwing-xmpp/README.md` for full recipes.
+Full single-tenant reference: `ic/testing/lunarwing-xmpp/README.md`.
 
 ## Repo Structure
 
@@ -131,7 +122,8 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | E2E tests | `ic/tests/e2e/CLAUDE.md` |
 | Network security policy | `ic/src/NETWORK_SECURITY.md` |
 | Multi-tenancy (production) | `docs/MULTITENANCY-PRODUCTION.md` |
-| Multi-tenancy (test harness) | `MULTITENANCY-HARNESS.md` |
+| Single-tenant test harness | `HARNESS-SINGLE-TENANT.md` |
+| Multi-tenant test harness | `MULTITENANCY-HARNESS.md` |
 
 ## Architecture Overview
 
