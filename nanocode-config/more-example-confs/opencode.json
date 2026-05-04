@@ -1,0 +1,46 @@
+{
+  "$schema": "https://github.com/nanogpt-community/nanocode/config.json",
+  "plugin": [
+    "@gotgenes/opencode-agent-identity",
+    "opencode-agent-memory",
+    "opencode-agent-skills",
+    "@zenobius/opencode-background",
+    "envsitter-guard",
+    "oh-my-openagent",
+    "@howaboua/opencode-planning-toolkit",
+    "opentmux",
+    "@spoons-and-mirrors/subtask2"
+  ],
+  "model": "tensorzero::nanocode",
+  "disabled_providers": ["nanogpt"],
+  "provider": {
+    "tensorzero": {
+      "name": "TensorZero",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "{env:TENSORZERO_API_KEY}",
+        "baseURL": "http://127.0.0.1:3000/openai/v1/"
+      },
+      "models": {
+        "tensorzero::nanocode": {
+          "name": "tensorzero::nanocode"
+        }
+      }
+    }
+  },
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "headers": {
+        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+      }
+    },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "enabled": true
+    }
+  }
+}
