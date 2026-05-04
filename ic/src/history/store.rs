@@ -1476,6 +1476,20 @@ impl Store {
             .await?;
         rows.iter().map(row_to_routine_run).collect()
     }
+
+    pub async fn list_stuck_lightweight_runs(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<RoutineRun>, DatabaseError> {
+        let conn = self.conn().await?;
+        let rows = conn
+            .query(
+                "SELECT * FROM routine_runs WHERE status = 'running' AND job_id IS NULL AND started_at < $1",
+                &[&cutoff],
+            )
+            .await?;
+        rows.iter().map(row_to_routine_run).collect()
+    }
 }
 
 #[cfg(feature = "postgres")]

@@ -583,6 +583,13 @@ impl RoutineStore for PgBackend {
     async fn list_dispatched_routine_runs(&self) -> Result<Vec<RoutineRun>, DatabaseError> {
         self.store.list_dispatched_routine_runs().await
     }
+
+    async fn list_stuck_lightweight_runs(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<RoutineRun>, DatabaseError> {
+        self.store.list_stuck_lightweight_runs(cutoff).await
+    }
 }
 
 // ==================== ToolFailureStore ====================

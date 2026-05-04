@@ -593,4 +593,31 @@ impl RoutineStore for LibSqlBackend {
         }
         Ok(runs)
     }
+
+    async fn list_stuck_lightweight_runs(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<RoutineRun>, DatabaseError> {
+        let conn = self.connect().await?;
+        let mut rows = conn
+            .query(
+                &format!(
+                    "SELECT {} FROM routine_runs WHERE status = 'running' AND job_id IS NULL AND started_at < ?1",
+                    ROUTINE_RUN_COLUMNS
+                ),
+                params![fmt_ts(&cutoff)],
+            )
+            .await
+            .map_err(|e| DatabaseError::Query(e.to_string()))?;
+
+        let mut runs = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| DatabaseError::Query(e.to_string()))?
+        {
+            runs.push(row_to_routine_run_libsql(&row)?);
+        }
+        Ok(runs)
+    }
 }

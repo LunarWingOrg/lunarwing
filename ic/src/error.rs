@@ -430,6 +430,9 @@ pub enum RoutineError {
         /// Tokens consumed by the call that produced the truncated response.
         partial_tokens: Option<i32>,
     },
+
+    #[error("Routine execution timed out after {timeout_secs}s")]
+    Timeout { timeout_secs: u64 },
 }
 
 impl RoutineError {
@@ -443,7 +446,9 @@ impl RoutineError {
     pub fn is_retryable(&self) -> bool {
         match self {
             RoutineError::LlmFailed { retryable, .. } => *retryable,
-            RoutineError::EmptyResponse { .. } | RoutineError::TruncatedResponse { .. } => true,
+            RoutineError::EmptyResponse { .. }
+            | RoutineError::TruncatedResponse { .. }
+            | RoutineError::Timeout { .. } => true,
             _ => false,
         }
     }

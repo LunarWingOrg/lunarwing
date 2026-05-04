@@ -792,6 +792,7 @@ impl TestRigBuilder {
                 max_lightweight_tokens: 4096,
                 lightweight_tools_enabled: true,
                 lightweight_max_iterations: 3,
+                lightweight_timeout_secs: 300,
             })
         } else {
             None

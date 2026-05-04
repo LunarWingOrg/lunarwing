@@ -679,6 +679,90 @@ impl RoutineEngine {
         // where running_count was already reset to 0.
     }
 
+    /// Find lightweight runs stuck in 'running' beyond the configured timeout
+    /// and mark them as failed. Only processes runs with `job_id IS NULL`
+    /// (lightweight) to avoid conflicting with `sync_dispatched_runs()`.
+    pub async fn sweep_stuck_lightweight_runs(&self) {
+        let cutoff =
+            Utc::now() - chrono::Duration::seconds(self.config.lightweight_timeout_secs as i64);
+        let runs = match self.store.list_stuck_lightweight_runs(cutoff).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("Failed to list stuck lightweight runs: {}", e);
+                return;
+            }
+        };
+
+        if runs.is_empty() {
+            return;
+        }
+
+        tracing::warn!("Sweeping {} stuck lightweight routine runs", runs.len());
+
+        for run in runs {
+            if let Err(e) = self
+                .store
+                .complete_routine_run(
+                    run.id,
+                    RunStatus::Failed,
+                    Some("Timed out (stuck run recovery)"),
+                    None,
+                )
+                .await
+            {
+                tracing::error!(run_id = %run.id, "Failed to complete stuck run: {}", e);
+                continue;
+            }
+
+            let routine = match self.store.get_routine(run.routine_id).await {
+                Ok(Some(r)) => r,
+                Ok(None) => {
+                    tracing::warn!(
+                        run_id = %run.id,
+                        routine_id = %run.routine_id,
+                        "Routine not found for stuck run cleanup"
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        run_id = %run.id,
+                        "Failed to load routine for stuck run: {}", e
+                    );
+                    continue;
+                }
+            };
+
+            let next_fire = if let Trigger::Cron {
+                ref schedule,
+                ref timezone,
+            } = routine.trigger
+            {
+                next_cron_fire(schedule, timezone.as_deref()).unwrap_or(None)
+            } else {
+                None
+            };
+
+            if let Err(e) = self
+                .store
+                .update_routine_runtime(
+                    routine.id,
+                    Utc::now(),
+                    next_fire,
+                    routine.run_count + 1,
+                    routine.consecutive_failures + 1,
+                    &routine.state,
+                )
+                .await
+            {
+                tracing::error!(
+                    routine = %routine.name,
+                    "Failed to update runtime after stuck run sweep: {}", e
+                );
+            }
+        }
+    }
+
     /// Fire a routine manually (from tool call or CLI).
     ///
     /// Bypasses cooldown checks (those only apply to cron/event triggers).
@@ -1025,16 +1109,31 @@ async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) 
             use_tools,
             max_tool_rounds,
         } => {
-            execute_lightweight(
-                &ctx,
-                &routine,
-                prompt,
-                context_paths,
-                *max_tokens,
-                *use_tools,
-                *max_tool_rounds,
+            let timeout_secs = ctx.config.lightweight_timeout_secs;
+            let timeout_dur = Duration::from_secs(timeout_secs);
+            match tokio::time::timeout(
+                timeout_dur,
+                execute_lightweight(
+                    &ctx,
+                    &routine,
+                    prompt,
+                    context_paths,
+                    *max_tokens,
+                    *use_tools,
+                    *max_tool_rounds,
+                ),
             )
             .await
+            {
+                Ok(result) => result,
+                Err(_) => {
+                    tracing::error!(
+                        routine = %routine.name,
+                        "Lightweight routine timed out after {timeout_secs}s"
+                    );
+                    Err(RoutineError::Timeout { timeout_secs })
+                }
+            }
         }
         RoutineAction::FullJob {
             title,
@@ -1831,6 +1930,7 @@ pub fn spawn_cron_ticker(
         // dispatching any new work, so we don't confuse fresh dispatches
         // with crash orphans.
         engine.sync_dispatched_runs().await;
+        engine.sweep_stuck_lightweight_runs().await;
 
         // Run one cron check immediately so routines due at startup don't
         // wait an extra full polling interval.
@@ -1850,6 +1950,7 @@ pub fn spawn_cron_ticker(
             // Sync first: only processes runs from before boot_time, so it
             // never races with FullJobWatcher instances from this process.
             engine.sync_dispatched_runs().await;
+            engine.sweep_stuck_lightweight_runs().await;
             engine.check_cron_triggers().await;
 
             if last_refresh.elapsed() >= refresh_interval {

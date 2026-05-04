@@ -18,6 +18,9 @@ pub struct RoutineConfig {
     pub lightweight_tools_enabled: bool,
     /// Max tool iterations for lightweight routines (default: 3, max: 5).
     pub lightweight_max_iterations: u32,
+    /// Timeout for lightweight routine execution in seconds (default: 300).
+    /// Runs exceeding this are marked as failed by the stuck-run sweeper.
+    pub lightweight_timeout_secs: u64,
 }
 
 impl Default for RoutineConfig {
@@ -30,6 +33,7 @@ impl Default for RoutineConfig {
             max_lightweight_tokens: 4096,
             lightweight_tools_enabled: true,
             lightweight_max_iterations: 3,
+            lightweight_timeout_secs: 300,
         }
     }
 }
@@ -45,6 +49,7 @@ impl RoutineConfig {
             max_lightweight_tokens: parse_optional_env("ROUTINES_MAX_TOKENS", 4096)?,
             lightweight_tools_enabled: parse_bool_env("ROUTINES_LIGHTWEIGHT_TOOLS", true)?,
             lightweight_max_iterations: max_iterations.min(5), // cap at 5
+            lightweight_timeout_secs: parse_optional_env("ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS", 300)?,
         })
     }
 }

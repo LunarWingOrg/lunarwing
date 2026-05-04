@@ -630,6 +630,13 @@ pub trait RoutineStore: Send + Sync {
     /// List routine runs that were dispatched as full_job but have not yet
     /// been finalized (status='running' with a linked job_id).
     async fn list_dispatched_routine_runs(&self) -> Result<Vec<RoutineRun>, DatabaseError>;
+
+    /// List lightweight routine runs stuck in 'running' state
+    /// (job_id IS NULL) with started_at before the given cutoff.
+    async fn list_stuck_lightweight_runs(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<RoutineRun>, DatabaseError>;
 }
 
 #[async_trait]

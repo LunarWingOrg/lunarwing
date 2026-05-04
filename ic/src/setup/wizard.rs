@@ -211,7 +211,9 @@ impl SetupWizard {
     }
 
     fn generate_env_master_key_hex() -> String {
-        if let Ok(output) = Command::new("openssl").args(["rand", "-hex", "32"]).output()
+        if let Ok(output) = Command::new("openssl")
+            .args(["rand", "-hex", "32"])
+            .output()
             && output.status.success()
         {
             let key_hex = String::from_utf8_lossy(&output.stdout).trim().to_string();

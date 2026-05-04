@@ -488,6 +488,13 @@ impl AdminScope {
         self.inner.list_dispatched_routine_runs().await
     }
 
+    pub async fn list_stuck_lightweight_runs(
+        &self,
+        cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<RoutineRun>, DatabaseError> {
+        self.inner.list_stuck_lightweight_runs(cutoff).await
+    }
+
     pub async fn count_running_routine_runs_batch(
         &self,
         routine_ids: &[Uuid],

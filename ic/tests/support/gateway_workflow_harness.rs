@@ -280,6 +280,7 @@ impl GatewayWorkflowHarness {
                 max_lightweight_tokens: 4096,
                 lightweight_tools_enabled: true,
                 lightweight_max_iterations: 3,
+                lightweight_timeout_secs: 300,
             }),
             Some(Arc::clone(&components.context_manager)),
             Some(Arc::clone(&agent_session_manager)),

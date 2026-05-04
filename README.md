@@ -13,9 +13,9 @@ LunarWing adds much needed features to the project. There are far too many impro
 
 ## Why "LunarWing"?: 
 
-### `Lunar` - We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information.
+### `Lunar` - We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information as well as the philosophical journal, `Agorism in the 21st Century`
 
-### `Wing` - Wings are extensions of the body which allow flight. We can soar and we believe we will soar to even greater heights in time. (Wings can often serve other purposes as well.) We are not required to remain on the ground. Our imagination has enabled us to innovate in this space, where others have not been able to.
+### `Wing` - Wings are extensions of the body which allow flight. We can soar and we believe we will soar to even greater heights in time. (Wings can often serve other purposes as well.) We are not required to remain on the ground. Our imagination has enabled us to innovate in this space, where others have not been able to. We also chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`.
 
 The LunarWing project team maintains AGPLv3 license forever as well as AGPLv3 license on its extensions, tools, and channels.
 
