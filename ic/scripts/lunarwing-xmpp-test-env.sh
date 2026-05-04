@@ -1578,9 +1578,21 @@ PLIST
 
 render_launchd() {
   ensure_env
-  local proxy_label="com.lunarwing.test.proxy"
-  local bridge_label="com.lunarwing.test.bridge"
-  local daemon_label="com.lunarwing.test.daemon"
+  # Derive a safe tenant id from the last path component of TEST_ROOT.
+  # Single-tenant default ("lunarwing-xmpp-test") → no suffix.
+  # MT roots ("lunarwing-mt-a") → suffix ".mt-a".
+  local _root_name
+  _root_name="$(basename "$TEST_ROOT")"
+  local _tenant_suffix=""
+  case "$_root_name" in
+    *lunarwing-mt-*)
+      _tenant_suffix=".${_root_name#*lunarwing-}"  # e.g. ".mt-a"
+      ;;
+  esac
+
+  local proxy_label="com.lunarwing.test${_tenant_suffix}.proxy"
+  local bridge_label="com.lunarwing.test${_tenant_suffix}.bridge"
+  local daemon_label="com.lunarwing.test${_tenant_suffix}.daemon"
 
   _write_plist "$LAUNCHD_DIR/${proxy_label}.plist" \
     "$proxy_label" "$REPO_ROOT" "$ENV_DIR/proxy.env" \
@@ -2092,7 +2104,9 @@ _mt_install_launchd_agents() {
   mkdir -p "$agents_dir"
 
   say "  installing launchd agents for tenant $tenant"
-  for plist in "$root/launchd/"*.plist; do
+  # Only copy tenant-scoped plists (com.lunarwing.test.mt-<tenant>.*) to avoid
+  # polluting ~/Library/LaunchAgents with generic-label plists from previous runs.
+  for plist in "$root/launchd/com.lunarwing.test.mt-${tenant}."*.plist; do
     [[ -f "$plist" ]] || continue
     cp "$plist" "$agents_dir/"
     say "    -> $(basename "$plist")"
@@ -2107,15 +2121,21 @@ _mt_start_launchd_tenant() {
     [[ -f "$plist" ]] || continue
     launchctl load "$plist" 2>/dev/null || true
   done
-  sleep 2
 
+  # Wait up to 10s for the daemon to appear in launchctl list (launchd registration is async)
   local daemon_label="com.lunarwing.test.mt-${tenant}.daemon"
-  if launchctl list 2>/dev/null | grep -q "$daemon_label"; then
-    say "  $daemon_label is loaded"
-  else
-    say "  WARNING: $daemon_label not loaded" >&2
-    return 1
-  fi
+  local attempts=0
+  while [[ $attempts -lt 10 ]]; do
+    if launchctl list 2>/dev/null | grep -q "$daemon_label"; then
+      say "  $daemon_label is loaded"
+      return 0
+    fi
+    sleep 1
+    (( attempts++ )) || true
+  done
+
+  say "  WARNING: $daemon_label not loaded after 10s" >&2
+  return 1
 }
 
 _mt_stop_launchd_tenant() {
