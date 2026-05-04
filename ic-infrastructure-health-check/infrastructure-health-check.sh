@@ -24,6 +24,23 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2
 }
 
+# Detect init system (reuses pattern from ic/scripts/install-lunarwing-watchdog.sh)
+detect_service_manager() {
+  local override="${LUNARWING_SERVICE_MANAGER:-}"
+  if [[ -n "$override" ]]; then
+    case "${override,,}" in
+      systemd) printf 'systemd'; return 0 ;;
+      openrc)  printf 'openrc';  return 0 ;;
+    esac
+  fi
+  [[ -e /run/openrc/softlevel ]] && { printf 'openrc'; return 0; }
+  [[ -e /run/systemd/system ]]   && { printf 'systemd'; return 0; }
+  command -v rc-service >/dev/null 2>&1 && ! command -v systemctl >/dev/null 2>&1 && { printf 'openrc'; return 0; }
+  command -v systemctl >/dev/null 2>&1 && { printf 'systemd'; return 0; }
+  command -v rc-service >/dev/null 2>&1 && { printf 'openrc'; return 0; }
+  printf 'unknown'; return 0
+}
+
 # Run a health check
 run_check() {
     local script=$1
@@ -68,33 +85,41 @@ run_check() {
 # Run all health checks
 log "=== Starting Infrastructure Health Check ==="
 
+# Detect init system before launching checks
+SERVICE_MANAGER=$(detect_service_manager)
+log "Detected service manager: $SERVICE_MANAGER"
+
 # Run checks in parallel for speed using temp files (stdout only for JSON)
 run_check "health-gateway.sh" "gateway" > /tmp/check-gateway.tmp 2> /tmp/log-gateway.tmp &
-run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp &
-run_check "health-omemo.sh" "omemo" > /tmp/check-omemo.tmp 2> /tmp/log-omemo.tmp run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp &
-run_check "health-ratelimit.sh" "ratelimit" > /tmp/check-ratelimit.tmp 2> /tmp/log-ratelimit.tmp run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp &
+run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp &
+run_check "health-omemo.sh" "omemo" > /tmp/check-omemo.tmp 2> /tmp/log-omemo.tmp &
+run_check "health-ratelimit.sh" "ratelimit" > /tmp/check-ratelimit.tmp 2> /tmp/log-ratelimit.tmp &
 run_check "health-clickhouse.sh" "clickhouse" > /tmp/check-clickhouse.tmp 2> /tmp/log-clickhouse.tmp &
 run_check "health-tensorzero.sh" "tensorzero" > /tmp/check-tensorzero.tmp 2> /tmp/log-tensorzero.tmp &
-run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models.tmp run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models.tmp &
-run_check "health-systemd.sh" "systemd" > /tmp/check-systemd.tmp 2> /tmp/log-systemd.tmp run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models.tmp &
+run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models.tmp &
+case "$SERVICE_MANAGER" in
+  systemd) run_check "health-systemd.sh" "systemd" > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
+  openrc)  run_check "health-openrc.sh"  "openrc"  > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
+  *)       log "WARNING: unknown service manager '$SERVICE_MANAGER', skipping service health check" ;;
+esac
 
 # Wait for all checks to complete
 wait
 
 # Append logs to main log file
-for comp in gateway xmpp omemo ratelimit clickhouse tensorzero models systemd; do
+for comp in gateway xmpp omemo ratelimit clickhouse tensorzero models svcmgr; do
     [ -f "/tmp/log-${comp}.tmp" ] && cat "/tmp/log-${comp}.tmp" >> "$LOG_FILE" && rm -f "/tmp/log-${comp}.tmp"
 done
 
 # Read results from temp files
 check_gateway=$(cat /tmp/check-gateway.tmp 2>/dev/null || echo)
-check_irc=$(cat /tmp/check-irc.tmp 2>/dev/null || echo)
 check_xmpp=$(cat /tmp/check-xmpp.tmp 2>/dev/null || echo)
 check_omemo=$(cat /tmp/check-omemo.tmp 2>/dev/null || echo)
 check_ratelimit=$(cat /tmp/check-ratelimit.tmp 2>/dev/null || echo)
 check_clickhouse=$(cat /tmp/check-clickhouse.tmp 2>/dev/null || echo)
 check_tensorzero=$(cat /tmp/check-tensorzero.tmp 2>/dev/null || echo)
 check_models=$(cat /tmp/check-models.tmp 2>/dev/null || echo)
+check_svcmgr=$(cat /tmp/check-svcmgr.tmp 2>/dev/null || echo)
 
 # Cleanup temp files
 rm -f /tmp/check-*.tmp
@@ -102,14 +127,13 @@ rm -f /tmp/check-*.tmp
 # Collect results
 components=(
     "$check_gateway"
-     
     "$check_xmpp"
     "${check_omemo:-}"
     "${check_ratelimit:-}"
     "$check_clickhouse"
     "$check_tensorzero"
     "$check_models"
-    "${check_systemd:-}"
+    "${check_svcmgr:-}"
 )
 
 # Aggregate results and determine overall status
@@ -145,10 +169,10 @@ done
 
 # Build components array (filter out empty entries)
 components_json=""
-for comp in "$check_gateway"  "$check_xmpp"
-    "${check_omemo:-}"
-    "${check_ratelimit:-}" "$check_clickhouse" "$check_tensorzero" "$check_models"
-    "${check_systemd:-}"; do
+for comp in "$check_gateway" "$check_xmpp" \
+    "${check_omemo:-}" "${check_ratelimit:-}" \
+    "$check_clickhouse" "$check_tensorzero" \
+    "$check_models" "${check_svcmgr:-}"; do
     if [ -n "$comp" ] && echo "$comp" | jq . >/dev/null 2>&1; then
         if [ -n "$components_json" ]; then
             components_json="$components_json,$comp"
