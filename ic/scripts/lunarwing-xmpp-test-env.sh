@@ -141,6 +141,15 @@ die() {
   exit 1
 }
 
+# Portable in-place sed (macOS sed -i requires '' backup arg, GNU does not)
+_sed_i() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     die "$1 is required"
@@ -328,7 +337,7 @@ replace_env_value() {
   if [[ ! -f "$path" ]]; then
     return 0
   fi
-  sed -i "s|^${key}=.*|${key}=${value}|" "$path"
+  _sed_i "s|^${key}=.*|${key}=${value}|" "$path"
 }
 
 ensure_lunarwing_env_defaults() {
@@ -1509,7 +1518,7 @@ EOF
 _env_file_to_plist_dict() {
   local env_file="$1"
   while IFS='=' read -r key value; do
-    [[ -z "$key" || "$key" == \#* ]] && continue
+    [[ -z "$key" || "$key" == \#* || "$key" == "CLI_ENABLED" ]] && continue
     # Strip surrounding quotes
     value="${value%\"}"
     value="${value#\"}"
@@ -1612,13 +1621,35 @@ doctor() {
 
   say ""
   say "=== commands ==="
-  for cmd_name in cargo curl jq docker python3 systemctl wasm-tools; do
+  for cmd_name in cargo curl jq docker python3 wasm-tools; do
     if command -v "$cmd_name" >/dev/null 2>&1; then
       say "$cmd_name: found"
     else
       say "$cmd_name: MISSING"
     fi
   done
+
+  # Service manager commands (platform-dependent)
+  case "$(uname -s)" in
+    Darwin)
+      say "launchctl: found"
+      ;;
+    *)
+      if command -v systemctl >/dev/null 2>&1; then
+        say "systemctl: found"
+      elif command -v rc-service >/dev/null 2>&1; then
+        say "rc-service: found"
+        if command -v rc-update >/dev/null 2>&1; then
+          say "rc-update: found"
+        else
+          say "rc-update: MISSING"
+        fi
+      else
+        say "systemctl: MISSING"
+        say "rc-service: MISSING"
+      fi
+      ;;
+  esac
 
   # WASM target
   if rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2; then
@@ -1770,6 +1801,63 @@ doctor() {
             say "$svc_name: not active or not installed"
           fi
         done
+      elif command -v rc-service >/dev/null 2>&1; then
+        say ""
+        say "=== OpenRC ==="
+        # Strip .service suffix for OpenRC service names
+        for svc_name in "$(lunarwing_service_name)" "$(bridge_service_name)" "$(proxy_service_name)"; do
+          local openrc_name="${svc_name%.service}"
+          if rc-service "$openrc_name" status >/dev/null 2>&1; then
+            say "$openrc_name: started"
+          elif rc-service --exists "$openrc_name" >/dev/null 2>&1; then
+            say "$openrc_name: stopped"
+          else
+            say "$openrc_name: not installed"
+          fi
+        done
+
+        # Check runlevel registration
+        say ""
+        say "=== OpenRC runlevel ==="
+        for svc_name in "$(lunarwing_service_name)" "$(bridge_service_name)" "$(proxy_service_name)"; do
+          local openrc_name="${svc_name%.service}"
+          if rc-update show default 2>/dev/null | grep -q "$openrc_name"; then
+            say "$openrc_name: registered in default runlevel"
+          else
+            say "$openrc_name: not in default runlevel"
+          fi
+        done
+
+        # Watchdog (cron-based on OpenRC)
+        say ""
+        say "=== OpenRC watchdog ==="
+        if [[ -x /usr/local/sbin/lunarwing-watchdog-openrc ]]; then
+          say "watchdog script: installed"
+        else
+          say "watchdog script: not installed"
+        fi
+        if [[ -f /etc/conf.d/lunarwing-watchdog ]]; then
+          say "watchdog conf.d: present"
+        else
+          say "watchdog conf.d: not present"
+        fi
+        local cron_ok=false
+        if [[ -x /etc/cron.hourly/lunarwing-watchdog ]] || [[ -x /etc/periodic/hourly/lunarwing-watchdog ]]; then
+          say "watchdog cron hook: installed (hourly)"
+          cron_ok=true
+        fi
+        if command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | grep -q lunarwing-watchdog; then
+          say "watchdog fcron: installed"
+          cron_ok=true
+        fi
+        if [[ "$cron_ok" == "false" ]]; then
+          say "watchdog scheduler: not installed (run install-lunarwing-watchdog.sh)"
+        fi
+      else
+        say ""
+        say "=== service manager ==="
+        say "no service manager detected (systemctl, rc-service, launchctl all missing)"
+        say "services managed via direct PID files only"
       fi
       ;;
   esac
@@ -1866,36 +1954,36 @@ _mt_seed_tenant() {
 
   # Patch agent name
   if grep -q "^AGENT_NAME=" "$env_file"; then
-    sed -i "s|^AGENT_NAME=.*|AGENT_NAME=$name|" "$env_file"
+    _sed_i "s|^AGENT_NAME=.*|AGENT_NAME=$name|" "$env_file"
   else
     printf 'AGENT_NAME=%s\n' "$name" >>"$env_file"
   fi
 
   # Patch XMPP resource (unique per tenant)
   if grep -q "^XMPP_RESOURCE=" "$env_file"; then
-    sed -i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$env_file"
+    _sed_i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$env_file"
   fi
 
   # Patch XMPP JID if desired
   if [[ -n "$jid" ]]; then
     if grep -q "^XMPP_JID=" "$env_file"; then
-      sed -i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$env_file"
+      _sed_i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$env_file"
     fi
   fi
 
   # Patch bridge resource too
   if [[ -f "$bridge_file" ]]; then
     if grep -q "^XMPP_RESOURCE=" "$bridge_file"; then
-      sed -i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$bridge_file"
+      _sed_i "s|^XMPP_RESOURCE=.*|XMPP_RESOURCE=$resource|" "$bridge_file"
     fi
     if [[ -n "$jid" ]] && grep -q "^XMPP_JID=" "$bridge_file"; then
-      sed -i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$bridge_file"
+      _sed_i "s|^XMPP_JID=.*|XMPP_JID=$jid|" "$bridge_file"
     fi
   fi
 
   # Set unique RUST_LOG prefix for differentiation in logs
   if grep -q "^RUST_LOG=" "$env_file"; then
-    sed -i "s|^RUST_LOG=.*|RUST_LOG=ironclaw=info,lunarwing=info,$name=debug|" "$env_file"
+    _sed_i "s|^RUST_LOG=.*|RUST_LOG=ironclaw=info,lunarwing=info,$name=debug|" "$env_file"
   fi
 }
 
