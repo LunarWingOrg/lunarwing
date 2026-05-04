@@ -77,6 +77,7 @@ Commands:
   configure-bridge [args]  run scripts/xmpp-configure.sh with the test env
   rate-limit [args]        run scripts/xmpp-rate-limit.sh with the test env
   render-systemd           write systemd --user unit files under the test root
+  render-launchd           write launchd user agent plists under the test root (macOS)
   logs [lines]             tail all test logs (including docker)
 
   mt-init                  init two isolated tenants (A + B) with offset ports
@@ -85,6 +86,7 @@ Commands:
   mt-down                  tear down both tenant stacks (preserves state)
   mt-status                show status of both tenants
   mt-tokens                print gateway auth tokens for both tenants
+  mt-render-launchd        render launchd agents for both tenants (macOS)
 
 Environment:
   LUNARWING_TEST_ROOT      default: ${TMPDIR:-/tmp}/lunarwing-xmpp-test
@@ -306,7 +308,7 @@ tool_binary_name() {
 
 init_dirs() {
   mkdir -p "$ENV_DIR" "$LOG_DIR" "$RUN_DIR" "$STATE_DIR/xmpp" "$SYSTEMD_DIR" \
-    "$CHANNELS_DIR" "$TOOLS_DIR"
+    "$LAUNCHD_DIR" "$CHANNELS_DIR" "$TOOLS_DIR"
   chmod 700 "$ENV_DIR" "$RUN_DIR" "$STATE_DIR" 2>/dev/null || true
 }
 
@@ -1503,6 +1505,98 @@ EOF
   say "  systemctl --user start $main_service"
 }
 
+# Convert an env file to plist EnvironmentVariables dict entries.
+_env_file_to_plist_dict() {
+  local env_file="$1"
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    # Strip surrounding quotes
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    printf '    <key>%s</key>\n    <string>%s</string>\n' "$key" "$value"
+  done < "$env_file"
+}
+
+# Write a single launchd plist file.
+_write_plist() {
+  local path="$1" label="$2" workdir="$3" env_file="$4" stdout_log="$5" stderr_log="$6"
+  shift 6
+  # Remaining args are the ProgramArguments
+  local args_xml=""
+  for arg in "$@"; do
+    args_xml="${args_xml}    <string>${arg}</string>
+"
+  done
+
+  local env_dict=""
+  if [[ -f "$env_file" ]]; then
+    env_dict="$(_env_file_to_plist_dict "$env_file")"
+  fi
+  # Always disable interactive CLI in daemon mode
+  env_dict="${env_dict}    <key>CLI_ENABLED</key>
+    <string>false</string>
+"
+
+  cat >"$path" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+${args_xml}  </array>
+  <key>WorkingDirectory</key>
+  <string>${workdir}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+${env_dict}  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${stdout_log}</string>
+  <key>StandardErrorPath</key>
+  <string>${stderr_log}</string>
+</dict>
+</plist>
+PLIST
+}
+
+render_launchd() {
+  ensure_env
+  local proxy_label="com.lunarwing.test.proxy"
+  local bridge_label="com.lunarwing.test.bridge"
+  local daemon_label="com.lunarwing.test.daemon"
+
+  _write_plist "$LAUNCHD_DIR/${proxy_label}.plist" \
+    "$proxy_label" "$REPO_ROOT" "$ENV_DIR/proxy.env" \
+    "$LOG_DIR/proxy.stdout.log" "$LOG_DIR/proxy.stderr.log" \
+    "$(command -v python3)" "$(proxy_bin)" \
+    "--port" "$PROXY_PORT" "--bind" "$PROXY_BIND" "--tensorzero" "$TENSORZERO_URL"
+
+  _write_plist "$LAUNCHD_DIR/${bridge_label}.plist" \
+    "$bridge_label" "$REPO_ROOT/bridges/xmpp-bridge" "$ENV_DIR/xmpp-bridge.env" \
+    "$LOG_DIR/xmpp-bridge.stdout.log" "$LOG_DIR/xmpp-bridge.stderr.log" \
+    "$(bridge_bin)"
+
+  _write_plist "$LAUNCHD_DIR/${daemon_label}.plist" \
+    "$daemon_label" "$REPO_ROOT" "$ENV_DIR/lunarwing.env" \
+    "$LOG_DIR/lunarwing.stdout.log" "$LOG_DIR/lunarwing.stderr.log" \
+    "$(lunarwing_bin)" "--no-onboard" "run"
+
+  say "wrote: $LAUNCHD_DIR/${proxy_label}.plist"
+  say "wrote: $LAUNCHD_DIR/${bridge_label}.plist"
+  say "wrote: $LAUNCHD_DIR/${daemon_label}.plist"
+  say "install for user-mode testing with:"
+  say "  cp $LAUNCHD_DIR/*.plist ~/Library/LaunchAgents/"
+  say "  launchctl load ~/Library/LaunchAgents/${daemon_label}.plist"
+}
+
 doctor() {
   say "=== environment ==="
   say "test root: $TEST_ROOT"
@@ -1652,18 +1746,33 @@ doctor() {
     fi
   fi
 
-  # Systemd
-  if command -v systemctl >/dev/null 2>&1; then
-    say ""
-    say "=== systemd (user) ==="
-    for svc_name in "$(lunarwing_service_name)" "$(bridge_service_name)" "$(proxy_service_name)"; do
-      if systemctl --user --no-pager --plain status "$svc_name" >/dev/null 2>&1; then
-        say "$svc_name: active"
-      else
-        say "$svc_name: not active or not installed"
+  # Service manager
+  case "$(uname -s)" in
+    Darwin)
+      say ""
+      say "=== launchd (user agents) ==="
+      for label in "com.lunarwing.test.daemon" "com.lunarwing.test.bridge" "com.lunarwing.test.proxy"; do
+        if launchctl list 2>/dev/null | grep -q "$label"; then
+          say "$label: loaded"
+        else
+          say "$label: not loaded"
+        fi
+      done
+      ;;
+    *)
+      if command -v systemctl >/dev/null 2>&1; then
+        say ""
+        say "=== systemd (user) ==="
+        for svc_name in "$(lunarwing_service_name)" "$(bridge_service_name)" "$(proxy_service_name)"; do
+          if systemctl --user --no-pager --plain status "$svc_name" >/dev/null 2>&1; then
+            say "$svc_name: active"
+          else
+            say "$svc_name: not active or not installed"
+          fi
+        done
       fi
-    done
-  fi
+      ;;
+  esac
 }
 
 logs() {
@@ -1820,6 +1929,12 @@ mt_init() {
 }
 
 _mt_detect_init() {
+  case "$(uname -s)" in
+    Darwin)
+      echo "launchd"
+      return 0
+      ;;
+  esac
   if command -v systemctl >/dev/null 2>&1 && systemctl --user status >/dev/null 2>&1; then
     echo "systemd"
   elif command -v rc-service >/dev/null 2>&1; then
@@ -1881,6 +1996,61 @@ _mt_uninstall_systemd_units() {
   systemctl --user daemon-reload
 }
 
+# ── launchd (macOS) multi-tenant support ──────────────────────────────────────
+
+_mt_install_launchd_agents() {
+  local tenant="$1" root="$2"
+  local agents_dir="$HOME/Library/LaunchAgents"
+  mkdir -p "$agents_dir"
+
+  say "  installing launchd agents for tenant $tenant"
+  for plist in "$root/launchd/"*.plist; do
+    [[ -f "$plist" ]] || continue
+    cp "$plist" "$agents_dir/"
+    say "    -> $(basename "$plist")"
+  done
+}
+
+_mt_start_launchd_tenant() {
+  local tenant="$1"
+  local agents_dir="$HOME/Library/LaunchAgents"
+
+  for plist in "$agents_dir/com.lunarwing.test.mt-${tenant}."*.plist; do
+    [[ -f "$plist" ]] || continue
+    launchctl load "$plist" 2>/dev/null || true
+  done
+  sleep 2
+
+  local daemon_label="com.lunarwing.test.mt-${tenant}.daemon"
+  if launchctl list 2>/dev/null | grep -q "$daemon_label"; then
+    say "  $daemon_label is loaded"
+  else
+    say "  WARNING: $daemon_label not loaded" >&2
+    return 1
+  fi
+}
+
+_mt_stop_launchd_tenant() {
+  local tenant="$1"
+  local agents_dir="$HOME/Library/LaunchAgents"
+
+  for plist in "$agents_dir/com.lunarwing.test.mt-${tenant}."*.plist; do
+    [[ -f "$plist" ]] || continue
+    local label
+    label=$(basename "$plist" .plist)
+    if launchctl list 2>/dev/null | grep -q "$label"; then
+      say "  unloading $label"
+      launchctl unload "$plist" 2>/dev/null || true
+    fi
+  done
+}
+
+_mt_uninstall_launchd_agents() {
+  local tenant="$1"
+  local agents_dir="$HOME/Library/LaunchAgents"
+  rm -f "$agents_dir/com.lunarwing.test.mt-${tenant}."*.plist
+}
+
 mt_up() {
   say "=== Multi-tenancy up ==="
 
@@ -1934,8 +2104,26 @@ mt_up() {
     say "--- Installing & starting Tenant B ---"
     _mt_install_systemd_units "b" "$(_mt_base_root)-b"
     _mt_start_systemd_tenant "b" || die "Tenant B failed to start"
+  elif [[ "$init_system" == "launchd" ]]; then
+    say "--- Rendering launchd agents ---"
+    _mt_run_a render-launchd || die "Tenant A render-launchd failed"
+    _mt_run_b render-launchd || die "Tenant B render-launchd failed"
+    say ""
+
+    say "--- Starting databases ---"
+    _mt_run_a start-postgres || die "Tenant A postgres failed"
+    _mt_run_b start-postgres || die "Tenant B postgres failed"
+    say ""
+
+    say "--- Installing & starting Tenant A ---"
+    _mt_install_launchd_agents "a" "$(_mt_base_root)-a"
+    _mt_start_launchd_tenant "a" || die "Tenant A failed to start"
+    say ""
+    say "--- Installing & starting Tenant B ---"
+    _mt_install_launchd_agents "b" "$(_mt_base_root)-b"
+    _mt_start_launchd_tenant "b" || die "Tenant B failed to start"
   else
-    # Fallback: direct process management
+    # Fallback: direct process management (OpenRC or unknown)
     say "--- Starting Tenant A (direct) ---"
     _mt_run_a up || die "Tenant A failed to start"
     say ""
@@ -2061,6 +2249,18 @@ mt_down() {
     say "--- Stopping databases ---"
     _mt_run_a stop-postgres || true
     _mt_run_b stop-postgres || true
+  elif [[ "$init_system" == "launchd" ]]; then
+    say "--- Stopping Tenant A (launchd) ---"
+    _mt_stop_launchd_tenant "a"
+    _mt_uninstall_launchd_agents "a"
+    say ""
+    say "--- Stopping Tenant B (launchd) ---"
+    _mt_stop_launchd_tenant "b"
+    _mt_uninstall_launchd_agents "b"
+    say ""
+    say "--- Stopping databases ---"
+    _mt_run_a stop-postgres || true
+    _mt_run_b stop-postgres || true
   else
     say "--- Stopping Tenant A ---"
     _mt_run_a down || true
@@ -2120,6 +2320,22 @@ mt_render_systemd() {
   say "  systemctl --user daemon-reload"
   say "  systemctl --user start lunarwing-mt-a.service"
   say "  systemctl --user start lunarwing-mt-b.service"
+}
+
+mt_render_launchd() {
+  say "=== Multi-tenancy render-launchd ==="
+  say ""
+  say "--- Tenant A ---"
+  _mt_run_a render-launchd || die "Tenant A render-launchd failed"
+  say ""
+  say "--- Tenant B ---"
+  _mt_run_b render-launchd || die "Tenant B render-launchd failed"
+  say ""
+  say "Install both for testing with:"
+  say "  cp $(_mt_base_root)-a/launchd/*.plist ~/Library/LaunchAgents/"
+  say "  cp $(_mt_base_root)-b/launchd/*.plist ~/Library/LaunchAgents/"
+  say "  launchctl load ~/Library/LaunchAgents/com.lunarwing.test.mt-a.*.plist"
+  say "  launchctl load ~/Library/LaunchAgents/com.lunarwing.test.mt-b.*.plist"
 }
 
 main() {
@@ -2222,6 +2438,9 @@ main() {
     render-systemd)
       render_systemd
       ;;
+    render-launchd)
+      render_launchd
+      ;;
     logs)
       logs "$@"
       ;;
@@ -2243,6 +2462,9 @@ main() {
       ;;
     mt-render-systemd)
       mt_render_systemd
+      ;;
+    mt-render-launchd)
+      mt_render_launchd
       ;;
     mt-tokens)
       mt_tokens
