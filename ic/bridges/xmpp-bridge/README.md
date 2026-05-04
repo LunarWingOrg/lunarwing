@@ -26,13 +26,13 @@ tests, live configuration wrappers, and generated user-systemd units, see
 
 ## Services
 
-On Linux, `ironclaw service install` detects the host service manager:
+On Linux, `lunarwing service install` detects the host service manager:
 
 - systemd: installs `lunarwing.service` and, when available, a companion
   `xmpp-bridge.service` user unit under `~/.config/systemd/user/`
 - OpenRC: installs `/etc/init.d/lunarwing` and `/etc/init.d/xmpp-bridge`
 
-`ironclaw service start` and `ironclaw service stop` manage both services
+`lunarwing service start` and `lunarwing service stop` manage both services
 together when the bridge binary is available.
 
 If you run LunarWing as a system service instead of a user service, use the

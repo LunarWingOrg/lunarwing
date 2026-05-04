@@ -2,7 +2,7 @@
 
 description="LunarWing AI assistant"
 
-: "${lunarwing_command:=/usr/local/bin/ironclaw}"
+: "${lunarwing_command:=/usr/local/bin/lunarwing}"
 : "${lunarwing_args:=--no-onboard run}"
 : "${lunarwing_user:=lunarwing}"
 : "${lunarwing_group:=lunarwing}"
@@ -19,7 +19,7 @@ description="LunarWing AI assistant"
 : "${lunarwing_allow_private_ips:=1}"
 : "${lunarwing_pgsslmode:=disable}"
 : "${lunarwing_base_dir:=/var/lib/lunarwing}"
-: "${lunarwing_rust_log:=ironclaw=info,lunarwing=info}"
+: "${lunarwing_rust_log:=lunarwing=info}"
 : "${lunarwing_umask:=0077}"
 : "${lunarwing_respawn_delay:=5}"
 : "${lunarwing_respawn_max:=5}"
@@ -56,6 +56,7 @@ load_env() {
     export AGENT_NAME="${lunarwing_agent_name}"
     export ALLOW_PRIVATE_IPS="${lunarwing_allow_private_ips}"
     export PGSSLMODE="${lunarwing_pgsslmode}"
+    export LUNARWING_BASE_DIR="${lunarwing_base_dir}"
     export IRONCLAW_BASE_DIR="${lunarwing_base_dir}"
     export RUST_LOG="${lunarwing_rust_log}"
 

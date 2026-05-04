@@ -13,8 +13,8 @@ mod idempotency_tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use ironclaw::import::openclaw::reader::OpenClawReader;
-    use ironclaw::import::{ImportOptions, ImportStats};
+    use lunarwing::import::openclaw::reader::OpenClawReader;
+    use lunarwing::import::{ImportOptions, ImportStats};
 
     /// Helper: Create minimal test OpenClaw
     async fn create_minimal_openclaw() -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {

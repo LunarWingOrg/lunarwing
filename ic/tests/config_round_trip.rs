@@ -4,13 +4,13 @@
 //! dotenvy, and assert values match. Each test uses a tempdir for isolation.
 //!
 //! These tests call the real `save_bootstrap_env_to` and `upsert_bootstrap_var_to`
-//! functions from `ironclaw::bootstrap`, ensuring test coverage of the actual
+//! functions from `lunarwing::bootstrap`, ensuring test coverage of the actual
 //! escaping/formatting logic rather than a reimplementation.
 
 use std::collections::HashMap;
 use tempfile::tempdir;
 
-use ironclaw::bootstrap::{save_bootstrap_env_to, upsert_bootstrap_var_to};
+use lunarwing::bootstrap::{save_bootstrap_env_to, upsert_bootstrap_var_to};
 
 /// Fake OpenAI API key for test use only. Mirrors the internal
 /// `TEST_OPENAI_API_KEY_LONG` constant from the main crate, which is not

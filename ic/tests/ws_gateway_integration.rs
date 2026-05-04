@@ -19,11 +19,11 @@ use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
-use ironclaw::channels::IncomingMessage;
-use ironclaw::channels::web::server::{GatewayState, start_server};
-use ironclaw::channels::web::sse::SseManager;
-use ironclaw::channels::web::types::SseEvent;
-use ironclaw::channels::web::ws::WsConnectionTracker;
+use lunarwing::channels::IncomingMessage;
+use lunarwing::channels::web::server::{GatewayState, start_server};
+use lunarwing::channels::web::sse::SseManager;
+use lunarwing::channels::web::types::SseEvent;
+use lunarwing::channels::web::ws::WsConnectionTracker;
 
 const AUTH_TOKEN: &str = "test-token-12345";
 const TIMEOUT: Duration = Duration::from_secs(5);
@@ -58,19 +58,19 @@ async fn start_test_server() -> (
         llm_provider: None,
         skill_registry: None,
         skill_catalog: None,
-        chat_rate_limiter: ironclaw::channels::web::server::PerUserRateLimiter::new(30, 60),
-        oauth_rate_limiter: ironclaw::channels::web::server::RateLimiter::new(10, 60),
-        webhook_rate_limiter: ironclaw::channels::web::server::RateLimiter::new(10, 60),
+        chat_rate_limiter: lunarwing::channels::web::server::PerUserRateLimiter::new(30, 60),
+        oauth_rate_limiter: lunarwing::channels::web::server::RateLimiter::new(10, 60),
+        webhook_rate_limiter: lunarwing::channels::web::server::RateLimiter::new(10, 60),
         registry_entries: Vec::new(),
         cost_guard: None,
         routine_engine: Arc::new(tokio::sync::RwLock::new(None)),
         startup_time: std::time::Instant::now(),
-        active_config: ironclaw::channels::web::server::ActiveConfigSnapshot::default(),
+        active_config: lunarwing::channels::web::server::ActiveConfigSnapshot::default(),
         secrets_store: None,
         db_auth: None,
     });
 
-    let auth = ironclaw::channels::web::auth::MultiAuthState::single(
+    let auth = lunarwing::channels::web::auth::MultiAuthState::single(
         AUTH_TOKEN.to_string(),
         "test-user".to_string(),
     );
@@ -363,7 +363,7 @@ async fn test_ws_multiple_events_in_sequence() {
 /// without deadlock. If locks are heavily contended, the test will timeout.
 #[tokio::test]
 async fn test_session_lock_not_held_during_api_operations() {
-    use ironclaw::agent::SessionManager;
+    use lunarwing::agent::SessionManager;
 
     let (_addr, _state, _agent_rx) = start_test_server().await;
 

@@ -5,7 +5,7 @@
 # Keep secrets in /etc/lunarwing/lunarwing.env (0600) unless you explicitly
 # prefer exporting them directly from this conf.d file.
 
-lunarwing_command="/usr/local/bin/ironclaw"
+lunarwing_command="/usr/local/bin/lunarwing"
 lunarwing_args="--no-onboard run"
 lunarwing_user="lunarwing"
 lunarwing_group="lunarwing"
@@ -20,7 +20,7 @@ lunarwing_cli_enabled="false"
 lunarwing_allow_private_ips="1"
 lunarwing_pgsslmode="disable"
 lunarwing_base_dir="/var/lib/lunarwing"
-lunarwing_rust_log="ironclaw=info,lunarwing=info"
+lunarwing_rust_log="lunarwing=info"
 
 # Optional OpenRC dependency wiring.
 # Set this when the companion bridge is installed and should be started first.

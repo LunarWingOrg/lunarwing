@@ -9,7 +9,7 @@ cargo fmt                                                    # format
 cargo clippy --all --benches --tests --examples --all-features  # lint (zero warnings)
 cargo test                                                   # unit tests
 cargo test --features integration                            # + PostgreSQL tests
-RUST_LOG=ironclaw=debug cargo run                            # run with logging
+RUST_LOG=lunarwing=debug cargo run                            # run with logging
 ```
 
 E2E tests: see `tests/e2e/CLAUDE.md`.
@@ -206,7 +206,7 @@ Pending -> InProgress -> Completed -> Submitted -> Accepted
 
 SKILL.md files extend the agent's prompt with domain-specific instructions. See `.claude/rules/skills.md` for full details.
 
-- **Trust model**: Trusted (user-placed in `~/.ironclaw/skills/` or workspace `skills/`, full tool access) vs Installed (registry, read-only tools)
+- **Trust model**: Trusted (user-placed in `~/.lunarwing/skills/` or workspace `skills/`, full tool access) vs Installed (registry, read-only tools)
 - **Selection pipeline**: gating (check bin/env/config requirements) -> scoring (keywords/patterns/tags) -> budget (fit within `SKILLS_MAX_TOKENS`) -> attenuation (trust-based tool ceiling)
 - **Skill tools**: `skill_list`, `skill_search`, `skill_install`, `skill_remove`
 
@@ -228,9 +228,9 @@ Persistent memory with hybrid search (FTS + vector via RRF). Four tools: `memory
 ## Debugging
 
 ```bash
-RUST_LOG=ironclaw=trace cargo run           # verbose
-RUST_LOG=ironclaw::agent=debug cargo run    # agent module only
-RUST_LOG=ironclaw=debug,tower_http=debug cargo run  # + HTTP request logging
+RUST_LOG=lunarwing=trace cargo run           # verbose
+RUST_LOG=lunarwing::agent=debug cargo run    # agent module only
+RUST_LOG=lunarwing=debug,tower_http=debug cargo run  # + HTTP request logging
 ```
 
 ## Current Limitations

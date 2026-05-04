@@ -7,7 +7,7 @@
 #   $LUNARWING_BASE_DIR/workspace-template/
 #
 # If your OpenAI-compatible endpoint insists on a key, set it at launch time:
-#   LLM_API_KEY=unneeded ironclaw run
+#   LLM_API_KEY=unneeded lunarwing run
 
 llm_backend = "openai_compatible"
 selected_model = "tensorzero::function_name::ironclaw"

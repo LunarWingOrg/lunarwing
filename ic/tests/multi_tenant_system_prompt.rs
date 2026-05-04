@@ -23,9 +23,9 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use ironclaw::channels::IncomingMessage;
-    use ironclaw::llm::Role;
-    use ironclaw::workspace::Workspace;
+    use lunarwing::channels::IncomingMessage;
+    use lunarwing::llm::Role;
+    use lunarwing::workspace::Workspace;
 
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::{LlmTrace, TraceResponse, TraceStep};
@@ -71,7 +71,7 @@ mod tests {
 
     /// Seed identity files for a user by creating a workspace scoped to that
     /// user and writing IDENTITY.md.
-    async fn seed_identity(db: &Arc<dyn ironclaw::db::Database>, user_id: &str, content: &str) {
+    async fn seed_identity(db: &Arc<dyn lunarwing::db::Database>, user_id: &str, content: &str) {
         let ws = Workspace::new_with_db(user_id, db.clone());
         ws.write("IDENTITY.md", content)
             .await
@@ -82,7 +82,7 @@ mod tests {
     ///
     /// The system prompt is the first message with role=System in the first
     /// LLM request for a given turn.
-    fn extract_system_prompt(requests: &[Vec<ironclaw::llm::ChatMessage>]) -> Option<String> {
+    fn extract_system_prompt(requests: &[Vec<lunarwing::llm::ChatMessage>]) -> Option<String> {
         requests.last().and_then(|msgs| {
             msgs.iter()
                 .find(|m| matches!(m.role, Role::System))

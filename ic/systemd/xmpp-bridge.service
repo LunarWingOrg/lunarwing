@@ -23,6 +23,7 @@ Group=lunarwing
 WorkingDirectory=/var/lib/lunarwing
 
 # Non-secret defaults. EnvironmentFile values can override these.
+Environment=LUNARWING_BASE_DIR=/var/lib/lunarwing
 Environment=IRONCLAW_BASE_DIR=/var/lib/lunarwing
 Environment=XMPP_BRIDGE_BIND=127.0.0.1:8787
 Environment=XMPP_BRIDGE_MAX_MESSAGES=1024

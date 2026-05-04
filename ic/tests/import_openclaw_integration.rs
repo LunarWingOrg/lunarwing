@@ -8,10 +8,10 @@
 
 #[cfg(feature = "import")]
 mod import_integration_tests {
-    use ironclaw::db::Database;
-    use ironclaw::db::libsql::LibSqlBackend;
-    use ironclaw::import::ImportStats;
-    use ironclaw::import::openclaw::reader::OpenClawReader;
+    use lunarwing::db::Database;
+    use lunarwing::db::libsql::LibSqlBackend;
+    use lunarwing::import::ImportStats;
+    use lunarwing::import::openclaw::reader::OpenClawReader;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -19,12 +19,12 @@ mod import_integration_tests {
 
     /// Helper: Create a test database and return both the DB and temp dir
     async fn create_test_db()
-    -> Result<(Arc<dyn ironclaw::db::Database>, TempDir), Box<dyn std::error::Error>> {
+    -> Result<(Arc<dyn lunarwing::db::Database>, TempDir), Box<dyn std::error::Error>> {
         let temp_dir = TempDir::new()?;
         let db_path = temp_dir.path().join("test.db");
         let backend = LibSqlBackend::new_local(&db_path).await?;
         backend.run_migrations().await?;
-        let db: Arc<dyn ironclaw::db::Database> = Arc::new(backend);
+        let db: Arc<dyn lunarwing::db::Database> = Arc::new(backend);
         Ok((db, temp_dir))
     }
 
@@ -206,7 +206,7 @@ mod import_integration_tests {
         let (_db, _db_temp) = create_test_db().await.expect("DB creation failed");
 
         // Create import options
-        let opts = ironclaw::import::ImportOptions {
+        let opts = lunarwing::import::ImportOptions {
             openclaw_path: openclaw_path.clone(),
             dry_run: false,
             re_embed: false,
@@ -245,7 +245,7 @@ mod import_integration_tests {
         let before_count = before_import.len();
 
         // Create import options in DRY-RUN mode
-        let opts = ironclaw::import::ImportOptions {
+        let opts = lunarwing::import::ImportOptions {
             openclaw_path: openclaw_path.clone(),
             dry_run: true, // ← KEY: dry_run is enabled
             re_embed: false,

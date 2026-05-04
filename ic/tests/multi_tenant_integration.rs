@@ -19,18 +19,18 @@ use axum::middleware;
 use axum::routing::{get, post};
 use tower::ServiceExt;
 
-use ironclaw::channels::IncomingMessage;
-use ironclaw::channels::web::auth::{
+use lunarwing::channels::IncomingMessage;
+use lunarwing::channels::web::auth::{
     AuthenticatedUser, MultiAuthState, UserIdentity, auth_middleware,
 };
-use ironclaw::channels::web::server::{
+use lunarwing::channels::web::server::{
     GatewayState, PerUserRateLimiter, RateLimiter, start_server,
 };
-use ironclaw::channels::web::sse::SseManager;
-use ironclaw::channels::web::test_helpers::TestGatewayBuilder;
-use ironclaw::channels::web::ws::WsConnectionTracker;
-use ironclaw::context::JobContext;
-use ironclaw::db::Database;
+use lunarwing::channels::web::sse::SseManager;
+use lunarwing::channels::web::test_helpers::TestGatewayBuilder;
+use lunarwing::channels::web::ws::WsConnectionTracker;
+use lunarwing::context::JobContext;
+use lunarwing::db::Database;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -307,7 +307,7 @@ fn per_user_rate_limiter_single_user_mode() {
 
 #[tokio::test]
 async fn sse_scoped_event_only_delivered_to_target_user() {
-    use ironclaw::channels::web::types::SseEvent;
+    use lunarwing::channels::web::types::SseEvent;
     use tokio_stream::StreamExt;
 
     let manager = SseManager::new();
@@ -352,7 +352,7 @@ async fn sse_scoped_event_only_delivered_to_target_user() {
 
 #[tokio::test]
 async fn sse_global_event_delivered_to_all_users() {
-    use ironclaw::channels::web::types::SseEvent;
+    use lunarwing::channels::web::types::SseEvent;
     use tokio_stream::StreamExt;
 
     let manager = SseManager::new();
@@ -385,7 +385,7 @@ async fn sse_global_event_delivered_to_all_users() {
 
 #[tokio::test]
 async fn sse_user_b_event_not_visible_to_user_a() {
-    use ironclaw::channels::web::types::SseEvent;
+    use lunarwing::channels::web::types::SseEvent;
     use tokio_stream::StreamExt;
 
     let manager = SseManager::new();
@@ -418,7 +418,7 @@ async fn sse_user_b_event_not_visible_to_user_a() {
 
 #[tokio::test]
 async fn sse_unscoped_subscriber_receives_all_events() {
-    use ironclaw::channels::web::types::SseEvent;
+    use lunarwing::channels::web::types::SseEvent;
     use tokio_stream::StreamExt;
 
     let manager = SseManager::new();
@@ -885,7 +885,7 @@ async fn full_server_jobs_endpoint_rejected_without_auth() {
 #[tokio::test]
 async fn full_server_ws_multi_user_event_isolation() {
     use futures::StreamExt;
-    use ironclaw::channels::web::types::SseEvent;
+    use lunarwing::channels::web::types::SseEvent;
     use tokio_tungstenite::tungstenite::Message;
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
@@ -980,7 +980,7 @@ async fn start_multi_user_server_with_db() -> (
 ) {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let path = temp_dir.path().join("test.db");
-    let backend = ironclaw::db::libsql::LibSqlBackend::new_local(&path)
+    let backend = lunarwing::db::libsql::LibSqlBackend::new_local(&path)
         .await
         .expect("failed to create test DB");
     backend
@@ -1026,7 +1026,7 @@ async fn start_multi_user_server_with_db() -> (
     });
 
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let bound = ironclaw::channels::web::server::start_server(addr, state.clone(), auth.into())
+    let bound = lunarwing::channels::web::server::start_server(addr, state.clone(), auth.into())
         .await
         .expect("Failed to start server with DB");
 

@@ -14,8 +14,8 @@ mod tests {
     use async_trait::async_trait;
     use serde_json::json;
 
-    use ironclaw::context::JobContext;
-    use ironclaw::tools::{Tool, ToolError, ToolOutput};
+    use lunarwing::context::JobContext;
+    use lunarwing::tools::{Tool, ToolError, ToolOutput};
 
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;

@@ -512,7 +512,7 @@ mod tests {
     fn test_print_log_entry_json() {
         let entry = serde_json::json!({
             "level": "INFO",
-            "target": "ironclaw::agent",
+            "target": "lunarwing::agent",
             "message": "test message",
             "timestamp": "2024-01-15T10:30:00.000Z"
         });

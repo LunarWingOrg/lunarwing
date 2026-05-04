@@ -125,7 +125,7 @@ fn reject_if_injected(path: &str, content: &str) -> Result<(), WorkspaceError> {
             .map(|w| w.description.as_str())
             .collect();
         tracing::warn!(
-            target: "ironclaw::safety",
+            target: "lunarwing::safety",
             file = %path,
             "workspace write rejected: prompt injection detected ({})",
             descriptions.join("; "),
@@ -137,7 +137,7 @@ fn reject_if_injected(path: &str, content: &str) -> Result<(), WorkspaceError> {
     }
     for w in &warnings {
         tracing::warn!(
-            target: "ironclaw::safety",
+            target: "lunarwing::safety",
             file = %path, severity = ?w.severity, pattern = %w.pattern,
             "workspace write warning: {}", w.description,
         );

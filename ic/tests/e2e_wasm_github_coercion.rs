@@ -25,7 +25,7 @@ mod tests {
 
     use serde_json::json;
 
-    use ironclaw::llm::recording::{HttpExchange, HttpExchangeRequest, HttpExchangeResponse};
+    use lunarwing::llm::recording::{HttpExchange, HttpExchangeRequest, HttpExchangeResponse};
 
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::{

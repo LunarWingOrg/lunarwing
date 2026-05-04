@@ -7,7 +7,7 @@ use axum::{
     extract::Query,
     routing::{get, post},
 };
-use ironclaw::channels::relay::client::{ChannelEvent, RelayClient};
+use lunarwing::channels::relay::client::{ChannelEvent, RelayClient};
 use secrecy::SecretString;
 use serde::Deserialize;
 use tokio::net::TcpListener;

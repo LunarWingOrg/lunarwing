@@ -18,8 +18,8 @@ cargo clippy --all --benches --tests --examples --all-features  # zero warnings 
 cargo test                          # unit tests
 cargo test --features integration   # + PostgreSQL tests
 cargo test test_name -- --nocapture # single test
-cargo build --release --bin ironclaw
-RUST_LOG=ironclaw=debug cargo run
+cargo build --release --bin lunarwing
+RUST_LOG=lunarwing=debug cargo run
 ```
 
 Feature-flag compilation (required for dual-backend work):
@@ -51,7 +51,7 @@ Quick launcher from `ic/`:
 LUNARWING_BASE_DIR=/path/to/instance ./run.sh
 ```
 
-`run.sh` defaults `AGENT_NAME=lunarwing`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `HTTP_PORT=9098`. It runs `target/release/ironclaw run`.
+`run.sh` defaults `AGENT_NAME=lunarwing`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `HTTP_PORT=9098`. It runs `target/release/lunarwing run`.
 
 Fresh instance setup:
 ```bash
@@ -180,9 +180,9 @@ Gotify is a WASM tool, not a channel. Routines needing Gotify notifications shou
 ## Debugging
 
 ```bash
-RUST_LOG=ironclaw=trace cargo run                        # verbose all modules
-RUST_LOG=ironclaw::agent=debug cargo run                 # agent loop only
-RUST_LOG=ironclaw=debug,tower_http=debug cargo run       # + HTTP request logging
+RUST_LOG=lunarwing=trace cargo run                        # verbose all modules
+RUST_LOG=lunarwing::agent=debug cargo run                 # agent loop only
+RUST_LOG=lunarwing=debug,tower_http=debug cargo run       # + HTTP request logging
 ```
 
 ## Routine System

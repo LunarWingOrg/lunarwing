@@ -1,0 +1,514 @@
+ic/CHANGELOG.md:354:- add IRONCLAW_BASE_DIR env var with LazyLock caching ([#397](https://github.com/nearai/ironclaw/pull/397))
+ic/run.sh:13:if [[ -n "${LUNARWING_BASE_DIR:-}" && -z "${IRONCLAW_BASE_DIR:-}" ]]; then
+ic/run.sh:14:  export IRONCLAW_BASE_DIR="$LUNARWING_BASE_DIR"
+ic/src/worker/container.rs:71:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/src/config/relay.rs:73:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/config/relay.rs:75:            instance_id: aliased_env("LUNARWING_INSTANCE_ID", "IRONCLAW_INSTANCE_ID"),
+ic/src/config/relay.rs:129:            "IRONCLAW_OAUTH_CALLBACK_URL" => Some("https://tunnel.example.com".into()),
+ic/src/config/relay.rs:130:            "IRONCLAW_INSTANCE_ID" => Some("my-instance".into()),
+ic/src/config/relay.rs:152:            "IRONCLAW_OAUTH_CALLBACK_URL" => Some("https://legacy.example.com".into()),
+ic/src/config/relay.rs:154:            "IRONCLAW_INSTANCE_ID" => Some("legacy-instance".into()),
+ic/src/worker/api.rs:3://! Every request includes a bearer token from `IRONCLAW_WORKER_TOKEN` env var.
+ic/src/worker/api.rs:120:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment.
+ic/src/worker/api.rs:123:            std::env::var("IRONCLAW_WORKER_TOKEN").map_err(|_| WorkerError::MissingToken)?;
+ic/src/worker/acp_bridge.rs:62:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/src/worker/claude_bridge.rs:149:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/src/config/mod.rs:391:                "LUNARWING_OWNER_ID (or legacy IRONCLAW_OWNER_ID) resolved to the legacy 'default' scope explicitly; durable state will keep legacy owner behavior"
+ic/src/cli/oauth_defaults.rs:34:const GOOGLE_CLIENT_ID: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_ID") {
+ic/src/cli/oauth_defaults.rs:38:const GOOGLE_CLIENT_SECRET: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_SECRET") {
+ic/src/cli/oauth_defaults.rs:60:        "google_oauth_token" => Some("IRONCLAW_GOOGLE_CLIENT_ID"),
+ic/src/cli/oauth_defaults.rs:523:/// `IRONCLAW_OAUTH_CALLBACK_URL`) is set to a non-loopback URL, meaning the
+ic/src/cli/oauth_defaults.rs:541:/// `IRONCLAW_OAUTH_PROXY_AUTH_TOKEN`). Existing hosted instances continue to
+ic/src/cli/oauth_defaults.rs:1202:        let original_url = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1206:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1220:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1229:        let original_url = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1233:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1241:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1252:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1256:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/cli/oauth_defaults.rs:1265:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1267:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1417:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1420:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1425:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1433:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1437:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/cli/oauth_defaults.rs:1444:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1446:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1454:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1457:            std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", "http://127.0.0.1:3001");
+ic/src/cli/oauth_defaults.rs:1462:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1464:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1472:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/cli/oauth_defaults.rs:1475:            std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", "");
+ic/src/cli/oauth_defaults.rs:1480:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/cli/oauth_defaults.rs:1482:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/cli/oauth_defaults.rs:1492:        let original = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/src/cli/oauth_defaults.rs:1495:            std::env::set_var("IRONCLAW_INSTANCE_NAME", "kind-deer");
+ic/src/cli/oauth_defaults.rs:1504:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/src/cli/oauth_defaults.rs:1506:                std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/src/cli/oauth_defaults.rs:1516:        let original = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/src/cli/oauth_defaults.rs:1520:            std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/src/cli/oauth_defaults.rs:1530:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/src/cli/oauth_defaults.rs:1543:        let original_ic = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/src/cli/oauth_defaults.rs:1547:            std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/src/cli/oauth_defaults.rs:1557:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/src/config/helpers.rs:43:        "IRONCLAW_OAUTH_CALLBACK_URL" | "LUNARWING_OAUTH_CALLBACK_URL" => (
+ic/src/config/helpers.rs:45:            Some("IRONCLAW_OAUTH_CALLBACK_URL"),
+ic/src/config/helpers.rs:47:        "IRONCLAW_OAUTH_EXCHANGE_URL" | "LUNARWING_OAUTH_EXCHANGE_URL" => (
+ic/src/config/helpers.rs:49:            Some("IRONCLAW_OAUTH_EXCHANGE_URL"),
+ic/src/config/helpers.rs:51:        "IRONCLAW_OAUTH_PROXY_AUTH_TOKEN" | "LUNARWING_OAUTH_PROXY_AUTH_TOKEN" => (
+ic/src/config/helpers.rs:53:            Some("IRONCLAW_OAUTH_PROXY_AUTH_TOKEN"),
+ic/src/config/helpers.rs:55:        "IRONCLAW_OWNER_ID" | "LUNARWING_OWNER_ID" => {
+ic/src/config/helpers.rs:56:            ("LUNARWING_OWNER_ID", Some("IRONCLAW_OWNER_ID"))
+ic/src/config/helpers.rs:58:        "IRONCLAW_IN_DOCKER" | "LUNARWING_IN_DOCKER" => {
+ic/src/config/helpers.rs:59:            ("LUNARWING_IN_DOCKER", Some("IRONCLAW_IN_DOCKER"))
+ic/src/config/helpers.rs:61:        "IRONCLAW_DISABLE_RESTART" | "LUNARWING_DISABLE_RESTART" => (
+ic/src/config/helpers.rs:63:            Some("IRONCLAW_DISABLE_RESTART"),
+ic/src/config/helpers.rs:65:        "IRONCLAW_RESTART_DELAY" | "LUNARWING_RESTART_DELAY" => {
+ic/src/config/helpers.rs:66:            ("LUNARWING_RESTART_DELAY", Some("IRONCLAW_RESTART_DELAY"))
+ic/src/config/helpers.rs:68:        "IRONCLAW_MAX_FAILURES" | "LUNARWING_MAX_FAILURES" => {
+ic/src/config/helpers.rs:69:            ("LUNARWING_MAX_FAILURES", Some("IRONCLAW_MAX_FAILURES"))
+ic/src/config/helpers.rs:71:        "IRONCLAW_SERVICE_MANAGER" | "LUNARWING_SERVICE_MANAGER" => (
+ic/src/config/helpers.rs:73:            Some("IRONCLAW_SERVICE_MANAGER"),
+ic/src/config/helpers.rs:75:        "IRONCLAW_INSTANCE_ID" | "LUNARWING_INSTANCE_ID" => {
+ic/src/config/helpers.rs:76:            ("LUNARWING_INSTANCE_ID", Some("IRONCLAW_INSTANCE_ID"))
+ic/src/config/helpers.rs:78:        "IRONCLAW_INSTANCE_NAME" | "LUNARWING_INSTANCE_NAME" => {
+ic/src/config/helpers.rs:79:            ("LUNARWING_INSTANCE_NAME", Some("IRONCLAW_INSTANCE_NAME"))
+ic/src/config/helpers.rs:408:        let key = "IRONCLAW_TEST_RUNTIME_OVERRIDE_42";
+ic/src/config/helpers.rs:422:        let key = "IRONCLAW_TEST_OPTIONAL_ENV_OVERRIDE_42";
+ic/src/config/helpers.rs:434:        let key = "IRONCLAW_TEST_ENV_PRIORITY_42";
+ic/src/config/helpers.rs:456:        let old_ironclaw = std::env::var("IRONCLAW_IN_DOCKER").ok();
+ic/src/config/helpers.rs:459:            std::env::set_var("IRONCLAW_IN_DOCKER", "false");
+ic/src/config/helpers.rs:463:            env_or_override("IRONCLAW_IN_DOCKER"),
+ic/src/config/helpers.rs:476:            Some(val) => unsafe { std::env::set_var("IRONCLAW_IN_DOCKER", val) },
+ic/src/config/helpers.rs:477:            None => unsafe { std::env::remove_var("IRONCLAW_IN_DOCKER") },
+ic/src/config/helpers.rs:485:        let old_ironclaw = std::env::var("IRONCLAW_OWNER_ID").ok();
+ic/src/config/helpers.rs:488:            std::env::set_var("IRONCLAW_OWNER_ID", "legacy-owner");
+ic/src/config/helpers.rs:496:            optional_env("IRONCLAW_OWNER_ID").unwrap(),
+ic/src/config/helpers.rs:505:            Some(val) => unsafe { std::env::set_var("IRONCLAW_OWNER_ID", val) },
+ic/src/config/helpers.rs:506:            None => unsafe { std::env::remove_var("IRONCLAW_OWNER_ID") },
+ic/src/skills/gating.rs:126:            env: vec!["__IRONCLAW_TEST_NONEXISTENT_VAR__".to_string()],
+ic/crates/ironclaw_skills/src/gating.rs:126:            env: vec!["__IRONCLAW_TEST_NONEXISTENT_VAR__".to_string()],
+ic/docs/LUNARWING_XMPP_TESTING.md:59:- `state/` for the isolated `IRONCLAW_BASE_DIR`, libSQL database, and OMEMO
+ic/docs/LUNARWING_XMPP_TESTING.md:70:- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+ic/docs/LUNARWING_XMPP_TESTING.md:152:Use your isolated `IRONCLAW_BASE_DIR` for onboarding or live credentials instead
+ic/src/extensions/manager.rs:589:    /// used to build OAuth redirect URIs when `IRONCLAW_OAUTH_CALLBACK_URL` is not set.
+ic/src/extensions/manager.rs:601:    /// - `IRONCLAW_OAUTH_CALLBACK_URL` is set to a non-loopback URL, OR
+ic/src/extensions/manager.rs:622:    /// 1. `IRONCLAW_OAUTH_CALLBACK_URL` env var (via `callback_url()`)
+ic/src/extensions/manager.rs:7570:    // `IRONCLAW_OAUTH_CALLBACK_URL` env var, ignoring `self.tunnel_url`.
+ic/src/extensions/manager.rs:7605:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7608:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7619:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7627:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7629:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7640:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7648:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7650:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7661:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7667:    /// Clears `IRONCLAW_OAUTH_CALLBACK_URL` for the duration, restoring on drop.
+ic/src/extensions/manager.rs:7676:            let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7679:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7693:                    std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7695:                    std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7734:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7737:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/extensions/manager.rs:7750:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7752:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/extensions/manager.rs:7760:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/src/extensions/manager.rs:7763:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/extensions/manager.rs:7776:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/src/extensions/manager.rs:7778:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/src/service.rs:918:        "sudo env IRONCLAW_BASE_DIR={} {} service {}",
+ic/src/service.rs:1053:         (legacy IRONCLAW_SERVICE_MANAGER is also supported)."
+ic/src/main.rs:464:            .or_else(|_| std::env::var("IRONCLAW_SOCKET"))
+ic/docs/plans/2026-02-24-automated-qa.md:634:        env={"IRONCLAW_HOME": str(tmp_ironclaw_home), **base_env},
+ic/docs/plans/2026-02-24-automated-qa.md:649:        env={"IRONCLAW_HOME": str(tmp_ironclaw_home), **base_env},
+ic/src/channels/wasm/bundled.rs:39:/// 1. `IRONCLAW_CHANNELS_SRC` env var
+ic/src/channels/wasm/bundled.rs:42:    if let Ok(dir) = std::env::var("IRONCLAW_CHANNELS_SRC") {
+ic/src/orchestrator/reaper.rs:666:    // They require Docker to be running and the IRONCLAW_E2E_DOCKER_TESTS
+ic/src/orchestrator/reaper.rs:669:    // Run with: IRONCLAW_E2E_DOCKER_TESTS=1 cargo test orchestrator::reaper::e2e_tests --lib -- --nocapture
+ic/src/orchestrator/reaper.rs:676:            std::env::var("IRONCLAW_E2E_DOCKER_TESTS").is_ok()
+ic/src/orchestrator/reaper.rs:683:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/src/orchestrator/reaper.rs:769:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/src/orchestrator/reaper.rs:866:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/src/app.rs:846:            // $IRONCLAW_BASE_DIR/workspace-template/ when it exists.
+ic/src/llm/CLAUDE.md:28:| `recording.rs` | `RecordingLlm` — trace capture for E2E replay testing (`IRONCLAW_RECORD_TRACE`) |
+ic/src/llm/CLAUDE.md:206:  → RecordingLlm            (trace capture; only when IRONCLAW_RECORD_TRACE is set)
+ic/src/llm/CLAUDE.md:241:Set `IRONCLAW_RECORD_TRACE=1` to enable live trace recording via `RecordingLlm`. Traces are JSON files containing: memory snapshot, HTTP exchanges from tools, and LLM steps (user inputs, text responses, tool call responses). Replay these in E2E tests via `TraceLlm`. Configure output path with `IRONCLAW_TRACE_OUTPUT` (default: `trace_{timestamp}.json`).
+ic/src/orchestrator/job_manager.rs:321:            format!("IRONCLAW_WORKER_TOKEN={}", token),
+ic/src/orchestrator/job_manager.rs:322:            format!("IRONCLAW_JOB_ID={}", job_id),
+ic/src/orchestrator/job_manager.rs:323:            format!("IRONCLAW_ORCHESTRATOR_URL={}", orchestrator_url),
+ic/src/orchestrator/job_manager.rs:331:            env_vec.push("IRONCLAW_WORKSPACE=/workspace".to_string());
+ic/customic/src/channels/wasm/bundled.rs:36:/// 1. `IRONCLAW_CHANNELS_SRC` env var
+ic/customic/src/channels/wasm/bundled.rs:39:    if let Ok(dir) = std::env::var("IRONCLAW_CHANNELS_SRC") {
+ic/src/channels/web/server.rs:734:/// `IRONCLAW_OAUTH_CALLBACK_URL`) points to the gateway (e.g.,
+ic/src/cli/repl.rs:58:            } else if let Ok(path) = std::env::var("IRONCLAW_SOCKET") {
+ic/src/llm/oauth_helpers.rs:39:/// `IRONCLAW_OAUTH_CALLBACK_URL` also works), which is useful for remote/VPS
+ic/scripts/lunarwing-xmpp-test-env.sh:378:  append_env_if_missing "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
+ic/scripts/lunarwing-xmpp-test-env.sh:380:  replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
+ic/scripts/lunarwing-xmpp-test-env.sh:387:  append_env_if_missing "$path" "IRONCLAW_BASE_DIR" "$STATE_DIR"
+ic/scripts/lunarwing-xmpp-test-env.sh:418:      printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
+ic/scripts/lunarwing-xmpp-test-env.sh:419:      printf 'IRONCLAW_SOCKET=%s\n' "$(harness_socket_path)"
+ic/scripts/lunarwing-xmpp-test-env.sh:511:      printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
+ic/scripts/lunarwing-xmpp-test-env.sh:1386:  say "starting LunarWing with isolated IRONCLAW_BASE_DIR=$IRONCLAW_BASE_DIR"
+ic/scripts/lunarwing-xmpp-test-env.sh:1430:    say "launching REPLv2 client via socket ${LUNARWING_SOCKET:-${IRONCLAW_SOCKET:-$(harness_socket_path)}}"
+ic/deploy/env.example:6:# IRONCLAW_VERSION=v1.0.0
+ic/deploy/run.sh:13:if [[ -n "${LUNARWING_BASE_DIR:-}" && -z "${IRONCLAW_BASE_DIR:-}" ]]; then
+ic/deploy/run.sh:14:  export IRONCLAW_BASE_DIR="$LUNARWING_BASE_DIR"
+ic/src/llm/recording.rs:13://! Enable by setting `IRONCLAW_RECORD_TRACE=1` at runtime.
+ic/src/llm/recording.rs:489:    /// - `IRONCLAW_RECORD_TRACE` — any non-empty value enables recording
+ic/src/llm/recording.rs:490:    /// - `IRONCLAW_TRACE_OUTPUT` — file path (default: `./trace_{timestamp}.json`)
+ic/src/llm/recording.rs:491:    /// - `IRONCLAW_TRACE_MODEL_NAME` — model_name field (default: `recorded-{inner.model_name()}`)
+ic/src/llm/recording.rs:493:        let enabled = std::env::var("IRONCLAW_RECORD_TRACE")
+ic/src/llm/recording.rs:498:        let output_path = std::env::var("IRONCLAW_TRACE_OUTPUT")
+ic/src/llm/recording.rs:507:        let model_name = std::env::var("IRONCLAW_TRACE_MODEL_NAME")
+ic/src/llm/recording.rs:975:        unsafe { std::env::remove_var("IRONCLAW_RECORD_TRACE") };
+ic/src/agent/commands.rs:543:                         The LUNARWING_IN_DOCKER environment variable (or legacy IRONCLAW_IN_DOCKER) must be set to 'true' for Docker deployments."
+ic/tests/e2e/CLAUDE.md:79:| `hosted_oauth_refresh_server` | Starts a second ironclaw instance with a dedicated libSQL DB and `GOOGLE_OAUTH_CLIENT_ID=hosted-google-client-id`, while still pointing `IRONCLAW_OAUTH_EXCHANGE_URL` at `mock_llm.py`. Yields a dict with `base_url`, `db_path`, `gateway_user_id`, and `mock_llm_url` for the hosted refresh regression scenario. |
+ic/deploy/ironclaw.service:10:# uncontrolled deployments. Update IRONCLAW_VERSION in /opt/ironclaw/.env
+ic/deploy/ironclaw.service:12:ExecStartPre=/bin/bash -c 'docker pull us-central1-docker.pkg.dev/ironclaw-prod/ironclaw/agent:${IRONCLAW_VERSION:-latest}'
+ic/deploy/ironclaw.service:17:  us-central1-docker.pkg.dev/ironclaw-prod/ironclaw/agent:${IRONCLAW_VERSION:-latest} \
+ic/scripts/lunarwing-watchdog.sh:4:SERVICE="${LUNARWING_WATCHDOG_SERVICE:-${IRONCLAW_WATCHDOG_SERVICE:-lunarwing.service}}"
+ic/scripts/lunarwing-watchdog.sh:5:LOG_FILE="${LUNARWING_WATCHDOG_LOG:-${IRONCLAW_WATCHDOG_LOG:-/var/log/lunarwing-watchdog.log}}"
+ic/scripts/lunarwing-watchdog.sh:6:LOCK_FILE="${LUNARWING_WATCHDOG_LOCK:-${IRONCLAW_WATCHDOG_LOCK:-/run/lunarwing-watchdog.lock}}"
+ic/scripts/lunarwing-watchdog.sh:7:POST_RESTART_SLEEP_SECONDS="${LUNARWING_WATCHDOG_POST_RESTART_SLEEP_SECONDS:-${IRONCLAW_WATCHDOG_POST_RESTART_SLEEP_SECONDS:-5}}"
+ic/scripts/lunarwing-watchdog-openrc.sh:11:SERVICE="${lunarwing_watchdog_service:-${LUNARWING_WATCHDOG_SERVICE:-${IRONCLAW_WATCHDOG_SERVICE:-lunarwing}}}"
+ic/scripts/lunarwing-watchdog-openrc.sh:13:LOG_FILE="${lunarwing_watchdog_log:-${LUNARWING_WATCHDOG_LOG:-${IRONCLAW_WATCHDOG_LOG:-/var/log/lunarwing-watchdog.log}}}"
+ic/scripts/lunarwing-watchdog-openrc.sh:14:LOCK_FILE="${lunarwing_watchdog_lock:-${LUNARWING_WATCHDOG_LOCK:-${IRONCLAW_WATCHDOG_LOCK:-/run/lunarwing-watchdog.lock}}}"
+ic/scripts/lunarwing-watchdog-openrc.sh:15:POST_RESTART_SLEEP_SECONDS="${lunarwing_watchdog_post_restart_sleep_seconds:-${LUNARWING_WATCHDOG_POST_RESTART_SLEEP_SECONDS:-${IRONCLAW_WATCHDOG_POST_RESTART_SLEEP_SECONDS:-5}}}"
+ic/scripts/ci/quality_gate.sh:10:if [ "${IRONCLAW_PREPUSH_TEST:-1}" = "1" ]; then
+ic/scripts/ci/quality_gate.sh:11:    echo "==> tests (skip with IRONCLAW_PREPUSH_TEST=0)"
+ic/scripts/setup-instance.sh:9:BASE_DIR="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-${HOME}/.ironclaw}}"
+ic/scripts/setup-instance.sh:36:  --base-dir PATH            Instance directory. Default: $LUNARWING_BASE_DIR, $IRONCLAW_BASE_DIR, or ~/.ironclaw
+ic/scripts/lunarwing-mt-admin.sh:432:IRONCLAW_BASE_DIR=$state_dir
+ic/scripts/lunarwing-mt-admin.sh:433:IRONCLAW_SOCKET=$run_dir/ironclaw.sock
+ic/scripts/lunarwing-mt-admin.sh:514:IRONCLAW_BASE_DIR=$state_dir
+ic/scripts/install-lunarwing-watchdog.sh:35:  local override="${LUNARWING_SERVICE_MANAGER:-${IRONCLAW_SERVICE_MANAGER:-}}"
+ic/src/bootstrap.rs:13:const LEGACY_IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
+ic/src/bootstrap.rs:16:static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_ironclaw_base_dir);
+ic/src/bootstrap.rs:25:    let legacy_ironclaw_base_dir = std::env::var(LEGACY_IRONCLAW_BASE_DIR_ENV).ok();
+ic/src/bootstrap.rs:33:            "Warning: {LUNARWING_BASE_DIR_ENV} and {LEGACY_IRONCLAW_BASE_DIR_ENV} differ; using {LUNARWING_BASE_DIR_ENV}"
+ic/src/bootstrap.rs:74:/// Legacy `IRONCLAW_BASE_DIR` is still accepted as a fallback.
+ic/src/bootstrap.rs:81:/// - Otherwise, if `IRONCLAW_BASE_DIR` is set to a non-empty path, that path is used.
+ic/src/bootstrap.rs:90:    IRONCLAW_BASE_DIR.clone()
+ic/src/bootstrap.rs:693:        let old_ironclaw = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:696:        unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:709:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:717:        let old_ironclaw = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:721:            std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/ironclaw-base");
+ic/src/bootstrap.rs:733:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:735:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1099:        // It verifies that when IRONCLAW_BASE_DIR is not set, the default path is used.
+ic/src/bootstrap.rs:1101:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:1103:        unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1112:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:1118:        // This test verifies that when IRONCLAW_BASE_DIR is set,
+ic/src/bootstrap.rs:1121:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:1123:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/custom/ironclaw/path") };
+ic/src/bootstrap.rs:1131:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:1134:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1143:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:1145:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/my/custom/dir") };
+ic/src/bootstrap.rs:1154:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:1157:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1163:        // Verifies that empty IRONCLAW_BASE_DIR falls back to default.
+ic/src/bootstrap.rs:1165:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:1167:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "") };
+ic/src/bootstrap.rs:1176:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:1179:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1187:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/src/bootstrap.rs:1189:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/test_with-special.chars") };
+ic/src/bootstrap.rs:1200:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/src/bootstrap.rs:1203:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/src/bootstrap.rs:1300:        if std::env::var("IRONCLAW_PID_LOCK_CHILD").ok().as_deref() != Some("1") {
+ic/src/bootstrap.rs:1305:            std::env::var("IRONCLAW_PID_LOCK_PATH").expect("IRONCLAW_PID_LOCK_PATH missing"),
+ic/src/bootstrap.rs:1307:        let hold_ms = std::env::var("IRONCLAW_PID_LOCK_HOLD_MS")
+ic/src/bootstrap.rs:1329:            .env("IRONCLAW_PID_LOCK_CHILD", "1")
+ic/src/bootstrap.rs:1330:            .env("IRONCLAW_PID_LOCK_PATH", pid_path.display().to_string())
+ic/src/bootstrap.rs:1331:            .env("IRONCLAW_PID_LOCK_HOLD_MS", "3000")
+ic/systemd/lunarwing.service:30:Environment=IRONCLAW_BASE_DIR=/var/lib/lunarwing
+ic/systemd/lunarwing.openrc:59:    export IRONCLAW_BASE_DIR="${lunarwing_base_dir}"
+ic/src/setup/wizard.rs:4176:        let _owner = EnvGuard::set("IRONCLAW_OWNER_ID", " wizard-owner ");
+ic/src/setup/wizard.rs:4185:        let _owner = EnvGuard::clear("IRONCLAW_OWNER_ID");
+ic/src/setup/wizard.rs:4201:        let original = std::env::var_os("IRONCLAW_OWNER_ID");
+ic/src/setup/wizard.rs:4203:            std::env::set_var("IRONCLAW_OWNER_ID", OsString::from_vec(vec![0x66, 0x80]));
+ic/src/setup/wizard.rs:4210:                std::env::set_var("IRONCLAW_OWNER_ID", value);
+ic/src/setup/wizard.rs:4212:                std::env::remove_var("IRONCLAW_OWNER_ID");
+ic/tests/e2e/conftest.py:266:        "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+ic/tests/e2e/conftest.py:269:        "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
+ic/tests/e2e/conftest.py:297:        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/tests/e2e/conftest.py:298:        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/tests/e2e/conftest.py:366:            "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+ic/tests/e2e/conftest.py:369:            "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
+ic/tests/e2e/conftest.py:394:            "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/tests/e2e/conftest.py:395:            "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/tests/e2e/conftest.py:498:        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/tests/e2e/conftest.py:499:        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/customic/src/channels/web/server.rs:735:/// Used on hosted instances where `IRONCLAW_OAUTH_CALLBACK_URL` points to
+ic/customic/src/channels/web/server.rs:2755:    let restart_enabled = std::env::var("IRONCLAW_IN_DOCKER")
+ic/src/setup/README.md:91:base directory (`LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR`), the wizard seeds:
+ic/src/setup/README.md:762:   publicly accessible URL (legacy `IRONCLAW_OAUTH_CALLBACK_URL` still works),
+ic/systemd/xmpp-bridge.service:26:Environment=IRONCLAW_BASE_DIR=/var/lib/lunarwing
+ic/testing/lunarwing-xmpp/lunarwing.env.example:5:IRONCLAW_BASE_DIR=/tmp/lunarwing-xmpp-test/state
+ic/testing/lunarwing-xmpp/lunarwing.env.example:11:# Prefer running onboarding against the isolated IRONCLAW_BASE_DIR instead of
+ic/tests/e2e/scenarios/test_extension_oauth.py:7:The conftest sets IRONCLAW_OAUTH_CALLBACK_URL (non-loopback, forces gateway
+ic/tests/e2e/scenarios/test_extension_oauth.py:8:mode) and IRONCLAW_OAUTH_EXCHANGE_URL (points to mock_llm.py's /oauth/exchange).
+ic/systemd/xmpp-bridge.openrc:51:    export IRONCLAW_BASE_DIR="${xmpp_bridge_base_dir}"
+ic/src/tools/builtin/restart.rs:7://!   (legacy `IRONCLAW_RESTART_DELAY`) and restart
+ic/src/tools/builtin/restart.rs:9://!   `LUNARWING_MAX_FAILURES` (legacy `IRONCLAW_MAX_FAILURES`)
+ic/src/tools/builtin/restart.rs:77:        // (legacy IRONCLAW_IN_DOCKER). The Docker entrypoint sets this to "true".
+ic/src/tools/builtin/restart.rs:176:            std::env::remove_var("IRONCLAW_IN_DOCKER");
+ic/src/tools/builtin/restart.rs:473:        // IRONCLAW_IN_DOCKER not set or false)
+ic/src/tools/builtin/restart.rs:484:                "Test environment should have LUNARWING_IN_DOCKER / IRONCLAW_IN_DOCKER unset or false"
+ic/testing/lunarwing-xmpp/xmpp-bridge.env.example:5:IRONCLAW_BASE_DIR=/tmp/lunarwing-xmpp-test/state
+ic/testing/lunarwing-xmpp/README.md:84:- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+ic/testing/lunarwing-xmpp/README.md:491:The harness starts LunarWing with the isolated `IRONCLAW_BASE_DIR` from
+ic/customic/CHANGELOG.md:354:- add IRONCLAW_BASE_DIR env var with LazyLock caching ([#397](https://github.com/nearai/ironclaw/pull/397))
+ic/customic/src/orchestrator/reaper.rs:666:    // They require Docker to be running and the IRONCLAW_E2E_DOCKER_TESTS
+ic/customic/src/orchestrator/reaper.rs:669:    // Run with: IRONCLAW_E2E_DOCKER_TESTS=1 cargo test orchestrator::reaper::e2e_tests --lib -- --nocapture
+ic/customic/src/orchestrator/reaper.rs:676:            std::env::var("IRONCLAW_E2E_DOCKER_TESTS").is_ok()
+ic/customic/src/orchestrator/reaper.rs:683:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/customic/src/orchestrator/reaper.rs:769:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/customic/src/orchestrator/reaper.rs:866:                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+ic/src/tools/builtin/shell.rs:1237:        let secret_var = "IRONCLAW_TEST_SECRET_KEY";
+ic/src/tools/builtin/shell.rs:1443:        unsafe { std::env::set_var("IRONCLAW_QA_TEST_SECRET", "supersecret123") };
+ic/src/tools/builtin/shell.rs:1452:            !output.contains("IRONCLAW_QA_TEST_SECRET"),
+ic/src/tools/builtin/shell.rs:1461:        unsafe { std::env::remove_var("IRONCLAW_QA_TEST_SECRET") };
+ic/customic/src/orchestrator/job_manager.rs:321:            format!("IRONCLAW_WORKER_TOKEN={}", token),
+ic/customic/src/orchestrator/job_manager.rs:322:            format!("IRONCLAW_JOB_ID={}", job_id),
+ic/customic/src/orchestrator/job_manager.rs:323:            format!("IRONCLAW_ORCHESTRATOR_URL={}", orchestrator_url),
+ic/customic/src/orchestrator/job_manager.rs:331:            env_vec.push("IRONCLAW_WORKSPACE=/workspace".to_string());
+ic/customic/crates/ironclaw_skills/src/gating.rs:126:            env: vec!["__IRONCLAW_TEST_NONEXISTENT_VAR__".to_string()],
+ic/src/NETWORK_SECURITY.md:293:Google OAuth client ID and secret are compiled into the binary (with compile-time override via `IRONCLAW_GOOGLE_CLIENT_ID` / `IRONCLAW_GOOGLE_CLIENT_SECRET`). As noted in the source, Google Desktop App client secrets are [not actually secret](https://developers.google.com/identity/protocols/oauth2/native-app) per Google's documentation.
+ic/tests/fixtures/llm_traces/README.md:439:| `IRONCLAW_RECORD_TRACE` | yes | — | Set to any non-empty value to enable recording. |
+ic/tests/fixtures/llm_traces/README.md:440:| `IRONCLAW_TRACE_OUTPUT` | no | `./trace_{timestamp}.json` | Output file path for the recorded trace. |
+ic/tests/fixtures/llm_traces/README.md:441:| `IRONCLAW_TRACE_MODEL_NAME` | no | `recorded-{model}` | The `model_name` field in the trace JSON. |
+ic/tests/fixtures/llm_traces/README.md:447:IRONCLAW_RECORD_TRACE=1 cargo run
+ic/tests/fixtures/llm_traces/README.md:450:IRONCLAW_RECORD_TRACE=1 IRONCLAW_TRACE_OUTPUT=my_trace.json cargo run
+ic/tests/fixtures/llm_traces/README.md:453:IRONCLAW_RECORD_TRACE=1 IRONCLAW_TRACE_MODEL_NAME=regression-auth-flow cargo run
+ic/customic/src/worker/container.rs:71:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/customic/src/worker/api.rs:3://! Every request includes a bearer token from `IRONCLAW_WORKER_TOKEN` env var.
+ic/customic/src/worker/api.rs:120:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment.
+ic/customic/src/worker/api.rs:123:            std::env::var("IRONCLAW_WORKER_TOKEN").map_err(|_| WorkerError::MissingToken)?;
+ic/src/bridge/auth_manager.rs:607:            "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/src/bridge/auth_manager.rs:667:            "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/worker/acp_bridge.rs:62:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/src/error.rs:366:    #[error("Missing worker token (IRONCLAW_WORKER_TOKEN not set)")]
+ic/customic/src/worker/claude_bridge.rs:139:    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+ic/src/tools/wasm/loader.rs:522:/// 1. `IRONCLAW_TOOLS_SRC` env var
+ic/src/tools/wasm/loader.rs:525:    if let Ok(dir) = std::env::var("IRONCLAW_TOOLS_SRC") {
+ic/src/tools/wasm/loader.rs:592:/// Set `IRONCLAW_TOOLS_SRC` env var to override the source directory.
+ic/src/tools/wasm/loader.rs:983:        let _proxy_guard = set_env_var("IRONCLAW_OAUTH_EXCHANGE_URL", None);
+ic/src/tools/wasm/loader.rs:1020:            "IRONCLAW_OAUTH_EXCHANGE_URL",
+ic/src/tools/wasm/loader.rs:1060:            "IRONCLAW_OAUTH_EXCHANGE_URL",
+ic/customic/src/skills/gating.rs:126:            env: vec!["__IRONCLAW_TEST_NONEXISTENT_VAR__".to_string()],
+ic/customic/src/main.rs:447:        let socket_path = std::env::var("IRONCLAW_SOCKET")
+ic/customic/docs/plans/2026-02-24-automated-qa.md:634:        env={"IRONCLAW_HOME": str(tmp_ironclaw_home), **base_env},
+ic/customic/docs/plans/2026-02-24-automated-qa.md:649:        env={"IRONCLAW_HOME": str(tmp_ironclaw_home), **base_env},
+ic/customic/.githooks/pre-push:13:if [ "${IRONCLAW_STRICT_DELTA_LINT:-0}" = "1" ]; then
+ic/customic/.githooks/pre-push:15:elif [ "${IRONCLAW_STRICT_LINT:-0}" = "1" ]; then
+ic/customic/deploy/env.example:6:# IRONCLAW_VERSION=v1.0.0
+ic/customic/deploy/env.example:35:#   - Exit code 0 = clean restart: reset failure counter, wait IRONCLAW_RESTART_DELAY, restart
+ic/customic/deploy/env.example:36:#   - Exit code ≠ 0 = failure: increment counter, exit after IRONCLAW_MAX_FAILURES
+ic/customic/deploy/env.example:37:IRONCLAW_IN_DOCKER=false
+ic/customic/deploy/env.example:38:IRONCLAW_RESTART_DELAY=5          # seconds to wait before restarting (range: 1-30)
+ic/customic/deploy/env.example:39:IRONCLAW_MAX_FAILURES=10          # max consecutive failures before container exits
+ic/customic/tests/e2e/CLAUDE.md:79:| `hosted_oauth_refresh_server` | Starts a second ironclaw instance with a dedicated libSQL DB and `GOOGLE_OAUTH_CLIENT_ID=hosted-google-client-id`, while still pointing `IRONCLAW_OAUTH_EXCHANGE_URL` at `mock_llm.py`. Yields a dict with `base_url`, `db_path`, `gateway_user_id`, and `mock_llm_url` for the hosted refresh regression scenario. |
+ic/customic/src/error.rs:366:    #[error("Missing worker token (IRONCLAW_WORKER_TOKEN not set)")]
+ic/customic/src/config/relay.rs:65:            callback_url: env("IRONCLAW_OAUTH_CALLBACK_URL"),
+ic/customic/src/config/relay.rs:66:            instance_id: env("IRONCLAW_INSTANCE_ID"),
+ic/customic/src/config/relay.rs:120:            "IRONCLAW_OAUTH_CALLBACK_URL" => Some("https://tunnel.example.com".into()),
+ic/customic/src/config/relay.rs:121:            "IRONCLAW_INSTANCE_ID" => Some("my-instance".into()),
+ic/customic/src/cli/oauth_defaults.rs:34:const GOOGLE_CLIENT_ID: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_ID") {
+ic/customic/src/cli/oauth_defaults.rs:38:const GOOGLE_CLIENT_SECRET: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_SECRET") {
+ic/customic/src/cli/oauth_defaults.rs:60:        "google_oauth_token" => Some("IRONCLAW_GOOGLE_CLIENT_ID"),
+ic/customic/src/cli/oauth_defaults.rs:522:/// This is the case when `IRONCLAW_OAUTH_CALLBACK_URL` is set to a non-loopback
+ic/customic/src/cli/oauth_defaults.rs:526:    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_CALLBACK_URL")
+ic/customic/src/cli/oauth_defaults.rs:540:/// `IRONCLAW_OAUTH_PROXY_AUTH_TOKEN`. Existing hosted instances continue to
+ic/customic/src/cli/oauth_defaults.rs:549:    normalized_env_value("IRONCLAW_OAUTH_PROXY_AUTH_TOKEN")
+ic/customic/src/cli/oauth_defaults.rs:555:    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_EXCHANGE_URL")
+ic/customic/src/cli/oauth_defaults.rs:593:    crate::config::helpers::env_or_override("IRONCLAW_INSTANCE_NAME")
+ic/customic/src/cli/oauth_defaults.rs:1201:        let original_url = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1205:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1219:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1228:        let original_url = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1232:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1240:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1251:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1255:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/cli/oauth_defaults.rs:1264:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1266:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1416:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1419:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1424:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1432:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1436:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/cli/oauth_defaults.rs:1443:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1445:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1453:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1456:            std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", "http://127.0.0.1:3001");
+ic/customic/src/cli/oauth_defaults.rs:1461:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1463:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1471:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/cli/oauth_defaults.rs:1474:            std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", "");
+ic/customic/src/cli/oauth_defaults.rs:1479:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/cli/oauth_defaults.rs:1481:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/cli/oauth_defaults.rs:1491:        let original = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/customic/src/cli/oauth_defaults.rs:1494:            std::env::set_var("IRONCLAW_INSTANCE_NAME", "kind-deer");
+ic/customic/src/cli/oauth_defaults.rs:1503:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/customic/src/cli/oauth_defaults.rs:1505:                std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/customic/src/cli/oauth_defaults.rs:1515:        let original = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/customic/src/cli/oauth_defaults.rs:1519:            std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/customic/src/cli/oauth_defaults.rs:1529:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/customic/src/cli/oauth_defaults.rs:1542:        let original_ic = std::env::var("IRONCLAW_INSTANCE_NAME").ok();
+ic/customic/src/cli/oauth_defaults.rs:1546:            std::env::remove_var("IRONCLAW_INSTANCE_NAME");
+ic/customic/src/cli/oauth_defaults.rs:1556:                std::env::set_var("IRONCLAW_INSTANCE_NAME", val);
+ic/customic/src/cli/mod.rs:398:    let user_id = std::env::var("IRONCLAW_OWNER_ID").unwrap_or_else(|_| "default".to_string());
+ic/customic/.env.example:217:# Set IRONCLAW_IN_DOCKER=true in the container entrypoint to enable the restart feature.
+ic/customic/.env.example:219:# IRONCLAW_IN_DOCKER=false
+ic/customic/.env.example:220:# IRONCLAW_RESTART_DELAY=5          # default wait before exit (seconds, range: 1-30)
+ic/customic/.env.example:221:# IRONCLAW_MAX_FAILURES=10          # max consecutive failures before container exits
+ic/customic/tests/e2e/scenarios/test_extension_oauth.py:7:The conftest sets IRONCLAW_OAUTH_CALLBACK_URL (non-loopback, forces gateway
+ic/customic/tests/e2e/scenarios/test_extension_oauth.py:8:mode) and IRONCLAW_OAUTH_EXCHANGE_URL (points to mock_llm.py's /oauth/exchange).
+ic/customic/src/config/mod.rs:374:    let env_owner_id = self::helpers::optional_env("IRONCLAW_OWNER_ID")?;
+ic/customic/src/config/mod.rs:391:                "IRONCLAW_OWNER_ID resolved to the legacy 'default' scope explicitly; durable state will keep legacy owner behavior"
+ic/customic/src/config/helpers.rs:351:        let key = "IRONCLAW_TEST_RUNTIME_OVERRIDE_42";
+ic/customic/src/config/helpers.rs:365:        let key = "IRONCLAW_TEST_OPTIONAL_ENV_OVERRIDE_42";
+ic/customic/src/config/helpers.rs:377:        let key = "IRONCLAW_TEST_ENV_PRIORITY_42";
+ic/customic/tests/e2e/conftest.py:266:        "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+ic/customic/tests/e2e/conftest.py:269:        "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
+ic/customic/tests/e2e/conftest.py:297:        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/customic/tests/e2e/conftest.py:298:        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/customic/tests/e2e/conftest.py:366:            "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+ic/customic/tests/e2e/conftest.py:369:            "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
+ic/customic/tests/e2e/conftest.py:394:            "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/customic/tests/e2e/conftest.py:395:            "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/customic/tests/e2e/conftest.py:498:        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+ic/customic/tests/e2e/conftest.py:499:        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+ic/customic/scripts/ci/quality_gate.sh:10:if [ "${IRONCLAW_PREPUSH_TEST:-1}" = "1" ]; then
+ic/customic/scripts/ci/quality_gate.sh:11:    echo "==> tests (skip with IRONCLAW_PREPUSH_TEST=0)"
+ic/customic/src/llm/CLAUDE.md:28:| `recording.rs` | `RecordingLlm` — trace capture for E2E replay testing (`IRONCLAW_RECORD_TRACE`) |
+ic/customic/src/llm/CLAUDE.md:206:  → RecordingLlm            (trace capture; only when IRONCLAW_RECORD_TRACE is set)
+ic/customic/src/llm/CLAUDE.md:241:Set `IRONCLAW_RECORD_TRACE=1` to enable live trace recording via `RecordingLlm`. Traces are JSON files containing: memory snapshot, HTTP exchanges from tools, and LLM steps (user inputs, text responses, tool call responses). Replay these in E2E tests via `TraceLlm`. Configure output path with `IRONCLAW_TRACE_OUTPUT` (default: `trace_{timestamp}.json`).
+ic/customic/src/llm/recording.rs:13://! Enable by setting `IRONCLAW_RECORD_TRACE=1` at runtime.
+ic/customic/src/llm/recording.rs:290:    /// - `IRONCLAW_RECORD_TRACE` — any non-empty value enables recording
+ic/customic/src/llm/recording.rs:291:    /// - `IRONCLAW_TRACE_OUTPUT` — file path (default: `./trace_{timestamp}.json`)
+ic/customic/src/llm/recording.rs:292:    /// - `IRONCLAW_TRACE_MODEL_NAME` — model_name field (default: `recorded-{inner.model_name()}`)
+ic/customic/src/llm/recording.rs:294:        let enabled = std::env::var("IRONCLAW_RECORD_TRACE")
+ic/customic/src/llm/recording.rs:299:        let output_path = std::env::var("IRONCLAW_TRACE_OUTPUT")
+ic/customic/src/llm/recording.rs:308:        let model_name = std::env::var("IRONCLAW_TRACE_MODEL_NAME")
+ic/customic/src/llm/recording.rs:776:        unsafe { std::env::remove_var("IRONCLAW_RECORD_TRACE") };
+ic/customic/src/tools/builtin/restart.rs:6://! - **Exit code 0** (clean): Reset failure counter, wait `IRONCLAW_RESTART_DELAY` (default 5s), restart
+ic/customic/src/tools/builtin/restart.rs:7://! - **Exit code ≠ 0** (failure): Increment failure counter, exit after `IRONCLAW_MAX_FAILURES` (default 10)
+ic/customic/src/tools/builtin/restart.rs:74:        // Check if running inside a Docker container via IRONCLAW_IN_DOCKER env var.
+ic/customic/src/tools/builtin/restart.rs:77:        let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+ic/customic/src/tools/builtin/restart.rs:81:        tracing::debug!("[RestartTool::execute] IRONCLAW_IN_DOCKER={}", in_docker);
+ic/customic/src/tools/builtin/restart.rs:106:        //   * Exit code 0 = clean restart: reset failure counter, wait IRONCLAW_RESTART_DELAY
+ic/customic/src/tools/builtin/restart.rs:108:        //   * Exit code ≠ 0 = failure: increment counter, exit after IRONCLAW_MAX_FAILURES
+ic/customic/src/tools/builtin/restart.rs:122:        let restart_disabled = std::env::var("IRONCLAW_DISABLE_RESTART")
+ic/customic/src/tools/builtin/restart.rs:142:                    "[RestartTool] Exit disabled (IRONCLAW_DISABLE_RESTART set), skipping std::process::exit(0)"
+ic/customic/src/tools/builtin/restart.rs:172:            std::env::set_var("IRONCLAW_IN_DOCKER", "true");
+ic/customic/src/tools/builtin/restart.rs:468:        // Test that restart is rejected when not in Docker (IRONCLAW_IN_DOCKER not set or false)
+ic/customic/src/tools/builtin/restart.rs:470:        let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+ic/customic/src/tools/builtin/restart.rs:476:            // Simulating what the tool would do when IRONCLAW_IN_DOCKER is not set
+ic/customic/src/tools/builtin/restart.rs:479:                "Test environment should have IRONCLAW_IN_DOCKER unset or false"
+ic/customic/src/tools/wasm/loader.rs:522:/// 1. `IRONCLAW_TOOLS_SRC` env var
+ic/customic/src/tools/wasm/loader.rs:525:    if let Ok(dir) = std::env::var("IRONCLAW_TOOLS_SRC") {
+ic/customic/src/tools/wasm/loader.rs:592:/// Set `IRONCLAW_TOOLS_SRC` env var to override the source directory.
+ic/customic/src/tools/wasm/loader.rs:983:        let _proxy_guard = set_env_var("IRONCLAW_OAUTH_EXCHANGE_URL", None);
+ic/customic/src/tools/wasm/loader.rs:1020:            "IRONCLAW_OAUTH_EXCHANGE_URL",
+ic/customic/src/tools/wasm/loader.rs:1060:            "IRONCLAW_OAUTH_EXCHANGE_URL",
+ic/customic/src/llm/oauth_helpers.rs:38:/// Checks `IRONCLAW_OAUTH_CALLBACK_URL` env var first (useful for remote/VPS
+ic/customic/src/llm/oauth_helpers.rs:42:    crate::config::helpers::env_or_override("IRONCLAW_OAUTH_CALLBACK_URL")
+ic/customic/src/extensions/manager.rs:589:    /// used to build OAuth redirect URIs when `IRONCLAW_OAUTH_CALLBACK_URL` is not set.
+ic/customic/src/extensions/manager.rs:601:    /// - `IRONCLAW_OAUTH_CALLBACK_URL` is set to a non-loopback URL, OR
+ic/customic/src/extensions/manager.rs:622:    /// 1. `IRONCLAW_OAUTH_CALLBACK_URL` env var (via `callback_url()`)
+ic/customic/src/extensions/manager.rs:7437:    // `IRONCLAW_OAUTH_CALLBACK_URL` env var, ignoring `self.tunnel_url`.
+ic/customic/src/extensions/manager.rs:7472:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7475:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7486:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7494:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7496:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7507:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7515:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7517:            std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7528:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7534:    /// Clears `IRONCLAW_OAUTH_CALLBACK_URL` for the duration, restoring on drop.
+ic/customic/src/extensions/manager.rs:7543:            let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7546:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7560:                    std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7562:                    std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7601:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7604:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/extensions/manager.rs:7617:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7619:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/extensions/manager.rs:7627:        let original = std::env::var("IRONCLAW_OAUTH_CALLBACK_URL").ok();
+ic/customic/src/extensions/manager.rs:7630:                "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/extensions/manager.rs:7643:                std::env::set_var("IRONCLAW_OAUTH_CALLBACK_URL", val);
+ic/customic/src/extensions/manager.rs:7645:                std::env::remove_var("IRONCLAW_OAUTH_CALLBACK_URL");
+ic/customic/src/NETWORK_SECURITY.md:293:Google OAuth client ID and secret are compiled into the binary (with compile-time override via `IRONCLAW_GOOGLE_CLIENT_ID` / `IRONCLAW_GOOGLE_CLIENT_SECRET`). As noted in the source, Google Desktop App client secrets are [not actually secret](https://developers.google.com/identity/protocols/oauth2/native-app) per Google's documentation.
+ic/customic/src/bootstrap.rs:12:const IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
+ic/customic/src/bootstrap.rs:15:static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_ironclaw_base_dir);
+ic/customic/src/bootstrap.rs:23:    std::env::var(IRONCLAW_BASE_DIR_ENV)
+ic/customic/src/bootstrap.rs:30:                    "Warning: IRONCLAW_BASE_DIR is a relative path '{}', resolved against current directory",
+ic/customic/src/bootstrap.rs:58:/// Override with `IRONCLAW_BASE_DIR` environment variable.
+ic/customic/src/bootstrap.rs:64:/// - If `IRONCLAW_BASE_DIR` is set to a non-empty path, that path is used.
+ic/customic/src/bootstrap.rs:65:/// - If `IRONCLAW_BASE_DIR` is set to an empty string, it is treated as unset.
+ic/customic/src/bootstrap.rs:66:/// - If `IRONCLAW_BASE_DIR` contains null bytes, a warning is printed and the default is used.
+ic/customic/src/bootstrap.rs:73:    IRONCLAW_BASE_DIR.clone()
+ic/customic/src/bootstrap.rs:673:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:675:        unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:685:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1049:        // It verifies that when IRONCLAW_BASE_DIR is not set, the default path is used.
+ic/customic/src/bootstrap.rs:1051:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:1053:        unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:1062:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1068:        // This test verifies that when IRONCLAW_BASE_DIR is set,
+ic/customic/src/bootstrap.rs:1071:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:1073:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/custom/ironclaw/path") };
+ic/customic/src/bootstrap.rs:1081:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1084:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:1093:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:1095:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/my/custom/dir") };
+ic/customic/src/bootstrap.rs:1104:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1107:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:1113:        // Verifies that empty IRONCLAW_BASE_DIR falls back to default.
+ic/customic/src/bootstrap.rs:1115:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:1117:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "") };
+ic/customic/src/bootstrap.rs:1126:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1129:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:1137:        let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
+ic/customic/src/bootstrap.rs:1139:        unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/test_with-special.chars") };
+ic/customic/src/bootstrap.rs:1150:            unsafe { std::env::set_var("IRONCLAW_BASE_DIR", val) };
+ic/customic/src/bootstrap.rs:1153:            unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
+ic/customic/src/bootstrap.rs:1250:        if std::env::var("IRONCLAW_PID_LOCK_CHILD").ok().as_deref() != Some("1") {
+ic/customic/src/bootstrap.rs:1255:            std::env::var("IRONCLAW_PID_LOCK_PATH").expect("IRONCLAW_PID_LOCK_PATH missing"),
+ic/customic/src/bootstrap.rs:1257:        let hold_ms = std::env::var("IRONCLAW_PID_LOCK_HOLD_MS")
+ic/customic/src/bootstrap.rs:1279:            .env("IRONCLAW_PID_LOCK_CHILD", "1")
+ic/customic/src/bootstrap.rs:1280:            .env("IRONCLAW_PID_LOCK_PATH", pid_path.display().to_string())
+ic/customic/src/bootstrap.rs:1281:            .env("IRONCLAW_PID_LOCK_HOLD_MS", "3000")
+ic/customic/src/agent/commands.rs:531:                let in_docker = std::env::var("IRONCLAW_IN_DOCKER")
+ic/customic/src/agent/commands.rs:535:                tracing::debug!("[commands::restart] IRONCLAW_IN_DOCKER={}", in_docker);
+ic/customic/src/agent/commands.rs:543:                         The IRONCLAW_IN_DOCKER environment variable must be set to 'true' for Docker deployments."
+ic/customic/src/tools/builtin/shell.rs:1237:        let secret_var = "IRONCLAW_TEST_SECRET_KEY";
+ic/customic/src/tools/builtin/shell.rs:1443:        unsafe { std::env::set_var("IRONCLAW_QA_TEST_SECRET", "supersecret123") };
+ic/customic/src/tools/builtin/shell.rs:1452:            !output.contains("IRONCLAW_QA_TEST_SECRET"),
+ic/customic/src/tools/builtin/shell.rs:1461:        unsafe { std::env::remove_var("IRONCLAW_QA_TEST_SECRET") };
+ic/customic/src/setup/wizard.rs:3764:        let _owner = EnvGuard::set("IRONCLAW_OWNER_ID", " wizard-owner ");
+ic/customic/src/setup/wizard.rs:3773:        let _owner = EnvGuard::clear("IRONCLAW_OWNER_ID");
+ic/customic/src/setup/wizard.rs:3789:        let original = std::env::var_os("IRONCLAW_OWNER_ID");
+ic/customic/src/setup/wizard.rs:3791:            std::env::set_var("IRONCLAW_OWNER_ID", OsString::from_vec(vec![0x66, 0x80]));
+ic/customic/src/setup/wizard.rs:3798:                std::env::set_var("IRONCLAW_OWNER_ID", value);
+ic/customic/src/setup/wizard.rs:3800:                std::env::remove_var("IRONCLAW_OWNER_ID");
+ic/customic/src/setup/README.md:656:2. **Custom callback URL:** Set `IRONCLAW_OAUTH_CALLBACK_URL` to a
+ic/customic/src/setup/README.md:660:   export IRONCLAW_OAUTH_CALLBACK_URL=https://myserver.example.com:9876
+ic/customic/tests/fixtures/llm_traces/README.md:439:| `IRONCLAW_RECORD_TRACE` | yes | — | Set to any non-empty value to enable recording. |
+ic/customic/tests/fixtures/llm_traces/README.md:440:| `IRONCLAW_TRACE_OUTPUT` | no | `./trace_{timestamp}.json` | Output file path for the recorded trace. |
+ic/customic/tests/fixtures/llm_traces/README.md:441:| `IRONCLAW_TRACE_MODEL_NAME` | no | `recorded-{model}` | The `model_name` field in the trace JSON. |
+ic/customic/tests/fixtures/llm_traces/README.md:447:IRONCLAW_RECORD_TRACE=1 cargo run
+ic/customic/tests/fixtures/llm_traces/README.md:450:IRONCLAW_RECORD_TRACE=1 IRONCLAW_TRACE_OUTPUT=my_trace.json cargo run
+ic/customic/tests/fixtures/llm_traces/README.md:453:IRONCLAW_RECORD_TRACE=1 IRONCLAW_TRACE_MODEL_NAME=regression-auth-flow cargo run
+ic/customic/src/bridge/auth_manager.rs:607:            "IRONCLAW_OAUTH_CALLBACK_URL",
+ic/customic/src/bridge/auth_manager.rs:667:            "IRONCLAW_OAUTH_CALLBACK_URL",

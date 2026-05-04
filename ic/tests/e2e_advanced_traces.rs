@@ -9,9 +9,9 @@ mod support;
 mod advanced {
     use std::time::Duration;
 
-    use ironclaw::agent::routine::Trigger;
-    use ironclaw::channels::IncomingMessage;
-    use ironclaw::db::Database;
+    use lunarwing::agent::routine::Trigger;
+    use lunarwing::channels::IncomingMessage;
+    use lunarwing::db::Database;
 
     use crate::support::cleanup::CleanupGuard;
     use crate::support::test_rig::TestRigBuilder;
@@ -27,7 +27,7 @@ mod advanced {
         db: &std::sync::Arc<dyn Database>,
         routine_id: uuid::Uuid,
         timeout: Duration,
-    ) -> Vec<ironclaw::agent::routine::RoutineRun> {
+    ) -> Vec<lunarwing::agent::routine::RoutineRun> {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {
             let runs = db
@@ -300,7 +300,7 @@ mod advanced {
 
     #[tokio::test]
     async fn routine_news_digest() {
-        use ironclaw::llm::recording::{HttpExchange, HttpExchangeRequest, HttpExchangeResponse};
+        use lunarwing::llm::recording::{HttpExchange, HttpExchangeRequest, HttpExchangeResponse};
 
         let trace = LlmTrace::from_file(format!("{FIXTURES}/routine_news_digest.json")).unwrap();
 
@@ -586,7 +586,7 @@ mod advanced {
     #[tokio::test]
     async fn mcp_extension_lifecycle() {
         use crate::support::mock_mcp_server::{MockToolResponse, start_mock_mcp_server};
-        use ironclaw::extensions::{AuthHint, ExtensionKind, ExtensionSource, RegistryEntry};
+        use lunarwing::extensions::{AuthHint, ExtensionKind, ExtensionSource, RegistryEntry};
 
         // 1. Start mock MCP server with pre-configured tool responses.
         let mock_server = start_mock_mcp_server(vec![
@@ -658,7 +658,7 @@ mod advanced {
             .secrets()
             .create(
                 test_user,
-                ironclaw::secrets::CreateSecretParams::new(secret_name, "mock-access-token")
+                lunarwing::secrets::CreateSecretParams::new(secret_name, "mock-access-token")
                     .with_provider("mcp:mock-notion".to_string()),
             )
             .await
@@ -859,7 +859,7 @@ mod advanced {
     /// clears BOOTSTRAP.md, and the workspace reflects all writes.
     #[tokio::test]
     async fn bootstrap_onboarding_clears_bootstrap() {
-        use ironclaw::workspace::paths;
+        use lunarwing::workspace::paths;
 
         let trace = LlmTrace::from_file(format!("{FIXTURES}/bootstrap_onboarding.json")).unwrap();
         let rig = TestRigBuilder::new()
@@ -944,7 +944,7 @@ mod advanced {
             .await
             .expect("read profile for deser test");
         let deser_result =
-            serde_json::from_str::<ironclaw::profile::PsychographicProfile>(&stored.content);
+            serde_json::from_str::<lunarwing::profile::PsychographicProfile>(&stored.content);
         assert!(
             deser_result.is_ok(),
             "profile should deserialize: {:?}\ncontent: {:?}",

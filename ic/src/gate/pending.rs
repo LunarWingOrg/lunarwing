@@ -1,7 +1,7 @@
 //! Pending gate state — unified type replacing `PendingApproval` and `PendingAuth`.
 
 use chrono::{DateTime, Utc};
-use ironclaw_engine::{ResumeKind, ThreadId};
+use lunarwing_engine::{ResumeKind, ThreadId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -34,7 +34,7 @@ pub struct PendingGate {
     /// Engine thread that is paused.
     pub thread_id: ThreadId,
     /// Conversation the thread belongs to.
-    pub conversation_id: ironclaw_engine::ConversationId,
+    pub conversation_id: lunarwing_engine::ConversationId,
     /// Channel that originated the request.
     /// Resolution MUST come from the same channel (or a trusted channel).
     pub source_channel: String,
@@ -119,7 +119,7 @@ mod tests {
             gate_name: "approval".into(),
             user_id: "user1".into(),
             thread_id: ThreadId::new(),
-            conversation_id: ironclaw_engine::ConversationId::new(),
+            conversation_id: lunarwing_engine::ConversationId::new(),
             source_channel: "telegram".into(),
             action_name: "shell".into(),
             call_id: "call_1".into(),

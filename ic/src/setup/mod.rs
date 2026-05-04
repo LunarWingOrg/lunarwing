@@ -16,7 +16,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use ironclaw::setup::SetupWizard;
+//! use lunarwing::setup::SetupWizard;
 //!
 //! let mut wizard = SetupWizard::new();
 //! wizard.run().await?;

@@ -17,7 +17,7 @@ fi
 sleep "${RUN_START_DELAY_SECS:-2}"
 
 if [[ "$#" -gt 0 ]]; then
-  exec ./target/release/ironclaw "$@"
+  exec ./target/release/lunarwing "$@"
 fi
 
-exec ./target/release/ironclaw run
+exec ./target/release/lunarwing run

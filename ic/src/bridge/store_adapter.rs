@@ -30,7 +30,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use ironclaw_engine::{
+use lunarwing_engine::{
     CapabilityLease, ConversationId, ConversationSurface, DocId, DocType, EngineError, LeaseId,
     MemoryDoc, Project, ProjectId, Step, Store, Thread, ThreadEvent, ThreadId, ThreadState,
     types::mission::{Mission, MissionId, MissionStatus},
@@ -865,7 +865,7 @@ fn compact_thread_summary(thread: &Thread) -> ThreadArchiveSummary {
         .messages
         .iter()
         .rev()
-        .find(|m| matches!(m.role, ironclaw_engine::MessageRole::Assistant))
+        .find(|m| matches!(m.role, lunarwing_engine::MessageRole::Assistant))
         .map(|m| truncate_for_readme(&m.content, 200))
         .unwrap_or_default();
 
@@ -901,12 +901,12 @@ fn thread_from_archive(summary: &ThreadArchiveSummary) -> Option<Thread> {
     Some(Thread {
         id: ThreadId(id),
         goal: summary.goal.clone(),
-        thread_type: ironclaw_engine::ThreadType::Mission,
+        thread_type: lunarwing_engine::ThreadType::Mission,
         state,
-        project_id: ironclaw_engine::ProjectId(uuid::Uuid::nil()),
+        project_id: lunarwing_engine::ProjectId(uuid::Uuid::nil()),
         user_id: "default".to_string(),
         parent_id: None,
-        config: ironclaw_engine::ThreadConfig::default(),
+        config: lunarwing_engine::ThreadConfig::default(),
         messages: Vec::new(),
         internal_messages: Vec::new(),
         events: Vec::new(),

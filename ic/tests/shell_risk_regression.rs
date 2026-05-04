@@ -22,7 +22,7 @@
 //!    variants remain `High`.
 //! 6. **`risk_level_for` trait method** — delegates to classify_command_risk.
 
-use ironclaw::tools::{ApprovalRequirement, RiskLevel, Tool, ToolRegistry};
+use lunarwing::tools::{ApprovalRequirement, RiskLevel, Tool, ToolRegistry};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------

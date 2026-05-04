@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/ironclaw_common", "crates/ironclaw_safety", "crates/ironclaw_skills", "crates/ironclaw_engine"]
+members = [".", "crates/lunarwing_common", "crates/lunarwing_safety", "crates/lunarwing_skills", "crates/lunarwing_engine"]
 exclude = [
     "job_prompt",
     "channels-src/discord",
@@ -18,19 +18,19 @@ exclude = [
     "tools-src/slack",
     "tools-src/telegram",
     "fuzz",
-    "crates/ironclaw_safety/fuzz",
+    "crates/lunarwing_safety/fuzz",
 ]
 
 [package]
-name = "ironclaw"
+name = "lunarwing"
 version = "0.24.0"
 edition = "2024"
 rust-version = "1.92"
-description = "Secure personal AI assistant that protects your data and expands its capabilities on the fly"
-authors = ["NEAR AI <support@near.ai>"]
+description = "Secure, privacy-first AI agent with XMPP/OMEMO, Gotify, and open-protocol channels"
+authors = ["LunarWing Team"]
 license = "MIT OR Apache-2.0"
-homepage = "https://github.com/nearai/ironclaw"
-repository = "https://github.com/nearai/ironclaw"
+homepage = "https://github.com/LunarWingOrg/lunarwing"
+repository = "https://github.com/LunarWingOrg/lunarwing"
 
 [package.metadata.wix]
 upgrade-guid = "D0156E61-BA37-451E-8AB9-1A2ECCCFA48F"
@@ -108,12 +108,12 @@ tokio-util = { version = "0.7", features = ["compat"] }
 cron = "0.13"
 
 # Internal crates
-ironclaw_common = { path = "crates/ironclaw_common", version = "0.1.0" }
-ironclaw_engine = { path = "crates/ironclaw_engine", version = "0.1.0" }
-ironclaw_skills = { path = "crates/ironclaw_skills", version = "0.1.0" }
+lunarwing_common = { path = "crates/lunarwing_common", version = "0.1.0" }
+lunarwing_engine = { path = "crates/lunarwing_engine", version = "0.1.0" }
+lunarwing_skills = { path = "crates/lunarwing_skills", version = "0.1.0" }
 
 # Safety/sanitization
-ironclaw_safety = { path = "crates/ironclaw_safety", version = "0.1.0" }
+lunarwing_safety = { path = "crates/lunarwing_safety", version = "0.1.0" }
 regex = "1"
 aho-corasick = "1"
 

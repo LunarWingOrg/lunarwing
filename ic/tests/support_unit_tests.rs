@@ -144,7 +144,7 @@ mod test_channel_tests {
     use std::time::Duration;
 
     use crate::support::test_channel::TestChannel;
-    use ironclaw::channels::{Channel, IncomingMessage, OutgoingResponse, StatusUpdate};
+    use lunarwing::channels::{Channel, IncomingMessage, OutgoingResponse, StatusUpdate};
 
     #[tokio::test]
     async fn send_and_receive_message() {
@@ -340,7 +340,7 @@ mod test_channel_tests {
 
 mod trace_llm_tests {
     use crate::support::trace_llm::*;
-    use ironclaw::llm::{
+    use lunarwing::llm::{
         ChatMessage, CompletionRequest, FinishReason, LlmProvider, ToolCompletionRequest,
     };
 

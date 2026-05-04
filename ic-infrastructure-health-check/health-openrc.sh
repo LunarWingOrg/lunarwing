@@ -18,8 +18,8 @@ discover_services() {
     fi
   done
 
-  # Multi-tenant: lunarwing-<tenant>, xmpp-bridge-<tenant>, ironclaw-proxy-<tenant>
-  for initscript in /etc/init.d/lunarwing-* /etc/init.d/xmpp-bridge-* /etc/init.d/ironclaw-proxy-*; do
+  # Multi-tenant: lunarwing-<tenant>, xmpp-bridge-<tenant>, lunarwing-proxy-<tenant>
+  for initscript in /etc/init.d/lunarwing-* /etc/init.d/xmpp-bridge-* /etc/init.d/lunarwing-proxy-*; do
     [ -x "$initscript" ] || continue
     local name
     name=$(basename "$initscript")

@@ -1,4 +1,4 @@
-//! Engine v2 bridge — connects `ironclaw_engine` to existing infrastructure.
+//! Engine v2 bridge — connects `lunarwing_engine` to existing infrastructure.
 //!
 //! Strategy C: parallel deployment. When `ENGINE_V2=true`, user messages
 //! route through the engine instead of the existing agentic loop. All

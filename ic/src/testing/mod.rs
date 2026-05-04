@@ -9,7 +9,7 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use ironclaw::testing::TestHarnessBuilder;
+//! use lunarwing::testing::TestHarnessBuilder;
 //!
 //! #[tokio::test]
 //! async fn test_something() {

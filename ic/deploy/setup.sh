@@ -37,7 +37,7 @@ chmod +x /usr/local/bin/cloud-sql-proxy
 
 echo "==> Installing systemd services"
 cp /tmp/deploy/cloud-sql-proxy.service /etc/systemd/system/
-cp /tmp/deploy/ironclaw.service /etc/systemd/system/
+cp /tmp/deploy/lunarwing.service /etc/systemd/system/
 systemctl daemon-reload
 
 echo "==> Starting Cloud SQL Auth Proxy"
@@ -51,25 +51,25 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 echo "==> Creating config directory"
 # Owned by root, readable only by root. Docker reads --env-file as root
 # before dropping to uid 1000 (ironclaw) inside the container.
-mkdir -p /opt/ironclaw
-chmod 700 /opt/ironclaw
+mkdir -p /opt/lunarwing
+chmod 700 /opt/lunarwing
 
-if [ ! -f /opt/ironclaw/.env ]; then
-  echo "WARNING: /opt/ironclaw/.env does not exist."
-  echo "Create it with your configuration before starting IronClaw."
+if [ ! -f /opt/lunarwing/.env ]; then
+  echo "WARNING: /opt/lunarwing/.env does not exist."
+  echo "Create it with your configuration before starting LunarWing."
   echo "See deploy/env.example for the required variables."
   echo ""
-  echo "Then run: systemctl enable ironclaw && systemctl start ironclaw"
+  echo "Then run: systemctl enable lunarwing && systemctl start lunarwing"
 else
-  chmod 600 /opt/ironclaw/.env
-  echo "==> Starting IronClaw"
-  systemctl enable ironclaw
-  systemctl start ironclaw
+  chmod 600 /opt/lunarwing/.env
+  echo "==> Starting LunarWing"
+  systemctl enable lunarwing
+  systemctl start lunarwing
 fi
 
 echo "==> Setup complete"
 echo ""
 echo "Verify with:"
 echo "  systemctl status cloud-sql-proxy"
-echo "  systemctl status ironclaw"
-echo "  docker logs ironclaw"
+echo "  systemctl status lunarwing"
+echo "  docker logs lunarwing"

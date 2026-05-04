@@ -1,0 +1,558 @@
+/Users/cmcfee/lunarwing/ic/crates/ironclaw_engine/src/executor/prompt.rs://! Prompt templates live in `crates/ironclaw_engine/prompts/` as plain
+/Users/cmcfee/lunarwing/ic/customic/crates/ironclaw_engine/src/executor/prompt.rs://! Prompt templates live in `crates/ironclaw_engine/prompts/` as plain
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/store_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/store_adapter.rs:        .find(|m| matches!(m.role, ironclaw_engine::MessageRole::Assistant))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/store_adapter.rs:        thread_type: ironclaw_engine::ThreadType::Mission,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/store_adapter.rs:        project_id: ironclaw_engine::ProjectId(uuid::Uuid::nil()),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/store_adapter.rs:        config: ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/mod.rs://! Engine v2 bridge — connects `ironclaw_engine` to existing infrastructure.
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs://! Effect bridge adapter — wraps `ToolRegistry` + `SafetyLayer` as `ironclaw_engine::EffectExecutor`.
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    mission_manager: RwLock<Option<Arc<ironclaw_engine::MissionManager>>>,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    pub async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        resume_kind: ironclaw_engine::ResumeKind,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                        let mut updates = ironclaw_engine::MissionUpdate::default();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                            ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:fn parse_cadence(s: &str) -> ironclaw_engine::types::mission::MissionCadence {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    use ironclaw_engine::types::mission::MissionCadence;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    fn lease() -> ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:    ) -> ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let lease = ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let lease = ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:        let ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/effect_adapter.rs:                    ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:use ironclaw_engine::types::{is_shared_owner, shared_owner_id};
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:) -> ironclaw_engine::ThreadMessage {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    ironclaw_engine::ThreadMessage::user(format!(
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::External { callback_id } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    let exec_ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        Err(ironclaw_engine::EngineError::GatePaused {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    fallback: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:) -> Result<ironclaw_engine::ProjectId, Error> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    let project = ironclaw_engine::Project::new(user_id, "default", "Default project");
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    default_project_id: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:fn parse_engine_thread_id(scope: Option<&str>) -> Option<ironclaw_engine::ThreadId> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .map(ironclaw_engine::ThreadId)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        if thread.state != ironclaw_engine::ThreadState::Waiting
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            if thread.state != ironclaw_engine::ThreadState::Waiting {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ThreadState::Failed,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    if !thread.is_owned_by(user_id) || thread.state != ironclaw_engine::ThreadState::Waiting {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadState::Failed,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                .map(|td| ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    resolution: ironclaw_engine::GateResolution,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Approved { always } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Denied { reason } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            let deny_msg = ironclaw_engine::ThreadMessage::user(format!(
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Cancelled => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::GateResolution::CredentialProvided { token } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            if let ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ironclaw_engine::GateResolution::ExternalCallback { .. } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::EventKind::ActionExecuted {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::EventKind::ActionFailed {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    conv: &Option<ironclaw_engine::ConversationSurface>,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:) -> Option<ironclaw_engine::Thread> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            if let ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                    ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Cancelled
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::GateResolution::CredentialProvided {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    conv_id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                    resume_kind: ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::External { callback_id } => {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    notif: &ironclaw_engine::MissionNotification,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    event: &ironclaw_engine::ThreadEvent,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    use ironclaw_engine::EventKind;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    event: &ironclaw_engine::ThreadEvent,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    use ironclaw_engine::EventKind;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:fn cadence_type_label(cadence: &ironclaw_engine::types::mission::MissionCadence) -> &'static str {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    use ironclaw_engine::types::mission::MissionCadence;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:fn thread_to_info(t: &ironclaw_engine::Thread) -> EngineThreadInfo {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ProjectId(uuid)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    let tid = ironclaw_engine::ThreadId(tid);
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_thread(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_steps(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_thread(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_events(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_project(ironclaw_engine::ProjectId(pid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ProjectId(uuid)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        .load_mission(ironclaw_engine::MissionId(mid))
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    let mid = ironclaw_engine::MissionId(mid);
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    mgr.pause_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    mgr.resume_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    store: &Arc<dyn ironclaw_engine::Store>,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    if let Ok(Some(mission)) = store.load_mission(ironclaw_engine::MissionId(mid)).await
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:async fn migrate_legacy_user_ids(store: &Arc<dyn ironclaw_engine::Store>, owner_id: &str) {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:    let all_projects: Vec<ironclaw_engine::Project> =
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        conversations: TokioRwLock<Vec<ironclaw_engine::ConversationSurface>>,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        threads: TokioRwLock<HashMap<ironclaw_engine::ThreadId, ironclaw_engine::Thread>>,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            thread: &ironclaw_engine::Thread,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _project_id: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _state: ironclaw_engine::ThreadState,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &ironclaw_engine::Step,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Step>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &[ironclaw_engine::ThreadEvent],
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::ThreadEvent>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &ironclaw_engine::Project,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            conversation: &ironclaw_engine::ConversationSurface,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &ironclaw_engine::MemoryDoc,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::DocId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &ironclaw_engine::CapabilityLease,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::CapabilityLease>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::LeaseId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: &ironclaw_engine::Mission,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::MissionId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::MissionId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            _: ironclaw_engine::MissionStatus,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        resume_kind: ironclaw_engine::ResumeKind,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            conversation_id: ironclaw_engine::ConversationId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        impl ironclaw_engine::LlmBackend for NoopLlm {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &[ironclaw_engine::ThreadMessage],
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &[ironclaw_engine::ActionDef],
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &ironclaw_engine::LlmCallConfig,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ) -> Result<ironclaw_engine::LlmOutput, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                Ok(ironclaw_engine::LlmOutput {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                    response: ironclaw_engine::LlmResponse::Text("done".into()),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                    usage: ironclaw_engine::TokenUsage::default(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        impl ironclaw_engine::EffectExecutor for NoopEffects {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &ironclaw_engine::CapabilityLease,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &ironclaw_engine::ThreadExecutionContext,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ) -> Result<ironclaw_engine::ActionResult, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:                _: &[ironclaw_engine::CapabilityLease],
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ) -> Result<Vec<ironclaw_engine::ActionDef>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            default_project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let mut thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::user("hello"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::assistant("hi there"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let conv = Some(ironclaw_engine::ConversationSurface::new("web", "alice"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let mut thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::user("do something"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::assistant("done"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/router.rs:        conv.add_entry(ironclaw_engine::ConversationEntry::agent(tid, "done"));
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/llm_adapter.rs://! LLM bridge adapter — wraps `LlmProvider` as `ironclaw_engine::LlmBackend`.
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/llm_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/llm_adapter.rs:                    .map(|tc| ironclaw_engine::ActionCall {
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/llm_adapter.rs:    use ironclaw_engine::MessageRole;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/skill_migration.rs:use ironclaw_engine::traits::store::Store;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/skill_migration.rs:use ironclaw_engine::types::error::EngineError;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/skill_migration.rs:use ironclaw_engine::types::memory::{DocType, MemoryDoc};
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/skill_migration.rs:use ironclaw_engine::types::project::ProjectId;
+/Users/cmcfee/lunarwing/ic/customic/src/bridge/skill_migration.rs:use ironclaw_engine::types::shared_owner_id;
+/Users/cmcfee/lunarwing/ic/customic/src/agent/agent_loop.rs:        Arc<tokio::sync::RwLock<Option<Arc<ironclaw_engine::MissionManager>>>>,
+/Users/cmcfee/lunarwing/ic/customic/src/agent/agent_loop.rs:    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+/Users/cmcfee/lunarwing/ic/customic/src/agent/agent_loop.rs:    pub(crate) async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+/Users/cmcfee/lunarwing/ic/customic/src/gate/pending.rs:use ironclaw_engine::{ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/customic/src/gate/pending.rs:    pub conversation_id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/customic/src/gate/pending.rs:            conversation_id: ironclaw_engine::ConversationId::new(),
+/Users/cmcfee/lunarwing/ic/customic/src/gate/persistence.rs:    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/customic/src/gate/store.rs:    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/customic/src/gate/mod.rs://! The engine crate (`ironclaw_engine::gate`) defines the [`ExecutionGate`]
+/Users/cmcfee/lunarwing/ic/customic/src/gate/mod.rs://! [`ExecutionGate`]: ironclaw_engine::ExecutionGate
+/Users/cmcfee/lunarwing/ic/customic/src/gate/approval.rs:use ironclaw_engine::gate::{ExecutionGate, ExecutionMode, GateContext, GateDecision, ResumeKind};
+/Users/cmcfee/lunarwing/ic/customic/src/gate/approval.rs:    use ironclaw_engine::gate::ExecutionMode;
+/Users/cmcfee/lunarwing/ic/customic/src/gate/approval.rs:    use ironclaw_engine::types::capability::{ActionDef, EffectType};
+/Users/cmcfee/lunarwing/ic/customic/src/gate/approval.rs:    use ironclaw_engine::types::thread::ThreadId;
+/Users/cmcfee/lunarwing/ic/src/bridge/store_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/src/bridge/store_adapter.rs:        .find(|m| matches!(m.role, ironclaw_engine::MessageRole::Assistant))
+/Users/cmcfee/lunarwing/ic/src/bridge/store_adapter.rs:        thread_type: ironclaw_engine::ThreadType::Mission,
+/Users/cmcfee/lunarwing/ic/src/bridge/store_adapter.rs:        project_id: ironclaw_engine::ProjectId(uuid::Uuid::nil()),
+/Users/cmcfee/lunarwing/ic/src/bridge/store_adapter.rs:        config: ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/src/bridge/mod.rs://! Engine v2 bridge — connects `ironclaw_engine` to existing infrastructure.
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs://! Effect bridge adapter — wraps `ToolRegistry` + `SafetyLayer` as `ironclaw_engine::EffectExecutor`.
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    mission_manager: RwLock<Option<Arc<ironclaw_engine::MissionManager>>>,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    pub async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        resume_kind: ironclaw_engine::ResumeKind,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                    .map(ironclaw_engine::MissionId)
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                        let mut updates = ironclaw_engine::MissionUpdate::default();
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                            ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:fn parse_cadence(s: &str) -> ironclaw_engine::types::mission::MissionCadence {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    use ironclaw_engine::types::mission::MissionCadence;
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    fn lease() -> ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:    ) -> ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let lease = ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let lease = ironclaw_engine::CapabilityLease {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            id: ironclaw_engine::types::capability::LeaseId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            granted_actions: ironclaw_engine::GrantedActions::All,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:        let ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_id: ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:            step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/effect_adapter.rs:                    ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:use ironclaw_engine::types::{is_shared_owner, shared_owner_id};
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:) -> ironclaw_engine::ThreadMessage {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    ironclaw_engine::ThreadMessage::user(format!(
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::External { callback_id } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    let exec_ctx = ironclaw_engine::ThreadExecutionContext {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        step_id: ironclaw_engine::StepId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        Err(ironclaw_engine::EngineError::GatePaused {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    fallback: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:) -> Result<ironclaw_engine::ProjectId, Error> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    let project = ironclaw_engine::Project::new(user_id, "default", "Default project");
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    default_project_id: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:fn parse_engine_thread_id(scope: Option<&str>) -> Option<ironclaw_engine::ThreadId> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .map(ironclaw_engine::ThreadId)
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        if thread.state != ironclaw_engine::ThreadState::Waiting
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            if thread.state != ironclaw_engine::ThreadState::Waiting {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ThreadState::Failed,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    if !thread.is_owned_by(user_id) || thread.state != ironclaw_engine::ThreadState::Waiting {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadState::Failed,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                .map(|td| ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ActionDef {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Approved { always }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Denied { reason: None }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    resolution: ironclaw_engine::GateResolution,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Approved { always: raw_always } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                    ironclaw_engine::ResumeKind::Approval { allow_always: true }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Denied { reason } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            let deny_msg = ironclaw_engine::ThreadMessage::user(format!(
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::GateResolution::Cancelled => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::GateResolution::CredentialProvided { token } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            if let ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ironclaw_engine::GateResolution::ExternalCallback { .. } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::EventKind::ActionExecuted {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::EventKind::ActionFailed {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    conv: &Option<ironclaw_engine::ConversationSurface>,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:) -> Option<ironclaw_engine::Thread> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            if let ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                    ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::Cancelled
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::GateResolution::CredentialProvided {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    conv_id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                    resume_kind: ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::External { callback_id } => {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    notif: &ironclaw_engine::MissionNotification,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    event: &ironclaw_engine::ThreadEvent,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    use ironclaw_engine::EventKind;
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    event: &ironclaw_engine::ThreadEvent,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    use ironclaw_engine::EventKind;
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:fn cadence_type_label(cadence: &ironclaw_engine::types::mission::MissionCadence) -> &'static str {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    use ironclaw_engine::types::mission::MissionCadence;
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:fn thread_to_info(t: &ironclaw_engine::Thread) -> EngineThreadInfo {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ProjectId(uuid)
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    let tid = ironclaw_engine::ThreadId(tid);
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_thread(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_steps(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_thread(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_events(ironclaw_engine::ThreadId(tid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_project(ironclaw_engine::ProjectId(pid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ProjectId(uuid)
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        .load_mission(ironclaw_engine::MissionId(mid))
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    let mid = ironclaw_engine::MissionId(mid);
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    mgr.pause_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    mgr.resume_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    store: &Arc<dyn ironclaw_engine::Store>,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    if let Ok(Some(mission)) = store.load_mission(ironclaw_engine::MissionId(mid)).await
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:async fn migrate_legacy_user_ids(store: &Arc<dyn ironclaw_engine::Store>, owner_id: &str) {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:    let all_projects: Vec<ironclaw_engine::Project> =
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        conversations: TokioRwLock<Vec<ironclaw_engine::ConversationSurface>>,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        threads: TokioRwLock<HashMap<ironclaw_engine::ThreadId, ironclaw_engine::Thread>>,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            thread: &ironclaw_engine::Thread,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _project_id: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _state: ironclaw_engine::ThreadState,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &ironclaw_engine::Step,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Step>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &[ironclaw_engine::ThreadEvent],
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::ThreadEvent>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &ironclaw_engine::Project,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            conversation: &ironclaw_engine::ConversationSurface,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &ironclaw_engine::MemoryDoc,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::DocId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &ironclaw_engine::CapabilityLease,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::CapabilityLease>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::LeaseId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: &ironclaw_engine::Mission,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::MissionId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Option<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::ProjectId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<Vec<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::MissionId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            _: ironclaw_engine::MissionStatus,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        ) -> Result<(), ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        thread_id: ironclaw_engine::ThreadId,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        resume_kind: ironclaw_engine::ResumeKind,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            conversation_id: ironclaw_engine::ConversationId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ThreadId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_id = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ResumeKind::Authentication { .. }
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_a = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread_b = ironclaw_engine::ThreadId::new();
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                ironclaw_engine::ResumeKind::Authentication {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        impl ironclaw_engine::LlmBackend for NoopLlm {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &[ironclaw_engine::ThreadMessage],
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &[ironclaw_engine::ActionDef],
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &ironclaw_engine::LlmCallConfig,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ) -> Result<ironclaw_engine::LlmOutput, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                Ok(ironclaw_engine::LlmOutput {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                    response: ironclaw_engine::LlmResponse::Text("done".into()),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                    usage: ironclaw_engine::TokenUsage::default(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        impl ironclaw_engine::EffectExecutor for NoopEffects {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &ironclaw_engine::CapabilityLease,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &ironclaw_engine::ThreadExecutionContext,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ) -> Result<ironclaw_engine::ActionResult, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:                _: &[ironclaw_engine::CapabilityLease],
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ) -> Result<Vec<ironclaw_engine::ActionDef>, ironclaw_engine::EngineError> {
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            default_project_id: ironclaw_engine::ProjectId::new(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let mut thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::user("hello"));
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::assistant("hi there"));
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let conv = Some(ironclaw_engine::ConversationSurface::new("web", "alice"));
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let mut thread = ironclaw_engine::Thread::new(
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadType::Foreground,
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:            ironclaw_engine::ThreadConfig::default(),
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::user("do something"));
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        thread.add_message(ironclaw_engine::ThreadMessage::assistant("done"));
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+/Users/cmcfee/lunarwing/ic/src/bridge/router.rs:        conv.add_entry(ironclaw_engine::ConversationEntry::agent(tid, "done"));
+/Users/cmcfee/lunarwing/ic/src/bridge/llm_adapter.rs://! LLM bridge adapter — wraps `LlmProvider` as `ironclaw_engine::LlmBackend`.
+/Users/cmcfee/lunarwing/ic/src/bridge/llm_adapter.rs:use ironclaw_engine::{
+/Users/cmcfee/lunarwing/ic/src/bridge/llm_adapter.rs:                    .map(|tc| ironclaw_engine::ActionCall {
+/Users/cmcfee/lunarwing/ic/src/bridge/llm_adapter.rs:    use ironclaw_engine::MessageRole;
+/Users/cmcfee/lunarwing/ic/src/bridge/skill_migration.rs:use ironclaw_engine::traits::store::Store;
+/Users/cmcfee/lunarwing/ic/src/bridge/skill_migration.rs:use ironclaw_engine::types::error::EngineError;
+/Users/cmcfee/lunarwing/ic/src/bridge/skill_migration.rs:use ironclaw_engine::types::memory::{DocType, MemoryDoc};
+/Users/cmcfee/lunarwing/ic/src/bridge/skill_migration.rs:use ironclaw_engine::types::project::ProjectId;
+/Users/cmcfee/lunarwing/ic/src/bridge/skill_migration.rs:use ironclaw_engine::types::shared_owner_id;
+/Users/cmcfee/lunarwing/ic/src/agent/agent_loop.rs:        Arc<tokio::sync::RwLock<Option<Arc<ironclaw_engine::MissionManager>>>>,
+/Users/cmcfee/lunarwing/ic/src/agent/agent_loop.rs:    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+/Users/cmcfee/lunarwing/ic/src/agent/agent_loop.rs:    pub(crate) async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+/Users/cmcfee/lunarwing/ic/src/gate/pending.rs:use ironclaw_engine::{ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/src/gate/pending.rs:    pub conversation_id: ironclaw_engine::ConversationId,
+/Users/cmcfee/lunarwing/ic/src/gate/pending.rs:            conversation_id: ironclaw_engine::ConversationId::new(),
+/Users/cmcfee/lunarwing/ic/src/gate/persistence.rs:    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/src/gate/store.rs:    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+/Users/cmcfee/lunarwing/ic/src/gate/mod.rs://! The engine crate (`ironclaw_engine::gate`) defines the [`ExecutionGate`]
+/Users/cmcfee/lunarwing/ic/src/gate/mod.rs://! [`ExecutionGate`]: ironclaw_engine::ExecutionGate
+/Users/cmcfee/lunarwing/ic/src/gate/approval.rs:use ironclaw_engine::gate::{ExecutionGate, ExecutionMode, GateContext, GateDecision, ResumeKind};
+/Users/cmcfee/lunarwing/ic/src/gate/approval.rs:    use ironclaw_engine::gate::ExecutionMode;
+/Users/cmcfee/lunarwing/ic/src/gate/approval.rs:    use ironclaw_engine::types::capability::{ActionDef, EffectType};
+/Users/cmcfee/lunarwing/ic/src/gate/approval.rs:    use ironclaw_engine::types::thread::ThreadId;

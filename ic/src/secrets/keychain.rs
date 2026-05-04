@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use ironclaw::secrets::keychain::{store_master_key, get_master_key, delete_master_key};
+//! use lunarwing::secrets::keychain::{store_master_key, get_master_key, delete_master_key};
 //!
 //! // Generate and store a new master key
 //! let key = generate_master_key();

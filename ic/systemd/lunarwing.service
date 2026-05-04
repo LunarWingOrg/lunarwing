@@ -3,8 +3,7 @@
 # Install notes:
 #   1. Create a dedicated service account:
 #        useradd --system --home-dir /var/lib/lunarwing --shell /usr/sbin/nologin lunarwing
-#   2. Install the current binary. The repo package is still named `ironclaw`;
-#      change ExecStart if your installed binary has been renamed to `lunarwing`.
+#   2. Install the binary as /usr/local/bin/lunarwing.
 #   3. Keep secrets in /etc/lunarwing/lunarwing.env with mode 0600.
 #   4. Install this file as /etc/systemd/system/lunarwing.service.
 
@@ -27,16 +26,15 @@ Environment=CLI_ENABLED=false
 Environment=AGENT_NAME=lunarwing
 Environment=ALLOW_PRIVATE_IPS=1
 Environment=PGSSLMODE=disable
+Environment=LUNARWING_BASE_DIR=/var/lib/lunarwing
 Environment=IRONCLAW_BASE_DIR=/var/lib/lunarwing
-Environment=RUST_LOG=ironclaw=info,lunarwing=info
+Environment=RUST_LOG=lunarwing=info
 
 # Required production config and secrets. Do not inline tokens, database URLs,
 # provider keys, or webhook secrets in this unit file.
 EnvironmentFile=/etc/lunarwing/lunarwing.env
 
-# Current binary name is still `ironclaw`. If the installed binary is renamed,
-# change this to `/usr/local/bin/lunarwing --no-onboard run`.
-ExecStart=/usr/local/bin/ironclaw --no-onboard run
+ExecStart=/usr/local/bin/lunarwing --no-onboard run
 
 Restart=always
 RestartSec=5

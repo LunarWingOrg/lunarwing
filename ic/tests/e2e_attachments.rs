@@ -13,8 +13,8 @@ mod attachment_tests {
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;
 
-    use ironclaw::channels::{AttachmentKind, IncomingAttachment, IncomingMessage};
-    use ironclaw::llm::ContentPart;
+    use lunarwing::channels::{AttachmentKind, IncomingAttachment, IncomingMessage};
+    use lunarwing::llm::ContentPart;
 
     const FIXTURES: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -74,7 +74,7 @@ mod attachment_tests {
         let last_user_msg = last_request
             .iter()
             .rev()
-            .find(|m| matches!(m.role, ironclaw::llm::Role::User))
+            .find(|m| matches!(m.role, lunarwing::llm::Role::User))
             .expect("should have a user message");
 
         // The augmented text should contain the attachment tags and transcript
@@ -140,7 +140,7 @@ mod attachment_tests {
         let last_user_msg = last_request
             .iter()
             .rev()
-            .find(|m| matches!(m.role, ironclaw::llm::Role::User))
+            .find(|m| matches!(m.role, lunarwing::llm::Role::User))
             .expect("should have a user message");
 
         // Should have image content parts
@@ -191,7 +191,7 @@ mod attachment_tests {
         let last_user_msg = last_request
             .iter()
             .rev()
-            .find(|m| matches!(m.role, ironclaw::llm::Role::User))
+            .find(|m| matches!(m.role, lunarwing::llm::Role::User))
             .expect("should have a user message");
 
         // No attachments → no augmentation tags, no content parts

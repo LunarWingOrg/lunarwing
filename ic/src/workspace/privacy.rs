@@ -69,8 +69,8 @@ impl PrivacyClassifier for PatternPrivacyClassifier {
 /// cause false positives, add domain-specific patterns).
 ///
 /// ```
-/// use ironclaw::workspace::privacy::ConfigurablePrivacyClassifier;
-/// use ironclaw::workspace::privacy::PrivacyClassifier;
+/// use lunarwing::workspace::privacy::ConfigurablePrivacyClassifier;
+/// use lunarwing::workspace::privacy::PrivacyClassifier;
 ///
 /// let classifier = ConfigurablePrivacyClassifier::new(vec![
 ///     r"\b\d{3}-\d{2}-\d{4}\b".into(),  // SSN only

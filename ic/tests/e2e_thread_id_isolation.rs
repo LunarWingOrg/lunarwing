@@ -10,7 +10,7 @@ mod support;
 mod tests {
     use std::time::Duration;
 
-    use ironclaw::channels::{IncomingMessage, OutgoingResponse};
+    use lunarwing::channels::{IncomingMessage, OutgoingResponse};
     use uuid::Uuid;
 
     use crate::support::test_rig::TestRigBuilder;

@@ -8,8 +8,8 @@ mod comprehensive_import_tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use ironclaw::import::openclaw::reader::OpenClawReader;
-    use ironclaw::import::{ImportError, ImportOptions};
+    use lunarwing::import::openclaw::reader::OpenClawReader;
+    use lunarwing::import::{ImportError, ImportOptions};
 
     /// Helper to create a minimal synthetic OpenClaw directory structure
     fn create_synthetic_openclaw_dir() -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
@@ -410,7 +410,7 @@ mod comprehensive_import_tests {
 
     #[test]
     fn test_import_stats_aggregation() {
-        let stats = ironclaw::import::ImportStats {
+        let stats = lunarwing::import::ImportStats {
             documents: 5,
             chunks: 10,
             conversations: 3,

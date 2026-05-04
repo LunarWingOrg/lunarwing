@@ -6,8 +6,8 @@
 //!
 //! See: <https://github.com/nearai/ironclaw/issues/352> (QA plan, item 1.1)
 
-use ironclaw::tools::validate_tool_schema;
-use ironclaw::tools::{Tool, ToolRegistry};
+use lunarwing::tools::validate_tool_schema;
+use lunarwing::tools::{Tool, ToolRegistry};
 
 /// Validate schemas of all tools registered via `register_builtin_tools()` and
 /// `register_dev_tools()` (echo, time, json, http, shell, file tools).
@@ -83,7 +83,7 @@ async fn core_registration_covers_expected_tools() {
 fn json_tool_freeform_data_field_is_valid() {
     // Regression: json tool's "data" field intentionally has no "type" for
     // OpenAI compatibility (union types with arrays require "items").
-    let tool = ironclaw::tools::builtin::JsonTool;
+    let tool = lunarwing::tools::builtin::JsonTool;
     let schema = tool.parameters_schema();
     let errors = validate_tool_schema(&schema, "json");
     assert!(errors.is_empty(), "json tool schema errors: {errors:?}");
@@ -102,7 +102,7 @@ fn json_tool_freeform_data_field_is_valid() {
 #[test]
 fn http_tool_headers_array_is_valid() {
     // Regression: http tool's "headers" is an array of {name, value} objects.
-    let tool = ironclaw::tools::builtin::HttpTool::new();
+    let tool = lunarwing::tools::builtin::HttpTool::new();
     let schema = tool.parameters_schema();
     let errors = validate_tool_schema(&schema, "http");
     assert!(errors.is_empty(), "http tool schema errors: {errors:?}");
@@ -125,7 +125,7 @@ fn http_tool_headers_array_is_valid() {
 
 #[test]
 fn time_tool_schema_is_valid() {
-    let tool = ironclaw::tools::builtin::TimeTool;
+    let tool = lunarwing::tools::builtin::TimeTool;
     let schema = tool.parameters_schema();
     let errors = validate_tool_schema(&schema, "time");
     assert!(errors.is_empty(), "time tool schema errors: {errors:?}");
@@ -133,7 +133,7 @@ fn time_tool_schema_is_valid() {
 
 #[test]
 fn shell_tool_schema_is_valid() {
-    let tool = ironclaw::tools::builtin::ShellTool::new();
+    let tool = lunarwing::tools::builtin::ShellTool::new();
     let schema = tool.parameters_schema();
     let errors = validate_tool_schema(&schema, "shell");
     assert!(errors.is_empty(), "shell tool schema errors: {errors:?}");

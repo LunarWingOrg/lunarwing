@@ -11,9 +11,9 @@ mod e2e_import_tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use ironclaw::import::openclaw::reader::OpenClawReader;
-    use ironclaw::import::openclaw::settings;
-    use ironclaw::import::{ImportOptions, ImportStats};
+    use lunarwing::import::openclaw::reader::OpenClawReader;
+    use lunarwing::import::openclaw::settings;
+    use lunarwing::import::{ImportOptions, ImportStats};
 
     /// Helper: Create a synthetic OpenClaw with full structure
     async fn setup_full_openclaw_test_env() -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>>

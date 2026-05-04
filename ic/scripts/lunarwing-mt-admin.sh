@@ -366,9 +366,9 @@ build_tenant() {
   (
     flock -x 200
 
-    say "building ironclaw for $name ..."
-    sudo -u "$name" bash -c "cd '$repo' && cargo build --profile $PROFILE --bin ironclaw" \
-      || die "ironclaw build failed for $name"
+    say "building lunarwing for $name ..."
+    sudo -u "$name" bash -c "cd '$repo' && cargo build --profile $PROFILE --bin lunarwing" \
+      || die "lunarwing build failed for $name"
 
     say "building xmpp-bridge for $name ..."
     sudo -u "$name" bash -c "cd '$repo/bridges/xmpp-bridge' && cargo build --profile $PROFILE" \
@@ -429,13 +429,14 @@ write_tenant_lunarwing_env() {
   (
     umask 077
     cat >"$path" <<ENVEOF
+LUNARWING_BASE_DIR=$state_dir
 IRONCLAW_BASE_DIR=$state_dir
-IRONCLAW_SOCKET=$run_dir/ironclaw.sock
-LUNARWING_SOCKET=$run_dir/ironclaw.sock
+LUNARWING_SOCKET=$run_dir/lunarwing.sock
+IRONCLAW_SOCKET=$run_dir/lunarwing.sock
 
 # Database
 DATABASE_BACKEND=postgres
-DATABASE_URL=postgres://ironclaw:ironclaw@127.0.0.1:${pg_port}/ironclaw
+DATABASE_URL=postgres://lunarwing:lunarwing@127.0.0.1:${pg_port}/lunarwing
 DATABASE_SSLMODE=disable
 PGSSLMODE=disable
 
@@ -483,7 +484,7 @@ HTTP_PORT=$http_port
 CLI_ENABLED=false
 ONBOARD_COMPLETED=true
 HEARTBEAT_ENABLED=false
-RUST_LOG=ironclaw=info,lunarwing=info
+RUST_LOG=lunarwing=info
 ENVEOF
   )
   chown "$name:$name" "$path"
@@ -575,16 +576,16 @@ start_tenant_postgres() {
     say "creating PostgreSQL container $container_name on port $pg_port"
     $CONTAINER_RT run -d \
       --name "$container_name" \
-      -e POSTGRES_USER=ironclaw \
-      -e POSTGRES_PASSWORD=ironclaw \
-      -e POSTGRES_DB=ironclaw \
+      -e POSTGRES_USER=lunarwing \
+      -e POSTGRES_PASSWORD=lunarwing \
+      -e POSTGRES_DB=lunarwing \
       -p "127.0.0.1:${pg_port}:5432" \
       --restart unless-stopped \
       pgvector/pgvector:pg16 >/dev/null
   fi
 
   local attempts=0
-  while ! $CONTAINER_RT exec "$container_name" pg_isready -U ironclaw -q 2>/dev/null; do
+  while ! $CONTAINER_RT exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
     [[ $attempts -lt 30 ]] || die "PostgreSQL for $name did not become ready"
     sleep 1
@@ -630,10 +631,10 @@ render_tenant_systemd_units() {
   bridge_port="$(ports_get "$name" bridge)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/ironclaw-proxy.py"
+  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   # Proxy unit
-  cat >"$user_unit_dir/ironclaw-proxy-${name}.service" <<EOF
+  cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
 [Unit]
 Description=LunarWing TensorZero proxy ($name)
 After=network.target
@@ -674,14 +675,14 @@ EOF
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target xmpp-bridge-${name}.service ironclaw-proxy-${name}.service
-Wants=xmpp-bridge-${name}.service ironclaw-proxy-${name}.service
+After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
 
 [Service]
 Type=simple
 WorkingDirectory=$repo
 EnvironmentFile=$env_dir/lunarwing.env
-ExecStart=$repo/target/${PROFILE}/ironclaw --no-onboard run
+ExecStart=$repo/target/${PROFILE}/lunarwing --no-onboard run
 Restart=always
 RestartSec=5
 TimeoutStartSec=60
@@ -726,7 +727,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "ironclaw-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -739,7 +740,7 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "ironclaw-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
 
@@ -763,7 +764,7 @@ render_tenant_openrc_units() {
   bridge_port="$(ports_get "$name" bridge)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/ironclaw-proxy.py"
+  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -771,7 +772,7 @@ render_tenant_openrc_units() {
 
 description="LunarWing AI assistant ($name)"
 
-: "\${lunarwing_command:=$repo/target/${PROFILE}/ironclaw}"
+: "\${lunarwing_command:=$repo/target/${PROFILE}/lunarwing}"
 : "\${lunarwing_args:=--no-onboard run}"
 : "\${lunarwing_user:=$name}"
 : "\${lunarwing_group:=$name}"
@@ -806,7 +807,7 @@ required_files="\${command}"
 depend() {
     need net localmount
     use dns logger
-    after firewall xmpp-bridge-${name} ironclaw-proxy-${name}
+    after firewall xmpp-bridge-${name} lunarwing-proxy-${name}
 }
 
 load_env() {
@@ -893,7 +894,7 @@ INITEOF
   chmod 0755 "/etc/init.d/xmpp-bridge-${name}"
 
   # ── TensorZero proxy init script ──
-  cat >"/etc/init.d/ironclaw-proxy-${name}" <<INITEOF
+  cat >"/etc/init.d/lunarwing-proxy-${name}" <<INITEOF
 #!/sbin/openrc-run
 
 description="LunarWing TensorZero proxy ($name)"
@@ -950,12 +951,12 @@ start_pre() {
     umask "\${proxy_umask}"
 }
 INITEOF
-  chmod 0755 "/etc/init.d/ironclaw-proxy-${name}"
+  chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
 
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} ironclaw-proxy-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -963,7 +964,7 @@ CONFD
 xmpp_bridge_rc_before="lunarwing-${name}"
 CONFD
 
-  cat >"/etc/conf.d/ironclaw-proxy-${name}" <<CONFD
+  cat >"/etc/conf.d/lunarwing-proxy-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
@@ -972,7 +973,7 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
-  rc-service "ironclaw-proxy-${name}" start
+  rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
   say "OpenRC services started for $name"
@@ -982,13 +983,13 @@ stop_tenant_openrc() {
   local name="$1"
   rc-service "lunarwing-${name}" stop 2>/dev/null || true
   rc-service "xmpp-bridge-${name}" stop 2>/dev/null || true
-  rc-service "ironclaw-proxy-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "ironclaw-proxy-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -1176,13 +1177,13 @@ status_tenant() {
   say ""
   say "Services ($INIT_SYSTEM):"
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "ironclaw-proxy-${name}"; do
+    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
       local state
       state="$(_systemctl_user "$name" is-active "${svc}.service" 2>/dev/null || echo "inactive")"
       say "  ${svc}.service: $state"
     done
   else
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "ironclaw-proxy-${name}"; do
+    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
       local state
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
       say "  $svc: $state"
@@ -1288,7 +1289,7 @@ doctor() {
 
   _check "port registry exists" test -f "$PORTS_REGISTRY"
   _check "source repo exists" test -d "$SOURCE_REPO/ic"
-  _check "proxy script exists" test -f "$SOURCE_REPO/tensorzero-proxy-configurations/ironclaw-proxy.py"
+  _check "proxy script exists" test -f "$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   say ""
   say "passed: $pass, failed: $fail"

@@ -1,4 +1,4 @@
-//! Effect bridge adapter — wraps `ToolRegistry` + `SafetyLayer` as `ironclaw_engine::EffectExecutor`.
+//! Effect bridge adapter — wraps `ToolRegistry` + `SafetyLayer` as `lunarwing_engine::EffectExecutor`.
 //!
 //! This is the security boundary between the engine and existing IronClaw
 //! infrastructure. All v1 security controls are enforced here:
@@ -15,7 +15,7 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use ironclaw_engine::{
+use lunarwing_engine::{
     ActionDef, ActionResult, CapabilityLease, EffectExecutor, EngineError, ThreadExecutionContext,
 };
 
@@ -27,7 +27,7 @@ use crate::hooks::{HookEvent, HookOutcome, HookRegistry};
 use crate::tools::permissions::PermissionState;
 use crate::tools::rate_limiter::RateLimiter;
 use crate::tools::{ApprovalRequirement, ToolRegistry};
-use ironclaw_safety::SafetyLayer;
+use lunarwing_safety::SafetyLayer;
 
 /// Wraps the existing tool pipeline to implement the engine's `EffectExecutor`.
 ///
@@ -46,7 +46,7 @@ pub struct EffectBridgeAdapter {
     /// Per-user per-tool sliding window rate limiter.
     rate_limiter: RateLimiter,
     /// Mission manager for handling mission_* function calls.
-    mission_manager: RwLock<Option<Arc<ironclaw_engine::MissionManager>>>,
+    mission_manager: RwLock<Option<Arc<lunarwing_engine::MissionManager>>>,
     /// Centralized auth manager for pre-flight credential checks.
     auth_manager: RwLock<Option<Arc<AuthManager>>>,
 }
@@ -110,12 +110,12 @@ impl EffectBridgeAdapter {
     }
 
     /// Set the mission manager (called after engine init).
-    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+    pub async fn set_mission_manager(&self, mgr: Arc<lunarwing_engine::MissionManager>) {
         *self.mission_manager.write().await = Some(mgr);
     }
 
     /// Get the mission manager if available.
-    pub async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+    pub async fn mission_manager(&self) -> Option<Arc<lunarwing_engine::MissionManager>> {
         self.mission_manager.read().await.clone()
     }
 
@@ -124,7 +124,7 @@ impl EffectBridgeAdapter {
         action_name: &str,
         call_id: Option<&str>,
         parameters: serde_json::Value,
-        resume_kind: ironclaw_engine::ResumeKind,
+        resume_kind: lunarwing_engine::ResumeKind,
         resume_output: Option<serde_json::Value>,
     ) -> EngineError {
         EngineError::GatePaused {
@@ -152,7 +152,7 @@ impl EffectBridgeAdapter {
                 action_name,
                 context.current_call_id.as_deref(),
                 parameters,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: name.to_string(),
                     instructions: output_value
                         .get("instructions")
@@ -285,7 +285,7 @@ impl EffectBridgeAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let id = uuid::Uuid::parse_str(id_str)
-                    .map(ironclaw_engine::MissionId)
+                    .map(lunarwing_engine::MissionId)
                     .map_err(|e| EngineError::Effect {
                         reason: format!("invalid mission id: {e}"),
                     });
@@ -309,7 +309,7 @@ impl EffectBridgeAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let id = uuid::Uuid::parse_str(id_str)
-                    .map(ironclaw_engine::MissionId)
+                    .map(lunarwing_engine::MissionId)
                     .map_err(|e| EngineError::Effect {
                         reason: format!("invalid mission id: {e}"),
                     });
@@ -336,7 +336,7 @@ impl EffectBridgeAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let id = uuid::Uuid::parse_str(id_str)
-                    .map(ironclaw_engine::MissionId)
+                    .map(lunarwing_engine::MissionId)
                     .map_err(|e| EngineError::Effect {
                         reason: format!("invalid mission id: {e}"),
                     });
@@ -355,13 +355,13 @@ impl EffectBridgeAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let id = uuid::Uuid::parse_str(id_str)
-                    .map(ironclaw_engine::MissionId)
+                    .map(lunarwing_engine::MissionId)
                     .map_err(|e| EngineError::Effect {
                         reason: format!("invalid mission id: {e}"),
                     });
                 match id {
                     Ok(id) => {
-                        let mut updates = ironclaw_engine::MissionUpdate::default();
+                        let mut updates = lunarwing_engine::MissionUpdate::default();
                         if let Some(name) = params.get("name").and_then(|v| v.as_str()) {
                             updates.name = Some(name.to_string());
                         }
@@ -524,7 +524,7 @@ impl EffectBridgeAdapter {
                             action_name,
                             context.current_call_id.as_deref(),
                             parameters,
-                            ironclaw_engine::ResumeKind::Approval { allow_always: true },
+                            lunarwing_engine::ResumeKind::Approval { allow_always: true },
                             None,
                         ));
                     }
@@ -584,7 +584,7 @@ impl EffectBridgeAdapter {
                         action_name,
                         context.current_call_id.as_deref(),
                         parameters,
-                        ironclaw_engine::ResumeKind::Authentication {
+                        lunarwing_engine::ResumeKind::Authentication {
                             credential_name: cred.credential_name.clone(),
                             instructions: cred.setup_instructions.clone().unwrap_or_else(|| {
                                 format!("Provide your {} token", cred.credential_name)
@@ -690,7 +690,7 @@ impl EffectBridgeAdapter {
                                 action_name,
                                 context.current_call_id.as_deref(),
                                 parameters,
-                                ironclaw_engine::ResumeKind::Authentication {
+                                lunarwing_engine::ResumeKind::Authentication {
                                     credential_name: credential_name.clone(),
                                     instructions: instructions.unwrap_or_else(|| {
                                         auth_mgr.get_setup_instructions_or_default(&credential_name)
@@ -757,7 +757,7 @@ impl EffectBridgeAdapter {
                         action_name,
                         context.current_call_id.as_deref(),
                         parameters,
-                        ironclaw_engine::ResumeKind::Authentication {
+                        lunarwing_engine::ResumeKind::Authentication {
                             credential_name: cred_name.clone(),
                             instructions: format!("Provide your {} token", cred_name),
                             auth_url: None,
@@ -833,8 +833,8 @@ impl EffectExecutor for EffectBridgeAdapter {
 }
 
 /// Parse a cadence string into a MissionCadence.
-fn parse_cadence(s: &str) -> ironclaw_engine::types::mission::MissionCadence {
-    use ironclaw_engine::types::mission::MissionCadence;
+fn parse_cadence(s: &str) -> lunarwing_engine::types::mission::MissionCadence {
+    use lunarwing_engine::types::mission::MissionCadence;
     let trimmed = s.trim().to_lowercase();
     if trimmed == "manual" {
         MissionCadence::Manual
@@ -931,7 +931,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn make_adapter() -> EffectBridgeAdapter {
-        use ironclaw_safety::SafetyConfig;
+        use lunarwing_safety::SafetyConfig;
         let config = SafetyConfig {
             max_output_length: 10_000,
             injection_check_enabled: false,
@@ -1019,12 +1019,12 @@ mod tests {
         }
     }
 
-    fn lease() -> ironclaw_engine::CapabilityLease {
-        ironclaw_engine::CapabilityLease {
-            id: ironclaw_engine::types::capability::LeaseId::new(),
-            thread_id: ironclaw_engine::ThreadId::new(),
+    fn lease() -> lunarwing_engine::CapabilityLease {
+        lunarwing_engine::CapabilityLease {
+            id: lunarwing_engine::types::capability::LeaseId::new(),
+            thread_id: lunarwing_engine::ThreadId::new(),
             capability_name: "tools".into(),
-            granted_actions: ironclaw_engine::GrantedActions::All,
+            granted_actions: lunarwing_engine::GrantedActions::All,
             granted_at: chrono::Utc::now(),
             expires_at: None,
             max_uses: None,
@@ -1035,15 +1035,15 @@ mod tests {
     }
 
     fn exec_ctx(
-        thread_id: ironclaw_engine::ThreadId,
+        thread_id: lunarwing_engine::ThreadId,
         call_id: Option<&str>,
-    ) -> ironclaw_engine::ThreadExecutionContext {
-        ironclaw_engine::ThreadExecutionContext {
+    ) -> lunarwing_engine::ThreadExecutionContext {
+        lunarwing_engine::ThreadExecutionContext {
             thread_id,
-            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
-            project_id: ironclaw_engine::ProjectId::new(),
+            thread_type: lunarwing_engine::types::thread::ThreadType::Foreground,
+            project_id: lunarwing_engine::ProjectId::new(),
             user_id: "test_user".to_string(),
-            step_id: ironclaw_engine::StepId::new(),
+            step_id: lunarwing_engine::StepId::new(),
             current_call_id: call_id.map(str::to_string),
             source_channel: None,
         }
@@ -1051,7 +1051,7 @@ mod tests {
 
     #[tokio::test]
     async fn need_approval_preserves_current_call_id() {
-        use ironclaw_safety::SafetyConfig;
+        use lunarwing_safety::SafetyConfig;
 
         let tools = Arc::new(ToolRegistry::new());
         tools.register(Arc::new(ApprovalTestTool)).await;
@@ -1065,7 +1065,7 @@ mod tests {
             Arc::new(HookRegistry::default()),
         );
 
-        let thread_id = ironclaw_engine::ThreadId::new();
+        let thread_id = lunarwing_engine::ThreadId::new();
         let result = adapter
             .execute_action(
                 "approval_test",
@@ -1088,7 +1088,7 @@ mod tests {
 
     #[tokio::test]
     async fn resolved_pending_action_bypasses_approval_once() {
-        use ironclaw_safety::SafetyConfig;
+        use lunarwing_safety::SafetyConfig;
 
         let tools = Arc::new(ToolRegistry::new());
         tools.register(Arc::new(ApprovalTestTool)).await;
@@ -1102,7 +1102,7 @@ mod tests {
             Arc::new(HookRegistry::default()),
         );
 
-        let thread_id = ironclaw_engine::ThreadId::new();
+        let thread_id = lunarwing_engine::ThreadId::new();
         let first = adapter
             .execute_action(
                 "approval_test",
@@ -1237,7 +1237,7 @@ mod tests {
 
     #[tokio::test]
     async fn persisted_always_allow_skips_gate() {
-        use ironclaw_safety::SafetyConfig;
+        use lunarwing_safety::SafetyConfig;
 
         let tools = Arc::new(ToolRegistry::new());
         tools.register(Arc::new(ApprovalTestTool)).await;
@@ -1264,7 +1264,7 @@ mod tests {
             .set_settings_store(settings as Arc<dyn SettingsStore + Send + Sync>)
             .await;
 
-        let thread_id = ironclaw_engine::ThreadId::new();
+        let thread_id = lunarwing_engine::ThreadId::new();
         let result = adapter
             .execute_action(
                 "approval_test",
@@ -1379,7 +1379,7 @@ mod tests {
             Arc::new(ToolRegistry::new().with_credentials(Arc::clone(&cred_reg), secrets.clone()));
         tools.register_builtin_tools();
 
-        use ironclaw_safety::SafetyConfig;
+        use lunarwing_safety::SafetyConfig;
         let adapter = EffectBridgeAdapter::new(
             tools,
             Arc::new(SafetyLayer::new(&SafetyConfig {
@@ -1408,11 +1408,11 @@ mod tests {
             "url": "https://api.github.com/repos/nearai/ironclaw/issues",
             "method": "GET"
         });
-        let lease = ironclaw_engine::CapabilityLease {
-            id: ironclaw_engine::types::capability::LeaseId::new(),
-            thread_id: ironclaw_engine::ThreadId::new(),
+        let lease = lunarwing_engine::CapabilityLease {
+            id: lunarwing_engine::types::capability::LeaseId::new(),
+            thread_id: lunarwing_engine::ThreadId::new(),
             capability_name: "tools".into(),
-            granted_actions: ironclaw_engine::GrantedActions::All,
+            granted_actions: lunarwing_engine::GrantedActions::All,
             granted_at: chrono::Utc::now(),
             expires_at: None,
             max_uses: None,
@@ -1420,12 +1420,12 @@ mod tests {
             revoked: false,
             revoked_reason: None,
         };
-        let ctx = ironclaw_engine::ThreadExecutionContext {
-            thread_id: ironclaw_engine::ThreadId::new(),
-            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
-            project_id: ironclaw_engine::ProjectId::new(),
+        let ctx = lunarwing_engine::ThreadExecutionContext {
+            thread_id: lunarwing_engine::ThreadId::new(),
+            thread_type: lunarwing_engine::types::thread::ThreadType::Foreground,
+            project_id: lunarwing_engine::ProjectId::new(),
             user_id: "test_user".to_string(),
-            step_id: ironclaw_engine::StepId::new(),
+            step_id: lunarwing_engine::StepId::new(),
             current_call_id: None,
             source_channel: None,
         };
@@ -1437,7 +1437,7 @@ mod tests {
         // approval gate first.
         match result {
             Err(EngineError::GatePaused { resume_kind, .. }) => match *resume_kind {
-                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+                lunarwing_engine::ResumeKind::Approval { allow_always } => {
                     assert!(allow_always);
                 }
                 other => panic!("Expected Approval gate, got: {other:?}"),
@@ -1492,18 +1492,18 @@ mod tests {
 
         let adapter = EffectBridgeAdapter::new(
             tools,
-            Arc::new(SafetyLayer::new(&ironclaw_safety::SafetyConfig {
+            Arc::new(SafetyLayer::new(&lunarwing_safety::SafetyConfig {
                 max_output_length: 10_000,
                 injection_check_enabled: false,
             })),
             Arc::new(HookRegistry::default()),
         );
 
-        let lease = ironclaw_engine::CapabilityLease {
-            id: ironclaw_engine::types::capability::LeaseId::new(),
-            thread_id: ironclaw_engine::ThreadId::new(),
+        let lease = lunarwing_engine::CapabilityLease {
+            id: lunarwing_engine::types::capability::LeaseId::new(),
+            thread_id: lunarwing_engine::ThreadId::new(),
             capability_name: "tools".into(),
-            granted_actions: ironclaw_engine::GrantedActions::All,
+            granted_actions: lunarwing_engine::GrantedActions::All,
             granted_at: chrono::Utc::now(),
             expires_at: None,
             max_uses: None,
@@ -1511,12 +1511,12 @@ mod tests {
             revoked: false,
             revoked_reason: None,
         };
-        let ctx = ironclaw_engine::ThreadExecutionContext {
-            thread_id: ironclaw_engine::ThreadId::new(),
-            thread_type: ironclaw_engine::types::thread::ThreadType::Foreground,
-            project_id: ironclaw_engine::ProjectId::new(),
+        let ctx = lunarwing_engine::ThreadExecutionContext {
+            thread_id: lunarwing_engine::ThreadId::new(),
+            thread_type: lunarwing_engine::types::thread::ThreadType::Foreground,
+            project_id: lunarwing_engine::ProjectId::new(),
             user_id: "test_user".to_string(),
-            step_id: ironclaw_engine::StepId::new(),
+            step_id: lunarwing_engine::StepId::new(),
             current_call_id: Some("call_123".to_string()),
             source_channel: None,
         };
@@ -1540,7 +1540,7 @@ mod tests {
                 assert_eq!(gate_name, "authentication");
                 assert_eq!(action_name, "tool_activate");
                 match *resume_kind {
-                    ironclaw_engine::ResumeKind::Authentication {
+                    lunarwing_engine::ResumeKind::Authentication {
                         credential_name,
                         auth_url,
                         ..

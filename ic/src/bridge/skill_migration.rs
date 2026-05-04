@@ -12,15 +12,15 @@
 
 use std::sync::Arc;
 
-use ironclaw_engine::traits::store::Store;
-use ironclaw_engine::types::error::EngineError;
-use ironclaw_engine::types::memory::{DocType, MemoryDoc};
-use ironclaw_engine::types::project::ProjectId;
-use ironclaw_engine::types::shared_owner_id;
+use lunarwing_engine::traits::store::Store;
+use lunarwing_engine::types::error::EngineError;
+use lunarwing_engine::types::memory::{DocType, MemoryDoc};
+use lunarwing_engine::types::project::ProjectId;
+use lunarwing_engine::types::shared_owner_id;
 
-use ironclaw_skills::SkillRegistry;
-use ironclaw_skills::types::{LoadedSkill, SkillSource};
-use ironclaw_skills::v2::{SkillMetrics, V2SkillMetadata, V2SkillSource};
+use lunarwing_skills::SkillRegistry;
+use lunarwing_skills::types::{LoadedSkill, SkillSource};
+use lunarwing_skills::v2::{SkillMetrics, V2SkillMetadata, V2SkillSource};
 
 /// Migrate v1 skills to v2 MemoryDocs.
 ///
@@ -128,7 +128,7 @@ fn v1_skill_to_memory_doc(skill: &LoadedSkill, project_id: ProjectId) -> MemoryD
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ironclaw_skills::types::{ActivationCriteria, SkillManifest, SkillTrust};
+    use lunarwing_skills::types::{ActivationCriteria, SkillManifest, SkillTrust};
     use std::path::PathBuf;
 
     fn make_v1_skill(name: &str, content: &str) -> LoadedSkill {
@@ -147,7 +147,7 @@ mod tests {
             prompt_content: content.to_string(),
             trust: SkillTrust::Trusted,
             source: SkillSource::User(PathBuf::from("/tmp/test")),
-            content_hash: ironclaw_skills::compute_hash(content),
+            content_hash: lunarwing_skills::compute_hash(content),
             compiled_patterns: vec![],
             lowercased_keywords: vec!["test".to_string()],
             lowercased_exclude_keywords: vec![],

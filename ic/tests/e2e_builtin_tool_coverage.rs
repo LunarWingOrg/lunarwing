@@ -10,7 +10,7 @@ mod support;
 mod tests {
     use std::time::Duration;
 
-    use ironclaw::agent::routine::{RoutineAction, Trigger};
+    use lunarwing::agent::routine::{RoutineAction, Trigger};
 
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;

@@ -1,6 +1,6 @@
 """pytest fixtures for E2E tests.
 
-Session-scoped: build binary, start mock LLM, start ironclaw, launch browser.
+Session-scoped: build binary, start mock LLM, start lunarwing, launch browser.
 Function-scoped: fresh browser context and page per test.
 """
 
@@ -43,16 +43,16 @@ except Exception:
     pass
 
 # Temp directory for the libSQL database file (cleaned up automatically)
-_DB_TMPDIR = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-")
+_DB_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-")
 
 # Temp HOME so pairing/allowFrom state never touches the developer's real ~/.ironclaw
-_HOME_TMPDIR = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-home-")
+_HOME_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-home-")
 
 # Temp directories for WASM extensions. These start empty and are populated by
 # the install pipeline during tests; fixtures do not pre-populate dev build
 # artifacts into them.
-_WASM_TOOLS_TMPDIR = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-wasm-tools-")
-_WASM_CHANNELS_TMPDIR = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-wasm-channels-")
+_WASM_TOOLS_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-wasm-tools-")
+_WASM_CHANNELS_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-wasm-channels-")
 
 
 def _latest_mtime(path: Path) -> float:
@@ -147,11 +147,11 @@ def _forward_coverage_env(env: dict[str, str]) -> None:
 
 
 @pytest.fixture(scope="session")
-def ironclaw_binary():
-    """Ensure ironclaw binary is built. Returns the binary path."""
-    binary = ROOT / "target" / "debug" / "ironclaw"
+def lunarwing_binary():
+    """Ensure lunarwing binary is built. Returns the binary path."""
+    binary = ROOT / "target" / "debug" / "lunarwing"
     if _binary_needs_rebuild(binary):
-        print("Building ironclaw (this may take a while)...")
+        print("Building lunarwing (this may take a while)...")
         subprocess.run(
             ["cargo", "build", "--no-default-features", "--features", "libsql"],
             cwd=ROOT,
@@ -247,12 +247,12 @@ def _wasm_build_symlinks():
 
 @pytest.fixture(scope="session")
 async def ironclaw_server(
-    ironclaw_binary,
+    lunarwing_binary,
     mock_llm_server,
     wasm_tools_dir,
     server_ports,
 ):
-    """Start the ironclaw gateway. Yields the base URL."""
+    """Start the lunarwing gateway. Yields the base URL."""
     home_dir = _HOME_TMPDIR.name
     gateway_port = server_ports["gateway"]
     http_port = server_ports["http"]
@@ -263,8 +263,9 @@ async def ironclaw_server(
         # Minimal env: PATH for process spawning, HOME for Rust/cargo defaults
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": home_dir,
+        "LUNARWING_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
         "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
-        "RUST_LOG": "ironclaw=info",
+        "RUST_LOG": "lunarwing=info",
         "RUST_BACKTRACE": "1",
         "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
         "GATEWAY_ENABLED": "true",
@@ -299,7 +300,7 @@ async def ironclaw_server(
     }
     _forward_coverage_env(env)
     proc = await asyncio.create_subprocess_exec(
-        ironclaw_binary, "--no-onboard",
+        lunarwing_binary, "--no-onboard",
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -324,7 +325,7 @@ async def ironclaw_server(
                 pass
         stderr_text = stderr_bytes.decode("utf-8", errors="replace")
         pytest.fail(
-            f"ironclaw server failed to start on port {gateway_port} "
+            f"lunarwing server failed to start on port {gateway_port} "
             f"(returncode={returncode}).\nstderr:\n{stderr_text}"
         )
     finally:
@@ -342,14 +343,14 @@ async def ironclaw_server(
 
 @pytest.fixture(scope="session")
 async def hosted_oauth_refresh_server(
-    ironclaw_binary,
+    lunarwing_binary,
     mock_llm_server,
     wasm_tools_dir,
 ):
-    """Start a hosted-mode ironclaw instance for OAuth refresh regression tests."""
+    """Start a hosted-mode lunarwing instance for OAuth refresh regression tests."""
     reserved = _reserve_loopback_sockets(2)
-    db_tmpdir = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-hosted-oauth-db-")
-    home_tmpdir = tempfile.TemporaryDirectory(prefix="ironclaw-e2e-hosted-oauth-home-")
+    db_tmpdir = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-hosted-oauth-db-")
+    home_tmpdir = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-hosted-oauth-home-")
 
     try:
         gateway_port = reserved[0].getsockname()[1]
@@ -363,8 +364,9 @@ async def hosted_oauth_refresh_server(
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": home_dir,
+            "LUNARWING_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
             "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
-            "RUST_LOG": "ironclaw=info",
+            "RUST_LOG": "lunarwing=info",
             "RUST_BACKTRACE": "1",
             "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
             "GATEWAY_ENABLED": "true",
@@ -398,7 +400,7 @@ async def hosted_oauth_refresh_server(
         _forward_coverage_env(env)
 
         proc = await asyncio.create_subprocess_exec(
-            ironclaw_binary, "--no-onboard",
+            lunarwing_binary, "--no-onboard",
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -456,7 +458,7 @@ async def http_channel_server(ironclaw_server, server_ports):
 
 @pytest.fixture(scope="session")
 async def http_channel_server_without_secret(
-    ironclaw_binary,
+    lunarwing_binary,
     mock_llm_server,
     wasm_tools_dir,
 ):
@@ -467,7 +469,7 @@ async def http_channel_server_without_secret(
         # Minimal env: PATH for process spawning, HOME for Rust/cargo defaults
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": os.environ.get("HOME", "/tmp"),
-        "RUST_LOG": "ironclaw=info",
+        "RUST_LOG": "lunarwing=info",
         "RUST_BACKTRACE": "1",
         "GATEWAY_ENABLED": "true",
         "GATEWAY_HOST": "127.0.0.1",
@@ -500,7 +502,7 @@ async def http_channel_server_without_secret(
     }
     _forward_coverage_env(env)
     proc = await asyncio.create_subprocess_exec(
-        ironclaw_binary, "--no-onboard",
+        lunarwing_binary, "--no-onboard",
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -527,7 +529,7 @@ async def http_channel_server_without_secret(
                 pass
         stderr_text = stderr_bytes.decode("utf-8", errors="replace")
         pytest.fail(
-            f"ironclaw server without webhook secret failed to start on ports "
+            f"lunarwing server without webhook secret failed to start on ports "
             f"gateway={gateway_port}, http={http_port} "
             f"(returncode={returncode}).\nstderr:\n{stderr_text}"
         )

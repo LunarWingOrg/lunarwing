@@ -14,7 +14,7 @@ mod tests {
     use std::time::Duration;
 
     use chrono::Utc;
-    use ironclaw::agent::routine::{
+    use lunarwing::agent::routine::{
         NotifyConfig, Routine, RoutineAction, RoutineGuardrails, Trigger,
     };
     use uuid::Uuid;

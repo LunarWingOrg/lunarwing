@@ -96,5 +96,5 @@ pub mod prelude {
     pub use crate::llm::LlmProvider;
     pub use crate::tools::{Tool, ToolOutput, ToolRegistry};
     pub use crate::workspace::{MemoryDocument, Workspace};
-    pub use ironclaw_safety::{SanitizedOutput, Sanitizer};
+    pub use lunarwing_safety::{SanitizedOutput, Sanitizer};
 }

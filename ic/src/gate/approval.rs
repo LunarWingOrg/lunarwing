@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ironclaw_engine::gate::{ExecutionGate, ExecutionMode, GateContext, GateDecision, ResumeKind};
+use lunarwing_engine::gate::{ExecutionGate, ExecutionMode, GateContext, GateDecision, ResumeKind};
 
 use crate::tools::rate_limiter::RateLimiter;
 use crate::tools::{ApprovalRequirement, ToolRegistry};
@@ -308,9 +308,9 @@ impl ExecutionGate for RelayChannelGate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ironclaw_engine::gate::ExecutionMode;
-    use ironclaw_engine::types::capability::{ActionDef, EffectType};
-    use ironclaw_engine::types::thread::ThreadId;
+    use lunarwing_engine::gate::ExecutionMode;
+    use lunarwing_engine::types::capability::{ActionDef, EffectType};
+    use lunarwing_engine::types::thread::ThreadId;
     use std::collections::HashSet;
 
     fn action_def(name: &str, requires_approval: bool) -> ActionDef {

@@ -36,7 +36,7 @@ Options:
   --base-dir PATH            Instance directory. Default: $LUNARWING_BASE_DIR, $IRONCLAW_BASE_DIR, or ~/.ironclaw
   --database KIND            postgres or libsql. Default: libsql
   --database-url URL         Required when --database postgres
-  --libsql-path PATH         libSQL database path. Default: <base-dir>/ironclaw.db
+  --libsql-path PATH         libSQL database path. Default: <base-dir>/lunarwing.db
   --llm-base-url URL         Default: http://192.168.1.157:3002
   --llm-model MODEL          Default: tensorzero::function_name::ironclaw
   --llm-api-key KEY          Optional. Use "unneeded" for placeholder-only endpoints
@@ -44,8 +44,8 @@ Options:
   --agent-name NAME          Default: lunarwing
   --secrets-master-key HEX   Optional 64-hex env master key for encrypted secrets
   --timezone TZ              Default: America/New_York
-  --bin PATH                 Path to ironclaw binary. Auto-detected if omitted
-  --run-onboard              Launch `ironclaw onboard --quick` after seeding files
+  --bin PATH                 Path to lunarwing binary. Auto-detected if omitted
+  --run-onboard              Launch `lunarwing onboard --quick` after seeding files
   --force                    Overwrite existing workspace-template/*.md files too
   --help                     Show this help
 
@@ -58,7 +58,7 @@ Examples:
   scripts/setup-instance.sh \
     --base-dir /srv/lunarwing-dev \
     --database libsql \
-    --libsql-path /srv/lunarwing-dev/ironclaw.db \
+    --libsql-path /srv/lunarwing-dev/lunarwing.db \
     --gateway-token 'replace-me-gateway-token' \
     --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
     --run-onboard
@@ -98,18 +98,18 @@ resolve_bin_path() {
     return 0
   fi
 
-  if [[ -x "$REPO_ROOT/target/debug/ironclaw" ]]; then
-    printf '%s' "$REPO_ROOT/target/debug/ironclaw"
+  if [[ -x "$REPO_ROOT/target/debug/lunarwing" ]]; then
+    printf '%s' "$REPO_ROOT/target/debug/lunarwing"
     return 0
   fi
 
-  if [[ -x "$REPO_ROOT/target/release/ironclaw" ]]; then
-    printf '%s' "$REPO_ROOT/target/release/ironclaw"
+  if [[ -x "$REPO_ROOT/target/release/lunarwing" ]]; then
+    printf '%s' "$REPO_ROOT/target/release/lunarwing"
     return 0
   fi
 
-  if command -v ironclaw >/dev/null 2>&1; then
-    command -v ironclaw
+  if command -v lunarwing >/dev/null 2>&1; then
+    command -v lunarwing
     return 0
   fi
 
@@ -216,9 +216,9 @@ print_summary() {
     say "  4. Service: LUNARWING_BASE_DIR=\"$BASE_DIR\" \"$bin\" service install"
   else
     say "Next steps:"
-    say "  1. Build or install ironclaw"
-    say "  2. Run: LUNARWING_BASE_DIR=\"$BASE_DIR\" /path/to/ironclaw onboard --quick"
-    say "  3. Start: LUNARWING_BASE_DIR=\"$BASE_DIR\" /path/to/ironclaw run"
+    say "  1. Build or install lunarwing"
+    say "  2. Run: LUNARWING_BASE_DIR=\"$BASE_DIR\" /path/to/lunarwing onboard --quick"
+    say "  3. Start: LUNARWING_BASE_DIR=\"$BASE_DIR\" /path/to/lunarwing run"
   fi
 }
 
@@ -230,7 +230,7 @@ run_onboard_if_requested() {
     return 0
   fi
 
-  [[ -n "$bin" ]] || die "--run-onboard requested but ironclaw binary was not found"
+  [[ -n "$bin" ]] || die "--run-onboard requested but lunarwing binary was not found"
 
   say ""
   say "Launching quick onboarding..."
@@ -330,7 +330,7 @@ if [[ "$DATABASE_KIND" == "postgres" && -z "$DATABASE_URL" ]]; then
 fi
 
 if [[ "$DATABASE_KIND" == "libsql" && -z "$LIBSQL_PATH" ]]; then
-  LIBSQL_PATH="$BASE_DIR/ironclaw.db"
+  LIBSQL_PATH="$BASE_DIR/lunarwing.db"
 fi
 
 validate_hex_master_key

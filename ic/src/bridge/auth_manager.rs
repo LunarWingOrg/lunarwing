@@ -15,7 +15,7 @@ use crate::extensions::naming::canonicalize_extension_name;
 use crate::secrets::SecretsStore;
 use crate::tools::builtin::extract_host_from_params;
 use crate::tools::wasm::SharedCredentialRegistry;
-use ironclaw_skills::{SkillCredentialSpec, SkillRegistry};
+use lunarwing_skills::{SkillCredentialSpec, SkillRegistry};
 
 /// Result of checking whether a tool call has the credentials it needs.
 #[derive(Debug)]
@@ -514,7 +514,7 @@ mod tests {
 
     async fn make_skill_registry_with_google_oauth(
         dir: &Path,
-    ) -> Arc<std::sync::RwLock<ironclaw_skills::SkillRegistry>> {
+    ) -> Arc<std::sync::RwLock<lunarwing_skills::SkillRegistry>> {
         std::fs::create_dir_all(dir.join("gmail-skill")).expect("create skill dir");
         std::fs::write(
             dir.join("gmail-skill").join("SKILL.md"),
@@ -542,7 +542,7 @@ Test skill
         )
         .expect("write skill");
 
-        let mut registry = ironclaw_skills::SkillRegistry::new(dir.to_path_buf());
+        let mut registry = lunarwing_skills::SkillRegistry::new(dir.to_path_buf());
         registry.discover_all().await;
         Arc::new(std::sync::RwLock::new(registry))
     }

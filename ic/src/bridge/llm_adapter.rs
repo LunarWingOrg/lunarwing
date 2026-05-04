@@ -1,8 +1,8 @@
-//! LLM bridge adapter — wraps `LlmProvider` as `ironclaw_engine::LlmBackend`.
+//! LLM bridge adapter — wraps `LlmProvider` as `lunarwing_engine::LlmBackend`.
 
 use std::sync::Arc;
 
-use ironclaw_engine::{
+use lunarwing_engine::{
     ActionDef, EngineError, LlmBackend, LlmCallConfig, LlmOutput, LlmResponse, ThreadMessage,
     TokenUsage,
 };
@@ -117,7 +117,7 @@ impl LlmBackend for LlmBridgeAdapter {
                 calls: response
                     .tool_calls
                     .iter()
-                    .map(|tc| ironclaw_engine::ActionCall {
+                    .map(|tc| lunarwing_engine::ActionCall {
                         id: tc.id.clone(),
                         action_name: tc.name.clone(),
                         parameters: tc.arguments.clone(),
@@ -157,7 +157,7 @@ impl LlmBackend for LlmBridgeAdapter {
 // ── Conversion helpers ──────────────────────────────────────
 
 fn thread_msg_to_chat(msg: &ThreadMessage) -> ChatMessage {
-    use ironclaw_engine::MessageRole;
+    use lunarwing_engine::MessageRole;
 
     let role = match msg.role {
         MessageRole::System => Role::System,

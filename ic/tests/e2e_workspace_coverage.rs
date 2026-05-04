@@ -304,7 +304,7 @@ mod tests {
         let first_request = &captured[0];
         let system_msg = first_request
             .iter()
-            .find(|msg| matches!(msg.role, ironclaw::llm::Role::System));
+            .find(|msg| matches!(msg.role, lunarwing::llm::Role::System));
         assert!(
             system_msg.is_some(),
             "Expected a system message in the first request"

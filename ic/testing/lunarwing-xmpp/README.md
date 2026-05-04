@@ -263,7 +263,7 @@ rm -rf "$BASE"
 scripts/setup-instance.sh \
   --base-dir "$BASE" \
   --database libsql \
-  --libsql-path "$BASE/ironclaw.db" \
+  --libsql-path "$BASE/lunarwing.db" \
   --llm-base-url http://127.0.0.1:3002/openai/v1 \
   --llm-model tensorzero::function_name::ironclaw \
   --llm-api-key "$LLM_API_KEY" \
@@ -300,7 +300,7 @@ for key, value in values.items():
 path.write_text("\n".join(out) + "\n")
 PY
 
-LUNARWING_BASE_DIR="$BASE" ./target/debug/ironclaw run
+LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 ```
 
 That flow still seeds `config.toml` plus `workspace-template/` from `deploy/`,
@@ -318,12 +318,11 @@ scripts/lunarwing-xmpp-test-env.sh build
 This builds:
 
 ```text
-target/debug/ironclaw
+target/debug/lunarwing
 bridges/xmpp-bridge/target/debug/xmpp-bridge
 ```
 
-The binary is still named `ironclaw` in the current codebase, even though the
-project is now called LunarWing.
+The binary is named `lunarwing`.
 
 For release binaries:
 
@@ -510,7 +509,7 @@ scripts/lunarwing-xmpp-test-env.sh stop-lunarwing
 Default command:
 
 ```bash
-target/debug/ironclaw --no-onboard run
+target/debug/lunarwing --no-onboard run
 ```
 
 If LunarWing needs onboarding or provider credentials, run onboarding against
@@ -520,7 +519,7 @@ the isolated env:
 set -a
 . "${LUNARWING_TEST_ROOT:-/tmp/lunarwing-xmpp-test}/env/lunarwing.env"
 set +a
-target/debug/ironclaw onboard
+target/debug/lunarwing onboard
 ```
 
 Then start LunarWing again through the harness.
@@ -590,7 +589,7 @@ If the test stack is already running from manual `start-*` commands, stop those
 first so the service-managed units can bind the same ports cleanly.
 
 The built-in Rust service installer is separate from this test renderer. Running
-`ironclaw service install` now detects the host service manager:
+`lunarwing service install` now detects the host service manager:
 
 - systemd: installs the user unit as `lunarwing.service` and attempts to disable
   the legacy `ironclaw.service` user unit when it exists
@@ -661,7 +660,7 @@ Keep these as follow-up harness checks when the current setup work is stable:
 - `Gotify real send`: add a real `gotify_app_token`, set `gotify_url`, and make
   the tool send one notification.
 - `Dual-instance socket isolation`: run two harness roots at once and confirm
-  each gets its own `run/ironclaw.sock` and `repl` attaches to the correct
+  each gets its own `run/lunarwing.sock` and `repl` attaches to the correct
   daemon.
 - `Init idempotence`: run `init` twice on the same root after customizing env
   values and confirm the harness preserves user-edited tokens, DB mode, agent

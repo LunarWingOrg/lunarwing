@@ -17,27 +17,27 @@ mod tests {
     use secrecy::SecretString;
     use uuid::Uuid;
 
-    use ironclaw::agent::routine::{
+    use lunarwing::agent::routine::{
         NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus, Trigger,
     };
-    use ironclaw::agent::routine_engine::RoutineEngine;
-    use ironclaw::agent::{
+    use lunarwing::agent::routine_engine::RoutineEngine;
+    use lunarwing::agent::{
         HeartbeatConfig, HeartbeatRunner, SandboxReadiness, Scheduler, SchedulerDeps,
     };
-    use ironclaw::channels::IncomingMessage;
-    use ironclaw::config::{AgentConfig, RoutineConfig, SafetyConfig};
-    use ironclaw::context::{ContextManager, JobContext};
-    use ironclaw::db::{Database, libsql::LibSqlBackend};
-    use ironclaw::extensions::ExtensionManager;
-    use ironclaw::hooks::HookRegistry;
-    use ironclaw::llm::LlmProvider;
-    use ironclaw::safety::SafetyLayer;
-    use ironclaw::secrets::{InMemorySecretsStore, SecretsCrypto, SecretsStore};
-    use ironclaw::tools::builtin::routine::RoutineUpdateTool;
-    use ironclaw::tools::mcp::{McpProcessManager, McpSessionManager};
-    use ironclaw::tools::{ApprovalRequirement, Tool, ToolError, ToolOutput, ToolRegistry};
-    use ironclaw::workspace::Workspace;
-    use ironclaw::workspace::hygiene::HygieneConfig;
+    use lunarwing::channels::IncomingMessage;
+    use lunarwing::config::{AgentConfig, RoutineConfig, SafetyConfig};
+    use lunarwing::context::{ContextManager, JobContext};
+    use lunarwing::db::{Database, libsql::LibSqlBackend};
+    use lunarwing::extensions::ExtensionManager;
+    use lunarwing::hooks::HookRegistry;
+    use lunarwing::llm::LlmProvider;
+    use lunarwing::safety::SafetyLayer;
+    use lunarwing::secrets::{InMemorySecretsStore, SecretsCrypto, SecretsStore};
+    use lunarwing::tools::builtin::routine::RoutineUpdateTool;
+    use lunarwing::tools::mcp::{McpProcessManager, McpSessionManager};
+    use lunarwing::tools::{ApprovalRequirement, Tool, ToolError, ToolOutput, ToolRegistry};
+    use lunarwing::workspace::Workspace;
+    use lunarwing::workspace::hygiene::HygieneConfig;
 
     use crate::support::trace_llm::{LlmTrace, TraceLlm, TraceResponse, TraceStep, TraceToolCall};
 
@@ -968,7 +968,7 @@ mod tests {
 
         let result = runner.check_heartbeat().await;
         match result {
-            ironclaw::agent::HeartbeatResult::NeedsAttention(msg) => {
+            lunarwing::agent::HeartbeatResult::NeedsAttention(msg) => {
                 assert!(
                     msg.contains("error"),
                     "Expected 'error' in attention message: {msg}"
@@ -1014,7 +1014,7 @@ mod tests {
 
         let result = runner.check_heartbeat().await;
         assert!(
-            matches!(result, ironclaw::agent::HeartbeatResult::Skipped),
+            matches!(result, lunarwing::agent::HeartbeatResult::Skipped),
             "Expected Skipped for empty checklist, got: {result:?}"
         );
     }
@@ -1141,10 +1141,10 @@ mod tests {
 
     #[tokio::test]
     async fn full_job_max_concurrent_blocks_second_fire_while_first_active() {
-        use ironclaw::agent::routine::{
+        use lunarwing::agent::routine::{
             NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RoutineRun, RunStatus, Trigger,
         };
-        use ironclaw::error::RoutineError;
+        use lunarwing::error::RoutineError;
 
         let (db, _tmp) = create_test_db().await;
         let ws = create_workspace(&db);

@@ -137,7 +137,7 @@ impl GatePersistence for FileGatePersistence {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, Utc};
-    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+    use lunarwing_engine::{ConversationId, ResumeKind, ThreadId};
 
     use super::*;
 

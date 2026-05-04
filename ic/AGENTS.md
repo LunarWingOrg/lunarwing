@@ -76,7 +76,7 @@ Start with these deeper docs as needed:
 
 - Treat systemd unit environment values as secret-bearing. Do not paste passwords, bearer tokens, or webhook secrets into user-facing output; summarize or redact them.
 - `xmpp-bridge.service` is coupled to `lunarwing.service` with `PartOf=lunarwing.service`, so LunarWing restarts can also restart the bridge. Do not assume the bridge caused a LunarWing stop just because both units restarted together.
-- For install-style harness tests on Linux, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; OpenRC validation should use `ironclaw service install` or the committed OpenRC templates.
+- For install-style harness tests on Linux, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
 - The harness and service path intentionally seed `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless the task explicitly changes the network or SSL assumptions.
 - Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes. It requires `XMPP_BRIDGE_TOKEN`; `status`, `set <n>`, `off`, and `reset` are the main commands.
 - Use `scripts/xmpp-configure.sh` for bridge room/configuration checks and configure calls when working with the existing XMPP bridge API.

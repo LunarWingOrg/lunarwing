@@ -292,7 +292,7 @@ impl PendingGateStore {
 mod tests {
     use super::*;
     use chrono::{Duration, Utc};
-    use ironclaw_engine::{ConversationId, ResumeKind, ThreadId};
+    use lunarwing_engine::{ConversationId, ResumeKind, ThreadId};
 
     fn sample_gate_with(
         user_id: &str,

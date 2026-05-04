@@ -10,16 +10,16 @@ mod tests {
 
     use async_trait::async_trait;
     use futures::StreamExt;
-    use ironclaw::agent::{Agent, AgentDeps};
-    use ironclaw::app::{AppBuilder, AppBuilderFlags};
-    use ironclaw::channels::web::log_layer::LogBroadcaster;
-    use ironclaw::channels::{
+    use lunarwing::agent::{Agent, AgentDeps};
+    use lunarwing::app::{AppBuilder, AppBuilderFlags};
+    use lunarwing::channels::web::log_layer::LogBroadcaster;
+    use lunarwing::channels::{
         Channel, ChannelManager, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate,
     };
-    use ironclaw::config::Config;
-    use ironclaw::db::{Database, libsql::LibSqlBackend};
-    use ironclaw::error::ChannelError;
-    use ironclaw::llm::{LlmProvider, SessionConfig, SessionManager};
+    use lunarwing::config::Config;
+    use lunarwing::db::{Database, libsql::LibSqlBackend};
+    use lunarwing::error::ChannelError;
+    use lunarwing::llm::{LlmProvider, SessionConfig, SessionManager};
     use tokio::sync::{Mutex, mpsc};
     use tokio_stream::wrappers::ReceiverStream;
 
@@ -198,7 +198,7 @@ mod tests {
             http_interceptor: None,
             transcription: None,
             document_extraction: None,
-            sandbox_readiness: ironclaw::agent::SandboxReadiness::DisabledByConfig,
+            sandbox_readiness: lunarwing::agent::SandboxReadiness::DisabledByConfig,
             builder: None,
             llm_backend: "nearai".to_string(),
         };

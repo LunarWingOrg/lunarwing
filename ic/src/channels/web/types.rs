@@ -342,9 +342,9 @@ pub enum SseEvent {
     },
 }
 
-impl From<ironclaw_common::AppEvent> for SseEvent {
-    fn from(ev: ironclaw_common::AppEvent) -> Self {
-        use ironclaw_common::AppEvent as AE;
+impl From<lunarwing_common::AppEvent> for SseEvent {
+    fn from(ev: lunarwing_common::AppEvent) -> Self {
+        use lunarwing_common::AppEvent as AE;
         match ev {
             AE::Response { content, thread_id } => SseEvent::Response { content, thread_id },
             AE::Thinking { message, thread_id } => SseEvent::Thinking { message, thread_id },

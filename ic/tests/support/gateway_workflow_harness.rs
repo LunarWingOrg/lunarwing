@@ -9,26 +9,26 @@ use secrecy::SecretString;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use ironclaw::agent::routine_engine::RoutineEngine;
-use ironclaw::agent::{Agent, AgentDeps, SessionManager as AgentSessionManager};
-use ironclaw::app::{AppBuilder, AppBuilderFlags};
-use ironclaw::channels::IncomingMessage;
-use ironclaw::channels::web::auth::MultiAuthState;
-use ironclaw::channels::web::log_layer::LogBroadcaster;
-use ironclaw::channels::web::server::{
+use lunarwing::agent::routine_engine::RoutineEngine;
+use lunarwing::agent::{Agent, AgentDeps, SessionManager as AgentSessionManager};
+use lunarwing::app::{AppBuilder, AppBuilderFlags};
+use lunarwing::channels::IncomingMessage;
+use lunarwing::channels::web::auth::MultiAuthState;
+use lunarwing::channels::web::log_layer::LogBroadcaster;
+use lunarwing::channels::web::server::{
     GatewayState, PerUserRateLimiter, RateLimiter, start_server,
 };
-use ironclaw::channels::web::sse::SseManager;
-use ironclaw::channels::web::ws::WsConnectionTracker;
-use ironclaw::config::{Config, RegistryProviderConfig, RoutineConfig};
-use ironclaw::db::Database;
-use ironclaw::db::libsql::LibSqlBackend;
-use ironclaw::llm::registry::ProviderProtocol;
-use ironclaw::llm::{
+use lunarwing::channels::web::sse::SseManager;
+use lunarwing::channels::web::ws::WsConnectionTracker;
+use lunarwing::config::{Config, RegistryProviderConfig, RoutineConfig};
+use lunarwing::db::Database;
+use lunarwing::db::libsql::LibSqlBackend;
+use lunarwing::llm::registry::ProviderProtocol;
+use lunarwing::llm::{
     SessionConfig as LlmSessionConfig, SessionManager as LlmSessionManager, create_llm_provider,
 };
-use ironclaw::secrets::SecretsStore;
-use ironclaw::tools::{Tool, ToolError, ToolOutput};
+use lunarwing::secrets::SecretsStore;
+use lunarwing::tools::{Tool, ToolError, ToolOutput};
 
 use crate::support::test_channel::{TestChannel, TestChannelHandle};
 
@@ -51,7 +51,7 @@ impl Tool for MockGithubWebhookTool {
     async fn execute(
         &self,
         params: serde_json::Value,
-        _ctx: &ironclaw::context::JobContext,
+        _ctx: &lunarwing::context::JobContext,
     ) -> Result<ToolOutput, ToolError> {
         let event = params
             .pointer("/webhook/headers/x-github-event")
@@ -91,8 +91,8 @@ impl Tool for MockGithubWebhookTool {
         ))
     }
 
-    fn webhook_capability(&self) -> Option<ironclaw::tools::wasm::WebhookCapability> {
-        Some(ironclaw::tools::wasm::WebhookCapability {
+    fn webhook_capability(&self) -> Option<lunarwing::tools::wasm::WebhookCapability> {
+        Some(lunarwing::tools::wasm::WebhookCapability {
             secret_name: Some("github_webhook_secret".to_string()),
             secret_header: Some("x-webhook-secret".to_string()),
             ..Default::default()
@@ -195,7 +195,7 @@ impl GatewayWorkflowHarness {
 
         let test_channel = Arc::new(TestChannel::new());
         let handle = TestChannelHandle::with_name(Arc::clone(&test_channel), "gateway");
-        let channel_manager = ironclaw::channels::ChannelManager::new();
+        let channel_manager = lunarwing::channels::ChannelManager::new();
         channel_manager.add(Box::new(handle)).await;
         let channels = Arc::new(channel_manager);
 
@@ -208,7 +208,7 @@ impl GatewayWorkflowHarness {
             }
         });
 
-        let scheduler_slot: ironclaw::tools::builtin::SchedulerSlot =
+        let scheduler_slot: lunarwing::tools::builtin::SchedulerSlot =
             Arc::new(tokio::sync::RwLock::new(None));
         let agent_session_manager = Arc::new(AgentSessionManager::new());
 
@@ -240,7 +240,7 @@ impl GatewayWorkflowHarness {
             cost_guard: Some(Arc::clone(&components.cost_guard)),
             routine_engine: Arc::clone(&routine_slot),
             startup_time: Instant::now(),
-            active_config: ironclaw::channels::web::server::ActiveConfigSnapshot::default(),
+            active_config: lunarwing::channels::web::server::ActiveConfigSnapshot::default(),
             secrets_store: None,
             db_auth: None,
         });
@@ -265,7 +265,7 @@ impl GatewayWorkflowHarness {
                 http_interceptor: None,
                 transcription: None,
                 document_extraction: None,
-                sandbox_readiness: ironclaw::agent::SandboxReadiness::DisabledByConfig,
+                sandbox_readiness: lunarwing::agent::SandboxReadiness::DisabledByConfig,
                 builder: None,
                 llm_backend: "nearai".to_string(),
             },
@@ -306,8 +306,8 @@ impl GatewayWorkflowHarness {
         .await
         .expect("failed to start gateway server");
 
-        let webhook_secrets = Arc::new(ironclaw::secrets::InMemorySecretsStore::new(Arc::new(
-            ironclaw::secrets::SecretsCrypto::new(SecretString::from(
+        let webhook_secrets = Arc::new(lunarwing::secrets::InMemorySecretsStore::new(Arc::new(
+            lunarwing::secrets::SecretsCrypto::new(SecretString::from(
                 "test-key-at-least-32-chars-long!!".to_string(),
             ))
             .expect("crypto"),
@@ -315,22 +315,22 @@ impl GatewayWorkflowHarness {
         webhook_secrets
             .create(
                 &user_id,
-                ironclaw::secrets::CreateSecretParams::new(
+                lunarwing::secrets::CreateSecretParams::new(
                     "github_webhook_secret",
                     "test-webhook-secret",
                 ),
             )
             .await
             .expect("store webhook secret");
-        let webhook_state = ironclaw::webhooks::ToolWebhookState {
+        let webhook_state = lunarwing::webhooks::ToolWebhookState {
             tools: Arc::clone(gateway_state.tool_registry.as_ref().expect("tool registry")),
             routine_engine: Arc::clone(&routine_slot),
             user_id: user_id.clone(),
             secrets_store: Some(
-                webhook_secrets as Arc<dyn ironclaw::secrets::SecretsStore + Send + Sync>,
+                webhook_secrets as Arc<dyn lunarwing::secrets::SecretsStore + Send + Sync>,
             ),
         };
-        let webhook_app = ironclaw::webhooks::routes(webhook_state);
+        let webhook_app = lunarwing::webhooks::routes(webhook_state);
         let webhook_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("failed to bind webhook listener");

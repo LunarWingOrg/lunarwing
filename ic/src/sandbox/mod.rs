@@ -49,7 +49,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use ironclaw::sandbox::{SandboxManager, SandboxManagerBuilder, SandboxPolicy};
+//! use lunarwing::sandbox::{SandboxManager, SandboxManagerBuilder, SandboxPolicy};
 //! use std::collections::HashMap;
 //! use std::path::Path;
 //!

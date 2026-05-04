@@ -16,12 +16,12 @@ use std::sync::Arc;
 #[cfg(feature = "integration")]
 use futures::StreamExt;
 #[cfg(feature = "integration")]
-use ironclaw::channels::Channel;
-use ironclaw::channels::wasm::{
+use lunarwing::channels::Channel;
+use lunarwing::channels::wasm::{
     ChannelCapabilities, PreparedChannelModule, WasmChannel, WasmChannelRuntime,
     WasmChannelRuntimeConfig,
 };
-use ironclaw::pairing::PairingStore;
+use lunarwing::pairing::PairingStore;
 #[cfg(feature = "integration")]
 use tokio::time::{Duration, timeout};
 

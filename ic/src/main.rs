@@ -6,7 +6,7 @@ use std::time::Duration;
 use clap::Parser;
 use secrecy::ExposeSecret;
 
-use ironclaw::{
+use lunarwing::{
     agent::{Agent, AgentDeps},
     app::{AppBuilder, AppBuilderFlags},
     channels::{
@@ -29,11 +29,11 @@ use ironclaw::{
 };
 
 #[cfg(unix)]
-use ironclaw::channels::ChannelSecretUpdater;
+use lunarwing::channels::ChannelSecretUpdater;
 #[cfg(unix)]
-use ironclaw::channels::UnixSocketReplChannel;
+use lunarwing::channels::UnixSocketReplChannel;
 #[cfg(any(feature = "postgres", feature = "libsql"))]
-use ironclaw::setup::{SetupConfig, SetupWizard};
+use lunarwing::setup::{SetupConfig, SetupWizard};
 
 /// Synchronous entry point. Loads `.env` files before the Tokio runtime
 /// starts so that `std::env::set_var` is safe (no worker threads yet).
@@ -45,9 +45,9 @@ fn main() -> anyhow::Result<()> {
         .expect("failed to install rustls crypto provider");
 
     let _ = dotenvy::dotenv();
-    ironclaw::bootstrap::load_ironclaw_env();
+    lunarwing::bootstrap::load_ironclaw_env();
     #[cfg(any(feature = "postgres", feature = "libsql"))]
-    ironclaw::setup::maybe_seed_default_instance_assets();
+    lunarwing::setup::maybe_seed_default_instance_assets();
 
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
 
 /// Format a top-level error with color and recovery hints.
 fn format_top_level_error(err: &anyhow::Error) {
-    use ironclaw::cli::fmt;
+    use lunarwing::cli::fmt;
     let msg = format!("{err:#}");
 
     eprintln!();
@@ -105,15 +105,15 @@ async fn async_main() -> anyhow::Result<()> {
         }
         Some(Command::Config(config_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_config_command(config_cmd.clone()).await;
+            return lunarwing::cli::run_config_command(config_cmd.clone()).await;
         }
         Some(Command::Registry(registry_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_registry_command(registry_cmd.clone()).await;
+            return lunarwing::cli::run_registry_command(registry_cmd.clone()).await;
         }
         Some(Command::Channels(channels_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_channels_command(
+            return lunarwing::cli::run_channels_command(
                 channels_cmd.clone(),
                 cli.config.as_deref(),
             )
@@ -121,7 +121,7 @@ async fn async_main() -> anyhow::Result<()> {
         }
         Some(Command::Routines(routines_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_routines_cli(routines_cmd, cli.config.as_deref()).await;
+            return lunarwing::cli::run_routines_cli(routines_cmd, cli.config.as_deref()).await;
         }
         Some(Command::Mcp(mcp_cmd)) => {
             init_cli_tracing();
@@ -129,7 +129,7 @@ async fn async_main() -> anyhow::Result<()> {
         }
         Some(Command::Memory(mem_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_memory_command(mem_cmd).await;
+            return lunarwing::cli::run_memory_command(mem_cmd).await;
         }
         Some(Command::Pairing(pairing_cmd)) => {
             init_cli_tracing();
@@ -141,26 +141,26 @@ async fn async_main() -> anyhow::Result<()> {
         }
         Some(Command::Skills(skills_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_skills_command(skills_cmd.clone(), cli.config.as_deref())
+            return lunarwing::cli::run_skills_command(skills_cmd.clone(), cli.config.as_deref())
                 .await;
         }
         Some(Command::Hooks(hooks_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_hooks_command(hooks_cmd.clone(), cli.config.as_deref())
+            return lunarwing::cli::run_hooks_command(hooks_cmd.clone(), cli.config.as_deref())
                 .await;
         }
         Some(Command::Logs(logs_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_logs_command(logs_cmd.clone(), cli.config.as_deref()).await;
+            return lunarwing::cli::run_logs_command(logs_cmd.clone(), cli.config.as_deref()).await;
         }
         Some(Command::Models(models_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_models_command(models_cmd.clone(), cli.config.as_deref())
+            return lunarwing::cli::run_models_command(models_cmd.clone(), cli.config.as_deref())
                 .await;
         }
         Some(Command::Doctor) => {
             init_cli_tracing();
-            return ironclaw::cli::run_doctor_command().await;
+            return lunarwing::cli::run_doctor_command().await;
         }
         Some(Command::Status) => {
             init_cli_tracing();
@@ -173,13 +173,13 @@ async fn async_main() -> anyhow::Result<()> {
         #[cfg(unix)]
         Some(Command::Repl(repl_cmd)) => {
             init_cli_tracing();
-            return ironclaw::cli::run_repl_command(repl_cmd).await;
+            return lunarwing::cli::run_repl_command(repl_cmd).await;
         }
         #[cfg(feature = "import")]
         Some(Command::Import(import_cmd)) => {
             init_cli_tracing();
-            let config = ironclaw::config::Config::from_env().await?;
-            return ironclaw::cli::run_import_command(import_cmd, &config).await;
+            let config = lunarwing::config::Config::from_env().await?;
+            return lunarwing::cli::run_import_command(import_cmd, &config).await;
         }
         Some(Command::Acp(acp_cmd)) => {
             init_cli_tracing();
@@ -190,7 +190,7 @@ async fn async_main() -> anyhow::Result<()> {
             orchestrator_url,
         }) => {
             init_worker_tracing();
-            return ironclaw::worker::run_acp_bridge(*job_id, orchestrator_url).await;
+            return lunarwing::worker::run_acp_bridge(*job_id, orchestrator_url).await;
         }
         Some(Command::Worker {
             job_id,
@@ -198,7 +198,7 @@ async fn async_main() -> anyhow::Result<()> {
             max_iterations,
         }) => {
             init_worker_tracing();
-            return ironclaw::worker::run_worker(*job_id, orchestrator_url, *max_iterations).await;
+            return lunarwing::worker::run_worker(*job_id, orchestrator_url, *max_iterations).await;
         }
         Some(Command::ClaudeBridge {
             job_id,
@@ -207,7 +207,7 @@ async fn async_main() -> anyhow::Result<()> {
             model,
         }) => {
             init_worker_tracing();
-            return ironclaw::worker::run_claude_bridge(
+            return lunarwing::worker::run_claude_bridge(
                 *job_id,
                 orchestrator_url,
                 *max_turns,
@@ -225,7 +225,7 @@ async fn async_main() -> anyhow::Result<()> {
                         .await
                         .map_err(|e| anyhow::anyhow!("{}", e))?;
                     config.llm.openai_codex.unwrap_or_else(|| {
-                        use ironclaw::llm::OpenAiCodexConfig;
+                        use lunarwing::llm::OpenAiCodexConfig;
                         let mut cfg = OpenAiCodexConfig::default();
                         if let Ok(v) = std::env::var("OPENAI_CODEX_AUTH_URL") {
                             cfg.auth_endpoint = v;
@@ -242,7 +242,7 @@ async fn async_main() -> anyhow::Result<()> {
                         cfg
                     })
                 };
-                let mgr = ironclaw::llm::OpenAiCodexSessionManager::new(codex_config)
+                let mgr = lunarwing::llm::OpenAiCodexSessionManager::new(codex_config)
                     .map_err(|e| anyhow::anyhow!("{}", e))?;
                 mgr.device_code_login()
                     .await
@@ -289,14 +289,14 @@ async fn async_main() -> anyhow::Result<()> {
     }
 
     // ── PID lock (prevent multiple instances) ────────────────────────
-    let _pid_lock = match ironclaw::bootstrap::PidLock::acquire() {
+    let _pid_lock = match lunarwing::bootstrap::PidLock::acquire() {
         Ok(lock) => Some(lock),
-        Err(ironclaw::bootstrap::PidLockError::AlreadyRunning { pid }) => {
+        Err(lunarwing::bootstrap::PidLockError::AlreadyRunning { pid }) => {
             anyhow::bail!(
                 "Another LunarWing instance is already running (PID {}). \
                  If this is incorrect, remove the stale PID file: {}",
                 pid,
-                ironclaw::bootstrap::pid_lock_path().display()
+                lunarwing::bootstrap::pid_lock_path().display()
             );
         }
         Err(e) => {
@@ -313,7 +313,7 @@ async fn async_main() -> anyhow::Result<()> {
     // Enhanced first-run detection
     #[cfg(any(feature = "postgres", feature = "libsql"))]
     if !cli.no_onboard
-        && let Some(reason) = ironclaw::setup::check_onboard_needed()
+        && let Some(reason) = lunarwing::setup::check_onboard_needed()
     {
         println!("Onboarding needed: {}", reason);
         println!();
@@ -329,7 +329,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     // CLI flag overrides for config
     if cli.auto_approve {
-        ironclaw::config::set_runtime_env("AGENT_AUTO_APPROVE_TOOLS", "true");
+        lunarwing::config::set_runtime_env("AGENT_AUTO_APPROVE_TOOLS", "true");
     }
 
     // Load initial config from env + disk + optional TOML (before DB is available).
@@ -339,7 +339,7 @@ async fn async_main() -> anyhow::Result<()> {
     let toml_path = cli.config.as_deref();
     let config = match Config::from_env_with_toml(toml_path).await {
         Ok(c) => c,
-        Err(ironclaw::error::ConfigError::MissingRequired { key, hint }) => {
+        Err(lunarwing::error::ConfigError::MissingRequired { key, hint }) => {
             anyhow::bail!(
                 "Configuration error: Missing required setting '{}'. {}. \
                  Run 'ironclaw onboard' to configure, or set the required environment variables.",
@@ -359,7 +359,7 @@ async fn async_main() -> anyhow::Result<()> {
     // Initialize tracing with a reloadable EnvFilter so the gateway can switch
     // log levels at runtime without restarting.
     let log_level_handle =
-        ironclaw::channels::web::log_layer::init_tracing(Arc::clone(&log_broadcaster));
+        lunarwing::channels::web::log_layer::init_tracing(Arc::clone(&log_broadcaster));
 
     tracing::debug!("Starting IronClaw...");
     tracing::debug!("Loaded configuration for agent: {}", config.agent.name);
@@ -389,11 +389,11 @@ async fn async_main() -> anyhow::Result<()> {
 
     // ── Tunnel setup ───────────────────────────────────────────────────
 
-    let (config, active_tunnel) = ironclaw::tunnel::start_managed_tunnel(config).await;
+    let (config, active_tunnel) = lunarwing::tunnel::start_managed_tunnel(config).await;
 
     // ── Orchestrator / container job manager ────────────────────────────
 
-    let orch = ironclaw::orchestrator::setup_orchestrator(
+    let orch = lunarwing::orchestrator::setup_orchestrator(
         &config,
         &components.llm,
         components.db.as_ref(),
@@ -407,12 +407,12 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Derive user-facing warning from docker_status for channel notification
     let docker_user_warning: Option<String> = match docker_status {
-        ironclaw::sandbox::DockerStatus::NotInstalled => Some(
+        lunarwing::sandbox::DockerStatus::NotInstalled => Some(
             "Sandbox is enabled but Docker is not installed -- \
              full_job routines will fail until Docker is available."
                 .to_string(),
         ),
-        ironclaw::sandbox::DockerStatus::NotRunning => Some(
+        lunarwing::sandbox::DockerStatus::NotRunning => Some(
             "Sandbox is enabled but Docker is not running -- \
              full_job routines will fail until Docker is started."
                 .to_string(),
@@ -468,7 +468,7 @@ async fn async_main() -> anyhow::Result<()> {
                 if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
                     std::path::PathBuf::from(runtime_dir).join("ironclaw.sock")
                 } else {
-                    ironclaw::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
+                    lunarwing::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
                 }
             });
         let unix_repl = UnixSocketReplChannel::new(
@@ -483,7 +483,7 @@ async fn async_main() -> anyhow::Result<()> {
     }
 
     // Shared routine engine slot for gateway + generic webhook ingress.
-    let shared_routine_engine_slot: ironclaw::channels::web::server::RoutineEngineSlot =
+    let shared_routine_engine_slot: lunarwing::channels::web::server::RoutineEngineSlot =
         Arc::new(tokio::sync::RwLock::new(None));
 
     // Collect webhook route fragments; a single WebhookServer hosts them all.
@@ -509,7 +509,7 @@ async fn async_main() -> anyhow::Result<()> {
         );
     }
     if config.channels.wasm_channels_enabled && config.channels.wasm_channels_dir.exists() {
-        let wasm_result = ironclaw::channels::wasm::setup_wasm_channels(
+        let wasm_result = lunarwing::channels::wasm::setup_wasm_channels(
             &config,
             &components.secrets_store,
             components.extension_manager.as_ref(),
@@ -556,7 +556,7 @@ async fn async_main() -> anyhow::Result<()> {
     // Add HTTP channel if configured and not CLI-only mode.
     let mut webhook_server_addr: Option<std::net::SocketAddr> = None;
     #[cfg(unix)]
-    let mut http_channel_state: Option<Arc<ironclaw::channels::HttpChannelState>> = None;
+    let mut http_channel_state: Option<Arc<lunarwing::channels::HttpChannelState>> = None;
     if !cli.cli_only
         && let Some(ref http_config) = config.channels.http
     {
@@ -632,7 +632,7 @@ async fn async_main() -> anyhow::Result<()> {
     // Lazy scheduler slot — filled after Agent::new creates the Scheduler.
     // Allows CreateJobTool to dispatch local jobs via the Scheduler even though
     // the Scheduler is created after tools are registered (chicken-and-egg).
-    let scheduler_slot: ironclaw::tools::builtin::SchedulerSlot =
+    let scheduler_slot: lunarwing::tools::builtin::SchedulerSlot =
         Arc::new(tokio::sync::RwLock::new(None));
 
     // Register job tools (sandbox deps auto-injected when container_job_manager is available)
@@ -654,7 +654,7 @@ async fn async_main() -> anyhow::Result<()> {
     // ── Gateway channel ────────────────────────────────────────────────
 
     let mut gateway_url: Option<String> = None;
-    let mut sse_manager: Option<std::sync::Arc<ironclaw::channels::web::sse::SseManager>> = None;
+    let mut sse_manager: Option<std::sync::Arc<lunarwing::channels::web::sse::SseManager>> = None;
     if let Some(ref gw_config) = config.channels.gateway {
         let mut gw = GatewayChannel::new(gw_config.clone(), config.owner_id.clone());
         gw = gw.with_llm_provider(Arc::clone(&components.llm));
@@ -663,10 +663,10 @@ async fn async_main() -> anyhow::Result<()> {
         }
         // Create per-user workspace pool for multi-user mode.
         if let Some(ref db) = components.db {
-            let emb_cache_config = ironclaw::workspace::EmbeddingCacheConfig {
+            let emb_cache_config = lunarwing::workspace::EmbeddingCacheConfig {
                 max_entries: config.embeddings.cache_size,
             };
-            let pool = Arc::new(ironclaw::channels::web::server::WorkspacePool::new(
+            let pool = Arc::new(lunarwing::channels::web::server::WorkspacePool::new(
                 Arc::clone(db),
                 components.embeddings.clone(),
                 emb_cache_config,
@@ -718,7 +718,7 @@ async fn async_main() -> anyhow::Result<()> {
             let active_model = components.llm.model_name().to_string();
             let mut enabled = channel_names.clone();
             enabled.push("gateway".into());
-            gw = gw.with_active_config(ironclaw::channels::web::server::ActiveConfigSnapshot {
+            gw = gw.with_active_config(lunarwing::channels::web::server::ActiveConfigSnapshot {
                 llm_backend: config.llm.backend.to_string(),
                 llm_model: active_model,
                 enabled_channels: enabled,
@@ -793,7 +793,7 @@ async fn async_main() -> anyhow::Result<()> {
         .map(|c| c.model_name().to_string());
 
     if config.channels.cli.enabled && cli.message.is_none() {
-        let boot_info = ironclaw::boot_screen::BootInfo {
+        let boot_info = lunarwing::boot_screen::BootInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),
             agent_name: config.agent.name.clone(),
             llm_backend: config.llm.backend.to_string(),
@@ -829,7 +829,7 @@ async fn async_main() -> anyhow::Result<()> {
             tunnel_provider: active_tunnel.as_ref().map(|t| t.name().to_string()),
             startup_elapsed: Some(startup_start.elapsed()),
         };
-        ironclaw::boot_screen::print_boot_screen(&boot_info);
+        lunarwing::boot_screen::print_boot_screen(&boot_info);
     }
 
     // ── Run the agent ──────────────────────────────────────────────────
@@ -923,10 +923,10 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Capture db reference for SIGHUP handler before it's moved into AgentDeps (Unix only)
     #[cfg(unix)]
-    let sighup_settings_store: Option<Arc<dyn ironclaw::db::SettingsStore>> = components
+    let sighup_settings_store: Option<Arc<dyn lunarwing::db::SettingsStore>> = components
         .db
         .as_ref()
-        .map(|db| Arc::clone(db) as Arc<dyn ironclaw::db::SettingsStore>);
+        .map(|db| Arc::clone(db) as Arc<dyn lunarwing::db::SettingsStore>);
 
     let deps = AgentDeps {
         owner_id: config.owner_id.clone(),
@@ -945,19 +945,19 @@ async fn async_main() -> anyhow::Result<()> {
         sse_tx: sse_manager,
         http_interceptor,
         transcription: config.transcription.create_provider().map(|p| {
-            Arc::new(ironclaw::llm::transcription::TranscriptionMiddleware::new(
+            Arc::new(lunarwing::llm::transcription::TranscriptionMiddleware::new(
                 p,
             ))
         }),
         document_extraction: Some(Arc::new(
-            ironclaw::document_extraction::DocumentExtractionMiddleware::new(),
+            lunarwing::document_extraction::DocumentExtractionMiddleware::new(),
         )),
         sandbox_readiness: if !config.sandbox.enabled {
-            ironclaw::agent::routine_engine::SandboxReadiness::DisabledByConfig
+            lunarwing::agent::routine_engine::SandboxReadiness::DisabledByConfig
         } else if docker_status.is_ok() {
-            ironclaw::agent::routine_engine::SandboxReadiness::Available
+            lunarwing::agent::routine_engine::SandboxReadiness::Available
         } else {
-            ironclaw::agent::routine_engine::SandboxReadiness::DockerUnavailable
+            lunarwing::agent::routine_engine::SandboxReadiness::DockerUnavailable
         },
         builder: components.builder,
         llm_backend: config.llm.backend.clone(),
@@ -1049,7 +1049,7 @@ async fn async_main() -> anyhow::Result<()> {
                     {
                         // Thread-safe: Uses INJECTED_VARS mutex instead of unsafe std::env::set_var
                         // Config::from_env() will read from the overlay via optional_env()
-                        ironclaw::config::inject_single_var(
+                        lunarwing::config::inject_single_var(
                             "HTTP_WEBHOOK_SECRET",
                             webhook_secret.expose(),
                         );
@@ -1060,9 +1060,9 @@ async fn async_main() -> anyhow::Result<()> {
                 // Reload config (now with secrets injected into environment)
                 let new_config = match &sighup_settings_store_clone {
                     Some(store) => {
-                        ironclaw::config::Config::from_db(store.as_ref(), &sighup_owner_id).await
+                        lunarwing::config::Config::from_db(store.as_ref(), &sighup_owner_id).await
                     }
-                    None => ironclaw::config::Config::from_env().await,
+                    None => lunarwing::config::Config::from_env().await,
                 };
 
                 let new_config = match new_config {
@@ -1178,7 +1178,7 @@ async fn async_main() -> anyhow::Result<()> {
             // 5s is generous but avoids the message being lost on slow startups.
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             tracing::debug!("Sending sandbox-unavailable warning to connected channels");
-            let response = ironclaw::channels::OutgoingResponse {
+            let response = lunarwing::channels::OutgoingResponse {
                 content: format!("Warning: {warning}"),
                 thread_id: None,
                 attachments: Vec::new(),
@@ -1235,8 +1235,8 @@ async fn async_main() -> anyhow::Result<()> {
 
 async fn migrate_native_xmpp_to_installable(
     config: &Config,
-    db: Option<&Arc<dyn ironclaw::db::Database>>,
-    secrets_store: Option<&Arc<dyn ironclaw::secrets::SecretsStore + Send + Sync>>,
+    db: Option<&Arc<dyn lunarwing::db::Database>>,
+    secrets_store: Option<&Arc<dyn lunarwing::secrets::SecretsStore + Send + Sync>>,
 ) {
     let Some(xmpp) = config.channels.xmpp.as_ref() else {
         return;
@@ -1244,7 +1244,7 @@ async fn migrate_native_xmpp_to_installable(
 
     let wasm_path = config.channels.wasm_channels_dir.join("xmpp.wasm");
     if !wasm_path.exists() {
-        match ironclaw::channels::wasm::install_bundled_channel(
+        match lunarwing::channels::wasm::install_bundled_channel(
             "xmpp",
             &config.channels.wasm_channels_dir,
             false,
@@ -1270,7 +1270,7 @@ async fn migrate_native_xmpp_to_installable(
         if let Err(err) = secrets
             .create(
                 &config.owner_id,
-                ironclaw::secrets::CreateSecretParams::new(
+                lunarwing::secrets::CreateSecretParams::new(
                     "xmpp_password",
                     xmpp.password.expose_secret(),
                 )
@@ -1288,7 +1288,7 @@ async fn migrate_native_xmpp_to_installable(
             if let Err(err) = secrets
                 .create(
                     &config.owner_id,
-                    ironclaw::secrets::CreateSecretParams::new("xmpp_bridge_token", token.trim())
+                    lunarwing::secrets::CreateSecretParams::new("xmpp_bridge_token", token.trim())
                         .with_provider("xmpp".to_string()),
                 )
                 .await

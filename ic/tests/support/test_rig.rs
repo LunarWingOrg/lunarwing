@@ -9,21 +9,21 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ironclaw::agent::{Agent, AgentDeps};
-use ironclaw::app::{AppBuilder, AppBuilderFlags};
-use ironclaw::channels::web::log_layer::LogBroadcaster;
-use ironclaw::channels::{OutgoingResponse, StatusUpdate};
-use ironclaw::config::Config;
-use ironclaw::db::Database;
-use ironclaw::llm::{LlmProvider, SessionConfig, SessionManager};
-use ironclaw::tools::Tool;
+use lunarwing::agent::{Agent, AgentDeps};
+use lunarwing::app::{AppBuilder, AppBuilderFlags};
+use lunarwing::channels::web::log_layer::LogBroadcaster;
+use lunarwing::channels::{OutgoingResponse, StatusUpdate};
+use lunarwing::config::Config;
+use lunarwing::db::Database;
+use lunarwing::llm::{LlmProvider, SessionConfig, SessionManager};
+use lunarwing::tools::Tool;
 
 use crate::support::instrumented_llm::InstrumentedLlm;
 use crate::support::metrics::{ToolInvocation, TraceMetrics};
 use crate::support::test_channel::{TestChannel, TestChannelHandle};
 use crate::support::trace_llm::{LlmTrace, TraceLlm};
 
-use ironclaw::llm::recording::{HttpExchange, HttpInterceptor, ReplayingHttpInterceptor};
+use lunarwing::llm::recording::{HttpExchange, HttpInterceptor, ReplayingHttpInterceptor};
 
 // ---------------------------------------------------------------------------
 // TestRig
@@ -46,16 +46,16 @@ pub struct TestRig {
     db: Arc<dyn Database>,
     /// Workspace handle for direct memory operations in tests.
     #[cfg(feature = "libsql")]
-    workspace: Option<Arc<ironclaw::workspace::Workspace>>,
+    workspace: Option<Arc<lunarwing::workspace::Workspace>>,
     /// The underlying TraceLlm for inspecting captured requests.
     #[cfg(feature = "libsql")]
     trace_llm: Option<Arc<TraceLlm>>,
     /// Extension manager for direct extension operations in tests.
     #[cfg(feature = "libsql")]
-    extension_manager: Option<Arc<ironclaw::extensions::ExtensionManager>>,
+    extension_manager: Option<Arc<lunarwing::extensions::ExtensionManager>>,
     /// Session manager for direct session/thread access in tests.
     #[cfg(feature = "libsql")]
-    session_manager: Arc<ironclaw::agent::SessionManager>,
+    session_manager: Arc<lunarwing::agent::SessionManager>,
     /// Temp directory guard -- keeps the libSQL database file alive.
     #[cfg(feature = "libsql")]
     _temp_dir: tempfile::TempDir,
@@ -68,14 +68,14 @@ impl TestRig {
     }
 
     /// Inject a raw `IncomingMessage` (for tests that need attachments, etc.).
-    pub async fn send_incoming(&self, msg: ironclaw::channels::IncomingMessage) {
+    pub async fn send_incoming(&self, msg: lunarwing::channels::IncomingMessage) {
         self.channel.send_incoming(msg).await;
     }
 
     /// Return all message lists that were sent to the LLM provider.
     ///
     /// Only available when the rig was built with a `TraceLlm` (i.e., via `.with_trace()`).
-    pub fn captured_llm_requests(&self) -> Vec<Vec<ironclaw::llm::ChatMessage>> {
+    pub fn captured_llm_requests(&self) -> Vec<Vec<lunarwing::llm::ChatMessage>> {
         self.trace_llm
             .as_ref()
             .map(|t| t.captured_requests())
@@ -83,13 +83,13 @@ impl TestRig {
     }
 
     /// Return the extension manager for direct extension operations in tests.
-    pub fn extension_manager(&self) -> Option<&Arc<ironclaw::extensions::ExtensionManager>> {
+    pub fn extension_manager(&self) -> Option<&Arc<lunarwing::extensions::ExtensionManager>> {
         self.extension_manager.as_ref()
     }
 
     /// Return the session manager for direct session/thread access in tests.
     #[cfg(feature = "libsql")]
-    pub fn session_manager(&self) -> &Arc<ironclaw::agent::SessionManager> {
+    pub fn session_manager(&self) -> &Arc<lunarwing::agent::SessionManager> {
         &self.session_manager
     }
 
@@ -261,7 +261,7 @@ impl TestRig {
             let completed = self.tool_calls_completed();
             let mut results = self.tool_results();
             for status in self.channel.captured_status_events() {
-                if let ironclaw::channels::StatusUpdate::ToolCompleted {
+                if let lunarwing::channels::StatusUpdate::ToolCompleted {
                     name,
                     success: false,
                     error,
@@ -304,7 +304,7 @@ impl TestRig {
         let completed = self.tool_calls_completed();
         let mut results = self.tool_results();
         for status in self.channel.captured_status_events() {
-            if let ironclaw::channels::StatusUpdate::ToolCompleted {
+            if let lunarwing::channels::StatusUpdate::ToolCompleted {
                 name,
                 success: false,
                 error,
@@ -492,8 +492,8 @@ impl TestRigBuilder {
     /// Requires the `libsql` feature for the embedded test database.
     #[cfg(feature = "libsql")]
     pub async fn build(self) -> TestRig {
-        use ironclaw::channels::ChannelManager;
-        use ironclaw::db::libsql::LibSqlBackend;
+        use lunarwing::channels::ChannelManager;
+        use lunarwing::db::libsql::LibSqlBackend;
 
         // Destructure self up front to avoid partial-move issues.
         let TestRigBuilder {
@@ -520,7 +520,7 @@ impl TestRigBuilder {
             .run_migrations()
             .await
             .expect("failed to run migrations");
-        let db: Arc<dyn ironclaw::db::Database> = Arc::new(backend);
+        let db: Arc<dyn lunarwing::db::Database> = Arc::new(backend);
 
         // 2. Build Config::for_testing().
         let skills_dir = temp_dir.path().join("skills");
@@ -599,7 +599,7 @@ impl TestRigBuilder {
         components.config.agent.auto_approve_tools = auto_approve_tools.unwrap_or(true);
         components.config.agent.allow_local_tools = true;
 
-        let scheduler_slot: ironclaw::tools::builtin::SchedulerSlot =
+        let scheduler_slot: lunarwing::tools::builtin::SchedulerSlot =
             Arc::new(tokio::sync::RwLock::new(None));
 
         // Build HTTP interceptor once — shared by both AgentDeps and WASM tools.
@@ -635,8 +635,8 @@ impl TestRigBuilder {
 
             // Routine tools: create a RoutineEngine with the LLM and workspace.
             if let (Some(db_arc), Some(ws)) = (&components.db, &components.workspace) {
-                use ironclaw::agent::routine_engine::RoutineEngine;
-                use ironclaw::config::RoutineConfig;
+                use lunarwing::agent::routine_engine::RoutineEngine;
+                use lunarwing::config::RoutineConfig;
 
                 let routine_config = RoutineConfig::default();
                 let (notify_tx, _notify_rx) = tokio::sync::mpsc::channel(16);
@@ -650,7 +650,7 @@ impl TestRigBuilder {
                     None,
                     components.tools.clone(),
                     components.safety.clone(),
-                    ironclaw::agent::SandboxReadiness::Available, // tests don't use real Docker
+                    lunarwing::agent::SandboxReadiness::Available, // tests don't use real Docker
                 ));
                 components
                     .tools
@@ -661,10 +661,10 @@ impl TestRigBuilder {
             // AppBuilder did not wire them for this environment.
             if enable_skills {
                 let registry = Arc::new(std::sync::RwLock::new(
-                    ironclaw::skills::SkillRegistry::new(temp_dir.path().join("skills"))
+                    lunarwing::skills::SkillRegistry::new(temp_dir.path().join("skills"))
                         .with_installed_dir(temp_dir.path().join("installed_skills")),
                 ));
-                let catalog = ironclaw::skills::catalog::shared_catalog();
+                let catalog = lunarwing::skills::catalog::shared_catalog();
                 components
                     .tools
                     .register_skill_tools(Arc::clone(&registry), Arc::clone(&catalog));
@@ -679,7 +679,7 @@ impl TestRigBuilder {
 
             // Register WASM tools with the shared HTTP interceptor.
             if !wasm_tools.is_empty() {
-                use ironclaw::tools::wasm::{
+                use lunarwing::tools::wasm::{
                     Capabilities, CapabilitiesFile, WasmRuntimeConfig, WasmToolRuntime,
                     WasmToolWrapper,
                 };
@@ -738,7 +738,7 @@ impl TestRigBuilder {
         let db_ref = components.db.clone().expect("test rig requires a database");
         let workspace_ref = components.workspace.clone();
         let ext_mgr_ref = components.extension_manager.clone();
-        let session_manager_ref = Arc::new(ironclaw::agent::SessionManager::new());
+        let session_manager_ref = Arc::new(lunarwing::agent::SessionManager::new());
 
         // 7. Construct AgentDeps from AppComponents (mirrors main.rs).
         let deps = AgentDeps {
@@ -759,7 +759,7 @@ impl TestRigBuilder {
             http_interceptor,
             transcription: None,
             document_extraction: None,
-            sandbox_readiness: ironclaw::agent::SandboxReadiness::Available, // tests don't use real Docker
+            sandbox_readiness: lunarwing::agent::SandboxReadiness::Available, // tests don't use real Docker
             builder: None,
             llm_backend: "nearai".to_string(),
         };
@@ -784,7 +784,7 @@ impl TestRigBuilder {
 
         // 8. Create Agent.
         let routine_config = if enable_routines {
-            Some(ironclaw::config::RoutineConfig {
+            Some(lunarwing::config::RoutineConfig {
                 enabled: true,
                 cron_check_interval_secs: 60,
                 max_concurrent_routines: 3,
@@ -854,7 +854,7 @@ impl TestRig {
 
     /// Get the workspace handle for direct memory operations.
     #[cfg(feature = "libsql")]
-    pub fn workspace(&self) -> Option<&Arc<ironclaw::workspace::Workspace>> {
+    pub fn workspace(&self) -> Option<&Arc<lunarwing::workspace::Workspace>> {
         self.workspace.as_ref()
     }
 

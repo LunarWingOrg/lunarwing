@@ -3,7 +3,7 @@ Description=Ironclaw XMPP Bridge Service
 Documentation=https://github.com/IronclawCustomTools/ironclaw/tree/main/bridges/xmpp-bridge
 After=network.target
 Wants=network.target
-PartOf=ironclaw.service
+PartOf=lunarwing.service
 
 [Service]
 Type=simple

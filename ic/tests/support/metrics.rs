@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 //! Metrics types for test instrumentation.
 //!
-//! These types were previously in the `ironclaw::benchmark::metrics` module.
+//! These types were previously in the `lunarwing::benchmark::metrics` module.
 //! They now live directly in the test support crate to keep benchmark-specific
 //! types out of the main library.
 

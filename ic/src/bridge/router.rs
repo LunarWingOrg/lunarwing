@@ -5,13 +5,13 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use ironclaw_engine::{
+use lunarwing_engine::{
     Capability, CapabilityRegistry, ConversationManager, LeaseManager, MissionManager,
     PolicyEngine, Project, Store, ThreadConfig, ThreadManager, ThreadOutcome,
 };
 
-use ironclaw_common::AppEvent;
-use ironclaw_engine::types::{is_shared_owner, shared_owner_id};
+use lunarwing_common::AppEvent;
+use lunarwing_engine::types::{is_shared_owner, shared_owner_id};
 
 use crate::agent::Agent;
 use crate::bridge::auth_manager::AuthManager;
@@ -44,13 +44,13 @@ fn engine_err(context: &str, e: impl std::fmt::Display) -> Error {
     })
 }
 
-/// Convert a local v1 `LoadedSkill` to an `ironclaw_skills::LoadedSkill` for migration.
+/// Convert a local v1 `LoadedSkill` to an `lunarwing_skills::LoadedSkill` for migration.
 ///
 /// The local `SkillManifest` does not have a `credentials` field, so the
 /// converted skill will have an empty credentials list. All other fields
 /// are structurally identical.
-fn local_skill_to_v2(s: &crate::skills::LoadedSkill) -> ironclaw_skills::LoadedSkill {
-    use ironclaw_skills::types::{ActivationCriteria, SkillManifest, SkillSource, SkillTrust};
+fn local_skill_to_v2(s: &crate::skills::LoadedSkill) -> lunarwing_skills::LoadedSkill {
+    use lunarwing_skills::types::{ActivationCriteria, SkillManifest, SkillSource, SkillTrust};
 
     let activation = ActivationCriteria {
         keywords: s.manifest.activation.keywords.clone(),
@@ -97,7 +97,7 @@ fn local_skill_to_v2(s: &crate::skills::LoadedSkill) -> ironclaw_skills::LoadedS
         .collect();
     let lowercased_tags = activation.tags.iter().map(|t| t.to_lowercase()).collect();
 
-    ironclaw_skills::LoadedSkill {
+    lunarwing_skills::LoadedSkill {
         manifest,
         prompt_content: s.prompt_content.clone(),
         trust,
@@ -120,9 +120,9 @@ fn gate_display_parameters(pending: &PendingGate) -> serde_json::Value {
 fn resumed_action_result_message(
     action_name: &str,
     output: &serde_json::Value,
-) -> ironclaw_engine::ThreadMessage {
+) -> lunarwing_engine::ThreadMessage {
     let rendered = serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string());
-    ironclaw_engine::ThreadMessage::user(format!(
+    lunarwing_engine::ThreadMessage::user(format!(
         "The pending action '{action_name}' has already been executed.\n\
          Do not call it again unless the user explicitly asks.\n\
          Continue from this result:\n{rendered}"
@@ -160,7 +160,7 @@ async fn insert_and_notify_pending_gate(
     }
 
     match &pending.resume_kind {
-        ironclaw_engine::ResumeKind::Approval { allow_always } => {
+        lunarwing_engine::ResumeKind::Approval { allow_always } => {
             let _ = agent
                 .channels
                 .send_status(
@@ -181,7 +181,7 @@ async fn insert_and_notify_pending_gate(
                 pending.action_name
             )))
         }
-        ironclaw_engine::ResumeKind::Authentication {
+        lunarwing_engine::ResumeKind::Authentication {
             credential_name,
             instructions,
             auth_url,
@@ -205,7 +205,7 @@ async fn insert_and_notify_pending_gate(
                 credential_name
             )))
         }
-        ironclaw_engine::ResumeKind::External { callback_id } => {
+        lunarwing_engine::ResumeKind::External { callback_id } => {
             tracing::debug!(
                 gate = %pending.gate_name,
                 callback = %callback_id,
@@ -358,12 +358,12 @@ async fn execute_pending_gate_action(
             )
         })?;
 
-    let exec_ctx = ironclaw_engine::ThreadExecutionContext {
+    let exec_ctx = lunarwing_engine::ThreadExecutionContext {
         thread_id: pending.thread_id,
         thread_type: thread.thread_type,
         project_id: thread.project_id,
         user_id: thread.user_id.clone(),
-        step_id: ironclaw_engine::StepId::new(),
+        step_id: lunarwing_engine::StepId::new(),
         current_call_id: Some(pending.call_id.clone()),
         source_channel: Some(pending.source_channel.clone()),
     };
@@ -404,7 +404,7 @@ async fn execute_pending_gate_action(
             )
             .await
         }
-        Err(ironclaw_engine::EngineError::GatePaused {
+        Err(lunarwing_engine::EngineError::GatePaused {
             gate_name,
             action_name,
             call_id,
@@ -455,8 +455,8 @@ async fn execute_pending_gate_action(
 async fn resolve_user_project(
     store: &Arc<dyn Store>,
     user_id: &str,
-    fallback: ironclaw_engine::ProjectId,
-) -> Result<ironclaw_engine::ProjectId, Error> {
+    fallback: lunarwing_engine::ProjectId,
+) -> Result<lunarwing_engine::ProjectId, Error> {
     // Fast path: check if fallback project belongs to this user
     if let Ok(Some(project)) = store.load_project(fallback).await
         && project.is_owned_by(user_id)
@@ -475,7 +475,7 @@ async fn resolve_user_project(
     }
 
     // Create a new default project for this user
-    let project = ironclaw_engine::Project::new(user_id, "default", "Default project");
+    let project = lunarwing_engine::Project::new(user_id, "default", "Default project");
     let pid = project.id;
     store
         .save_project(&project)
@@ -491,7 +491,7 @@ struct EngineState {
     conversation_manager: ConversationManager,
     effect_adapter: Arc<EffectBridgeAdapter>,
     store: Arc<dyn Store>,
-    default_project_id: ironclaw_engine::ProjectId,
+    default_project_id: lunarwing_engine::ProjectId,
     /// Unified pending gate store — keyed by (user_id, thread_id).
     pending_gates: Arc<crate::gate::store::PendingGateStore>,
     /// SSE manager for broadcasting AppEvents to the web gateway.
@@ -513,10 +513,10 @@ enum PendingGateResolution {
     Ambiguous,
 }
 
-fn parse_engine_thread_id(scope: Option<&str>) -> Option<ironclaw_engine::ThreadId> {
+fn parse_engine_thread_id(scope: Option<&str>) -> Option<lunarwing_engine::ThreadId> {
     scope
         .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        .map(ironclaw_engine::ThreadId)
+        .map(lunarwing_engine::ThreadId)
 }
 
 fn parse_scope_uuid(scope: Option<&str>) -> Option<uuid::Uuid> {
@@ -540,7 +540,7 @@ async fn reconcile_pending_gate_state(
             continue;
         };
 
-        if thread.state != ironclaw_engine::ThreadState::Waiting
+        if thread.state != lunarwing_engine::ThreadState::Waiting
             || !thread.is_owned_by(&gate.user_id)
         {
             let _ = pending_gates.discard(&gate.key()).await;
@@ -557,7 +557,7 @@ async fn reconcile_pending_gate_state(
             .await
             .map_err(|e| engine_err("list all threads", e))?;
         for mut thread in threads {
-            if thread.state != ironclaw_engine::ThreadState::Waiting {
+            if thread.state != lunarwing_engine::ThreadState::Waiting {
                 continue;
             }
             let key = PendingGateKey {
@@ -569,7 +569,7 @@ async fn reconcile_pending_gate_state(
             }
 
             if let Err(e) = thread.transition_to(
-                ironclaw_engine::ThreadState::Failed,
+                lunarwing_engine::ThreadState::Failed,
                 Some("pending gate missing during recovery".into()),
             ) {
                 debug!(thread_id = %thread.id, error = %e, "failed to reconcile waiting thread");
@@ -588,7 +588,7 @@ async fn reconcile_pending_gate_state(
 async fn fail_orphaned_waiting_thread_if_needed(
     state: &EngineState,
     user_id: &str,
-    thread_id: ironclaw_engine::ThreadId,
+    thread_id: lunarwing_engine::ThreadId,
 ) -> Result<bool, Error> {
     if state
         .pending_gates
@@ -611,13 +611,13 @@ async fn fail_orphaned_waiting_thread_if_needed(
         return Ok(false);
     };
 
-    if !thread.is_owned_by(user_id) || thread.state != ironclaw_engine::ThreadState::Waiting {
+    if !thread.is_owned_by(user_id) || thread.state != lunarwing_engine::ThreadState::Waiting {
         return Ok(false);
     }
 
     thread
         .transition_to(
-            ironclaw_engine::ThreadState::Failed,
+            lunarwing_engine::ThreadState::Failed,
             Some("pending gate missing before resume".into()),
         )
         .map_err(|e| engine_err("reconcile waiting thread", e))?;
@@ -711,7 +711,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
             description: "Available tools".into(),
             actions: tool_defs
                 .into_iter()
-                .map(|td| ironclaw_engine::ActionDef {
+                .map(|td| lunarwing_engine::ActionDef {
                     name: td.name.replace('-', "_"),
                     description: td.description,
                     parameters_schema: td.parameters,
@@ -732,7 +732,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
         name: "missions".into(),
         description: "Mission and routine lifecycle management".into(),
         actions: vec![
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_create".into(),
                 description: "Create a new mission (routine). Use when the user wants to set up a recurring task, scheduled check, or periodic routine. Results are delivered to the current channel by default.".into(),
                 parameters_schema: serde_json::json!({
@@ -748,14 +748,14 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_list".into(),
                 description: "List all missions and routines in the current project.".into(),
                 parameters_schema: serde_json::json!({"type": "object"}),
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_fire".into(),
                 description: "Manually trigger a mission or routine to run immediately.".into(),
                 parameters_schema: serde_json::json!({
@@ -768,7 +768,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_pause".into(),
                 description: "Pause a running mission or routine.".into(),
                 parameters_schema: serde_json::json!({
@@ -781,7 +781,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_resume".into(),
                 description: "Resume a paused mission or routine.".into(),
                 parameters_schema: serde_json::json!({
@@ -794,7 +794,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_update".into(),
                 description: "Update a mission/routine. Change name, goal, cadence, notification channels, daily budget, or success criteria.".into(),
                 parameters_schema: serde_json::json!({
@@ -813,7 +813,7 @@ pub async fn init_engine(agent: &Agent) -> Result<(), Error> {
                 effects: vec![],
                 requires_approval: false,
             },
-            ironclaw_engine::ActionDef {
+            lunarwing_engine::ActionDef {
                 name: "mission_delete".into(),
                 description: "Delete a mission or routine permanently.".into(),
                 parameters_schema: serde_json::json!({
@@ -1076,7 +1076,7 @@ pub async fn resolve_engine_auth_callback(
         .filter(|gate| {
             matches!(
                 &gate.resume_kind,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: gate_credential,
                     ..
                 } if gate_credential == credential_name
@@ -1182,7 +1182,7 @@ pub async fn handle_approval(
 
     if !matches!(
         pending.resume_kind,
-        ironclaw_engine::ResumeKind::Approval { .. }
+        lunarwing_engine::ResumeKind::Approval { .. }
     ) {
         return Ok(Some(
             "The selected pending gate is not an approval request.".into(),
@@ -1198,9 +1198,9 @@ pub async fn handle_approval(
         thread_id,
         request_id,
         if approved {
-            ironclaw_engine::GateResolution::Approved { always }
+            lunarwing_engine::GateResolution::Approved { always }
         } else {
-            ironclaw_engine::GateResolution::Denied { reason: None }
+            lunarwing_engine::GateResolution::Denied { reason: None }
         },
     )
     .await
@@ -1235,7 +1235,7 @@ pub async fn handle_exec_approval(
         && gate.request_id == request_id.to_string()
         && matches!(
             gate.resume_kind,
-            ironclaw_engine::ResumeKind::Approval { .. }
+            lunarwing_engine::ResumeKind::Approval { .. }
         )
     {
         drop(guard);
@@ -1245,9 +1245,9 @@ pub async fn handle_exec_approval(
             thread_id,
             request_id,
             if approved {
-                ironclaw_engine::GateResolution::Approved { always }
+                lunarwing_engine::GateResolution::Approved { always }
             } else {
-                ironclaw_engine::GateResolution::Denied { reason: None }
+                lunarwing_engine::GateResolution::Denied { reason: None }
             },
         )
         .await;
@@ -1261,7 +1261,7 @@ pub async fn handle_exec_approval(
         .find(|gate| {
             matches!(
                 gate.resume_kind,
-                ironclaw_engine::ResumeKind::Approval { .. }
+                lunarwing_engine::ResumeKind::Approval { .. }
             ) && gate.request_id == request_id
         });
     drop(guard);
@@ -1273,9 +1273,9 @@ pub async fn handle_exec_approval(
             pending.thread_id,
             request_id,
             if approved {
-                ironclaw_engine::GateResolution::Approved { always }
+                lunarwing_engine::GateResolution::Approved { always }
             } else {
-                ironclaw_engine::GateResolution::Denied { reason: None }
+                lunarwing_engine::GateResolution::Denied { reason: None }
             },
         )
         .await;
@@ -1300,9 +1300,9 @@ pub async fn handle_exec_approval(
 pub async fn resolve_gate(
     agent: &Agent,
     message: &IncomingMessage,
-    thread_id: ironclaw_engine::ThreadId,
+    thread_id: lunarwing_engine::ThreadId,
     request_id: uuid::Uuid,
-    resolution: ironclaw_engine::GateResolution,
+    resolution: lunarwing_engine::GateResolution,
 ) -> Result<Option<String>, Error> {
     init_engine(agent).await?;
 
@@ -1339,11 +1339,11 @@ pub async fn resolve_gate(
         })?;
 
     match resolution {
-        ironclaw_engine::GateResolution::Approved { always: raw_always } => {
+        lunarwing_engine::GateResolution::Approved { always: raw_always } => {
             let always = raw_always
                 && matches!(
                     pending.resume_kind,
-                    ironclaw_engine::ResumeKind::Approval { allow_always: true }
+                    lunarwing_engine::ResumeKind::Approval { allow_always: true }
                 );
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
@@ -1401,7 +1401,7 @@ pub async fn resolve_gate(
             return result;
         }
 
-        ironclaw_engine::GateResolution::Denied { reason } => {
+        lunarwing_engine::GateResolution::Denied { reason } => {
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
                     &message.user_id,
@@ -1424,7 +1424,7 @@ pub async fn resolve_gate(
                 )
                 .await;
 
-            let deny_msg = ironclaw_engine::ThreadMessage::user(format!(
+            let deny_msg = lunarwing_engine::ThreadMessage::user(format!(
                 "User denied action '{}'. Do not execute it; choose an alternative approach.{}",
                 pending.action_name,
                 reason
@@ -1447,7 +1447,7 @@ pub async fn resolve_gate(
                 .map_err(|e| engine_err("resume error", e))?;
         }
 
-        ironclaw_engine::GateResolution::Cancelled => {
+        lunarwing_engine::GateResolution::Cancelled => {
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
                     &message.user_id,
@@ -1473,9 +1473,9 @@ pub async fn resolve_gate(
             return Ok(Some("Cancelled.".into()));
         }
 
-        ironclaw_engine::GateResolution::CredentialProvided { token } => {
+        lunarwing_engine::GateResolution::CredentialProvided { token } => {
             // Store credential then RESUME (not retry) — preserves thread work
-            if let ironclaw_engine::ResumeKind::Authentication {
+            if let lunarwing_engine::ResumeKind::Authentication {
                 ref credential_name,
                 ..
             } = pending.resume_kind
@@ -1580,7 +1580,7 @@ pub async fn resolve_gate(
             }
         }
 
-        ironclaw_engine::GateResolution::ExternalCallback { .. } => {
+        lunarwing_engine::GateResolution::ExternalCallback { .. } => {
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
                     &message.user_id,
@@ -1757,7 +1757,7 @@ pub async fn handle_expected(
         .events
         .iter()
         .filter_map(|e| match &e.kind {
-            ironclaw_engine::EventKind::ActionExecuted {
+            lunarwing_engine::EventKind::ActionExecuted {
                 action_name,
                 params_summary,
                 ..
@@ -1766,7 +1766,7 @@ pub async fn handle_expected(
                 "params": params_summary,
                 "success": true,
             })),
-            ironclaw_engine::EventKind::ActionFailed {
+            lunarwing_engine::EventKind::ActionFailed {
                 action_name, error, ..
             } => Some(serde_json::json!({
                 "tool": action_name,
@@ -1826,9 +1826,9 @@ pub async fn handle_expected(
 /// then falls back to the last completed thread visible in conversation entries).
 async fn find_most_recent_thread(
     state: &EngineState,
-    conv: &Option<ironclaw_engine::ConversationSurface>,
+    conv: &Option<lunarwing_engine::ConversationSurface>,
     user_id: &str,
-) -> Option<ironclaw_engine::Thread> {
+) -> Option<lunarwing_engine::Thread> {
     let conv = conv.as_ref()?;
 
     // Try active threads first (most recent interaction)
@@ -1926,7 +1926,7 @@ pub async fn has_pending_auth(user_id: &str) -> bool {
         .any(|gate| {
             matches!(
                 gate.resume_kind,
-                ironclaw_engine::ResumeKind::Authentication { .. }
+                lunarwing_engine::ResumeKind::Authentication { .. }
             )
         })
 }
@@ -1944,7 +1944,7 @@ pub async fn get_engine_pending_auth(
     let state = guard.as_ref()?;
     match resolve_pending_gate_for_user(&state.pending_gates, user_id, thread_id).await {
         PendingGateResolution::Resolved(gate) => {
-            if let ironclaw_engine::ResumeKind::Authentication {
+            if let lunarwing_engine::ResumeKind::Authentication {
                 credential_name,
                 instructions,
                 ..
@@ -1990,7 +1990,7 @@ pub async fn clear_engine_pending_auth(user_id: &str, thread_id: Option<&str>) {
             PendingGateResolution::Resolved(gate)
                 if matches!(
                     gate.resume_kind,
-                    ironclaw_engine::ResumeKind::Authentication { .. }
+                    lunarwing_engine::ResumeKind::Authentication { .. }
                 ) =>
             {
                 let _ = state.pending_gates.discard(&gate.key()).await;
@@ -2005,7 +2005,7 @@ pub async fn clear_engine_pending_auth(user_id: &str, thread_id: Option<&str>) {
     for gate in state.pending_gates.list_for_user(user_id).await {
         if matches!(
             gate.resume_kind,
-            ironclaw_engine::ResumeKind::Authentication { .. }
+            lunarwing_engine::ResumeKind::Authentication { .. }
         ) {
             let _ = state.pending_gates.discard(&gate.key()).await;
         }
@@ -2060,15 +2060,15 @@ async fn handle_with_engine_inner(
         resolve_pending_gate_for_user(&state.pending_gates, &message.user_id, thread_scope).await
         && matches!(
             gate.resume_kind,
-            ironclaw_engine::ResumeKind::Authentication { .. }
+            lunarwing_engine::ResumeKind::Authentication { .. }
         )
     {
         let request_id = gate.request_id;
         let resolution =
             if content.trim().is_empty() || content.trim().eq_ignore_ascii_case("cancel") {
-                ironclaw_engine::GateResolution::Cancelled
+                lunarwing_engine::GateResolution::Cancelled
             } else {
-                ironclaw_engine::GateResolution::CredentialProvided {
+                lunarwing_engine::GateResolution::CredentialProvided {
                     token: content.trim().to_string(),
                 }
             };
@@ -2215,8 +2215,8 @@ async fn await_thread_outcome(
     agent: &Agent,
     state: &EngineState,
     message: &IncomingMessage,
-    conv_id: ironclaw_engine::ConversationId,
-    thread_id: ironclaw_engine::ThreadId,
+    conv_id: lunarwing_engine::ConversationId,
+    thread_id: lunarwing_engine::ThreadId,
 ) -> Result<Option<String>, Error> {
     let mut event_rx = state.thread_manager.subscribe_events();
     let channels = &agent.channels;
@@ -2364,7 +2364,7 @@ async fn await_thread_outcome(
                     parameters: serde_json::json!({ "credential_name": cred_name }),
                     display_parameters: None,
                     description: format!("Authentication required for '{}'.", cred_name),
-                    resume_kind: ironclaw_engine::ResumeKind::Authentication {
+                    resume_kind: lunarwing_engine::ResumeKind::Authentication {
                         credential_name: cred_name.clone(),
                         instructions: setup_hint.clone(),
                         auth_url: None,
@@ -2471,7 +2471,7 @@ async fn await_thread_outcome(
 
             // Send appropriate StatusUpdate via channel
             match &resume_kind {
-                ironclaw_engine::ResumeKind::Approval { allow_always } => {
+                lunarwing_engine::ResumeKind::Approval { allow_always } => {
                     let _ = agent
                         .channels
                         .send_status(
@@ -2492,7 +2492,7 @@ async fn await_thread_outcome(
                         action_name
                     )))
                 }
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name,
                     instructions,
                     auth_url,
@@ -2529,7 +2529,7 @@ async fn await_thread_outcome(
                         credential_name
                     )))
                 }
-                ironclaw_engine::ResumeKind::External { callback_id } => {
+                lunarwing_engine::ResumeKind::External { callback_id } => {
                     tracing::debug!(
                         gate = %gate_name,
                         callback = %callback_id,
@@ -2585,7 +2585,7 @@ fn interpret_message_event(role: &str, content_preview: &str) -> Option<&'static
 
 /// Deliver a mission thread outcome to the mission's notify_channels.
 async fn handle_mission_notification(
-    notif: &ironclaw_engine::MissionNotification,
+    notif: &lunarwing_engine::MissionNotification,
     channels: &std::sync::Arc<crate::channels::ChannelManager>,
     sse: Option<&Arc<SseManager>>,
     db: Option<&Arc<dyn Database>>,
@@ -2641,12 +2641,12 @@ async fn handle_mission_notification(
 
 /// Forward an engine ThreadEvent to the channel as a StatusUpdate.
 async fn forward_event_to_channel(
-    event: &ironclaw_engine::ThreadEvent,
+    event: &lunarwing_engine::ThreadEvent,
     channels: &std::sync::Arc<crate::channels::ChannelManager>,
     channel_name: &str,
     metadata: &serde_json::Value,
 ) {
-    use ironclaw_engine::EventKind;
+    use lunarwing_engine::EventKind;
 
     match &event.kind {
         EventKind::StepStarted { .. } => {
@@ -2781,10 +2781,10 @@ async fn forward_event_to_channel(
 /// Returns multiple events when needed (e.g., ToolStarted + ToolCompleted
 /// so the frontend creates the card then resolves it).
 fn thread_event_to_app_events(
-    event: &ironclaw_engine::ThreadEvent,
+    event: &lunarwing_engine::ThreadEvent,
     thread_id: &str,
 ) -> Vec<AppEvent> {
-    use ironclaw_engine::EventKind;
+    use lunarwing_engine::EventKind;
 
     match &event.kind {
         EventKind::StepStarted { .. } => vec![AppEvent::Thinking {
@@ -2960,8 +2960,8 @@ pub struct EngineMissionDetail {
 
 // ── Engine query functions ───────────────────────────────────
 
-fn cadence_type_label(cadence: &ironclaw_engine::types::mission::MissionCadence) -> &'static str {
-    use ironclaw_engine::types::mission::MissionCadence;
+fn cadence_type_label(cadence: &lunarwing_engine::types::mission::MissionCadence) -> &'static str {
+    use lunarwing_engine::types::mission::MissionCadence;
     match cadence {
         MissionCadence::Cron { .. } => "cron",
         MissionCadence::OnEvent { .. } => "event",
@@ -2971,7 +2971,7 @@ fn cadence_type_label(cadence: &ironclaw_engine::types::mission::MissionCadence)
     }
 }
 
-fn thread_to_info(t: &ironclaw_engine::Thread) -> EngineThreadInfo {
+fn thread_to_info(t: &lunarwing_engine::Thread) -> EngineThreadInfo {
     EngineThreadInfo {
         id: t.id.to_string(),
         goal: t.goal.clone(),
@@ -3002,7 +3002,7 @@ pub async fn list_engine_threads(
     let pid = match project_id {
         Some(id) => {
             let uuid = uuid::Uuid::parse_str(id).map_err(|e| engine_err("parse project_id", e))?;
-            ironclaw_engine::ProjectId(uuid)
+            lunarwing_engine::ProjectId(uuid)
         }
         None => state.default_project_id,
     };
@@ -3030,7 +3030,7 @@ pub async fn get_engine_thread(
     };
 
     let tid = uuid::Uuid::parse_str(thread_id).map_err(|e| engine_err("parse thread_id", e))?;
-    let tid = ironclaw_engine::ThreadId(tid);
+    let tid = lunarwing_engine::ThreadId(tid);
 
     let Some(thread) = state
         .store
@@ -3085,7 +3085,7 @@ pub async fn list_engine_thread_steps(
     // Validate thread ownership before returning steps.
     if let Some(thread) = state
         .store
-        .load_thread(ironclaw_engine::ThreadId(tid))
+        .load_thread(lunarwing_engine::ThreadId(tid))
         .await
         .map_err(|e| engine_err("load thread", e))?
     {
@@ -3098,7 +3098,7 @@ pub async fn list_engine_thread_steps(
 
     let steps = state
         .store
-        .load_steps(ironclaw_engine::ThreadId(tid))
+        .load_steps(lunarwing_engine::ThreadId(tid))
         .await
         .map_err(|e| engine_err("load steps", e))?;
 
@@ -3136,7 +3136,7 @@ pub async fn list_engine_thread_events(
     // Validate thread ownership before returning events.
     if let Some(thread) = state
         .store
-        .load_thread(ironclaw_engine::ThreadId(tid))
+        .load_thread(lunarwing_engine::ThreadId(tid))
         .await
         .map_err(|e| engine_err("load thread", e))?
     {
@@ -3149,7 +3149,7 @@ pub async fn list_engine_thread_events(
 
     let events = state
         .store
-        .load_events(ironclaw_engine::ThreadId(tid))
+        .load_events(lunarwing_engine::ThreadId(tid))
         .await
         .map_err(|e| engine_err("load events", e))?;
 
@@ -3202,7 +3202,7 @@ pub async fn get_engine_project(
     let pid = uuid::Uuid::parse_str(project_id).map_err(|e| engine_err("parse project_id", e))?;
     let project = state
         .store
-        .load_project(ironclaw_engine::ProjectId(pid))
+        .load_project(lunarwing_engine::ProjectId(pid))
         .await
         .map_err(|e| engine_err("load project", e))?;
 
@@ -3232,7 +3232,7 @@ pub async fn list_engine_missions(
     let pid = match project_id {
         Some(id) => {
             let uuid = uuid::Uuid::parse_str(id).map_err(|e| engine_err("parse project_id", e))?;
-            ironclaw_engine::ProjectId(uuid)
+            lunarwing_engine::ProjectId(uuid)
         }
         None => state.default_project_id,
     };
@@ -3275,7 +3275,7 @@ pub async fn get_engine_mission(
     let mid = uuid::Uuid::parse_str(mission_id).map_err(|e| engine_err("parse mission_id", e))?;
     let mission = state
         .store
-        .load_mission(ironclaw_engine::MissionId(mid))
+        .load_mission(lunarwing_engine::MissionId(mid))
         .await
         .map_err(|e| engine_err("load mission", e))?;
 
@@ -3332,7 +3332,7 @@ pub async fn fire_engine_mission(mission_id: &str, user_id: &str) -> Result<Opti
     };
 
     let mid = uuid::Uuid::parse_str(mission_id).map_err(|e| engine_err("parse mission_id", e))?;
-    let mid = ironclaw_engine::MissionId(mid);
+    let mid = lunarwing_engine::MissionId(mid);
 
     let result = state
         .effect_adapter
@@ -3372,7 +3372,7 @@ pub async fn pause_engine_mission(
 
     // Shared missions require admin role; pass the shared owner id to satisfy engine check.
     let effective_user_id = resolve_mission_user_id(&state.store, mid, user_id, is_admin).await?;
-    mgr.pause_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+    mgr.pause_mission(lunarwing_engine::MissionId(mid), &effective_user_id)
         .await
         .map_err(|e| engine_err("pause mission", e))
 }
@@ -3402,7 +3402,7 @@ pub async fn resume_engine_mission(
         .ok_or_else(|| engine_err("mission", "mission manager not available"))?;
 
     let effective_user_id = resolve_mission_user_id(&state.store, mid, user_id, is_admin).await?;
-    mgr.resume_mission(ironclaw_engine::MissionId(mid), &effective_user_id)
+    mgr.resume_mission(lunarwing_engine::MissionId(mid), &effective_user_id)
         .await
         .map_err(|e| engine_err("resume mission", e))
 }
@@ -3423,12 +3423,12 @@ pub async fn reset_engine_state() {
 /// If the mission is shared-owned, requires admin role and returns the shared owner id
 /// so the engine ownership check passes. Otherwise returns the caller's user_id.
 async fn resolve_mission_user_id(
-    store: &Arc<dyn ironclaw_engine::Store>,
+    store: &Arc<dyn lunarwing_engine::Store>,
     mid: uuid::Uuid,
     user_id: &str,
     is_admin: bool,
 ) -> Result<String, Error> {
-    if let Ok(Some(mission)) = store.load_mission(ironclaw_engine::MissionId(mid)).await
+    if let Ok(Some(mission)) = store.load_mission(lunarwing_engine::MissionId(mid)).await
         && is_shared_owner(&mission.user_id)
     {
         if !is_admin {
@@ -3449,7 +3449,7 @@ async fn resolve_mission_user_id(
 ///
 /// Runs at engine init before user-scoped queries. After migration, records
 /// are findable by the owner's identity and the "legacy" sentinel disappears.
-async fn migrate_legacy_user_ids(store: &Arc<dyn ironclaw_engine::Store>, owner_id: &str) {
+async fn migrate_legacy_user_ids(store: &Arc<dyn lunarwing_engine::Store>, owner_id: &str) {
     // Projects
     if let Ok(legacy) = store.list_projects("legacy").await {
         for mut project in legacy {
@@ -3461,7 +3461,7 @@ async fn migrate_legacy_user_ids(store: &Arc<dyn ironclaw_engine::Store>, owner_
 
     // We need a project_id to query threads/missions/docs. Use list_projects
     // with the now-migrated owner_id, or fall back to "legacy" in case save failed.
-    let all_projects: Vec<ironclaw_engine::Project> =
+    let all_projects: Vec<lunarwing_engine::Project> =
         store.list_projects(owner_id).await.unwrap_or_default();
 
     for project in &all_projects {
@@ -3509,8 +3509,8 @@ mod tests {
     static ENGINE_STATE_TEST_LOCK: LazyLock<TokioMutex<()>> = LazyLock::new(|| TokioMutex::new(()));
 
     struct TestStore {
-        conversations: TokioRwLock<Vec<ironclaw_engine::ConversationSurface>>,
-        threads: TokioRwLock<HashMap<ironclaw_engine::ThreadId, ironclaw_engine::Thread>>,
+        conversations: TokioRwLock<Vec<lunarwing_engine::ConversationSurface>>,
+        threads: TokioRwLock<HashMap<lunarwing_engine::ThreadId, lunarwing_engine::Thread>>,
     }
 
     impl TestStore {
@@ -3526,82 +3526,82 @@ mod tests {
     impl Store for TestStore {
         async fn save_thread(
             &self,
-            thread: &ironclaw_engine::Thread,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            thread: &lunarwing_engine::Thread,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             self.threads.write().await.insert(thread.id, thread.clone());
             Ok(())
         }
         async fn load_thread(
             &self,
-            id: ironclaw_engine::ThreadId,
-        ) -> Result<Option<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+            id: lunarwing_engine::ThreadId,
+        ) -> Result<Option<lunarwing_engine::Thread>, lunarwing_engine::EngineError> {
             Ok(self.threads.read().await.get(&id).cloned())
         }
         async fn list_threads(
             &self,
-            _project_id: ironclaw_engine::ProjectId,
+            _project_id: lunarwing_engine::ProjectId,
             _user_id: &str,
-        ) -> Result<Vec<ironclaw_engine::Thread>, ironclaw_engine::EngineError> {
+        ) -> Result<Vec<lunarwing_engine::Thread>, lunarwing_engine::EngineError> {
             Ok(self.threads.read().await.values().cloned().collect())
         }
         async fn update_thread_state(
             &self,
-            _id: ironclaw_engine::ThreadId,
-            _state: ironclaw_engine::ThreadState,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _id: lunarwing_engine::ThreadId,
+            _state: lunarwing_engine::ThreadState,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn save_step(
             &self,
-            _: &ironclaw_engine::Step,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &lunarwing_engine::Step,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_steps(
             &self,
-            _: ironclaw_engine::ThreadId,
-        ) -> Result<Vec<ironclaw_engine::Step>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::ThreadId,
+        ) -> Result<Vec<lunarwing_engine::Step>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn append_events(
             &self,
-            _: &[ironclaw_engine::ThreadEvent],
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &[lunarwing_engine::ThreadEvent],
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_events(
             &self,
-            _: ironclaw_engine::ThreadId,
-        ) -> Result<Vec<ironclaw_engine::ThreadEvent>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::ThreadId,
+        ) -> Result<Vec<lunarwing_engine::ThreadEvent>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn save_project(
             &self,
-            _: &ironclaw_engine::Project,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &lunarwing_engine::Project,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_project(
             &self,
-            _: ironclaw_engine::ProjectId,
-        ) -> Result<Option<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::ProjectId,
+        ) -> Result<Option<lunarwing_engine::Project>, lunarwing_engine::EngineError> {
             Ok(None)
         }
         async fn list_projects(
             &self,
             _user_id: &str,
-        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+        ) -> Result<Vec<lunarwing_engine::Project>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn list_all_projects(
             &self,
-        ) -> Result<Vec<ironclaw_engine::Project>, ironclaw_engine::EngineError> {
+        ) -> Result<Vec<lunarwing_engine::Project>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn save_conversation(
             &self,
-            conversation: &ironclaw_engine::ConversationSurface,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            conversation: &lunarwing_engine::ConversationSurface,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             let mut conversations = self.conversations.write().await;
             conversations.retain(|existing| existing.id != conversation.id);
             conversations.push(conversation.clone());
@@ -3609,8 +3609,8 @@ mod tests {
         }
         async fn load_conversation(
             &self,
-            id: ironclaw_engine::ConversationId,
-        ) -> Result<Option<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+            id: lunarwing_engine::ConversationId,
+        ) -> Result<Option<lunarwing_engine::ConversationSurface>, lunarwing_engine::EngineError>
         {
             Ok(self
                 .conversations
@@ -3623,7 +3623,7 @@ mod tests {
         async fn list_conversations(
             &self,
             user_id: &str,
-        ) -> Result<Vec<ironclaw_engine::ConversationSurface>, ironclaw_engine::EngineError>
+        ) -> Result<Vec<lunarwing_engine::ConversationSurface>, lunarwing_engine::EngineError>
         {
             Ok(self
                 .conversations
@@ -3636,81 +3636,81 @@ mod tests {
         }
         async fn save_memory_doc(
             &self,
-            _: &ironclaw_engine::MemoryDoc,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &lunarwing_engine::MemoryDoc,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_memory_doc(
             &self,
-            _: ironclaw_engine::DocId,
-        ) -> Result<Option<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::DocId,
+        ) -> Result<Option<lunarwing_engine::MemoryDoc>, lunarwing_engine::EngineError> {
             Ok(None)
         }
         async fn list_memory_docs(
             &self,
-            _: ironclaw_engine::ProjectId,
+            _: lunarwing_engine::ProjectId,
             _user_id: &str,
-        ) -> Result<Vec<ironclaw_engine::MemoryDoc>, ironclaw_engine::EngineError> {
+        ) -> Result<Vec<lunarwing_engine::MemoryDoc>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn save_lease(
             &self,
-            _: &ironclaw_engine::CapabilityLease,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &lunarwing_engine::CapabilityLease,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_active_leases(
             &self,
-            _: ironclaw_engine::ThreadId,
-        ) -> Result<Vec<ironclaw_engine::CapabilityLease>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::ThreadId,
+        ) -> Result<Vec<lunarwing_engine::CapabilityLease>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn revoke_lease(
             &self,
-            _: ironclaw_engine::LeaseId,
+            _: lunarwing_engine::LeaseId,
             _: &str,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn save_mission(
             &self,
-            _: &ironclaw_engine::Mission,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: &lunarwing_engine::Mission,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
         async fn load_mission(
             &self,
-            _: ironclaw_engine::MissionId,
-        ) -> Result<Option<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+            _: lunarwing_engine::MissionId,
+        ) -> Result<Option<lunarwing_engine::Mission>, lunarwing_engine::EngineError> {
             Ok(None)
         }
         async fn list_missions(
             &self,
-            _: ironclaw_engine::ProjectId,
+            _: lunarwing_engine::ProjectId,
             _user_id: &str,
-        ) -> Result<Vec<ironclaw_engine::Mission>, ironclaw_engine::EngineError> {
+        ) -> Result<Vec<lunarwing_engine::Mission>, lunarwing_engine::EngineError> {
             Ok(vec![])
         }
         async fn update_mission_status(
             &self,
-            _: ironclaw_engine::MissionId,
-            _: ironclaw_engine::MissionStatus,
-        ) -> Result<(), ironclaw_engine::EngineError> {
+            _: lunarwing_engine::MissionId,
+            _: lunarwing_engine::MissionStatus,
+        ) -> Result<(), lunarwing_engine::EngineError> {
             Ok(())
         }
     }
 
     fn sample_pending_gate(
         user_id: &str,
-        thread_id: ironclaw_engine::ThreadId,
-        resume_kind: ironclaw_engine::ResumeKind,
+        thread_id: lunarwing_engine::ThreadId,
+        resume_kind: lunarwing_engine::ResumeKind,
     ) -> PendingGate {
         PendingGate {
             request_id: uuid::Uuid::new_v4(),
             gate_name: resume_kind.kind_name().to_string(),
             user_id: user_id.into(),
             thread_id,
-            conversation_id: ironclaw_engine::ConversationId::new(),
+            conversation_id: lunarwing_engine::ConversationId::new(),
             source_channel: "web".into(),
             action_name: "shell".into(),
             call_id: format!("call-{thread_id}"),
@@ -3728,13 +3728,13 @@ mod tests {
     #[tokio::test]
     async fn resolve_pending_gate_is_thread_scoped() {
         let store = crate::gate::store::PendingGateStore::in_memory();
-        let thread_a = ironclaw_engine::ThreadId::new();
-        let thread_b = ironclaw_engine::ThreadId::new();
+        let thread_a = lunarwing_engine::ThreadId::new();
+        let thread_b = lunarwing_engine::ThreadId::new();
         store
             .insert(sample_pending_gate(
                 "alice",
                 thread_a,
-                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+                lunarwing_engine::ResumeKind::Approval { allow_always: true },
             ))
             .await
             .unwrap();
@@ -3742,7 +3742,7 @@ mod tests {
             .insert(sample_pending_gate(
                 "alice",
                 thread_b,
-                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+                lunarwing_engine::ResumeKind::Approval { allow_always: true },
             ))
             .await
             .unwrap();
@@ -3762,16 +3762,16 @@ mod tests {
         store
             .insert(sample_pending_gate(
                 "alice",
-                ironclaw_engine::ThreadId::new(),
-                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+                lunarwing_engine::ThreadId::new(),
+                lunarwing_engine::ResumeKind::Approval { allow_always: true },
             ))
             .await
             .unwrap();
         store
             .insert(sample_pending_gate(
                 "alice",
-                ironclaw_engine::ThreadId::new(),
-                ironclaw_engine::ResumeKind::Approval { allow_always: true },
+                lunarwing_engine::ThreadId::new(),
+                lunarwing_engine::ResumeKind::Approval { allow_always: true },
             ))
             .await
             .unwrap();
@@ -3783,12 +3783,12 @@ mod tests {
     #[tokio::test]
     async fn resolve_pending_gate_filters_by_kind() {
         let store = crate::gate::store::PendingGateStore::in_memory();
-        let thread_id = ironclaw_engine::ThreadId::new();
+        let thread_id = lunarwing_engine::ThreadId::new();
         store
             .insert(sample_pending_gate(
                 "alice",
                 thread_id,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: "github".into(),
                     instructions: "paste token".into(),
                     auth_url: None,
@@ -3805,7 +3805,7 @@ mod tests {
         };
         assert!(matches!(
             gate.resume_kind,
-            ironclaw_engine::ResumeKind::Authentication { .. }
+            lunarwing_engine::ResumeKind::Authentication { .. }
         ));
     }
 
@@ -3814,15 +3814,15 @@ mod tests {
         let _guard = ENGINE_STATE_TEST_LOCK.lock().await;
         let store = Arc::new(TestStore::new());
         let state = make_expected_test_state(store);
-        let thread_a = ironclaw_engine::ThreadId::new();
-        let thread_b = ironclaw_engine::ThreadId::new();
+        let thread_a = lunarwing_engine::ThreadId::new();
+        let thread_b = lunarwing_engine::ThreadId::new();
 
         state
             .pending_gates
             .insert(sample_pending_gate(
                 "alice",
                 thread_a,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: "github_token".into(),
                     instructions: "paste token".into(),
                     auth_url: None,
@@ -3835,7 +3835,7 @@ mod tests {
             .insert(sample_pending_gate(
                 "alice",
                 thread_b,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: "linear_token".into(),
                     instructions: "paste token".into(),
                     auth_url: None,
@@ -3864,15 +3864,15 @@ mod tests {
         let _guard = ENGINE_STATE_TEST_LOCK.lock().await;
         let store = Arc::new(TestStore::new());
         let state = make_expected_test_state(store);
-        let thread_a = ironclaw_engine::ThreadId::new();
-        let thread_b = ironclaw_engine::ThreadId::new();
+        let thread_a = lunarwing_engine::ThreadId::new();
+        let thread_b = lunarwing_engine::ThreadId::new();
 
         state
             .pending_gates
             .insert(sample_pending_gate(
                 "alice",
                 thread_a,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: "github_token".into(),
                     instructions: "paste token".into(),
                     auth_url: None,
@@ -3885,7 +3885,7 @@ mod tests {
             .insert(sample_pending_gate(
                 "alice",
                 thread_b,
-                ironclaw_engine::ResumeKind::Authentication {
+                lunarwing_engine::ResumeKind::Authentication {
                     credential_name: "linear_token".into(),
                     instructions: "paste token".into(),
                     auth_url: None,
@@ -3911,23 +3911,23 @@ mod tests {
 
     /// Build a minimal EngineState backed by a TestStore for /expected tests.
     fn make_expected_test_state(store: Arc<TestStore>) -> EngineState {
-        use ironclaw_engine::{
+        use lunarwing_engine::{
             CapabilityRegistry, ConversationManager, LeaseManager, PolicyEngine, ThreadManager,
         };
 
         // Minimal mocks — /expected doesn't execute threads, just reads state
         struct NoopLlm;
         #[async_trait::async_trait]
-        impl ironclaw_engine::LlmBackend for NoopLlm {
+        impl lunarwing_engine::LlmBackend for NoopLlm {
             async fn complete(
                 &self,
-                _: &[ironclaw_engine::ThreadMessage],
-                _: &[ironclaw_engine::ActionDef],
-                _: &ironclaw_engine::LlmCallConfig,
-            ) -> Result<ironclaw_engine::LlmOutput, ironclaw_engine::EngineError> {
-                Ok(ironclaw_engine::LlmOutput {
-                    response: ironclaw_engine::LlmResponse::Text("done".into()),
-                    usage: ironclaw_engine::TokenUsage::default(),
+                _: &[lunarwing_engine::ThreadMessage],
+                _: &[lunarwing_engine::ActionDef],
+                _: &lunarwing_engine::LlmCallConfig,
+            ) -> Result<lunarwing_engine::LlmOutput, lunarwing_engine::EngineError> {
+                Ok(lunarwing_engine::LlmOutput {
+                    response: lunarwing_engine::LlmResponse::Text("done".into()),
+                    usage: lunarwing_engine::TokenUsage::default(),
                 })
             }
             fn model_name(&self) -> &str {
@@ -3937,20 +3937,20 @@ mod tests {
 
         struct NoopEffects;
         #[async_trait::async_trait]
-        impl ironclaw_engine::EffectExecutor for NoopEffects {
+        impl lunarwing_engine::EffectExecutor for NoopEffects {
             async fn execute_action(
                 &self,
                 _: &str,
                 _: serde_json::Value,
-                _: &ironclaw_engine::CapabilityLease,
-                _: &ironclaw_engine::ThreadExecutionContext,
-            ) -> Result<ironclaw_engine::ActionResult, ironclaw_engine::EngineError> {
+                _: &lunarwing_engine::CapabilityLease,
+                _: &lunarwing_engine::ThreadExecutionContext,
+            ) -> Result<lunarwing_engine::ActionResult, lunarwing_engine::EngineError> {
                 unreachable!()
             }
             async fn available_actions(
                 &self,
-                _: &[ironclaw_engine::CapabilityLease],
-            ) -> Result<Vec<ironclaw_engine::ActionDef>, ironclaw_engine::EngineError> {
+                _: &[lunarwing_engine::CapabilityLease],
+            ) -> Result<Vec<lunarwing_engine::ActionDef>, lunarwing_engine::EngineError> {
                 Ok(vec![])
             }
         }
@@ -3958,8 +3958,8 @@ mod tests {
         let store_dyn: Arc<dyn Store> = store;
         let effect_adapter = Arc::new(EffectBridgeAdapter::new(
             Arc::new(crate::tools::ToolRegistry::new()),
-            Arc::new(ironclaw_safety::SafetyLayer::new(
-                &ironclaw_safety::SafetyConfig {
+            Arc::new(lunarwing_safety::SafetyLayer::new(
+                &lunarwing_safety::SafetyConfig {
                     max_output_length: 10_000,
                     injection_check_enabled: false,
                 },
@@ -3983,7 +3983,7 @@ mod tests {
             conversation_manager: cm,
             effect_adapter,
             store: store_dyn,
-            default_project_id: ironclaw_engine::ProjectId::new(),
+            default_project_id: lunarwing_engine::ProjectId::new(),
             pending_gates: Arc::new(crate::gate::store::PendingGateStore::in_memory()),
             sse: None,
             db: None,
@@ -3999,19 +3999,19 @@ mod tests {
         let state = make_expected_test_state(store.clone());
 
         let project_id = state.default_project_id;
-        let mut thread = ironclaw_engine::Thread::new(
+        let mut thread = lunarwing_engine::Thread::new(
             "test goal",
-            ironclaw_engine::ThreadType::Foreground,
+            lunarwing_engine::ThreadType::Foreground,
             project_id,
             "alice",
-            ironclaw_engine::ThreadConfig::default(),
+            lunarwing_engine::ThreadConfig::default(),
         );
-        thread.add_message(ironclaw_engine::ThreadMessage::user("hello"));
-        thread.add_message(ironclaw_engine::ThreadMessage::assistant("hi there"));
+        thread.add_message(lunarwing_engine::ThreadMessage::user("hello"));
+        thread.add_message(lunarwing_engine::ThreadMessage::assistant("hi there"));
         let tid = thread.id;
         store.save_thread(&thread).await.unwrap();
 
-        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+        let mut conv = lunarwing_engine::ConversationSurface::new("web", "alice");
         conv.track_thread(tid);
         let conv_opt = Some(conv);
 
@@ -4026,7 +4026,7 @@ mod tests {
         let store = Arc::new(TestStore::new());
         let state = make_expected_test_state(store);
 
-        let conv = Some(ironclaw_engine::ConversationSurface::new("web", "alice"));
+        let conv = Some(lunarwing_engine::ConversationSurface::new("web", "alice"));
         let result = find_most_recent_thread(&state, &conv, "alice").await;
         assert!(result.is_none());
     }
@@ -4038,17 +4038,17 @@ mod tests {
         let state = make_expected_test_state(store.clone());
 
         let project_id = state.default_project_id;
-        let thread = ironclaw_engine::Thread::new(
+        let thread = lunarwing_engine::Thread::new(
             "bob's thread",
-            ironclaw_engine::ThreadType::Foreground,
+            lunarwing_engine::ThreadType::Foreground,
             project_id,
             "bob", // owned by bob
-            ironclaw_engine::ThreadConfig::default(),
+            lunarwing_engine::ThreadConfig::default(),
         );
         let tid = thread.id;
         store.save_thread(&thread).await.unwrap();
 
-        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
+        let mut conv = lunarwing_engine::ConversationSurface::new("web", "alice");
         conv.track_thread(tid);
 
         // Alice should NOT see Bob's thread
@@ -4064,21 +4064,21 @@ mod tests {
         let state = make_expected_test_state(store.clone());
 
         let project_id = state.default_project_id;
-        let mut thread = ironclaw_engine::Thread::new(
+        let mut thread = lunarwing_engine::Thread::new(
             "completed goal",
-            ironclaw_engine::ThreadType::Foreground,
+            lunarwing_engine::ThreadType::Foreground,
             project_id,
             "alice",
-            ironclaw_engine::ThreadConfig::default(),
+            lunarwing_engine::ThreadConfig::default(),
         );
-        thread.add_message(ironclaw_engine::ThreadMessage::user("do something"));
-        thread.add_message(ironclaw_engine::ThreadMessage::assistant("done"));
+        thread.add_message(lunarwing_engine::ThreadMessage::user("do something"));
+        thread.add_message(lunarwing_engine::ThreadMessage::assistant("done"));
         let tid = thread.id;
         store.save_thread(&thread).await.unwrap();
 
         // Conversation with no active threads, but an entry referencing the thread
-        let mut conv = ironclaw_engine::ConversationSurface::new("web", "alice");
-        conv.add_entry(ironclaw_engine::ConversationEntry::agent(tid, "done"));
+        let mut conv = lunarwing_engine::ConversationSurface::new("web", "alice");
+        conv.add_entry(lunarwing_engine::ConversationEntry::agent(tid, "done"));
         // Thread is NOT in active_threads (it completed and was untracked)
 
         let result = find_most_recent_thread(&state, &Some(conv), "alice").await;

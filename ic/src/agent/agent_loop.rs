@@ -193,7 +193,7 @@ pub struct Agent {
         Arc<tokio::sync::RwLock<Option<Arc<crate::agent::routine_engine::RoutineEngine>>>>,
     /// Engine v2 mission manager slot (set after engine init).
     pub(crate) mission_manager_slot:
-        Arc<tokio::sync::RwLock<Option<Arc<ironclaw_engine::MissionManager>>>>,
+        Arc<tokio::sync::RwLock<Option<Arc<lunarwing_engine::MissionManager>>>>,
 }
 
 impl Agent {
@@ -280,11 +280,11 @@ impl Agent {
     }
 
     /// Set the engine v2 mission manager (called after engine init).
-    pub async fn set_mission_manager(&self, mgr: Arc<ironclaw_engine::MissionManager>) {
+    pub async fn set_mission_manager(&self, mgr: Arc<lunarwing_engine::MissionManager>) {
         *self.mission_manager_slot.write().await = Some(mgr);
     }
 
-    pub(crate) async fn mission_manager(&self) -> Option<Arc<ironclaw_engine::MissionManager>> {
+    pub(crate) async fn mission_manager(&self) -> Option<Arc<lunarwing_engine::MissionManager>> {
         self.mission_manager_slot.read().await.clone()
     }
 

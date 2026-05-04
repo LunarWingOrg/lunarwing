@@ -19,8 +19,8 @@ PROFILE="${LUNARWING_TEST_PROFILE:-debug}"
 DB_KIND="${LUNARWING_TEST_DATABASE_KIND:-postgres}"
 PG_CONTAINER="${LUNARWING_TEST_PG_CONTAINER:-lunarwing-test-postgres}"
 PG_PORT="${LUNARWING_TEST_PG_PORT:-5432}"
-DATABASE_URL="${LUNARWING_TEST_DATABASE_URL:-postgres://ironclaw:ironclaw@127.0.0.1:${PG_PORT}/ironclaw}"
-LIBSQL_PATH="${LUNARWING_TEST_LIBSQL_PATH:-$STATE_DIR/ironclaw.db}"
+DATABASE_URL="${LUNARWING_TEST_DATABASE_URL:-postgres://lunarwing:lunarwing@127.0.0.1:${PG_PORT}/lunarwing}"
+LIBSQL_PATH="${LUNARWING_TEST_LIBSQL_PATH:-$STATE_DIR/lunarwing.db}"
 
 # TensorZero proxy
 PROXY_PORT="${LUNARWING_TEST_PROXY_PORT:-3002}"
@@ -61,12 +61,12 @@ Commands:
   start-postgres           start PostgreSQL container (pgvector/pg16)
   stop-postgres            stop PostgreSQL container (preserves data)
   reset-postgres           remove PostgreSQL container entirely
-  start-proxy              start TensorZero ironclaw-proxy
-  stop-proxy               stop TensorZero ironclaw-proxy
+  start-proxy              start TensorZero lunarwing-proxy
+  stop-proxy               stop TensorZero lunarwing-proxy
   start-bridge             start xmpp-bridge with the test env
   stop-bridge              stop the bridge started by this script
   start-lunarwing [-- args]
-                           start target/<profile>/ironclaw with isolated state
+                           start target/<profile>/lunarwing with isolated state
   stop-lunarwing           stop LunarWing started by this script
 
   bridge-status            call authenticated GET /v1/status
@@ -96,7 +96,7 @@ Environment:
   LUNARWING_TEST_PG_CONTAINER    default: lunarwing-test-postgres
   LUNARWING_TEST_PG_PORT         default: 5432
   LUNARWING_TEST_DATABASE_URL    override full postgres connection URL
-  LUNARWING_TEST_LIBSQL_PATH     default: $LUNARWING_TEST_ROOT/state/ironclaw.db
+  LUNARWING_TEST_LIBSQL_PATH     default: $LUNARWING_TEST_ROOT/state/lunarwing.db
 
   LUNARWING_TEST_PROXY_PORT      default: 3002
   LUNARWING_TEST_PROXY_BIND      default: 127.0.0.1
@@ -114,7 +114,7 @@ Environment:
   LUNARWING_TEST_BRIDGE_SERVICE_NAME
                                  default: xmpp-bridge-test.service
   LUNARWING_TEST_PROXY_SERVICE_NAME
-                                 default: ironclaw-proxy-test.service
+                                 default: lunarwing-proxy-test.service
   LUNARWING_TEST_SYSTEMCTL_SCOPE user or system; default: user
   LUNARWING_TEST_KEEP_BRIDGE=1   keeps smoke-test bridge running
 
@@ -171,7 +171,7 @@ profile_dir() {
 }
 
 lunarwing_bin() {
-  printf '%s/target/%s/ironclaw' "$REPO_ROOT" "$(profile_dir)"
+  printf '%s/target/%s/lunarwing' "$REPO_ROOT" "$(profile_dir)"
 }
 
 bridge_bin() {
@@ -187,7 +187,7 @@ replv2_client_bin() {
 }
 
 harness_socket_path() {
-  printf '%s/ironclaw.sock' "$RUN_DIR"
+  printf '%s/lunarwing.sock' "$RUN_DIR"
 }
 
 generate_token() {
@@ -475,7 +475,7 @@ write_lunarwing_env_if_missing() {
       printf 'CLI_ENABLED=false\n'
       printf 'ONBOARD_COMPLETED=true\n'
       printf 'HEARTBEAT_ENABLED=false\n'
-      printf 'RUST_LOG=ironclaw=info,lunarwing=info\n'
+      printf 'RUST_LOG=lunarwing=info\n'
     } >"$path"
   )
 
@@ -687,9 +687,9 @@ start_postgres() {
       say "creating PostgreSQL container $PG_CONTAINER on port $PG_PORT"
       docker run -d \
         --name "$PG_CONTAINER" \
-        -e POSTGRES_DB=ironclaw \
-        -e POSTGRES_USER=ironclaw \
-        -e POSTGRES_PASSWORD=ironclaw \
+        -e POSTGRES_DB=lunarwing \
+        -e POSTGRES_USER=lunarwing \
+        -e POSTGRES_PASSWORD=lunarwing \
         -p "127.0.0.1:${PG_PORT}:5432" \
         pgvector/pgvector:pg16 >/dev/null
       ;;
@@ -702,7 +702,7 @@ start_postgres() {
 wait_for_postgres() {
   local deadline=$((SECONDS + 30))
   while (( SECONDS < deadline )); do
-    if docker exec "$PG_CONTAINER" pg_isready -U ironclaw >/dev/null 2>&1; then
+    if docker exec "$PG_CONTAINER" pg_isready -U lunarwing >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -747,7 +747,7 @@ reset_postgres() {
 # --- TensorZero proxy management ---
 
 proxy_bin() {
-  printf '%s/tensorzero-proxy-configurations/ironclaw-proxy.py' "$LUNARWING_ROOT"
+  printf '%s/tensorzero-proxy-configurations/lunarwing-proxy.py' "$LUNARWING_ROOT"
 }
 
 proxy_ready() {
@@ -1072,7 +1072,7 @@ verify_stack() {
 
   if [[ "$(database_kind)" == "postgres" ]]; then
     _check "PostgreSQL is reachable" \
-      docker exec "$PG_CONTAINER" pg_isready -U ironclaw
+      docker exec "$PG_CONTAINER" pg_isready -U lunarwing
   else
     _check "libSQL database file exists" \
       test -f "$LIBSQL_PATH"
@@ -1145,7 +1145,7 @@ build_bins() {
   fi
 
   say "building LunarWing binary: $(lunarwing_bin)"
-  (cd "$REPO_ROOT" && cargo "${cargo_args[@]}" --bin ironclaw)
+  (cd "$REPO_ROOT" && cargo "${cargo_args[@]}" --bin lunarwing)
 
   say "building xmpp-bridge binary: $(bridge_bin)"
   (cd "$REPO_ROOT/bridges/xmpp-bridge" && cargo "${cargo_args[@]}")
@@ -1434,7 +1434,7 @@ launch_repl() {
 }
 
 proxy_service_name() {
-  normalize_service_name "${LUNARWING_TEST_PROXY_SERVICE_NAME:-ironclaw-proxy-test.service}"
+  normalize_service_name "${LUNARWING_TEST_PROXY_SERVICE_NAME:-lunarwing-proxy-test.service}"
 }
 
 render_systemd() {
@@ -1699,9 +1699,9 @@ doctor() {
   fi
   say "REPL socket: $(harness_socket_path)"
   if [[ -f "$(proxy_bin)" ]]; then
-    say "ironclaw-proxy: $(proxy_bin)"
+    say "lunarwing-proxy: $(proxy_bin)"
   else
-    say "ironclaw-proxy: MISSING at $(proxy_bin)"
+    say "lunarwing-proxy: MISSING at $(proxy_bin)"
   fi
 
   say ""
@@ -1918,7 +1918,7 @@ LUNARWING_TEST_WEECHAT_PORT=19001
 LUNARWING_TEST_DATABASE_KIND=${LUNARWING_MT_DATABASE_KIND:-postgres}
 LUNARWING_TEST_SERVICE_NAME=lunarwing-mt-a.service
 LUNARWING_TEST_BRIDGE_SERVICE_NAME=xmpp-bridge-mt-a.service
-LUNARWING_TEST_PROXY_SERVICE_NAME=ironclaw-proxy-mt-a.service
+LUNARWING_TEST_PROXY_SERVICE_NAME=lunarwing-proxy-mt-a.service
 EOF
 }
 
@@ -1937,7 +1937,7 @@ LUNARWING_TEST_WEECHAT_PORT=19002
 LUNARWING_TEST_DATABASE_KIND=${LUNARWING_MT_DATABASE_KIND:-postgres}
 LUNARWING_TEST_SERVICE_NAME=lunarwing-mt-b.service
 LUNARWING_TEST_BRIDGE_SERVICE_NAME=xmpp-bridge-mt-b.service
-LUNARWING_TEST_PROXY_SERVICE_NAME=ironclaw-proxy-mt-b.service
+LUNARWING_TEST_PROXY_SERVICE_NAME=lunarwing-proxy-mt-b.service
 EOF
 }
 
@@ -1995,7 +1995,7 @@ _mt_seed_tenant() {
 
   # Set unique RUST_LOG prefix for differentiation in logs
   if grep -q "^RUST_LOG=" "$env_file"; then
-    _sed_i "s|^RUST_LOG=.*|RUST_LOG=ironclaw=info,lunarwing=info,$name=debug|" "$env_file"
+    _sed_i "s|^RUST_LOG=.*|RUST_LOG=lunarwing=info,$name=debug|" "$env_file"
   fi
 }
 
@@ -2077,7 +2077,7 @@ _mt_stop_systemd_tenant() {
   local tenant="$1"
   local main_svc="lunarwing-mt-${tenant}.service"
   local bridge_svc="xmpp-bridge-mt-${tenant}.service"
-  local proxy_svc="ironclaw-proxy-mt-${tenant}.service"
+  local proxy_svc="lunarwing-proxy-mt-${tenant}.service"
 
   for svc in "$main_svc" "$bridge_svc" "$proxy_svc"; do
     if systemctl --user is-active --quiet "$svc" 2>/dev/null; then
@@ -2090,7 +2090,7 @@ _mt_stop_systemd_tenant() {
 _mt_uninstall_systemd_units() {
   local tenant="$1"
   local user_unit_dir="$HOME/.config/systemd/user"
-  for svc in "lunarwing-mt-${tenant}.service" "xmpp-bridge-mt-${tenant}.service" "ironclaw-proxy-mt-${tenant}.service"; do
+  for svc in "lunarwing-mt-${tenant}.service" "xmpp-bridge-mt-${tenant}.service" "lunarwing-proxy-mt-${tenant}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
   systemctl --user daemon-reload
@@ -2169,7 +2169,7 @@ mt_up() {
 
   if [[ ! -x "$main_bin" ]]; then
     say "--- Building LunarWing binary ---"
-    (cd "$REPO_ROOT" && cargo build --bin ironclaw) || die "LunarWing build failed"
+    (cd "$REPO_ROOT" && cargo build --bin lunarwing) || die "LunarWing build failed"
   fi
 
   if [[ ! -x "$bridge_bin_path" ]]; then

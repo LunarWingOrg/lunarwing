@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use ironclaw::db::Database;
-use ironclaw::db::libsql::LibSqlBackend;
-use ironclaw::workspace::{Workspace, paths};
+use lunarwing::db::Database;
+use lunarwing::db::libsql::LibSqlBackend;
+use lunarwing::workspace::{Workspace, paths};
 
 async fn setup() -> (Arc<dyn Database>, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("create temp dir");

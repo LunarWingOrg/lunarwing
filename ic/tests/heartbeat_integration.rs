@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use ironclaw::{
+use lunarwing::{
     agent::HeartbeatRunner,
     config::Config,
     history::Store,
@@ -92,30 +92,30 @@ async fn test_heartbeat_end_to_end() {
     // 6. Run heartbeat check
     println!("[6/6] Running check_heartbeat()...\n");
 
-    let hb_config = ironclaw::agent::HeartbeatConfig::default();
-    let hygiene_config = ironclaw::workspace::hygiene::HygieneConfig::default();
+    let hb_config = lunarwing::agent::HeartbeatConfig::default();
+    let hygiene_config = lunarwing::workspace::hygiene::HygieneConfig::default();
     let runner = HeartbeatRunner::new(hb_config, hygiene_config, workspace, llm);
 
     let result = runner.check_heartbeat().await;
 
     println!("=== Result ===\n");
     match &result {
-        ironclaw::agent::HeartbeatResult::Ok => {
+        lunarwing::agent::HeartbeatResult::Ok => {
             println!("HeartbeatResult::Ok");
             println!("  LLM responded HEARTBEAT_OK, nothing needs attention.");
         }
-        ironclaw::agent::HeartbeatResult::NeedsAttention(msg) => {
+        lunarwing::agent::HeartbeatResult::NeedsAttention(msg) => {
             println!("HeartbeatResult::NeedsAttention");
             println!("  Message:\n{}", msg);
         }
-        ironclaw::agent::HeartbeatResult::Skipped => {
+        lunarwing::agent::HeartbeatResult::Skipped => {
             println!("HeartbeatResult::Skipped");
             println!("  No checklist found, or checklist was effectively empty.");
             println!("  This means the HEARTBEAT.md either:");
             println!("    - Does not exist in the workspace database");
             println!("    - Contains only headers, comments, and empty checkboxes");
         }
-        ironclaw::agent::HeartbeatResult::Failed(err) => {
+        lunarwing::agent::HeartbeatResult::Failed(err) => {
             println!("HeartbeatResult::Failed");
             println!("  Error: {}", err);
         }
