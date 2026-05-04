@@ -1,0 +1,106 @@
+/**
+ * ironclaw_runtime.ts — Shared types, envelope helpers, and state file management
+ * for the IronClaw WebSocket protocol (ironclaw-agent-v1).
+ */
+
+import { randomUUID } from "crypto"
+import { writeFileSync, readFileSync } from "fs"
+
+// ── Protocol Envelope ─────────────────────────────────────────────────────────
+
+export interface Envelope {
+  id: string
+  type: string
+  timestamp: string
+  payload: Record<string, unknown>
+}
+
+export function createEnvelope(type: string, payload: Record<string, unknown>): Envelope {
+  return {
+    id: randomUUID(),
+    type,
+    timestamp: new Date().toISOString(),
+    payload,
+  }
+}
+
+export function parseEnvelope(data: string): Envelope | null {
+  try {
+    const msg = JSON.parse(data)
+    if (msg && typeof msg.type === "string" && typeof msg.payload === "object") {
+      return msg as Envelope
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+// ── Message Types ─────────────────────────────────────────────────────────────
+
+export interface TaskRequest {
+  task_id: string
+  prompt: string
+  context?: { path?: string; [key: string]: unknown }
+  timeout_ms?: number
+}
+
+export interface TaskProgress {
+  task_id: string
+  delta: string
+  done: boolean
+}
+
+export interface TaskResult {
+  task_id: string
+  status: "success" | "error" | "cancelled"
+  output: string
+  error: string | null
+  duration_ms: number
+}
+
+export interface ReadyPayload {
+  worker_id: string
+  version: string
+  mode: string
+}
+
+// ── State File (IPC with health_server.py) ────────────────────────────────────
+
+export interface WsState {
+  timestamp: string
+  ready: boolean
+  role: string
+  listening?: boolean
+  bind_host?: string
+  port?: number
+  path?: string
+  connections: number
+  connected_to?: string
+}
+
+const WS_STATE_FILE = process.env.WS_STATE_FILE || "/tmp/ironclaw_ws_state.json"
+
+export function writeWsState(state: WsState): void {
+  try {
+    writeFileSync(WS_STATE_FILE, JSON.stringify(state, null, 2))
+  } catch (err) {
+    console.error("[ironclaw_runtime] failed to write state file:", err)
+  }
+}
+
+export function readWsState(): WsState | null {
+  try {
+    const data = readFileSync(WS_STATE_FILE, "utf-8")
+    return JSON.parse(data)
+  } catch {
+    return null
+  }
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+export const SUBPROTOCOL = "ironclaw-agent-v1"
+export const DEFAULT_TIMEOUT_MS = 300_000
+export const WORKER_ID = process.env.IRONCLAW_WORKER_ID || "worker-nanocode-01"
+export const WORKER_VERSION = "nanocode-worker-1.0.0"

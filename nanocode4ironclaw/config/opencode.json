@@ -1,0 +1,23 @@
+{
+  "$schema": "https://github.com/nanogpt-community/nanocode/config.json",
+  "theme": "moonlight",
+  "plugin": [
+    "opencode-agent-memory",
+    "opencode-agent-skills"
+  ],
+  "provider": {
+    "tensorzero": {
+      "name": "TensorZero",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "{env:TENSORZERO_API_KEY}",
+        "baseURL": "http://192.168.1.157:3000/openai/v1/"
+      },
+      "models": {
+        "tensorzero::nanocode": {
+          "name": "tensorzero::nanocode"
+        }
+      }
+    }
+  }
+}
