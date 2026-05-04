@@ -34,7 +34,7 @@ check_connection() {
 # Measure message latency (simplified - would use real XMPP client in production)
 measure_latency() {
     local latency=0
-    
+
     if [ "$connected" = "true" ]; then
         # Placeholder - would send test message and measure roundtrip
         # For now, simulate with a ping-like test
@@ -43,33 +43,33 @@ measure_latency() {
         local end=$(date +%s%N)
         latency=$(( (end - start) / 1000000 ))
     fi
-    
+
     echo $latency
 }
 
 # Check error rate (would query from logs/database in production)
 check_errors() {
     local errors=0
-    
+
     # Placeholder - would query recent errors from logs
     # For now, check if there are any recent error files
-    if [ -d "$HOME/.ironclaw/workspace/logs" ]; then
-        errors=$(find "$HOME/.ironclaw/workspace/logs" -name "*xmpp*error*" -mmin -15 -type f 2>/dev/null | wc -l)
+    if [ -d "${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/workspace/logs" ]; then
+        errors=$(find "${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/workspace/logs" -name "*xmpp*error*" -mmin -15 -type f 2>/dev/null | wc -l)
     fi
-    
+
     echo $errors
 }
 
 # Count active XMPP sessions
 count_sessions() {
     local sessions=0
-    
+
     # Placeholder - would query active sessions from bridge
     # For now, count recent activity files
-    if [ -d "$HOME/.ironclaw/agents" ]; then
-        sessions=$(find "$HOME/.ironclaw/agents" -name "*.jsonl" -mmin -5 -type f 2>/dev/null | wc -l)
+    if [ -d "${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/agents" ]; then
+        sessions=$(find "${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/agents" -name "*.jsonl" -mmin -5 -type f 2>/dev/null | wc -l)
     fi
-    
+
     echo $sessions
 }
 

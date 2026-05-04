@@ -6,7 +6,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::channels::web::auth::AuthenticatedUser;
 use crate::channels::web::types::*;
 
@@ -61,7 +61,7 @@ pub async fn project_file_handler(
     serve_project_file(&project_id, &path).await
 }
 
-/// Shared logic: resolve the file inside `~/.ironclaw/projects/{project_id}/`,
+/// Shared logic: resolve the file inside `~/.lunarwing/projects/{project_id}/`,
 /// guard against path traversal, and stream the content with the right MIME type.
 async fn serve_project_file(project_id: &str, path: &str) -> axum::response::Response {
     // Reject project_id values that could escape the projects directory.
@@ -73,7 +73,7 @@ async fn serve_project_file(project_id: &str, path: &str) -> axum::response::Res
         return (StatusCode::BAD_REQUEST, "Invalid project ID").into_response();
     }
 
-    let base = ironclaw_base_dir().join("projects").join(project_id);
+    let base = lunarwing_base_dir().join("projects").join(project_id);
 
     let file_path = base.join(path);
 

@@ -2731,7 +2731,7 @@ async fn forward_event_to_channel(
                         StatusUpdate::AuthRequired {
                             extension_name: cred_name,
                             instructions: Some(
-                                "Store the credential with: ironclaw secret set <name> <value>"
+                                "Store the credential with: lunarwing secret set <name> <value>"
                                     .into(),
                             ),
                             auth_url: None,
@@ -3950,7 +3950,8 @@ mod tests {
             async fn available_actions(
                 &self,
                 _: &[lunarwing_engine::CapabilityLease],
-            ) -> Result<Vec<lunarwing_engine::ActionDef>, lunarwing_engine::EngineError> {
+            ) -> Result<Vec<lunarwing_engine::ActionDef>, lunarwing_engine::EngineError>
+            {
                 Ok(vec![])
             }
         }

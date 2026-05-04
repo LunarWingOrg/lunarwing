@@ -1,11 +1,11 @@
-# IronClaw E2E Tests
+# LunarWing E2E Tests
 
-Browser-level end-to-end tests for the IronClaw web gateway using Python + Playwright.
+Browser-level end-to-end tests for the LunarWing web gateway using Python + Playwright.
 
 ## Prerequisites
 
 - Python 3.11+
-- Rust toolchain (for building ironclaw)
+- Rust toolchain (for building lunarwing)
 - Chromium (installed via Playwright)
 
 ## Setup
@@ -16,9 +16,9 @@ pip install -e .
 playwright install chromium
 ```
 
-## Build ironclaw
+## Build lunarwing
 
-The tests need the ironclaw binary built with libsql support:
+The tests need the lunarwing binary built with libsql support:
 
 ```bash
 cargo build --no-default-features --features libsql
@@ -41,7 +41,7 @@ HEADED=1 pytest tests/e2e/scenarios/test_connection.py -v
 
 Tests start two subprocesses:
 1. **Mock LLM** (`mock_llm.py`) -- fake OpenAI-compat server with canned responses
-2. **IronClaw** -- the real binary with gateway enabled, pointing to the mock LLM
+2. **LunarWing** -- the real binary with gateway enabled, pointing to the mock LLM
 
 Then Playwright drives a headless Chromium browser against the gateway, making DOM assertions.
 

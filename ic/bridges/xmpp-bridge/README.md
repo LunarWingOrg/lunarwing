@@ -42,7 +42,7 @@ production templates in:
 - `systemd/xmpp-bridge.service`
 
 The main daemon unit declares `Wants=` / `After=` on `xmpp-bridge.service` so
-the bridge starts before `ironclaw run`. The bridge unit declares
+the bridge starts before `lunarwing run`. The bridge unit declares
 `PartOf=lunarwing.service` so service stops and restarts are coupled.
 
 ## API

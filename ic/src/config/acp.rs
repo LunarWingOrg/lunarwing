@@ -2,7 +2,7 @@
 //!
 //! Stores configuration for ACP-compliant coding agents that can be spawned
 //! as subprocesses inside Docker containers. Configuration is persisted at
-//! `~/.ironclaw/acp-agents.json` (disk fallback) and in the database settings
+//! `~/.lunarwing/acp-agents.json` (disk fallback) and in the database settings
 //! table under key `"acp_agents"`.
 //!
 //! Mirrors the MCP server config pattern (`src/tools/mcp/config.rs`).
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 
 /// Configuration for a single ACP-compliant agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,7 +169,7 @@ pub enum AcpConfigError {
 
 /// Get the default ACP agents configuration path.
 pub fn default_config_path() -> PathBuf {
-    ironclaw_base_dir().join("acp-agents.json")
+    lunarwing_base_dir().join("acp-agents.json")
 }
 
 /// Load ACP agent configurations from the default location.
@@ -540,7 +540,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_nonexistent_returns_empty() {
-        let path = std::env::temp_dir().join("ironclaw-test-nonexistent-acp.json");
+        let path = std::env::temp_dir().join("lunarwing-test-nonexistent-acp.json");
         let _ = std::fs::remove_file(&path); // ensure clean
         let file = load_acp_agents_from(&path).await.unwrap();
         assert!(file.agents.is_empty());

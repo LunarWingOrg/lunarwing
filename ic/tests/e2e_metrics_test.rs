@@ -16,7 +16,7 @@ mod tests {
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;
 
-    const TEST_DIR: &str = "/tmp/ironclaw_metrics_test";
+    const TEST_DIR: &str = "/tmp/lunarwing_metrics_test";
 
     fn setup_test_dir() {
         let _ = std::fs::remove_dir_all(TEST_DIR);

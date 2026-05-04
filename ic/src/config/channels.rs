@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use secrecy::SecretString;
 use serde::Deserialize;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env};
 use crate::error::ConfigError;
 use crate::settings::Settings;
@@ -17,7 +17,7 @@ pub struct ChannelsConfig {
     pub gateway: Option<GatewayConfig>,
     pub signal: Option<SignalConfig>,
     pub xmpp: Option<XmppConfig>,
-    /// Directory containing WASM channel modules (default: ~/.ironclaw/channels/).
+    /// Directory containing WASM channel modules (default: ~/.lunarwing/channels/).
     pub wasm_channels_dir: std::path::PathBuf,
     /// Whether WASM channels are enabled.
     pub wasm_channels_enabled: bool,
@@ -129,7 +129,7 @@ pub struct XmppConfig {
     pub encrypted_rooms: Vec<String>,
     /// OMEMO device ID (0 = auto-generate on first run).
     pub device_id: u32,
-    /// Directory for OMEMO key/session persistence (default: ~/.ironclaw/xmpp/).
+    /// Directory for OMEMO key/session persistence (default: ~/.lunarwing/xmpp/).
     pub omemo_store_dir: std::path::PathBuf,
     /// Fall back to plaintext when no OMEMO bundle is available.
     pub allow_plaintext_fallback: bool,
@@ -363,7 +363,7 @@ impl ChannelsConfig {
             let omemo_store_dir = optional_env("XMPP_OMEMO_STORE_DIR")?
                 .map(std::path::PathBuf::from)
                 .or_else(|| cs.xmpp_omemo_store_dir.clone())
-                .unwrap_or_else(|| ironclaw_base_dir().join("xmpp"));
+                .unwrap_or_else(|| lunarwing_base_dir().join("xmpp"));
             let allow_from = optional_env("XMPP_ALLOW_FROM")?
                 .or_else(|| cs.xmpp_allow_from.clone())
                 .map(|s| {
@@ -469,9 +469,9 @@ impl ChannelsConfig {
 /// other modules that need to construct a gateway URL.
 pub const DEFAULT_GATEWAY_PORT: u16 = 3000;
 
-/// Get the default channels directory (~/.ironclaw/channels/).
+/// Get the default channels directory (~/.lunarwing/channels/).
 fn default_channels_dir() -> PathBuf {
-    ironclaw_base_dir().join("channels")
+    lunarwing_base_dir().join("channels")
 }
 
 #[cfg(test)]

@@ -45,7 +45,7 @@ except Exception:
 # Temp directory for the libSQL database file (cleaned up automatically)
 _DB_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-")
 
-# Temp HOME so pairing/allowFrom state never touches the developer's real ~/.ironclaw
+# Temp HOME so pairing/allowFrom state never touches the developer's real ~/.lunarwing
 _HOME_TMPDIR = tempfile.TemporaryDirectory(prefix="lunarwing-e2e-home-")
 
 # Temp directories for WASM extensions. These start empty and are populated by
@@ -246,7 +246,7 @@ def _wasm_build_symlinks():
 
 
 @pytest.fixture(scope="session")
-async def ironclaw_server(
+async def lunarwing_server(
     lunarwing_binary,
     mock_llm_server,
     wasm_tools_dir,
@@ -263,8 +263,8 @@ async def ironclaw_server(
         # Minimal env: PATH for process spawning, HOME for Rust/cargo defaults
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": home_dir,
-        "LUNARWING_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
-        "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+        "LUNARWING_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
+        "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
         "RUST_LOG": "lunarwing=info",
         "RUST_BACKTRACE": "1",
         "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
@@ -364,8 +364,8 @@ async def hosted_oauth_refresh_server(
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": home_dir,
-            "LUNARWING_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
-            "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".ironclaw"),
+            "LUNARWING_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
+            "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
             "RUST_LOG": "lunarwing=info",
             "RUST_BACKTRACE": "1",
             "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
@@ -449,7 +449,7 @@ async def hosted_oauth_refresh_server(
 
 
 @pytest.fixture(scope="session")
-async def http_channel_server(ironclaw_server, server_ports):
+async def http_channel_server(lunarwing_server, server_ports):
     """HTTP webhook channel base URL."""
     base_url = f"http://127.0.0.1:{server_ports['http']}"
     await wait_for_ready(f"{base_url}/health", timeout=30)
@@ -547,7 +547,7 @@ async def http_channel_server_without_secret(
 
 
 @pytest.fixture(scope="session")
-async def browser(ironclaw_server):
+async def browser(lunarwing_server):
     """Session-scoped Playwright browser instance.
 
     Reuses a single browser process across all tests. Individual tests
@@ -563,11 +563,11 @@ async def browser(ironclaw_server):
 
 
 @pytest.fixture
-async def page(ironclaw_server, browser):
+async def page(lunarwing_server, browser):
     """Fresh Playwright browser context + page, navigated to the gateway with auth."""
     context = await browser.new_context(viewport={"width": 1280, "height": 720})
     pg = await context.new_page()
-    await pg.goto(f"{ironclaw_server}/?token={AUTH_TOKEN}")
+    await pg.goto(f"{lunarwing_server}/?token={AUTH_TOKEN}")
     # Wait for the app to initialize (auth screen hidden, SSE connected)
     await pg.wait_for_selector("#auth-screen", state="hidden", timeout=15000)
     yield pg

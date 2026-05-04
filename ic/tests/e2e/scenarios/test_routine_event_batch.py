@@ -141,12 +141,12 @@ async def _wait_for_completed_run(
 
 
 @pytest.mark.asyncio
-async def test_create_event_trigger_routine(page, ironclaw_server):
+async def test_create_event_trigger_routine(page, lunarwing_server):
     """Event routines can be created through the supported chat flow."""
     name = f"evt-{uuid.uuid4().hex[:8]}"
     routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=name,
         pattern="test|demo",
     )
@@ -159,14 +159,14 @@ async def test_create_event_trigger_routine(page, ironclaw_server):
 @pytest.mark.asyncio
 async def test_event_trigger_fires_on_matching_message(
     page,
-    ironclaw_server,
+    lunarwing_server,
     http_channel_server,
 ):
     """Matching HTTP-channel messages create routine runs."""
     name = f"evt-{uuid.uuid4().hex[:8]}"
     routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=name,
         pattern="urgent|critical|alert",
     )
@@ -178,11 +178,11 @@ async def test_event_trigger_fires_on_matching_message(
     assert response["status"] == "accepted"
 
     await _wait_for_run_count(
-        ironclaw_server,
+        lunarwing_server,
         routine["id"],
         expected_at_least=1,
     )
-    completed_run = await _wait_for_completed_run(ironclaw_server, routine["id"])
+    completed_run = await _wait_for_completed_run(lunarwing_server, routine["id"])
 
     assert completed_run["status"].lower() == "attention"
     assert completed_run["trigger_type"] == "event"
@@ -191,14 +191,14 @@ async def test_event_trigger_fires_on_matching_message(
 @pytest.mark.asyncio
 async def test_event_trigger_skips_non_matching_message(
     page,
-    ironclaw_server,
+    lunarwing_server,
     http_channel_server,
 ):
     """Non-matching messages do not create routine runs."""
     name = f"evt-{uuid.uuid4().hex[:8]}"
     routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=name,
         pattern="urgent|critical|alert",
     )
@@ -209,13 +209,13 @@ async def test_event_trigger_skips_non_matching_message(
     )
     await asyncio.sleep(2)
 
-    assert await _get_routine_runs(ironclaw_server, routine["id"]) == []
+    assert await _get_routine_runs(lunarwing_server, routine["id"]) == []
 
 
 @pytest.mark.asyncio
 async def test_multiple_routines_fire_on_matching_message(
     page,
-    ironclaw_server,
+    lunarwing_server,
     http_channel_server,
 ):
     """A single matching message can fire multiple event routines."""
@@ -225,7 +225,7 @@ async def test_multiple_routines_fire_on_matching_message(
         routines.append(
             await _create_event_routine(
                 page,
-                ironclaw_server,
+                lunarwing_server,
                 name=name,
                 pattern="error|warning|alert",
             )
@@ -238,31 +238,31 @@ async def test_multiple_routines_fire_on_matching_message(
 
     for routine in routines:
         await _wait_for_run_count(
-            ironclaw_server,
+            lunarwing_server,
             routine["id"],
             expected_at_least=1,
         )
-        completed_run = await _wait_for_completed_run(ironclaw_server, routine["id"])
+        completed_run = await _wait_for_completed_run(lunarwing_server, routine["id"])
         assert completed_run["status"].lower() == "attention"
 
 
 @pytest.mark.asyncio
 async def test_channel_filter_applied_correctly(
     page,
-    ironclaw_server,
+    lunarwing_server,
     http_channel_server,
 ):
     """Channel filters prevent HTTP messages from firing non-HTTP routines."""
     http_routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=f"evt-{uuid.uuid4().hex[:8]}",
         pattern="alert",
         channel="http",
     )
     telegram_routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=f"evt-{uuid.uuid4().hex[:8]}",
         pattern="alert",
         channel="telegram",
@@ -274,13 +274,13 @@ async def test_channel_filter_applied_correctly(
     )
 
     await _wait_for_run_count(
-        ironclaw_server,
+        lunarwing_server,
         http_routine["id"],
         expected_at_least=1,
     )
-    http_run = await _wait_for_completed_run(ironclaw_server, http_routine["id"])
+    http_run = await _wait_for_completed_run(lunarwing_server, http_routine["id"])
     await asyncio.sleep(2)
-    telegram_runs = await _get_routine_runs(ironclaw_server, telegram_routine["id"])
+    telegram_runs = await _get_routine_runs(lunarwing_server, telegram_routine["id"])
 
     assert http_run["status"].lower() == "attention"
     assert telegram_runs == []
@@ -289,13 +289,13 @@ async def test_channel_filter_applied_correctly(
 @pytest.mark.asyncio
 async def test_routine_execution_history_is_available(
     page,
-    ironclaw_server,
+    lunarwing_server,
     http_channel_server,
 ):
     """Routine run history is exposed by the routines runs API."""
     routine = await _create_event_routine(
         page,
-        ironclaw_server,
+        lunarwing_server,
         name=f"evt-{uuid.uuid4().hex[:8]}",
         pattern="history",
     )
@@ -306,11 +306,11 @@ async def test_routine_execution_history_is_available(
     )
 
     await _wait_for_run_count(
-        ironclaw_server,
+        lunarwing_server,
         routine["id"],
         expected_at_least=1,
     )
-    completed_run = await _wait_for_completed_run(ironclaw_server, routine["id"])
+    completed_run = await _wait_for_completed_run(lunarwing_server, routine["id"])
 
     assert completed_run["id"]
     assert completed_run["started_at"]

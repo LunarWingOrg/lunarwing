@@ -1,6 +1,6 @@
 //! WASM channel loader for loading channels from files or directories.
 //!
-//! Loads WASM channel modules from the filesystem (default: ~/.ironclaw/channels/).
+//! Loads WASM channel modules from the filesystem (default: ~/.lunarwing/channels/).
 //! Each channel consists of:
 //! - `<name>.wasm` - The compiled WASM component
 //! - `<name>.capabilities.json` - Channel capabilities and configuration
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use tokio::fs;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::channels::wasm::capabilities::ChannelCapabilities;
 use crate::channels::wasm::error::WasmChannelError;
 use crate::channels::wasm::runtime::WasmChannelRuntime;
@@ -408,10 +408,10 @@ pub struct DiscoveredChannel {
 
 /// Get the default channels directory path.
 ///
-/// Returns ~/.ironclaw/channels/
+/// Returns ~/.lunarwing/channels/
 #[allow(dead_code)]
 pub fn default_channels_dir() -> PathBuf {
-    ironclaw_base_dir().join("channels")
+    lunarwing_base_dir().join("channels")
 }
 
 #[cfg(test)]

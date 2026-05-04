@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 
 use super::pending::{PendingGate, PendingGateKey};
 use super::store::{GatePersistence, GateStoreError};
@@ -19,7 +19,7 @@ struct PendingGateFile {
     gates: Vec<PendingGate>,
 }
 
-/// JSON-file persistence for pending gates under `~/.ironclaw/`.
+/// JSON-file persistence for pending gates under `~/.lunarwing/`.
 #[derive(Debug, Clone)]
 pub struct FileGatePersistence {
     path: PathBuf,
@@ -31,7 +31,7 @@ impl FileGatePersistence {
     }
 
     pub fn default_path() -> PathBuf {
-        ironclaw_base_dir().join("pending-gates.json")
+        lunarwing_base_dir().join("pending-gates.json")
     }
 
     pub fn with_default_path() -> Self {

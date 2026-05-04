@@ -1,14 +1,13 @@
 ---
 source: src/cli/mod.rs
-assertion_line: 477
 expression: help
 ---
-LunarWing is a secure AI assistant. Use 'ironclaw <subcommand> --help' for details.
+LunarWing is a secure AI assistant. Use 'lunarwing <subcommand> --help' for details.
 Examples:
-  ironclaw run  # Start the agent
-  ironclaw config list  # List configs
+  lunarwing run  # Start the agent
+  lunarwing config list  # List configs
 
-Usage: ironclaw [OPTIONS] [COMMAND]
+Usage: lunarwing [OPTIONS] [COMMAND]
 
 Commands:
   run         Run the AI agent

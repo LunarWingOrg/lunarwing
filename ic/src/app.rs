@@ -607,7 +607,7 @@ impl AppBuilder {
                                         {
                                             tracing::warn!(
                                                 "MCP server '{}' requires authentication. \
-                                                 Run: ironclaw mcp auth {}",
+                                                 Run: lunarwing mcp auth {}",
                                                 server_name,
                                                 server_name
                                             );
@@ -851,7 +851,7 @@ impl AppBuilder {
                 .ok()
                 .map(std::path::PathBuf::from)
                 .or_else(|| {
-                    let default_dir = crate::bootstrap::ironclaw_workspace_template_dir();
+                    let default_dir = crate::bootstrap::lunarwing_workspace_template_dir();
                     if default_dir.is_dir() {
                         Some(default_dir)
                     } else {

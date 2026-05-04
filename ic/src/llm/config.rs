@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use secrecy::SecretString;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::llm::registry::ProviderProtocol;
 use crate::llm::session::SessionConfig;
 
@@ -114,7 +114,7 @@ pub struct OpenAiCodexConfig {
     pub api_base_url: String,
     /// OAuth client ID (default: OpenAI's public Codex client).
     pub client_id: String,
-    /// Path to session file (default: ~/.ironclaw/openai_codex_session.json).
+    /// Path to session file (default: ~/.lunarwing/openai_codex_session.json).
     pub session_path: PathBuf,
     /// Seconds before expiry to proactively refresh (default: 300).
     pub token_refresh_margin_secs: u64,
@@ -127,7 +127,7 @@ impl Default for OpenAiCodexConfig {
             auth_endpoint: "https://auth.openai.com".to_string(),
             api_base_url: "https://chatgpt.com/backend-api/codex".to_string(),
             client_id: "app_EMoamEEZ73f0CkXaXp7hrann".to_string(),
-            session_path: ironclaw_base_dir().join("openai_codex_session.json"),
+            session_path: lunarwing_base_dir().join("openai_codex_session.json"),
             token_refresh_margin_secs: 300,
         }
     }

@@ -2,7 +2,7 @@
 //!
 //! Provides subcommands for listing providers, viewing current model
 //! configuration, and setting the active provider/model. Settings are
-//! persisted to both `config.toml` and `~/.ironclaw/.env` so changes
+//! persisted to both `config.toml` and `~/.lunarwing/.env` so changes
 //! take effect immediately (no DB connection required).
 
 use clap::Subcommand;
@@ -147,7 +147,7 @@ fn save_settings(settings: &Settings, config_path: Option<&Path>) -> anyhow::Res
 }
 
 fn config_toml_path() -> std::path::PathBuf {
-    crate::bootstrap::ironclaw_base_dir().join("config.toml")
+    crate::bootstrap::lunarwing_base_dir().join("config.toml")
 }
 
 /// Try to fetch the live model list from a provider.
@@ -228,7 +228,7 @@ fn print_model_list(models: &Option<Vec<String>>, active_model: Option<&String>)
     }
 }
 
-/// Also update `~/.ironclaw/.env` so changes take effect immediately.
+/// Also update `~/.lunarwing/.env` so changes take effect immediately.
 ///
 /// Skipped when `config_path` is `Some` (custom `--config`), because the user
 /// is explicitly targeting a different config file and we must not pollute the
@@ -818,7 +818,7 @@ mod tests {
         // With a custom config path, sync_to_dotenv should be a no-op
         // (it returns early when config_path is Some).
         // We verify by checking that cmd_set_provider succeeds without
-        // trying to write to the default ~/.ironclaw/.env.
+        // trying to write to the default ~/.lunarwing/.env.
         cmd_set_provider("groq", None, Some(&toml_path)).expect("set provider with custom config");
 
         let settings = Settings::load_toml(&toml_path)

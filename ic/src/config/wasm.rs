@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env};
 use crate::error::ConfigError;
 
@@ -10,7 +10,7 @@ use crate::error::ConfigError;
 pub struct WasmConfig {
     /// Whether WASM tool execution is enabled.
     pub enabled: bool,
-    /// Directory containing installed WASM tools (default: ~/.ironclaw/tools/).
+    /// Directory containing installed WASM tools (default: ~/.lunarwing/tools/).
     pub tools_dir: PathBuf,
     /// Default memory limit in bytes (default: 10 MB).
     pub default_memory_limit: u64,
@@ -38,9 +38,9 @@ impl Default for WasmConfig {
     }
 }
 
-/// Get the default tools directory (~/.ironclaw/tools/).
+/// Get the default tools directory (~/.lunarwing/tools/).
 fn default_tools_dir() -> PathBuf {
-    ironclaw_base_dir().join("tools")
+    lunarwing_base_dir().join("tools")
 }
 
 impl WasmConfig {

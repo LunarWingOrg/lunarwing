@@ -3,7 +3,7 @@
 //! Shows a compact ANSI-styled status panel with three tiers:
 //! - **Tier 1 (always):** Name + version, model + backend.
 //! - **Tier 2 (conditional):** Gateway URL, tunnel URL, non-default channels.
-//! - **Tier 3 (removed):** Database, tool count, features → use `ironclaw status`.
+//! - **Tier 3 (removed):** Database, tool count, features → use `lunarwing status`.
 
 use crate::cli::fmt;
 
@@ -43,7 +43,7 @@ const KW: usize = 10;
 ///
 /// **Tier 1 (always):** Name + version, model + backend.
 /// **Tier 2 (conditional):** Gateway URL, tunnel URL, non-default channels.
-/// **Tier 3 (removed):** Database, tool count, features — use `ironclaw status`.
+/// **Tier 3 (removed):** Database, tool count, features — use `lunarwing status`.
 pub fn print_boot_screen(info: &BootInfo) {
     let border = format!("  {}", fmt::separator(58));
 
@@ -242,9 +242,9 @@ pub fn print_boot_screen(info: &BootInfo) {
         println!("  {}ready in {}{}", fmt::dim(), elapsed_str, fmt::reset());
     }
 
-    // Hint to run `ironclaw status` for full details
+    // Hint to run `lunarwing status` for full details
     println!(
-        "  {}Run `ironclaw status` for full system details.{}",
+        "  {}Run `lunarwing status` for full system details.{}",
         fmt::hint(),
         fmt::reset()
     );
@@ -261,7 +261,7 @@ mod tests {
     fn test_print_boot_screen_full() {
         let info = BootInfo {
             version: "0.2.0".to_string(),
-            agent_name: "ironclaw".to_string(),
+            agent_name: "lunarwing".to_string(),
             llm_backend: "nearai".to_string(),
             llm_model: "claude-3-5-sonnet-20241022".to_string(),
             cheap_model: Some("gpt-4o-mini".to_string()),
@@ -296,7 +296,7 @@ mod tests {
     fn test_print_boot_screen_minimal() {
         let info = BootInfo {
             version: "0.2.0".to_string(),
-            agent_name: "ironclaw".to_string(),
+            agent_name: "lunarwing".to_string(),
             llm_backend: "nearai".to_string(),
             llm_model: "gpt-4o".to_string(),
             cheap_model: None,

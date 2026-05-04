@@ -1,6 +1,6 @@
 //! Pairing store: pending requests and allowFrom list.
 //!
-//! Stored in ~/.ironclaw/{channel}-pairing.json and {channel}-allowFrom.json.
+//! Stored in ~/.lunarwing/{channel}-pairing.json and {channel}-allowFrom.json.
 
 use std::collections::HashSet;
 use std::fs;
@@ -13,7 +13,7 @@ use rand::Rng;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 
 const PAIRING_CODE_LENGTH: usize = 8;
 const PAIRING_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -76,7 +76,7 @@ struct AllowFromStoreFile {
 }
 
 fn default_pairing_dir() -> PathBuf {
-    ironclaw_base_dir()
+    lunarwing_base_dir()
 }
 
 fn safe_channel_key(channel: &str) -> Result<String, PairingStoreError> {
@@ -176,7 +176,7 @@ pub struct PairingStore {
 }
 
 impl PairingStore {
-    /// Create a new pairing store using default directory (~/.ironclaw).
+    /// Create a new pairing store using default directory (~/.lunarwing).
     pub fn new() -> Self {
         Self {
             base_dir: default_pairing_dir(),

@@ -1,4 +1,4 @@
-//! CLI subcommand definitions for `ironclaw service`.
+//! CLI subcommand definitions for `lunarwing service`.
 
 use clap::Subcommand;
 

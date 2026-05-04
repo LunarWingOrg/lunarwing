@@ -110,7 +110,7 @@ impl Default for LogBroadcaster {
 /// Handle for changing the tracing `EnvFilter` at runtime.
 ///
 /// Wraps a `reload::Handle` so the gateway can switch between log levels
-/// (e.g. `ironclaw=debug`) without restarting the process.
+/// (e.g. `lunarwing=debug`) without restarting the process.
 pub struct LogLevelHandle {
     handle: reload::Handle<EnvFilter, tracing_subscriber::Registry>,
     current_level: Mutex<String>,
@@ -130,7 +130,7 @@ impl LogLevelHandle {
         }
     }
 
-    /// Change the `ironclaw=<level>` directive at runtime.
+    /// Change the `lunarwing=<level>` directive at runtime.
     ///
     /// `level` must be one of: trace, debug, info, warn, error.
     pub fn set_level(&self, level: &str) -> Result<(), String> {
@@ -145,9 +145,9 @@ impl LogLevelHandle {
         }
 
         let filter_str = if self.base_filter.is_empty() {
-            format!("ironclaw={}", level)
+            format!("lunarwing={}", level)
         } else {
-            format!("ironclaw={},{}", level, self.base_filter)
+            format!("lunarwing={},{}", level, self.base_filter)
         };
 
         let new_filter = EnvFilter::new(&filter_str);
@@ -161,7 +161,7 @@ impl LogLevelHandle {
         Ok(())
     }
 
-    /// Returns the current ironclaw log level (e.g. "info", "debug").
+    /// Returns the current lunarwing log level (e.g. "info", "debug").
     pub fn current_level(&self) -> String {
         self.current_level
             .lock()
@@ -176,16 +176,16 @@ impl LogLevelHandle {
 /// The fmt layer and `WebLogLayer` are attached alongside the reloadable filter.
 pub fn init_tracing(log_broadcaster: Arc<LogBroadcaster>) -> Arc<LogLevelHandle> {
     let raw_filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "ironclaw=info,tower_http=warn".to_string());
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "lunarwing=info,tower_http=warn".to_string());
 
-    // Split into the ironclaw directive and "everything else" (base_filter).
+    // Split into the lunarwing directive and "everything else" (base_filter).
     let mut ironclaw_level = String::from("info");
     let mut base_parts: Vec<&str> = Vec::new();
 
     for part in raw_filter.split(',') {
         let trimmed = part.trim();
-        if trimmed.starts_with("ironclaw=") {
-            if let Some(lvl) = trimmed.strip_prefix("ironclaw=") {
+        if trimmed.starts_with("lunarwing=") {
+            if let Some(lvl) = trimmed.strip_prefix("lunarwing=") {
                 ironclaw_level = lvl.to_string();
             }
         } else if !trimmed.is_empty() {

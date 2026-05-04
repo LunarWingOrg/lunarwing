@@ -19,9 +19,9 @@ XMPP_DM_POLICY="${XMPP_DM_POLICY:-allowlist}"
 XMPP_ALLOW_FROM_JSON="${XMPP_ALLOW_FROM_JSON:-[]}"
 XMPP_ENCRYPTED_ROOMS_JSON="${XMPP_ENCRYPTED_ROOMS_JSON:-[]}"
 XMPP_DEVICE_ID="${XMPP_DEVICE_ID:-0}"
-XMPP_OMEMO_STORE_DIR="${XMPP_OMEMO_STORE_DIR:-/home/user/.ironclaw/xmpp}"
+XMPP_OMEMO_STORE_DIR="${XMPP_OMEMO_STORE_DIR:-/home/user/.lunarwing/xmpp}"
 XMPP_ALLOW_PLAINTEXT_FALLBACK="${XMPP_ALLOW_PLAINTEXT_FALLBACK:-true}"
-XMPP_RESOURCE="${XMPP_RESOURCE:-ironclaw}"
+XMPP_RESOURCE="${XMPP_RESOURCE:-lunarwing}"
 XMPP_ALLOW_ROOMS_JSON="${XMPP_ALLOW_ROOMS_JSON:-}"
 XMPP_BRIDGE_WAIT_SECONDS="${XMPP_BRIDGE_WAIT_SECONDS:-15}"
 XMPP_BRIDGE_SERVICE="${XMPP_BRIDGE_SERVICE:-xmpp-bridge.service}"
@@ -48,9 +48,9 @@ Environment:
     XMPP_ALLOW_ROOMS_JSON         JSON array if you do not want to pass rooms as args
     XMPP_ENCRYPTED_ROOMS_JSON     default: []
     XMPP_DEVICE_ID                default: 0
-    XMPP_OMEMO_STORE_DIR          default: /home/user/.ironclaw/xmpp
+    XMPP_OMEMO_STORE_DIR          default: /home/user/.lunarwing/xmpp
     XMPP_ALLOW_PLAINTEXT_FALLBACK default: true
-    XMPP_RESOURCE                 default: ironclaw
+    XMPP_RESOURCE                 default: lunarwing
     XMPP_BRIDGE_WAIT_SECONDS      default: 15
     XMPP_BRIDGE_SERVICE           default: xmpp-bridge.service
     XMPP_BRIDGE_SYSTEMCTL_SCOPE   system or user; default: system

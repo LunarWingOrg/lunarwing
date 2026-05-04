@@ -4,7 +4,7 @@
 //! - **Device Code** (primary): Works on headless servers, no browser needed.
 //! - **Browser PKCE** (fallback): Standard OAuth for local machines.
 //!
-//! Tokens are persisted to `~/.ironclaw/openai_codex_session.json` and
+//! Tokens are persisted to `~/.lunarwing/openai_codex_session.json` and
 //! auto-refreshed before expiry.
 
 use chrono::{DateTime, Utc};
@@ -164,7 +164,7 @@ impl OpenAiCodexSessionManager {
         let mut headers = HeaderMap::new();
         headers.insert(
             USER_AGENT,
-            HeaderValue::from_static(concat!("ironclaw/", env!("CARGO_PKG_VERSION"))),
+            HeaderValue::from_static(concat!("lunarwing/", env!("CARGO_PKG_VERSION"))),
         );
         let client = Client::builder()
             .default_headers(headers)

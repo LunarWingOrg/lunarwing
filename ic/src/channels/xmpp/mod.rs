@@ -317,7 +317,7 @@ fn default_muc_nick(bound_jid: &xmpp_parsers::jid::Jid) -> String {
     if let Some(node) = bound_jid.node() {
         return node.to_string();
     }
-    "ironclaw".to_string()
+    "lunarwing".to_string()
 }
 
 fn build_muc_join_presence(
@@ -686,7 +686,7 @@ async fn handle_pairing_request(
             .try_send(OutboundMessage {
                 to: sender_bare.to_string(),
                 body: format!(
-                    "To pair with this bot, run: `ironclaw pairing approve xmpp {}`",
+                    "To pair with this bot, run: `lunarwing pairing approve xmpp {}`",
                     result.code
                 ),
                 groupchat: false,
@@ -2486,13 +2486,13 @@ mod tests {
 
     #[test]
     fn muc_join_presence_targets_room_nick_and_requests_no_history() {
-        let presence = build_muc_join_presence("room@conference.example.com", "ironclaw")
+        let presence = build_muc_join_presence("room@conference.example.com", "lunarwing")
             .expect("valid room join presence");
 
         assert_eq!(presence.type_, PresenceType::None);
         assert_eq!(
             presence.to.as_ref().map(ToString::to_string).as_deref(),
-            Some("room@conference.example.com/ironclaw")
+            Some("room@conference.example.com/lunarwing")
         );
 
         let muc = Muc::try_from(
@@ -2628,7 +2628,7 @@ mod tests {
 
     fn test_config() -> XmppConfig {
         let omemo_store_dir =
-            std::env::temp_dir().join(format!("ironclaw-xmpp-test-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("lunarwing-xmpp-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&omemo_store_dir).expect("create test omemo dir");
         XmppConfig {
             jid: "bot@example.com".to_string(),
@@ -2904,7 +2904,7 @@ mod tests {
             .expect("channel initializes");
         channel.muc_participants.write().await.insert(
             "room@conference.example.com".to_string(),
-            HashSet::from([String::from("ironclaw")]),
+            HashSet::from([String::from("lunarwing")]),
         );
         channel
             .muc_participants
@@ -3212,7 +3212,7 @@ mod tests {
         let outbound = recv_outbound(&channel).await;
         assert_eq!(outbound.to, "eve@example.com");
         assert!(!outbound.groupchat);
-        assert!(outbound.body.contains("ironclaw pairing approve xmpp"));
+        assert!(outbound.body.contains("lunarwing pairing approve xmpp"));
     }
 
     #[tokio::test]

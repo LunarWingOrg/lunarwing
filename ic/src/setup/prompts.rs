@@ -305,7 +305,7 @@ pub fn confirm(prompt: &str, default: bool) -> io::Result<bool> {
 pub fn print_banner() {
     use crate::cli::fmt;
     println!();
-    println!("  {}ironclaw{}", fmt::bold_accent(), fmt::reset());
+    println!("  {}lunarwing{}", fmt::bold_accent(), fmt::reset());
     println!();
 }
 

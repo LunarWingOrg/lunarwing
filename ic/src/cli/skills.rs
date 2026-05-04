@@ -121,7 +121,7 @@ async fn cmd_list(config: &SkillsConfig, verbose: bool, json: bool) -> anyhow::R
         println!("  User:      {}", config.local_dir.display());
         println!("  Installed: {}", config.installed_dir.display());
         println!();
-        println!("Use 'ironclaw skills search <query>' to find skills on ClawHub.");
+        println!("Use 'lunarwing skills search <query>' to find skills on ClawHub.");
         return Ok(());
     }
 
@@ -157,7 +157,7 @@ async fn cmd_list(config: &SkillsConfig, verbose: bool, json: bool) -> anyhow::R
     if !verbose {
         println!();
         println!(
-            "Use --verbose for details, or 'ironclaw skills info <name>' for a specific skill."
+            "Use --verbose for details, or 'lunarwing skills info <name>' for a specific skill."
         );
     }
 
@@ -251,7 +251,7 @@ async fn cmd_info(config: &SkillsConfig, name: &str, json: bool) -> anyhow::Resu
     let registry = discover_skills(config).await;
     let skill = registry.find_by_name(name).ok_or_else(|| {
         anyhow::anyhow!(
-            "Skill '{}' not found. Use 'ironclaw skills list' to see available skills.",
+            "Skill '{}' not found. Use 'lunarwing skills list' to see available skills.",
             name
         )
     })?;

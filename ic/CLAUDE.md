@@ -35,20 +35,20 @@ All I/O is async with tokio. Use `Arc<T>` for shared state, `RwLock` for concurr
 
 ## Extracted Crates
 
-Safety logic lives in `crates/ironclaw_safety/`. The `src/safety/mod.rs` shim re-exports everything for backward compatibility, but **new code should import from `ironclaw_safety` directly** (e.g. `use ironclaw_safety::SafetyLayer`). When touching a file that still uses `crate::safety::*`, migrate its imports to `ironclaw_safety::*`.
+Safety logic lives in `crates/lunarwing_safety/`. The `src/safety/mod.rs` shim re-exports everything for backward compatibility, but **new code should import from `lunarwing_safety` directly** (e.g. `use lunarwing_safety::SafetyLayer`). When touching a file that still uses `crate::safety::*`, migrate its imports to `lunarwing_safety::*`.
 
 ## Project Structure
 
 ```
 crates/
-└── ironclaw_safety/    # Extracted: prompt injection, validation, leak detection, policy
+└── lunarwing_safety/    # Extracted: prompt injection, validation, leak detection, policy
 
 src/
 ├── lib.rs              # Library root, module declarations
 ├── main.rs             # Entry point, CLI args, startup
 ├── app.rs              # App startup orchestration (channel wiring, DB init)
-├── bootstrap.rs        # Base directory resolution (~/.ironclaw), early .env loading
-├── settings.rs         # User settings persistence (~/.ironclaw/settings.json)
+├── bootstrap.rs        # Base directory resolution (~/.lunarwing), early .env loading
+├── settings.rs         # User settings persistence (~/.lunarwing/settings.json)
 ├── service.rs          # OS service management (launchd/systemd daemon install)
 ├── tracing_fmt.rs      # Custom tracing formatter
 ├── util.rs             # Shared utilities
@@ -111,7 +111,7 @@ src/
 │   ├── claude_bridge.rs # Claude Code bridge (spawns claude CLI)
 │   └── proxy_llm.rs    # LlmProvider that proxies through orchestrator
 │
-├── safety/             # Re-export shim for crates/ironclaw_safety (see Extracted Crates)
+├── safety/             # Re-export shim for crates/lunarwing_safety (see Extracted Crates)
 │
 ├── llm/                # Multi-provider LLM integration — see src/llm/CLAUDE.md
 │

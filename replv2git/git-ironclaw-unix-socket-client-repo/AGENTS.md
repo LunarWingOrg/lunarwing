@@ -10,7 +10,7 @@ Use Cargo from the repository root:
 - `cargo check` verifies types and dependencies without producing a release binary.
 - `cargo build` compiles the client.
 - `cargo test` runs unit and integration tests.
-- `cargo run -- ~/.ironclaw/ironclaw.sock` starts the client against an explicit socket path.
+- `cargo run -- ~/.ironclaw/lunarwing.sock` starts the client against an explicit socket path.
 
 If Cargo cannot resolve crates, confirm network access to `crates.io` or use a pre-populated dependency cache.
 

@@ -1,6 +1,6 @@
 [Unit]
-Description=Ironclaw XMPP Bridge Service
-Documentation=https://github.com/IronclawCustomTools/ironclaw/tree/main/bridges/xmpp-bridge
+Description=LunarWing XMPP Bridge Service
+Documentation=https://github.com/LunarWingOrg/lunarwing/tree/main/bridges/xmpp-bridge
 After=network.target
 Wants=network.target
 PartOf=lunarwing.service
@@ -9,13 +9,13 @@ PartOf=lunarwing.service
 Type=simple
 User=starforce
 Group=starforce
-WorkingDirectory=/home/starforce/ironclaw/bridges/xmpp-bridge
+WorkingDirectory=/home/starforce/lunarwing/bridges/xmpp-bridge
 
 # Optional overrides:
 # Environment="XMPP_BRIDGE_BIND=127.0.0.1:8787"
 # Environment="XMPP_BRIDGE_TOKEN=change-me"
 
-ExecStart=/home/starforce/ironclaw/bridges/xmpp-bridge/target/release/xmpp-bridge
+ExecStart=/home/starforce/lunarwing/bridges/xmpp-bridge/target/release/xmpp-bridge
 
 Restart=on-failure
 RestartSec=5
@@ -28,7 +28,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 
-ReadWritePaths=/home/starforce/ironclaw
+ReadWritePaths=/home/starforce/lunarwing
 ReadWritePaths=/tmp
 
 StandardOutput=journal

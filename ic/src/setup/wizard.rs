@@ -20,7 +20,7 @@ use std::sync::Arc;
 use deadpool_postgres::Config as PoolConfig;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::channels::wasm::{
     ChannelCapabilitiesFile, available_channel_names, install_bundled_channel,
 };
@@ -110,7 +110,7 @@ fn validate_extension_setup_setting_path(name: &str, setting_path: &str) -> Resu
 }
 
 pub fn maybe_seed_default_instance_assets() {
-    let base_dir = ironclaw_base_dir();
+    let base_dir = lunarwing_base_dir();
     if let Err(err) = seed_default_instance_assets_to(&base_dir) {
         tracing::debug!(
             "Could not seed default instance assets into {}: {}",
@@ -207,7 +207,7 @@ impl SetupWizard {
     }
 
     fn bootstrap_env_path_display() -> String {
-        crate::bootstrap::ironclaw_env_path().display().to_string()
+        crate::bootstrap::lunarwing_env_path().display().to_string()
     }
 
     fn generate_env_master_key_hex() -> String {
@@ -655,7 +655,7 @@ impl SetupWizard {
 
         #[allow(unreachable_code)]
         Err(SetupError::Database(
-            "No database configured. Run full setup first (ironclaw onboard).".to_string(),
+            "No database configured. Run full setup first (lunarwing onboard).".to_string(),
         ))
     }
 
@@ -664,7 +664,7 @@ impl SetupWizard {
     async fn reconnect_postgres(&mut self) -> Result<(), SetupError> {
         let url = std::env::var("DATABASE_URL").map_err(|_| {
             SetupError::Database(
-                "DATABASE_URL not set. Run full setup first (ironclaw onboard).".to_string(),
+                "DATABASE_URL not set. Run full setup first (lunarwing onboard).".to_string(),
             )
         })?;
 
@@ -1020,7 +1020,7 @@ impl SetupWizard {
                  Ubuntu:  apt install postgresql-{0}-pgvector\n  \
                  Docker:  use the pgvector/pgvector:pg{0} image\n  \
                  Source:  https://github.com/pgvector/pgvector#installation\n\n\
-                 Then restart PostgreSQL and re-run: ironclaw onboard",
+                 Then restart PostgreSQL and re-run: lunarwing onboard",
                 major_version
             )));
         }
@@ -2720,7 +2720,7 @@ impl SetupWizard {
         println!();
 
         // Discover available WASM channels
-        let channels_dir = ironclaw_base_dir().join("channels");
+        let channels_dir = lunarwing_base_dir().join("channels");
 
         let mut discovered_channels = discover_wasm_channels(&channels_dir).await;
         let installed_names: HashSet<String> = discovered_channels
@@ -3032,7 +3032,7 @@ impl SetupWizard {
             Some(c) => c,
             None => {
                 print_info("Extension registry not found. Skipping tool installation.");
-                print_info("Install tools manually with: ironclaw tool install <path>");
+                print_info("Install tools manually with: lunarwing tool install <path>");
                 return Ok(());
             }
         };
@@ -3050,11 +3050,11 @@ impl SetupWizard {
 
         print_info("Available tools from the extension registry:");
         print_info("Select which tools to install. You can install more later with:");
-        print_info("  ironclaw registry install <name>");
+        print_info("  lunarwing registry install <name>");
         println!();
 
         // Check which tools are already installed
-        let tools_dir = ironclaw_base_dir().join("tools");
+        let tools_dir = lunarwing_base_dir().join("tools");
 
         let installed_tools = discover_installed_tools(&tools_dir).await;
 
@@ -3094,7 +3094,7 @@ impl SetupWizard {
         let installer = crate::registry::installer::RegistryInstaller::new(
             repo_root.to_path_buf(),
             tools_dir.clone(),
-            ironclaw_base_dir().join("channels"),
+            lunarwing_base_dir().join("channels"),
         );
 
         let mut installed_count = 0;
@@ -3121,7 +3121,7 @@ impl SetupWizard {
                     {
                         let provider = auth.provider.as_deref().unwrap_or(&tool.name);
                         // Only mention unique providers (Google tools share auth)
-                        let hint = format!("  {} - ironclaw tool auth {}", provider, tool.name);
+                        let hint = format!("  {} - lunarwing tool auth {}", provider, tool.name);
                         if !auth_needed
                             .iter()
                             .any(|h| h.starts_with(&format!("  {} -", provider)))
@@ -3377,7 +3377,7 @@ impl SetupWizard {
         Ok(saved)
     }
 
-    /// Write bootstrap environment variables to `~/.ironclaw/.env`.
+    /// Write bootstrap environment variables to `~/.lunarwing/.env`.
     ///
     /// Only true chicken-and-egg settings are written here — things needed
     /// before the database is connected: `DATABASE_BACKEND`, `DATABASE_URL`,
@@ -3603,7 +3603,7 @@ impl SetupWizard {
         let _ = loaded;
     }
 
-    /// Save settings to the database and `~/.ironclaw/.env`, then print
+    /// Save settings to the database and `~/.lunarwing/.env`, then print
     /// a warm completion card with the 3 key facts.
     async fn save_and_summarize(&mut self) -> Result<(), SetupError> {
         use crate::cli::fmt;
@@ -3630,9 +3630,9 @@ impl SetupWizard {
         println!("  {}", sep);
         println!();
 
-        // Title line: checkmark + "ironclaw is ready"
+        // Title line: checkmark + "lunarwing is ready"
         println!(
-            "  {}\u{2713}{} {}ironclaw is ready{}",
+            "  {}\u{2713}{} {}lunarwing is ready{}",
             fmt::success(),
             fmt::reset(),
             fmt::bold_accent(),
@@ -3712,14 +3712,14 @@ impl SetupWizard {
 
         // Action hints
         println!(
-            "  {}Start chatting:{}   {}ironclaw{}",
+            "  {}Start chatting:{}   {}lunarwing{}",
             fmt::dim(),
             fmt::reset(),
             fmt::bold_accent(),
             fmt::reset(),
         );
         println!(
-            "  {}Full setup:{}       {}ironclaw onboard{}",
+            "  {}Full setup:{}       {}lunarwing onboard{}",
             fmt::dim(),
             fmt::reset(),
             fmt::bold_accent(),
@@ -3729,7 +3729,7 @@ impl SetupWizard {
 
         if self.config.quick {
             print_info(
-                "Tip: Run `ironclaw onboard` to configure channels, extensions, embeddings, and more.",
+                "Tip: Run `lunarwing onboard` to configure channels, extensions, embeddings, and more.",
             );
             println!();
         }
@@ -4000,7 +4000,7 @@ async fn install_selected_registry_channels(
 
         let installer = crate::registry::installer::RegistryInstaller::new(
             repo_root.clone(),
-            ironclaw_base_dir().join("tools"),
+            lunarwing_base_dir().join("tools"),
             channels_dir.to_path_buf(),
         );
 
@@ -4406,7 +4406,7 @@ mod tests {
     #[tokio::test]
     async fn test_discover_wasm_channels_nonexistent_dir() {
         let channels = discover_wasm_channels(
-            &std::env::temp_dir().join("ironclaw_nonexistent_dir_abcxyz123"),
+            &std::env::temp_dir().join("lunarwing_nonexistent_dir_abcxyz123"),
         )
         .await;
         assert!(channels.is_empty());

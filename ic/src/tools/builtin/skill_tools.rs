@@ -477,7 +477,7 @@ fn validate_resolved_addrs(host: &str, addrs: &[std::net::SocketAddr]) -> Result
 fn build_fetch_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("ironclaw/0.1")
+        .user_agent("lunarwing/0.1")
         .redirect(reqwest::redirect::Policy::none())
 }
 

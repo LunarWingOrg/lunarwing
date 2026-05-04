@@ -4,7 +4,7 @@
 //! available is `DATABASE_URL` (chicken-and-egg: can't connect to DB without
 //! it). Everything else is auto-detected or read from env vars.
 //!
-//! File: `~/.ironclaw/.env` (standard dotenvy format)
+//! File: `~/.lunarwing/.env` (standard dotenvy format)
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -13,18 +13,18 @@ const LUNARWING_BASE_DIR_ENV: &str = "LUNARWING_BASE_DIR";
 const LEGACY_IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
 
 /// Lazily computed IronClaw base directory, cached for the lifetime of the process.
-static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_ironclaw_base_dir);
+static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_lunarwing_base_dir);
 
 /// Compute the IronClaw base directory from environment.
 ///
 /// This is the underlying implementation used by both the public
-/// `ironclaw_base_dir()` function (which caches the result) and tests
+/// `lunarwing_base_dir()` function (which caches the result) and tests
 /// (which need to verify different configurations).
-pub fn compute_ironclaw_base_dir() -> PathBuf {
+pub fn compute_lunarwing_base_dir() -> PathBuf {
     let lunarwing_base_dir = std::env::var(LUNARWING_BASE_DIR_ENV).ok();
-    let legacy_ironclaw_base_dir = std::env::var(LEGACY_IRONCLAW_BASE_DIR_ENV).ok();
+    let legacy_lunarwing_base_dir = std::env::var(LEGACY_IRONCLAW_BASE_DIR_ENV).ok();
 
-    if let (Some(lunarwing), Some(legacy)) = (&lunarwing_base_dir, &legacy_ironclaw_base_dir)
+    if let (Some(lunarwing), Some(legacy)) = (&lunarwing_base_dir, &legacy_lunarwing_base_dir)
         && !lunarwing.is_empty()
         && !legacy.is_empty()
         && lunarwing != legacy
@@ -35,7 +35,7 @@ pub fn compute_ironclaw_base_dir() -> PathBuf {
     }
 
     lunarwing_base_dir
-        .or(legacy_ironclaw_base_dir)
+        .or(legacy_lunarwing_base_dir)
         .map(PathBuf::from)
         .map(|path| {
             if path.as_os_str().is_empty() {
@@ -53,7 +53,7 @@ pub fn compute_ironclaw_base_dir() -> PathBuf {
         .unwrap_or_else(default_base_dir)
 }
 
-/// Get the default IronClaw base directory (~/.ironclaw).
+/// Get the default IronClaw base directory (~/.lunarwing).
 ///
 /// Logs a warning if the home directory cannot be determined and falls back to
 /// the current directory.
@@ -72,7 +72,7 @@ fn default_base_dir() -> PathBuf {
 ///
 /// Override with `LUNARWING_BASE_DIR` environment variable.
 /// Legacy `IRONCLAW_BASE_DIR` is still accepted as a fallback.
-/// Defaults to `~/.ironclaw` (or `./.ironclaw` if home directory cannot be determined).
+/// Defaults to `~/.lunarwing` (or `./.ironclaw` if home directory cannot be determined).
 ///
 /// Thread-safe: the value is computed once and cached in a `LazyLock`.
 ///
@@ -86,38 +86,38 @@ fn default_base_dir() -> PathBuf {
 /// # Returns
 /// A `PathBuf` pointing to the base directory. The path is not validated
 /// for existence.
-pub fn ironclaw_base_dir() -> PathBuf {
+pub fn lunarwing_base_dir() -> PathBuf {
     IRONCLAW_BASE_DIR.clone()
 }
 
-/// Path to the IronClaw-specific `.env` file: `~/.ironclaw/.env`.
-pub fn ironclaw_env_path() -> PathBuf {
-    ironclaw_base_dir().join(".env")
+/// Path to the IronClaw-specific `.env` file: `~/.lunarwing/.env`.
+pub fn lunarwing_env_path() -> PathBuf {
+    lunarwing_base_dir().join(".env")
 }
 
 /// Path to the default workspace template directory inside the base dir.
-pub fn ironclaw_workspace_template_dir() -> PathBuf {
-    ironclaw_base_dir().join("workspace-template")
+pub fn lunarwing_workspace_template_dir() -> PathBuf {
+    lunarwing_base_dir().join("workspace-template")
 }
 
-/// Load env vars from `~/.ironclaw/.env` (in addition to the standard `.env`).
+/// Load env vars from `~/.lunarwing/.env` (in addition to the standard `.env`).
 ///
 /// Call this **after** `dotenvy::dotenv()` so that the standard `./.env`
-/// takes priority over `~/.ironclaw/.env`. dotenvy never overwrites
+/// takes priority over `~/.lunarwing/.env`. dotenvy never overwrites
 /// existing env vars, so the effective priority is:
 ///
-///   explicit env vars > `./.env` > `~/.ironclaw/.env` > auto-detect
+///   explicit env vars > `./.env` > `~/.lunarwing/.env` > auto-detect
 ///
-/// If `~/.ironclaw/.env` doesn't exist but the legacy `bootstrap.json` does,
+/// If `~/.lunarwing/.env` doesn't exist but the legacy `bootstrap.json` does,
 /// extracts `DATABASE_URL` from it and writes the `.env` file (one-time
 /// upgrade from the old config format).
 ///
 /// After loading the `.env` file, auto-detects the libsql backend: if
-/// `DATABASE_BACKEND` is still unset and `~/.ironclaw/ironclaw.db` exists,
+/// `DATABASE_BACKEND` is still unset and `~/.lunarwing/ironclaw.db` exists,
 /// defaults to `libsql` so cloud instances work out of the box without any
 /// manual configuration.
-pub fn load_ironclaw_env() {
-    let path = ironclaw_env_path();
+pub fn load_lunarwing_env() {
+    let path = lunarwing_env_path();
 
     if !path.exists() {
         // One-time upgrade: extract DATABASE_URL from legacy bootstrap.json
@@ -133,13 +133,13 @@ pub fn load_ironclaw_env() {
     // This avoids the chicken-and-egg problem on cloud instances where no
     // DATABASE_URL is configured but ironclaw.db is already present.
     if std::env::var("DATABASE_BACKEND").is_err() {
-        let default_db = ironclaw_base_dir().join("ironclaw.db");
+        let default_db = lunarwing_base_dir().join("ironclaw.db");
         if default_db.exists() {
             if tokio::runtime::Handle::try_current().is_ok() {
                 // Tokio runtime is active (multi-threaded); std::env::set_var is UB here.
                 // Fall back to the thread-safe runtime overlay so the value is always set.
                 tracing::warn!(
-                    "load_ironclaw_env called with active Tokio runtime; \
+                    "load_lunarwing_env called with active Tokio runtime; \
                      using runtime env overlay for DATABASE_BACKEND"
                 );
                 crate::config::set_runtime_env("DATABASE_BACKEND", "libsql");
@@ -153,10 +153,10 @@ pub fn load_ironclaw_env() {
 
 /// If `bootstrap.json` exists, pull `database_url` out of it and write `.env`.
 fn migrate_bootstrap_json_to_env(env_path: &std::path::Path) {
-    let ironclaw_dir = env_path
+    let base_dir = env_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
-    let bootstrap_path = ironclaw_dir.join("bootstrap.json");
+    let bootstrap_path = base_dir.join("bootstrap.json");
 
     if !bootstrap_path.exists() {
         return;
@@ -192,7 +192,7 @@ fn migrate_bootstrap_json_to_env(env_path: &std::path::Path) {
     }
 }
 
-/// Write database bootstrap vars to `~/.ironclaw/.env`.
+/// Write database bootstrap vars to `~/.lunarwing/.env`.
 ///
 /// These settings form the chicken-and-egg layer: they must be available
 /// from the filesystem (env vars) BEFORE any database connection, because
@@ -203,7 +203,7 @@ fn migrate_bootstrap_json_to_env(env_path: &std::path::Path) {
 /// Values are double-quoted so that `#` (common in URL-encoded passwords)
 /// and other shell-special characters are preserved by dotenvy.
 pub fn save_bootstrap_env(vars: &[(&str, &str)]) -> std::io::Result<()> {
-    save_bootstrap_env_to(&ironclaw_env_path(), vars)
+    save_bootstrap_env_to(&lunarwing_env_path(), vars)
 }
 
 /// Write bootstrap vars to an arbitrary path (testable variant).
@@ -226,13 +226,13 @@ pub fn save_bootstrap_env_to(path: &std::path::Path, vars: &[(&str, &str)]) -> s
     Ok(())
 }
 
-/// Update or add multiple variables in `~/.ironclaw/.env`, preserving existing content.
+/// Update or add multiple variables in `~/.lunarwing/.env`, preserving existing content.
 ///
 /// Like `upsert_bootstrap_var` but batched — replaces lines for any key in `vars`
 /// and preserves all other existing lines. Use this instead of `save_bootstrap_env`
 /// when you want to update specific keys without destroying user-added variables.
 pub fn upsert_bootstrap_vars(vars: &[(&str, &str)]) -> std::io::Result<()> {
-    upsert_bootstrap_vars_to(&ironclaw_env_path(), vars)
+    upsert_bootstrap_vars_to(&lunarwing_env_path(), vars)
 }
 
 /// Update or add multiple variables at an arbitrary path (testable variant).
@@ -278,14 +278,14 @@ pub fn upsert_bootstrap_vars_to(
     Ok(())
 }
 
-/// Update or add a single variable in `~/.ironclaw/.env`, preserving existing content.
+/// Update or add a single variable in `~/.lunarwing/.env`, preserving existing content.
 ///
 /// Unlike `save_bootstrap_env` (which overwrites the entire file), this
 /// reads the current `.env`, replaces the line for `key` if it exists,
 /// or appends it otherwise. Use this when writing a single bootstrap var
 /// outside the wizard (which manages the full set via `save_bootstrap_env`).
 pub fn upsert_bootstrap_var(key: &str, value: &str) -> std::io::Result<()> {
-    upsert_bootstrap_var_to(&ironclaw_env_path(), key, value)
+    upsert_bootstrap_var_to(&lunarwing_env_path(), key, value)
 }
 
 /// Update or add a single variable at an arbitrary path (testable variant).
@@ -344,7 +344,7 @@ fn restrict_file_permissions(_path: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Write `DATABASE_URL` to `~/.ironclaw/.env`.
+/// Write `DATABASE_URL` to `~/.lunarwing/.env`.
 ///
 /// Convenience wrapper around `save_bootstrap_env` for single-value migration
 /// paths. Prefer `save_bootstrap_env` for new code.
@@ -352,7 +352,7 @@ pub fn save_database_url(url: &str) -> std::io::Result<()> {
     save_bootstrap_env(&[("DATABASE_URL", url)])
 }
 
-/// One-time migration of legacy `~/.ironclaw/settings.json` into the database.
+/// One-time migration of legacy `~/.lunarwing/settings.json` into the database.
 ///
 /// Only runs when a `settings.json` exists on disk AND the DB has no settings
 /// yet. After the wizard writes directly to the DB, this path is only hit by
@@ -363,8 +363,8 @@ pub async fn migrate_disk_to_db(
     store: &dyn crate::db::Database,
     user_id: &str,
 ) -> Result<(), MigrationError> {
-    let ironclaw_dir = ironclaw_base_dir();
-    let legacy_settings_path = ironclaw_dir.join("settings.json");
+    let base_dir = lunarwing_base_dir();
+    let legacy_settings_path = base_dir.join("settings.json");
 
     if !legacy_settings_path.exists() {
         tracing::debug!("No legacy settings.json found, skipping disk-to-DB migration");
@@ -397,15 +397,15 @@ pub async fn migrate_disk_to_db(
         tracing::info!("Migrated {} settings to database", db_map.len());
     }
 
-    // 2. Write DATABASE_URL to ~/.ironclaw/.env
+    // 2. Write DATABASE_URL to ~/.lunarwing/.env
     if let Some(ref url) = settings.database_url {
         save_database_url(url)
             .map_err(|e| MigrationError::Io(format!("Failed to write .env: {}", e)))?;
-        tracing::info!("Wrote DATABASE_URL to {}", ironclaw_env_path().display());
+        tracing::info!("Wrote DATABASE_URL to {}", lunarwing_env_path().display());
     }
 
     // 3. Migrate mcp-servers.json if it exists
-    let mcp_path = ironclaw_dir.join("mcp-servers.json");
+    let mcp_path = base_dir.join("mcp-servers.json");
     if mcp_path.exists() {
         match std::fs::read_to_string(&mcp_path) {
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
@@ -434,7 +434,7 @@ pub async fn migrate_disk_to_db(
     }
 
     // 4. Migrate session.json if it exists
-    let session_path = ironclaw_dir.join("session.json");
+    let session_path = base_dir.join("session.json");
     if session_path.exists() {
         match std::fs::read_to_string(&session_path) {
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
@@ -466,7 +466,7 @@ pub async fn migrate_disk_to_db(
     rename_to_migrated(&legacy_settings_path);
 
     // 6. Clean up old bootstrap.json if it exists (superseded by .env)
-    let old_bootstrap = ironclaw_dir.join("bootstrap.json");
+    let old_bootstrap = base_dir.join("bootstrap.json");
     if old_bootstrap.exists() {
         rename_to_migrated(&old_bootstrap);
         tracing::info!("Renamed old bootstrap.json to .migrated");
@@ -496,9 +496,9 @@ pub enum MigrationError {
 
 // ── PID Lock ──────────────────────────────────────────────────────────────
 
-/// Path to the PID lock file: `~/.ironclaw/ironclaw.pid`.
+/// Path to the PID lock file: `~/.lunarwing/lunarwing.pid`.
 pub fn pid_lock_path() -> PathBuf {
-    ironclaw_base_dir().join("ironclaw.pid")
+    lunarwing_base_dir().join("lunarwing.pid")
 }
 
 /// A PID-based lock that prevents multiple IronClaw instances from running
@@ -685,8 +685,8 @@ INJECTED="pwned"#;
     }
 
     #[test]
-    fn test_ironclaw_env_path() {
-        // Use compute_ironclaw_base_dir() directly to avoid LazyLock caching,
+    fn test_lunarwing_env_path() {
+        // Use compute_lunarwing_base_dir() directly to avoid LazyLock caching,
         // which can be poisoned by whichever test initializes it first.
         let _guard = lock_env();
         let old_lunarwing = std::env::var("LUNARWING_BASE_DIR").ok();
@@ -695,7 +695,7 @@ INJECTED="pwned"#;
         // SAFETY: Under lock_env(), no concurrent env access.
         unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
 
-        let path = compute_ironclaw_base_dir().join(".env");
+        let path = compute_lunarwing_base_dir().join(".env");
         assert!(
             path.ends_with(".ironclaw/.env"),
             "expected path ending with .ironclaw/.env, got: {}",
@@ -721,7 +721,7 @@ INJECTED="pwned"#;
             std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/ironclaw-base");
         }
 
-        let path = compute_ironclaw_base_dir();
+        let path = compute_lunarwing_base_dir();
         assert_eq!(path, PathBuf::from("/tmp/lunarwing-base"));
 
         if let Some(val) = old_lunarwing {
@@ -819,7 +819,7 @@ INJECTED="pwned"#;
 
         let vars = [
             ("DATABASE_BACKEND", "libsql"),
-            ("LIBSQL_PATH", "/home/user/.ironclaw/ironclaw.db"),
+            ("LIBSQL_PATH", "/home/user/.lunarwing/ironclaw.db"),
         ];
 
         // Write manually to the temp path (save_bootstrap_env uses the global path)
@@ -843,7 +843,7 @@ INJECTED="pwned"#;
             parsed[1],
             (
                 "LIBSQL_PATH".to_string(),
-                "/home/user/.ironclaw/ironclaw.db".to_string()
+                "/home/user/.lunarwing/ironclaw.db".to_string()
             )
         );
     }
@@ -1094,7 +1094,7 @@ INJECTED="pwned"#;
     }
 
     #[test]
-    fn test_ironclaw_base_dir_default() {
+    fn test_lunarwing_base_dir_default() {
         // This test must run first (or in isolation) before the LazyLock is initialized.
         // It verifies that when IRONCLAW_BASE_DIR is not set, the default path is used.
         let _guard = lock_env();
@@ -1103,7 +1103,7 @@ INJECTED="pwned"#;
         unsafe { std::env::remove_var("IRONCLAW_BASE_DIR") };
 
         // Force re-evaluation by calling the computation function directly
-        let path = compute_ironclaw_base_dir();
+        let path = compute_lunarwing_base_dir();
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
         assert_eq!(path, home.join(".ironclaw"));
 
@@ -1114,7 +1114,7 @@ INJECTED="pwned"#;
     }
 
     #[test]
-    fn test_ironclaw_base_dir_env_override() {
+    fn test_lunarwing_base_dir_env_override() {
         // This test verifies that when IRONCLAW_BASE_DIR is set,
         // the custom path is used. Must run before LazyLock is initialized.
         let _guard = lock_env();
@@ -1123,7 +1123,7 @@ INJECTED="pwned"#;
         unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/custom/ironclaw/path") };
 
         // Force re-evaluation by calling the computation function directly
-        let path = compute_ironclaw_base_dir();
+        let path = compute_lunarwing_base_dir();
         assert_eq!(path, std::path::PathBuf::from("/custom/ironclaw/path"));
 
         if let Some(val) = old_val {
@@ -1137,15 +1137,15 @@ INJECTED="pwned"#;
 
     #[test]
     fn test_compute_base_dir_env_path_join() {
-        // Verifies that ironclaw_env_path correctly joins .env to the base dir.
-        // Uses compute_ironclaw_base_dir directly to avoid LazyLock caching.
+        // Verifies that lunarwing_env_path correctly joins .env to the base dir.
+        // Uses compute_lunarwing_base_dir directly to avoid LazyLock caching.
         let _guard = lock_env();
         let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
         // SAFETY: ENV_MUTEX ensures single-threaded access to env vars in tests
         unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/my/custom/dir") };
 
         // Test the path construction logic directly
-        let base_path = compute_ironclaw_base_dir();
+        let base_path = compute_lunarwing_base_dir();
         let env_path = base_path.join(".env");
         assert_eq!(env_path, std::path::PathBuf::from("/my/custom/dir/.env"));
 
@@ -1159,7 +1159,7 @@ INJECTED="pwned"#;
     }
 
     #[test]
-    fn test_ironclaw_base_dir_empty_env() {
+    fn test_lunarwing_base_dir_empty_env() {
         // Verifies that empty IRONCLAW_BASE_DIR falls back to default.
         let _guard = lock_env();
         let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
@@ -1167,7 +1167,7 @@ INJECTED="pwned"#;
         unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "") };
 
         // Force re-evaluation by calling the computation function directly
-        let path = compute_ironclaw_base_dir();
+        let path = compute_lunarwing_base_dir();
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
         assert_eq!(path, home.join(".ironclaw"));
 
@@ -1181,7 +1181,7 @@ INJECTED="pwned"#;
     }
 
     #[test]
-    fn test_ironclaw_base_dir_special_chars() {
+    fn test_lunarwing_base_dir_special_chars() {
         // Verifies that paths with special characters are handled correctly.
         let _guard = lock_env();
         let old_val = std::env::var("IRONCLAW_BASE_DIR").ok();
@@ -1189,7 +1189,7 @@ INJECTED="pwned"#;
         unsafe { std::env::set_var("IRONCLAW_BASE_DIR", "/tmp/test_with-special.chars") };
 
         // Force re-evaluation by calling the computation function directly
-        let path = compute_ironclaw_base_dir();
+        let path = compute_lunarwing_base_dir();
         assert_eq!(
             path,
             std::path::PathBuf::from("/tmp/test_with-special.chars")
@@ -1209,7 +1209,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_acquire_and_drop() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         // Acquire lock
         let lock = PidLock::acquire_at(pid_path.clone()).unwrap();
@@ -1227,7 +1227,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_rejects_second_acquire() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         // First lock succeeds
         let _lock1 = PidLock::acquire_at(pid_path.clone()).unwrap();
@@ -1246,7 +1246,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_reclaims_after_drop() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         // Acquire and release
         let lock = PidLock::acquire_at(pid_path.clone()).unwrap();
@@ -1260,7 +1260,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_reclaims_stale_file_without_flock() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         // Write a stale PID file manually (no flock held)
         std::fs::write(&pid_path, "4294967294").unwrap();
@@ -1275,7 +1275,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_handles_corrupt_pid_file() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         // Write garbage (no flock held)
         std::fs::write(&pid_path, "not-a-number").unwrap();
@@ -1288,7 +1288,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_creates_parent_dirs() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("nested").join("deep").join("ironclaw.pid");
+        let pid_path = dir.path().join("nested").join("deep").join("lunarwing.pid");
 
         let lock = PidLock::acquire_at(pid_path.clone()).unwrap();
         assert!(pid_path.exists());
@@ -1316,7 +1316,7 @@ INJECTED="pwned"#;
     #[test]
     fn test_pid_lock_rejects_lock_held_by_other_process() {
         let dir = tempdir().unwrap();
-        let pid_path = dir.path().join("ironclaw.pid");
+        let pid_path = dir.path().join("lunarwing.pid");
 
         let current_exe = std::env::current_exe().unwrap();
         let mut child = Command::new(current_exe)

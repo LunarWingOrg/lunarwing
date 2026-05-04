@@ -103,7 +103,7 @@ mod tests {
         ))
         .expect("read fixture");
         let fixture_str = fixture_str.replace(
-            "/tmp/ironclaw_error_feedback_test/recovered.txt",
+            "/tmp/lunarwing_error_feedback_test/recovered.txt",
             &format!("{test_dir}/recovered.txt"),
         );
         let trace: LlmTrace = serde_json::from_str(&fixture_str).expect("parse patched fixture");

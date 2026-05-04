@@ -9,7 +9,7 @@
 
 [Unit]
 Description=LunarWing XMPP bridge sidecar
-Documentation=https://github.com/IronclawCustomTools/ironclaw/tree/main/bridges/xmpp-bridge
+Documentation=https://github.com/LunarWingOrg/lunarwing/tree/main/bridges/xmpp-bridge
 After=network-online.target
 Wants=network-online.target
 PartOf=lunarwing.service

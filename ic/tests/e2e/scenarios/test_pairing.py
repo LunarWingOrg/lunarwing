@@ -12,11 +12,11 @@ def _headers():
     return {"Authorization": f"Bearer {AUTH_TOKEN}"}
 
 
-async def test_pairing_list_returns_empty_for_unknown_channel(ironclaw_server):
+async def test_pairing_list_returns_empty_for_unknown_channel(lunarwing_server):
     """GET /api/pairing/{channel} returns empty list or 404 for non-existent channel."""
     async with httpx.AsyncClient() as client:
         r = await client.get(
-            f"{ironclaw_server}/api/pairing/nonexistent-channel",
+            f"{lunarwing_server}/api/pairing/nonexistent-channel",
             headers=_headers(),
             timeout=10,
         )
@@ -35,11 +35,11 @@ async def test_pairing_list_returns_empty_for_unknown_channel(ironclaw_server):
         assert r.status_code in (404, 400)
 
 
-async def test_approve_invalid_code_rejected(ironclaw_server):
+async def test_approve_invalid_code_rejected(lunarwing_server):
     """POST /api/pairing/{channel}/approve with bad code returns error."""
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"{ironclaw_server}/api/pairing/test-channel/approve",
+            f"{lunarwing_server}/api/pairing/test-channel/approve",
             json={"code": "INVALID0"},
             headers=_headers(),
             timeout=10,
@@ -52,11 +52,11 @@ async def test_approve_invalid_code_rejected(ironclaw_server):
         assert r.status_code >= 400
 
 
-async def test_approve_empty_code_rejected(ironclaw_server):
+async def test_approve_empty_code_rejected(lunarwing_server):
     """POST /api/pairing/{channel}/approve with empty code returns error."""
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"{ironclaw_server}/api/pairing/test-channel/approve",
+            f"{lunarwing_server}/api/pairing/test-channel/approve",
             json={"code": ""},
             headers=_headers(),
             timeout=10,
@@ -68,11 +68,11 @@ async def test_approve_empty_code_rejected(ironclaw_server):
         assert r.status_code >= 400
 
 
-async def test_pairing_approve_requires_auth(ironclaw_server):
+async def test_pairing_approve_requires_auth(lunarwing_server):
     """POST /api/pairing/{channel}/approve without auth token is rejected."""
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"{ironclaw_server}/api/pairing/test-channel/approve",
+            f"{lunarwing_server}/api/pairing/test-channel/approve",
             json={"code": "ABCD1234"},
             timeout=10,
         )

@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::error::OrchestratorError;
 use crate::orchestrator::auth::{CredentialGrant, TokenStore};
 use crate::sandbox::connect_docker;
@@ -71,7 +71,7 @@ pub struct ContainerJobConfig {
 impl Default for ContainerJobConfig {
     fn default() -> Self {
         Self {
-            image: "ironclaw-worker:latest".to_string(),
+            image: "lunarwing-worker:latest".to_string(),
             memory_limit_mb: 2048,
             cpu_shares: 1024,
             orchestrator_port: 50051,
@@ -132,7 +132,7 @@ pub struct CompletionResult {
     pub message: Option<String>,
 }
 
-/// Validate that a project directory is under `~/.ironclaw/projects/`.
+/// Validate that a project directory is under `~/.lunarwing/projects/`.
 ///
 /// Returns the canonicalized path if valid. Creates the base directory if
 /// it doesn't exist (so the prefix check always runs).
@@ -159,7 +159,7 @@ fn validate_bind_mount_path(
             ),
         })?;
 
-    let projects_base = ironclaw_base_dir().join("projects");
+    let projects_base = lunarwing_base_dir().join("projects");
 
     if !projects_base.is_absolute() {
         return Err(OrchestratorError::ContainerCreationFailed {
@@ -323,7 +323,7 @@ impl ContainerJobManager {
             format!("IRONCLAW_ORCHESTRATOR_URL={}", orchestrator_url),
         ];
 
-        // Build volume mounts (validate project_dir stays within ~/.ironclaw/projects/)
+        // Build volume mounts (validate project_dir stays within ~/.lunarwing/projects/)
         let mut binds = Vec::new();
         if let Some(ref dir) = project_dir {
             let canonical = validate_bind_mount_path(dir, job_id)?;
@@ -402,9 +402,9 @@ impl ContainerJobManager {
 
         // Add Docker labels for reaper identification and orphan detection
         let mut labels = std::collections::HashMap::new();
-        labels.insert("ironclaw.job_id".to_string(), job_id.to_string());
+        labels.insert("lunarwing.job_id".to_string(), job_id.to_string());
         labels.insert(
-            "ironclaw.created_at".to_string(),
+            "lunarwing.created_at".to_string(),
             chrono::Utc::now().to_rfc3339(),
         );
 
@@ -420,8 +420,8 @@ impl ContainerJobManager {
         };
 
         let container_name = match mode {
-            JobMode::Worker => format!("ironclaw-worker-{}", job_id),
-            JobMode::ClaudeCode => format!("ironclaw-claude-{}", job_id),
+            JobMode::Worker => format!("lunarwing-worker-{}", job_id),
+            JobMode::ClaudeCode => format!("lunarwing-claude-{}", job_id),
         };
         let options = CreateContainerOptions {
             name: container_name,
@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn test_validate_bind_mount_valid_path() {
-        let base = crate::bootstrap::compute_ironclaw_base_dir().join("projects");
+        let base = crate::bootstrap::compute_lunarwing_base_dir().join("projects");
         std::fs::create_dir_all(&base).unwrap();
 
         let test_dir = base.join("test_validate_bind");

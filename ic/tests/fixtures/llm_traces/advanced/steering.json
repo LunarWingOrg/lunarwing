@@ -6,7 +6,7 @@
   },
   "turns": [
     {
-      "user_input": "Write hello to /tmp/ironclaw_steer_test.txt",
+      "user_input": "Write hello to /tmp/lunarwing_steer_test.txt",
       "steps": [
         {
           "request_hint": { "last_user_message_contains": "hello" },
@@ -17,7 +17,7 @@
                 "id": "call_wf_1",
                 "name": "write_file",
                 "arguments": {
-                  "path": "/tmp/ironclaw_steer_test.txt",
+                  "path": "/tmp/lunarwing_steer_test.txt",
                   "content": "hello"
                 }
               }
@@ -29,7 +29,7 @@
         {
           "response": {
             "type": "text",
-            "content": "Done, I wrote 'hello' to /tmp/ironclaw_steer_test.txt.",
+            "content": "Done, I wrote 'hello' to /tmp/lunarwing_steer_test.txt.",
             "input_tokens": 80,
             "output_tokens": 15
           }
@@ -48,7 +48,7 @@
                 "id": "call_wf_2",
                 "name": "write_file",
                 "arguments": {
-                  "path": "/tmp/ironclaw_steer_test.txt",
+                  "path": "/tmp/lunarwing_steer_test.txt",
                   "content": "goodbye"
                 }
               }

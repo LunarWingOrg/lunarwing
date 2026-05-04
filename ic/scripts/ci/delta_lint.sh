@@ -70,12 +70,12 @@ fi
 echo "==> delta lint: checking changed lines since $(echo "$BASE" | head -c 10)..."
 
 # Extract unified-0 diff for changed line ranges
-DIFF_OUT=$(mktemp "${TMPDIR:-/tmp}/ironclaw-diff.XXXXXX")
+DIFF_OUT=$(mktemp "${TMPDIR:-/tmp}/lunarwing-diff.XXXXXX")
 git diff --unified=0 "$BASE" -- '*.rs' > "$DIFF_OUT"
 
 # Run clippy with JSON output (stderr shows compilation progress/errors)
-CLIPPY_OUT=$(mktemp "${TMPDIR:-/tmp}/ironclaw-clippy.XXXXXX")
-CLIPPY_STDERR=$(mktemp "${TMPDIR:-/tmp}/ironclaw-clippy-err.XXXXXX")
+CLIPPY_OUT=$(mktemp "${TMPDIR:-/tmp}/lunarwing-clippy.XXXXXX")
+CLIPPY_STDERR=$(mktemp "${TMPDIR:-/tmp}/lunarwing-clippy-err.XXXXXX")
 cargo clippy --locked --all-targets --message-format=json > "$CLIPPY_OUT" 2>"$CLIPPY_STDERR" || true
 
 # Show compilation errors if clippy produced no JSON output

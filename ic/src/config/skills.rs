@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env};
 use crate::error::ConfigError;
 
@@ -9,10 +9,10 @@ use crate::error::ConfigError;
 pub struct SkillsConfig {
     /// Whether the skills system is enabled.
     pub enabled: bool,
-    /// Directory containing user-placed skills (default: ~/.ironclaw/skills/).
+    /// Directory containing user-placed skills (default: ~/.lunarwing/skills/).
     /// Skills here are loaded with `Trusted` trust level.
     pub local_dir: PathBuf,
-    /// Directory containing registry-installed skills (default: ~/.ironclaw/installed_skills/).
+    /// Directory containing registry-installed skills (default: ~/.lunarwing/installed_skills/).
     /// Skills here are loaded with `Installed` trust level and get read-only tool access.
     pub installed_dir: PathBuf,
     /// Maximum number of skills that can be active simultaneously.
@@ -37,14 +37,14 @@ impl Default for SkillsConfig {
     }
 }
 
-/// Get the default user skills directory (~/.ironclaw/skills/).
+/// Get the default user skills directory (~/.lunarwing/skills/).
 fn default_skills_dir() -> PathBuf {
-    ironclaw_base_dir().join("skills")
+    lunarwing_base_dir().join("skills")
 }
 
-/// Get the default installed skills directory (~/.ironclaw/installed_skills/).
+/// Get the default installed skills directory (~/.lunarwing/installed_skills/).
 fn default_installed_skills_dir() -> PathBuf {
-    ironclaw_base_dir().join("installed_skills")
+    lunarwing_base_dir().join("installed_skills")
 }
 
 impl SkillsConfig {

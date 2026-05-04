@@ -1,6 +1,6 @@
 //! User settings persistence.
 //!
-//! Stores user preferences in `~/.ironclaw` (JSON/TOML) and, for some values,
+//! Stores user preferences in `~/.lunarwing` (JSON/TOML) and, for some values,
 //! in the database. At runtime, precedence between database values,
 //! environment variables, on-disk config, and built-in defaults is determined
 //! on a per-setting basis by the corresponding resolver.
@@ -62,7 +62,7 @@ pub fn custom_secret_name(provider_id: &str) -> String {
     format!("llm_custom_{provider_id}_api_key")
 }
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 
 /// User settings persisted to disk.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -770,7 +770,7 @@ fn default_sandbox_cpu_shares() -> u32 {
 }
 
 fn default_sandbox_image() -> String {
-    "ironclaw-worker:latest".to_string()
+    "lunarwing-worker:latest".to_string()
 }
 
 impl Default for SandboxSettings {
@@ -1112,9 +1112,9 @@ impl Settings {
         map
     }
 
-    /// Get the default settings file path (~/.ironclaw/settings.json).
+    /// Get the default settings file path (~/.lunarwing/settings.json).
     pub fn default_path() -> std::path::PathBuf {
-        ironclaw_base_dir().join("settings.json")
+        lunarwing_base_dir().join("settings.json")
     }
 
     /// Load settings from disk, returning default if not found.
@@ -1130,9 +1130,9 @@ impl Settings {
         }
     }
 
-    /// Default TOML config file path (~/.ironclaw/config.toml).
+    /// Default TOML config file path (~/.lunarwing/config.toml).
     pub fn default_toml_path() -> PathBuf {
-        ironclaw_base_dir().join("config.toml")
+        lunarwing_base_dir().join("config.toml")
     }
 
     /// Load settings from a TOML file.
@@ -1161,7 +1161,7 @@ impl Settings {
              #\n\
              # Priority: env var > this file > database settings > defaults.\n\
              # Uncomment and edit values to override defaults.\n\
-             # Run `ironclaw config init` to regenerate this file.\n\
+             # Run `lunarwing config init` to regenerate this file.\n\
              #\n\
              # Documentation: https://github.com/nearai/ironclaw\n\
              \n\
@@ -1850,7 +1850,7 @@ mod tests {
     }
 
     #[test]
-    fn default_toml_path_under_ironclaw() {
+    fn default_toml_path_under_lunarwing() {
         let path = Settings::default_toml_path();
         assert!(path.to_string_lossy().contains(".ironclaw"));
         assert!(path.to_string_lossy().ends_with("config.toml"));
@@ -1908,7 +1908,7 @@ mod tests {
         // Simulate prior partial run (steps 1-4 completed):
         let prior_run = Settings {
             database_backend: Some("postgres".to_string()),
-            database_url: Some("postgres://old-host/ironclaw".to_string()),
+            database_url: Some("postgres://old-host/lunarwing".to_string()),
             llm_backend: Some("anthropic".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             embeddings: EmbeddingsSettings {
@@ -2229,7 +2229,7 @@ mod tests {
     // to verify that re-running the wizard (or a subset of steps) doesn't
     // accidentally reset settings from prior runs.
 
-    /// Simulates `ironclaw onboard --provider-only` re-running on a fully
+    /// Simulates `lunarwing onboard --provider-only` re-running on a fully
     /// configured installation. Only provider + model should change; all
     /// other settings (channels, embeddings, heartbeat) must survive.
     #[test]
@@ -2238,7 +2238,7 @@ mod tests {
         let prior = Settings {
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.ironclaw/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
             llm_backend: Some("openai".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             embeddings: EmbeddingsSettings {
@@ -2298,7 +2298,7 @@ mod tests {
         );
     }
 
-    /// Simulates `ironclaw onboard --channels-only` re-running on a fully
+    /// Simulates `lunarwing onboard --channels-only` re-running on a fully
     /// configured installation. Only channel settings should change;
     /// provider, model, embeddings, heartbeat must survive.
     #[test]
@@ -2359,7 +2359,7 @@ mod tests {
         let prior = Settings {
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.ironclaw/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
             llm_backend: Some("openai".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             channels: ChannelSettings {
@@ -2388,7 +2388,7 @@ mod tests {
         // 1. auto_setup_database sets DB fields
         let step1 = Settings {
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.ironclaw/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
             ..Default::default()
         };
 
@@ -2610,7 +2610,7 @@ mod tests {
         // User picks libsql this time, wizard clears stale postgres settings
         let step1 = Settings {
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.ironclaw/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
             database_url: None, // explicitly not set for libsql
             ..Default::default()
         };
@@ -2623,7 +2623,7 @@ mod tests {
         assert_eq!(current.database_backend.as_deref(), Some("libsql"));
         assert_eq!(
             current.libsql_path.as_deref(),
-            Some("/home/user/.ironclaw/ironclaw.db")
+            Some("/home/user/.lunarwing/ironclaw.db")
         );
 
         // Prior provider/model should survive (unrelated to DB switch)

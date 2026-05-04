@@ -1,4 +1,4 @@
-//! `ironclaw routines` — manage scheduled routines from the CLI.
+//! `lunarwing routines` — manage scheduled routines from the CLI.
 //!
 //! Provides subcommands for listing, creating, editing, enabling/disabling,
 //! deleting, and viewing run history of routines without starting the full agent.

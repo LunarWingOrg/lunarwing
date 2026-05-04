@@ -1,7 +1,7 @@
 //! MCP server configuration.
 //!
 //! Stores configuration for connecting to hosted MCP servers.
-//! Configuration is persisted at ~/.ironclaw/mcp-servers.json.
+//! Configuration is persisted at ~/.lunarwing/mcp-servers.json.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::tools::tool::ToolError;
 
 /// Transport configuration for an MCP server.
@@ -393,7 +393,7 @@ impl From<ConfigError> for ToolError {
 
 /// Get the default MCP servers configuration path.
 pub fn default_config_path() -> PathBuf {
-    ironclaw_base_dir().join("mcp-servers.json")
+    lunarwing_base_dir().join("mcp-servers.json")
 }
 
 /// Load MCP server configurations from the default location.

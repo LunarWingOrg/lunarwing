@@ -27,7 +27,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use uuid::Uuid;
 
 use crate::agent::SessionManager;
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::channels::IncomingMessage;
 use crate::channels::relay::DEFAULT_RELAY_NAME;
 use crate::channels::web::auth::{AuthenticatedUser, UserIdentity, auth_middleware};
@@ -2112,7 +2112,7 @@ async fn extensions_install_handler(
                 crate::extensions::ExtensionSource::WasmBuildable { .. } => {
                     format!(
                         "'{}' requires building from source. \
-                         Run `ironclaw registry install {}` from the CLI.",
+                         Run `lunarwing registry install {}` from the CLI.",
                         req.name, req.name
                     )
                 }
@@ -2292,7 +2292,7 @@ async fn verify_project_ownership(state: &GatewayState, project_id: &str, user_i
     }
 }
 
-/// Shared logic: resolve the file inside `~/.ironclaw/projects/{project_id}/`,
+/// Shared logic: resolve the file inside `~/.lunarwing/projects/{project_id}/`,
 /// guard against path traversal, and stream the content with the right MIME type.
 async fn serve_project_file(project_id: &str, path: &str) -> axum::response::Response {
     // Reject project_id values that could escape the projects directory.
@@ -2304,7 +2304,7 @@ async fn serve_project_file(project_id: &str, path: &str) -> axum::response::Res
         return (StatusCode::BAD_REQUEST, "Invalid project ID").into_response();
     }
 
-    let base = ironclaw_base_dir().join("projects").join(project_id);
+    let base = lunarwing_base_dir().join("projects").join(project_id);
 
     let file_path = base.join(path);
 

@@ -96,7 +96,7 @@ mod cleanup_tests {
 
     #[test]
     fn cleanup_guard_removes_file() {
-        let path = "/tmp/ironclaw_cleanup_guard_test.txt";
+        let path = "/tmp/lunarwing_cleanup_guard_test.txt";
         std::fs::write(path, "test").unwrap();
         {
             let _guard = CleanupGuard::new().file(path);
@@ -107,7 +107,7 @@ mod cleanup_tests {
 
     #[test]
     fn cleanup_guard_removes_dir() {
-        let dir = "/tmp/ironclaw_cleanup_guard_test_dir";
+        let dir = "/tmp/lunarwing_cleanup_guard_test_dir";
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(format!("{dir}/file.txt"), "test").unwrap();
         {
@@ -119,7 +119,7 @@ mod cleanup_tests {
 
     #[test]
     fn cleanup_guard_file_does_not_remove_dir() {
-        let dir = "/tmp/ironclaw_cleanup_guard_file_not_dir";
+        let dir = "/tmp/lunarwing_cleanup_guard_file_not_dir";
         std::fs::create_dir_all(dir).unwrap();
         {
             // Registering a directory path as .file() should not remove it

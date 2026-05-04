@@ -1,10 +1,10 @@
-//! `ironclaw repl` - connect to a running LunarWing daemon via Unix socket.
+//! `lunarwing repl` - connect to a running LunarWing daemon via Unix socket.
 //!
 //! The daemon must already be running and listening on its Unix socket.
 //! Socket resolution mirrors the integrated CLI:
 //! `--socket` > `LUNARWING_SOCKET` > `IRONCLAW_SOCKET` >
-//! `$XDG_RUNTIME_DIR/ironclaw.sock` > `$LUNARWING_BASE_DIR/ironclaw.sock` >
-//! `$IRONCLAW_BASE_DIR/ironclaw.sock` > `~/.ironclaw/ironclaw.sock`.
+//! `$XDG_RUNTIME_DIR/lunarwing.sock` > `$LUNARWING_BASE_DIR/lunarwing.sock` >
+//! `$IRONCLAW_BASE_DIR/lunarwing.sock` > `~/.lunarwing/lunarwing.sock`.
 
 use std::path::PathBuf;
 use std::{
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let stream = UnixStream::connect(&socket_path).await.map_err(|e| {
         anyhow::anyhow!(
             "Failed to connect to LunarWing REPL at {}: {}.\n\
-             Make sure the daemon is running (`ironclaw run` or the relevant service unit).",
+             Make sure the daemon is running (`lunarwing run` or the relevant service unit).",
             socket_path.display(),
             e
         )
@@ -175,7 +175,7 @@ fn resolve_socket_path() -> anyhow::Result<PathBuf> {
         if arg == "--socket" {
             let value = args
                 .next()
-                .context("`--socket` requires a path, for example `--socket /tmp/ironclaw.sock`")?;
+                .context("`--socket` requires a path, for example `--socket /tmp/lunarwing.sock`")?;;
             return Ok(PathBuf::from(value));
         }
 
@@ -186,8 +186,8 @@ fn resolve_socket_path() -> anyhow::Result<PathBuf> {
         if arg == "-h" || arg == "--help" {
             println!("Usage: unix-socket-client-v2 [--socket PATH] [PATH]");
             println!("Environment:");
-            println!("  LUNARWING_SOCKET=/run/user/$UID/ironclaw.sock");
-            println!("  IRONCLAW_SOCKET=/run/user/$UID/ironclaw.sock");
+            println!("  LUNARWING_SOCKET=/run/user/$UID/lunarwing.sock");
+            println!("  IRONCLAW_SOCKET=/run/user/$UID/lunarwing.sock");
             println!("  LUNARWING_BASE_DIR=/path/to/instance");
             println!("  IRONCLAW_BASE_DIR=/path/to/instance");
             println!("Note: use --socket or *_SOCKET to target a specific daemon when multiple instances are running.");
@@ -218,10 +218,19 @@ fn resolve_socket_path() -> anyhow::Result<PathBuf> {
     }
 
     if let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR") {
-        return Ok(PathBuf::from(runtime_dir).join("ironclaw.sock"));
+        let preferred = PathBuf::from(&runtime_dir).join("lunarwing.sock");
+        if preferred.exists() {
+            return Ok(preferred);
+        }
+        // Fallback to legacy name
+        return Ok(PathBuf::from(runtime_dir).join("lunarwing.sock"));
     }
 
-    Ok(resolve_base_dir().join("ironclaw.sock"))
+    let preferred = resolve_base_dir().join("lunarwing.sock");
+    if preferred.exists() {
+        return Ok(preferred);
+    }
+    Ok(resolve_base_dir().join("lunarwing.sock"))
 }
 
 fn resolve_base_dir() -> PathBuf {
@@ -239,13 +248,13 @@ fn resolve_base_dir() -> PathBuf {
 
     if let Some(home) = std::env::var_os("HOME") {
         if !home.is_empty() {
-            return PathBuf::from(home).join(".ironclaw");
+            return PathBuf::from(home).join(".lunarwing");
         }
     }
 
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("/tmp"))
-        .join(".ironclaw")
+        .join(".lunarwing")
 }
 
 async fn read_loop(

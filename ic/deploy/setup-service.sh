@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ironclaw Service Management Script
+# LunarWing Service Management Script
 # Usage: sudo ./deploy/setup-service.sh
 
 set -e
@@ -7,7 +7,7 @@ set -e
 echo "Setting up LunarWing systemd service..."
 
 # Copy service file to systemd directory
-sudo cp /home/starforce/ironclaw/deploy/lunarwing.service /etc/systemd/system/
+sudo cp /home/starforce/lunarwing/deploy/lunarwing.service /etc/systemd/system/
 
 # Reload systemd to pick up new service
 sudo systemctl daemon-reload

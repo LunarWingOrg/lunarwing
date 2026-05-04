@@ -76,7 +76,7 @@ impl Tool for RestartTool {
         // Check if running inside a Docker container via LUNARWING_IN_DOCKER
         // (legacy IRONCLAW_IN_DOCKER). The Docker entrypoint sets this to "true".
         // For local development, it's unset or "false".
-        // The entrypoint restart loop only works inside a Docker container (ironclaw-worker).
+        // The entrypoint restart loop only works inside a Docker container (lunarwing-worker).
         let in_docker = crate::config::helpers::env_or_override("LUNARWING_IN_DOCKER")
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
@@ -104,8 +104,8 @@ impl Tool for RestartTool {
         // Spawn a background task so the response is flushed before exit.
         // We use std::process::exit(0) to trigger a Docker container restart:
         //
-        // - The ironclaw-worker Docker container runs an entrypoint loop that monitors
-        //   the exit code of the `ironclaw run` process:
+        // - The lunarwing-worker Docker container runs an entrypoint loop that monitors
+        //   the exit code of the `lunarwing run` process:
         //   * Exit code 0 = clean restart: reset failure counter, wait LUNARWING_RESTART_DELAY
         //     (default 5s), then restart the process
         //   * Exit code ≠ 0 = failure: increment counter, exit after LUNARWING_MAX_FAILURES

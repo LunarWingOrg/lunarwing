@@ -145,7 +145,7 @@ def _extract_tool_name(msg: dict) -> str:
     name = msg.get("name")
     if name:
         return name
-    # ironclaw wraps tool output as <tool_output name="...">
+    # lunarwing wraps tool output as <tool_output name="...">
     content = msg.get("content", "")
     m = re.search(r'<tool_output\s+name="([^"]+)"', content)
     if m:

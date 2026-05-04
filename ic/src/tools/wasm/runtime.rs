@@ -40,7 +40,7 @@ pub fn enable_compilation_cache(
         None => {
             let base = dirs::cache_dir()
                 .unwrap_or_else(std::env::temp_dir)
-                .join("ironclaw");
+                .join("lunarwing");
             Some(base.join(format!("wasmtime-{}", label)))
         }
         #[cfg(not(windows))]

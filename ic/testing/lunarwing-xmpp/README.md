@@ -3,7 +3,7 @@
 This is the practical setup guide for the local LunarWing and XMPP bridge test
 environment created by `scripts/lunarwing-xmpp-test-env.sh`.
 
-The test environment is isolated from your normal `~/.ironclaw` state. By
+The test environment is isolated from your normal `~/.lunarwing` state. By
 default it lives at:
 
 ```bash
@@ -82,7 +82,7 @@ The generated `env/lunarwing.env` is already seeded for the common private-lab
 stack used by this harness:
 
 - `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
-- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/lunarwing.sock`
 - `DATABASE_BACKEND=postgres`
 - `DATABASE_SSLMODE=disable`
 - `PGSSLMODE=disable`
@@ -127,7 +127,7 @@ custom gateway and bridge tokens. The harness auto-detects the platform and
 uses the appropriate service management (launchd on macOS, systemd or OpenRC on Linux,
 direct PID management otherwise).
 
-The built-in `start-postgres` helper still creates `ironclaw:ironclaw@.../ironclaw`.
+The built-in `start-postgres` helper still creates `lunarwing:lunarwing@.../lunarwing`.
 If you need custom PostgreSQL credentials, create the container yourself and
 point `LUNARWING_TEST_DATABASE_URL` at it as shown below.
 
@@ -146,8 +146,8 @@ export XMPP_PASSWORD='replace-me-xmpp-password'
 export LLM_API_KEY='unneeded'
 
 # Linux (systemd): stop and remove old units
-systemctl --user stop lunarwing-test.service xmpp-bridge-test.service ironclaw-proxy-test.service 2>/dev/null || true
-rm -f ~/.config/systemd/user/lunarwing-test.service ~/.config/systemd/user/xmpp-bridge-test.service ~/.config/systemd/user/ironclaw-proxy-test.service
+systemctl --user stop lunarwing-test.service xmpp-bridge-test.service lunarwing-proxy-test.service 2>/dev/null || true
+rm -f ~/.config/systemd/user/lunarwing-test.service ~/.config/systemd/user/xmpp-bridge-test.service ~/.config/systemd/user/lunarwing-proxy-test.service
 systemctl --user daemon-reload 2>/dev/null || true
 # macOS: remove old launchd agents (if any)
 launchctl unload ~/Library/LaunchAgents/com.lunarwing.test.*.plist 2>/dev/null || true
@@ -231,7 +231,7 @@ To target the active harness daemon cleanly:
 scripts/lunarwing-xmpp-test-env.sh repl
 ```
 
-The socket filename remains `ironclaw.sock`, but the harness now places it
+The socket filename is now `lunarwing.sock`, but the harness now places it
 under the per-instance `run/` directory, so parallel harness roots do not
 fight over a single global socket path.
 
@@ -351,7 +351,7 @@ xmpp-bridge-test.service
 ```
 
 Those names avoid clobbering a real user or system service named
-`lunarwing.service`, `ironclaw.service`, or `xmpp-bridge.service`.
+`lunarwing.service`, `lunarwing.service`, or `xmpp-bridge.service`.
 
 When you want the generated units to use the real LunarWing name, set both
 service-name variables before rendering:
@@ -557,14 +557,14 @@ The generated units inherit the current harness env file, including
 `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable`.
 
 Starting `lunarwing-test.service` is enough; it already pulls in
-`xmpp-bridge-test.service` and `ironclaw-proxy-test.service` through
+`xmpp-bridge-test.service` and `lunarwing-proxy-test.service` through
 `Wants=` / `After=`:
 
 ```bash
 systemctl --user restart lunarwing-test.service
 systemctl --user status lunarwing-test.service
 systemctl --user status xmpp-bridge-test.service
-systemctl --user status ironclaw-proxy-test.service
+systemctl --user status lunarwing-proxy-test.service
 ```
 
 Use read-only diagnostics first:
@@ -592,7 +592,7 @@ The built-in Rust service installer is separate from this test renderer. Running
 `lunarwing service install` now detects the host service manager:
 
 - systemd: installs the user unit as `lunarwing.service` and attempts to disable
-  the legacy `ironclaw.service` user unit when it exists
+  the legacy `lunarwing.service` user unit when it exists
 - OpenRC: installs `/etc/init.d/lunarwing` and `/etc/init.d/xmpp-bridge`
 
 For production system services, use the committed templates instead of the

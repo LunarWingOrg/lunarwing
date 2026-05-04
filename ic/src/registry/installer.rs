@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 
 use tokio::fs;
 
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::registry::catalog::RegistryError;
 use crate::registry::manifest::{BundleDefinition, ExtensionManifest, ManifestKind, SourceSpec};
 
@@ -202,9 +202,9 @@ pub struct InstallOutcome {
 pub struct RegistryInstaller {
     /// Root of the repo (parent of `registry/`), used to resolve `source.dir`.
     repo_root: PathBuf,
-    /// Directory for installed tools (`~/.ironclaw/tools/`).
+    /// Directory for installed tools (`~/.lunarwing/tools/`).
     tools_dir: PathBuf,
-    /// Directory for installed channels (`~/.ironclaw/channels/`).
+    /// Directory for installed channels (`~/.lunarwing/channels/`).
     channels_dir: PathBuf,
 }
 
@@ -219,7 +219,7 @@ impl RegistryInstaller {
 
     /// Default installer using standard paths.
     pub fn with_defaults(repo_root: PathBuf) -> Self {
-        let base_dir = ironclaw_base_dir();
+        let base_dir = lunarwing_base_dir();
         Self {
             repo_root,
             tools_dir: base_dir.join("tools"),
@@ -264,7 +264,7 @@ impl RegistryInstaller {
             .map_err(RegistryError::Io)?;
 
         // Use manifest.name for installed filenames so discovery, auth, and
-        // CLI commands (`ironclaw tool auth <name>`) all agree on the stem.
+        // CLI commands (`lunarwing tool auth <name>`) all agree on the stem.
         let target_wasm = target_dir.join(format!("{}.wasm", manifest.name));
 
         // Check if already exists
@@ -593,7 +593,7 @@ impl RegistryInstaller {
         let mut auth_hints = Vec::new();
         if let Some(shared) = &bundle.shared_auth {
             auth_hints.push(format!(
-                "Bundle uses shared auth '{}'. Run `ironclaw tool auth <any-member>` to authenticate all members.",
+                "Bundle uses shared auth '{}'. Run `lunarwing tool auth <any-member>` to authenticate all members.",
                 shared
             ));
         }
@@ -851,8 +851,8 @@ mod tests {
     fn test_installer_creation() {
         let installer = RegistryInstaller::new(
             PathBuf::from("/repo"),
-            PathBuf::from("/home/.ironclaw/tools"),
-            PathBuf::from("/home/.ironclaw/channels"),
+            PathBuf::from("/home/.lunarwing/tools"),
+            PathBuf::from("/home/.lunarwing/channels"),
         );
         assert_eq!(installer.repo_root, PathBuf::from("/repo"));
     }

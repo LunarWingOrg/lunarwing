@@ -2003,7 +2003,7 @@ mod tests {
                 "filters": {
                     "repository": {
                         "owner": "nearai",
-                        "name": "ironclaw"
+                        "name": "lunarwing"
                     }
                 }
             }

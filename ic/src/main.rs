@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
         .expect("failed to install rustls crypto provider");
 
     let _ = dotenvy::dotenv();
-    lunarwing::bootstrap::load_ironclaw_env();
+    lunarwing::bootstrap::load_lunarwing_env();
     #[cfg(any(feature = "postgres", feature = "libsql"))]
     lunarwing::setup::maybe_seed_default_instance_assets();
 
@@ -73,17 +73,17 @@ fn format_top_level_error(err: &anyhow::Error) {
     let hint = if lower.contains("database_url")
         || lower.contains("database") && lower.contains("not set")
     {
-        Some("run `ironclaw onboard` or set DATABASE_URL in .env")
+        Some("run `lunarwing onboard` or set DATABASE_URL in .env")
     } else if lower.contains("connection refused") || lower.contains("connect error") {
         Some("check that the database server is running")
     } else if lower.contains("session") && lower.contains("not found") {
-        Some("run `ironclaw onboard` to set up authentication")
+        Some("run `lunarwing onboard` to set up authentication")
     } else if lower.contains("secrets_master_key") {
-        Some("run `ironclaw onboard` or set SECRETS_MASTER_KEY in .env")
+        Some("run `lunarwing onboard` or set SECRETS_MASTER_KEY in .env")
     } else if lower.contains("already running") {
         Some("stop the other instance or remove the stale PID file")
     } else if lower.contains("onboard") {
-        Some("run `ironclaw onboard` to complete setup")
+        Some("run `lunarwing onboard` to complete setup")
     } else {
         None
     };
@@ -252,7 +252,7 @@ async fn async_main() -> anyhow::Result<()> {
                 );
             } else {
                 println!("Specify a provider to authenticate with:");
-                println!("  ironclaw login --openai-codex   (ChatGPT subscription)");
+                println!("  lunarwing login --openai-codex   (ChatGPT subscription)");
             }
             return Ok(());
         }
@@ -342,7 +342,7 @@ async fn async_main() -> anyhow::Result<()> {
         Err(lunarwing::error::ConfigError::MissingRequired { key, hint }) => {
             anyhow::bail!(
                 "Configuration error: Missing required setting '{}'. {}. \
-                 Run 'ironclaw onboard' to configure, or set the required environment variables.",
+                 Run 'lunarwing onboard' to configure, or set the required environment variables.",
                 key,
                 hint
             );
@@ -456,7 +456,7 @@ async fn async_main() -> anyhow::Result<()> {
         }
     }
 
-    // Unix Socket REPL: always enabled in daemon mode so `ironclaw repl` can
+    // Unix Socket REPL: always enabled in daemon mode so `lunarwing repl` can
     // attach to a running service (e.g. started via systemd).
     #[cfg(unix)]
     if !cli.cli_only {
@@ -466,9 +466,9 @@ async fn async_main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| {
                 // Prefer $XDG_RUNTIME_DIR (always writable, even on read-only home).
                 if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-                    std::path::PathBuf::from(runtime_dir).join("ironclaw.sock")
+                    std::path::PathBuf::from(runtime_dir).join("lunarwing.sock")
                 } else {
-                    lunarwing::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
+                    lunarwing::bootstrap::lunarwing_base_dir().join("lunarwing.sock")
                 }
             });
         let unix_repl = UnixSocketReplChannel::new(

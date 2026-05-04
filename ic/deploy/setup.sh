@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# VM bootstrap script for IronClaw on GCP Compute Engine.
+# VM bootstrap script for LunarWing on GCP Compute Engine.
 #
 # Run on a fresh Debian 12 VM after SSH:
 #   sudo bash setup.sh
 #
 # Prerequisites:
-#   - VM has the ironclaw-vm service account attached
+#   - VM has the lunarwing-vm service account attached
 #   - Cloud SQL Auth Proxy accessible via IAM
 #   - Artifact Registry image pushed
 
@@ -50,7 +50,7 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 echo "==> Creating config directory"
 # Owned by root, readable only by root. Docker reads --env-file as root
-# before dropping to uid 1000 (ironclaw) inside the container.
+# before dropping to uid 1000 (lunarwing) inside the container.
 mkdir -p /opt/lunarwing
 chmod 700 /opt/lunarwing
 

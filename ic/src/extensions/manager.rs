@@ -2558,7 +2558,7 @@ impl ExtensionManager {
                 ExtensionError::InstallFailed(format!(
                     "'{}' requires building from source. Build artifact not found. \
                          Run `cargo component build --release` in {} first, \
-                         or use `ironclaw registry install {}`.",
+                         or use `lunarwing registry install {}`.",
                     name,
                     resolved_dir.display(),
                     name,
@@ -7581,7 +7581,7 @@ mod tests {
             Arc::new(InMemorySecretsStore::new(crypto));
         let tools = Arc::new(crate::tools::ToolRegistry::new());
         let mcp = Arc::new(McpSessionManager::new());
-        let dir = std::env::temp_dir().join("ironclaw-test-gateway-mode");
+        let dir = std::env::temp_dir().join("lunarwing-test-gateway-mode");
 
         ExtensionManager::new(
             mcp,

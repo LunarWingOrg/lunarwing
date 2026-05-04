@@ -76,7 +76,7 @@ pub struct CapabilitiesFile {
     pub webhook: Option<WebhookCapabilitySchema>,
 
     /// Authentication setup instructions.
-    /// Used by `ironclaw config` to guide users through auth setup.
+    /// Used by `lunarwing config` to guide users through auth setup.
     #[serde(default)]
     pub auth: Option<AuthCapabilitySchema>,
 

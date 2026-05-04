@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` and `ironclaw` are internal/binary names from upstream.
+**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream.
 
 This is a self-hosted, privacy-first AI agent. The fork prioritizes XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal.
 
@@ -82,7 +82,7 @@ Full single-tenant reference: `ic/testing/lunarwing-xmpp/README.md`.
 ```
 ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   src/                      # Source tree
-  crates/                   # ironclaw_common, ironclaw_safety, ironclaw_skills, ironclaw_engine
+  crates/                   # lunarwing_common, lunarwing_safety, lunarwing_skills, lunarwing_engine
   channels-src/             # WASM channel sources (xmpp, weechat, darkirc, etc.)
   tools-src/                # WASM tool sources (gotify, github, google-*, etc.)
   bridges/xmpp-bridge/      # Standalone XMPP bridge service (separate process)
@@ -153,7 +153,7 @@ Do not break without explicit approval:
 
 ## Service Operations
 
-- `xmpp-bridge.service` has `PartOf=ironclaw.service` — IronClaw restarts can cascade to the bridge. Do not assume the bridge caused a stop just because both restarted.
+- `xmpp-bridge.service` has `PartOf=lunarwing.service` — LunarWing restarts can cascade to the bridge. Do not assume the bridge caused a stop just because both restarted.
 - Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes (`status`, `set <n>`, `off`, `reset`). Requires `XMPP_BRIDGE_TOKEN`.
 - Use `scripts/xmpp-configure.sh` for bridge room/configuration checks.
 - Watchdog: `scripts/lunarwing-watchdog.sh` (systemd) or `scripts/lunarwing-watchdog-openrc.sh` (OpenRC). Install via `scripts/install-lunarwing-watchdog.sh` (auto-detects init system).
@@ -163,7 +163,7 @@ Do not break without explicit approval:
 
 ## Deployment & Secrets
 
-Secrets may live in `/home/cmc/.ironclaw/.env`, systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
+Secrets may live in `/home/cmc/.lunarwing/.env`, systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
 
 For live DB checks, use read-only SQL unless the user explicitly requests mutation. Stop the service before mutating routine state; back up the DB first.
 

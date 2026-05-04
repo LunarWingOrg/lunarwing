@@ -7,8 +7,8 @@
 set -euo pipefail
 
 # Config
-AGENT_DIR="${AGENT_DIR:-$HOME/.ironclaw/agents}"
-OMEMO_STORE="${OMEMO_STORE:-$HOME/.ironclaw/omemo}"
+AGENT_DIR="${AGENT_DIR:-${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/agents}"
+OMEMO_STORE="${OMEMO_STORE:-${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/omemo}"
 
 issues=()
 devices=0

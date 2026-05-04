@@ -13,7 +13,7 @@
 //! ┌──────────────────────────────────────────────┐
 //! │ Docker Container                              │
 //! │                                               │
-//! │  ironclaw acp-bridge --job-id <uuid>          │
+//! │  lunarwing acp-bridge --job-id <uuid>          │
 //! │    └─ spawns ACP agent subprocess             │
 //! │    └─ ACP handshake (initialize + session)    │
 //! │    └─ sends job description via prompt()      │
@@ -416,7 +416,7 @@ impl<S: AcpEventSink> acp::Client for IronClawAcpClient<S> {
 /// Build the standard IronClaw ACP initialization request.
 pub(crate) fn ironclaw_init_request() -> acp::InitializeRequest {
     acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
-        acp::Implementation::new("ironclaw", env!("CARGO_PKG_VERSION")).title("IronClaw"),
+        acp::Implementation::new("lunarwing", env!("CARGO_PKG_VERSION")).title("LunarWing"),
     )
 }
 

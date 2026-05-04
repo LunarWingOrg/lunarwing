@@ -1,4 +1,4 @@
-use crate::bootstrap::ironclaw_base_dir;
+use crate::bootstrap::lunarwing_base_dir;
 use crate::config::helpers::{parse_bool_env, parse_optional_env};
 use crate::error::ConfigError;
 
@@ -43,14 +43,14 @@ impl HygieneConfig {
     }
 
     /// Convert to the workspace hygiene config, resolving the state directory
-    /// to the standard `~/.ironclaw` location.
+    /// to the standard `~/.lunarwing` location.
     pub fn to_workspace_config(&self) -> crate::workspace::hygiene::HygieneConfig {
         crate::workspace::hygiene::HygieneConfig {
             enabled: self.enabled,
             daily_retention_days: self.daily_retention_days,
             conversation_retention_days: self.conversation_retention_days,
             cadence_hours: self.cadence_hours,
-            state_dir: ironclaw_base_dir(),
+            state_dir: lunarwing_base_dir(),
         }
     }
 }

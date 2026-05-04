@@ -1,7 +1,7 @@
-//! `ironclaw repl` — connect to a running LunarWing daemon via Unix socket.
+//! `lunarwing repl` — connect to a running LunarWing daemon via Unix socket.
 //!
-//! The daemon must already be running (e.g. via `systemctl start ironclaw`)
-//! and listening on its Unix socket (default: `~/.ironclaw/ironclaw.sock`).
+//! The daemon must already be running (e.g. via `systemctl start lunarwing`)
+//! and listening on its Unix socket (default: `~/.lunarwing/lunarwing.sock`).
 
 use std::path::PathBuf;
 
@@ -38,13 +38,13 @@ enum ReplMessage {
 
 /// Connect to a running LunarWing service via its Unix socket REPL.
 ///
-/// The LunarWing daemon must be running (e.g. `ironclaw run` or via systemd).
+/// The LunarWing daemon must be running (e.g. `lunarwing run` or via systemd).
 /// This command does not start a new instance.
 #[derive(Parser, Debug)]
 pub struct ReplCommand {
     /// Path to the Unix socket.
     ///
-    /// Defaults to `~/.ironclaw/ironclaw.sock` — the socket the daemon creates
+    /// Defaults to `~/.lunarwing/lunarwing.sock` — the socket the daemon creates
     /// at startup when not running in CLI-only mode.
     #[arg(long)]
     pub socket: Option<PathBuf>,
@@ -58,16 +58,16 @@ impl ReplCommand {
             } else if let Ok(path) = std::env::var("IRONCLAW_SOCKET") {
                 std::path::PathBuf::from(path)
             } else if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-                std::path::PathBuf::from(runtime_dir).join("ironclaw.sock")
+                std::path::PathBuf::from(runtime_dir).join("lunarwing.sock")
             } else {
-                crate::bootstrap::ironclaw_base_dir().join("ironclaw.sock")
+                crate::bootstrap::lunarwing_base_dir().join("lunarwing.sock")
             }
         });
 
         let stream = UnixStream::connect(&socket_path).await.map_err(|e| {
             anyhow::anyhow!(
                 "Failed to connect to LunarWing REPL at {}: {}.\n\
-                 Make sure the daemon is running (`ironclaw run` or `systemctl start ironclaw`).",
+                 Make sure the daemon is running (`lunarwing run` or `systemctl start lunarwing`).",
                 socket_path.display(),
                 e
             )

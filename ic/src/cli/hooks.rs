@@ -99,7 +99,7 @@ async fn discover_hooks(config: &crate::config::Config) -> Vec<HookInfo> {
 ///
 /// Uses the same flat-file layout as the real WASM loaders:
 /// ```text
-/// ~/.ironclaw/tools/
+/// ~/.lunarwing/tools/
 /// ├── slack.wasm
 /// ├── slack.capabilities.json   <- hooks section parsed here
 /// ├── github.wasm

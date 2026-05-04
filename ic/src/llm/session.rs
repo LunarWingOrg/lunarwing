@@ -1,7 +1,7 @@
 //! Session management for NEAR AI authentication.
 //!
 //! Handles session token persistence, expiration detection, and renewal via
-//! OAuth flow. Tokens are stored in `~/.ironclaw/session.json` and refreshed
+//! OAuth flow. Tokens are stored in `~/.lunarwing/session.json` and refreshed
 //! automatically when expired.
 
 use std::path::PathBuf;
@@ -31,7 +31,7 @@ pub struct SessionData {
 pub struct SessionConfig {
     /// Base URL for auth endpoints (e.g., https://private.near.ai).
     pub auth_base_url: String,
-    /// Path to session file (e.g., ~/.ironclaw/session.json).
+    /// Path to session file (e.g., ~/.lunarwing/session.json).
     pub session_path: PathBuf,
 }
 
@@ -376,7 +376,7 @@ impl SessionManager {
     /// cloud.near.ai. The key is stored in the thread-safe runtime
     /// env overlay (via `set_runtime_env`) so `LlmConfig::resolve()`
     /// auto-selects ChatCompletions mode, and persisted to
-    /// `~/.ironclaw/.env` for survival across restarts.
+    /// `~/.lunarwing/.env` for survival across restarts.
     /// No session token is saved and no `/v1/users/me` validation is
     /// performed (different auth model).
     async fn api_key_login(&self) -> Result<(), LlmError> {
@@ -410,7 +410,7 @@ impl SessionManager {
         // multi-threaded programs (Rust 1.82+).
         crate::config::helpers::set_runtime_env("NEARAI_API_KEY", &key);
 
-        // Persist to ~/.ironclaw/.env so the key survives restarts
+        // Persist to ~/.lunarwing/.env so the key survives restarts
         // (bootstrap layer — available before DB is connected).
         // Uses upsert to avoid clobbering existing bootstrap vars.
         if let Err(e) = crate::bootstrap::upsert_bootstrap_var("NEARAI_API_KEY", &key) {

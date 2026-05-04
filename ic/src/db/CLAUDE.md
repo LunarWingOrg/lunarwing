@@ -141,7 +141,7 @@ The `Database` supertrait is composed of seven sub-traits. Leaf consumers can de
 
 ```bash
 # Use local SQLite file (default)
-DATABASE_BACKEND=libsql LIBSQL_PATH=~/.ironclaw/test.db cargo run
+DATABASE_BACKEND=libsql LIBSQL_PATH=~/.lunarwing/test.db cargo run
 
 # Use Turso cloud (embedded replica syncs local file to cloud)
 DATABASE_BACKEND=libsql LIBSQL_URL=libsql://xxx.turso.io LIBSQL_AUTH_TOKEN=xxx cargo run

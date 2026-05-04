@@ -852,7 +852,7 @@ impl Agent {
         let model_owned = model.to_string();
         let backend = self.deps.llm_backend.clone();
         if let Err(e) = tokio::task::spawn_blocking(move || {
-            // 2a. Update the backend-specific model env var in ~/.ironclaw/.env.
+            // 2a. Update the backend-specific model env var in ~/.lunarwing/.env.
             //
             // Env vars have the HIGHEST priority in LlmConfig::resolve_model()
             // (env var > TOML > DB > default). If the .env file has e.g.
@@ -864,7 +864,7 @@ impl Agent {
 
             // Only update the .env file if the var is actually set there
             // (avoid injecting new vars the user never configured).
-            let env_path = crate::bootstrap::ironclaw_env_path();
+            let env_path = crate::bootstrap::lunarwing_env_path();
             let env_has_var = std::fs::read_to_string(&env_path)
                 .ok()
                 .is_some_and(|content| {

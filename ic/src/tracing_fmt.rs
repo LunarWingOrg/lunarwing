@@ -37,7 +37,7 @@ pub fn init_cli_tracing() {
 pub fn init_worker_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("ironclaw=info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("lunarwing=info")),
         )
         .init();
 }

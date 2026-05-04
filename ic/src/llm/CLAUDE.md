@@ -85,7 +85,7 @@ ID, migrate to it immediately. Advanced users can override headers via
 ## NEAR AI Provider Gotchas
 
 **Dual auth modes:**
-- **Session token** (default): `NEARAI_SESSION_TOKEN=sess_...`, base URL = `https://private.near.ai`. Tokens are persisted to `~/.ironclaw/session.json` (mode 0600) and optionally to the DB `settings` table (`nearai.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `NearAiChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
+- **Session token** (default): `NEARAI_SESSION_TOKEN=sess_...`, base URL = `https://private.near.ai`. Tokens are persisted to `~/.lunarwing/session.json` (mode 0600) and optionally to the DB `settings` table (`nearai.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `NearAiChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
 - **API key**: Set `NEARAI_API_KEY` (from `cloud.near.ai`), base URL defaults to `https://cloud-api.near.ai`. 401s with API key auth are immediately returned as `LlmError::AuthFailed` — no renewal.
 
 **Session renewal is interactive:** When `SessionExpired` triggers renewal, it blocks and prompts the user in the terminal (GitHub/Google OAuth or manual API key entry). This is unsuitable for headless/hosted deployments — set `NEARAI_SESSION_TOKEN` env var instead.
@@ -178,7 +178,7 @@ Set `LLM_EXTRA_HEADERS=Key:Value,Key2:Value2` to inject headers into every reque
 
 Uses the Responses API at `chatgpt.com/backend-api/codex/responses` with ChatGPT subscription OAuth tokens (zero API cost — billing through subscription).
 
-**Auth flow:** Device code OAuth via `auth.openai.com/api/accounts/deviceauth/*` endpoints. On first run, displays a code for the user to enter at a URL. Tokens are persisted to `~/.ironclaw/openai_codex_session.json` (mode 0600) and auto-refreshed before expiry.
+**Auth flow:** Device code OAuth via `auth.openai.com/api/accounts/deviceauth/*` endpoints. On first run, displays a code for the user to enter at a URL. Tokens are persisted to `~/.lunarwing/openai_codex_session.json` (mode 0600) and auto-refreshed before expiry.
 
 **Provider chain:** `OpenAiCodexProvider` → `TokenRefreshingProvider` (pre-emptive refresh + retry on 401) → standard decorator chain. The `TokenRefreshingProvider` intercepts `AuthFailed`/`SessionExpired` errors, refreshes the OAuth token, and retries once.
 

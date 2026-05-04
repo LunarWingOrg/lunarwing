@@ -70,7 +70,7 @@
 //!
 //! // Load channels from directory
 //! let loader = WasmChannelLoader::new(runtime, pairing_store, settings_store, owner_scope_id);
-//! let channels = loader.load_from_dir(Path::new("~/.ironclaw/channels/")).await?;
+//! let channels = loader.load_from_dir(Path::new("~/.lunarwing/channels/")).await?;
 //!
 //! // Add to channel manager
 //! for channel in channels {

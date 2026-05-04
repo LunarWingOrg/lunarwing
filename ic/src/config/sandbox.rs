@@ -43,7 +43,7 @@ impl Default for SandboxModeConfig {
             timeout_secs: 120,
             memory_limit_mb: 2048,
             cpu_shares: 1024,
-            image: "ironclaw-worker:latest".to_string(),
+            image: "lunarwing-worker:latest".to_string(),
             auto_pull_image: true,
             extra_allowed_domains: Vec::new(),
             reaper_interval_secs: 300,
@@ -393,7 +393,7 @@ mod tests {
         assert_eq!(cfg.timeout_secs, 120);
         assert_eq!(cfg.memory_limit_mb, 2048);
         assert_eq!(cfg.cpu_shares, 1024);
-        assert_eq!(cfg.image, "ironclaw-worker:latest");
+        assert_eq!(cfg.image, "lunarwing-worker:latest");
         assert!(cfg.auto_pull_image);
         assert!(cfg.extra_allowed_domains.is_empty());
     }
