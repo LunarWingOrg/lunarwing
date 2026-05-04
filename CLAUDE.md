@@ -186,6 +186,9 @@ RUST_LOG=ironclaw=trace cargo run                        # verbose all modules
 RUST_LOG=ironclaw::agent=debug cargo run                 # agent loop only
 RUST_LOG=ironclaw=debug,tower_http=debug cargo run       # + HTTP request logging
 ```
+## Harness Mare
+
+I'm CLAAAAAAAAAAAUDING!
 
 ## Harness Environment Defaults
 
