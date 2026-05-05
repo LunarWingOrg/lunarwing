@@ -10,7 +10,7 @@ function getSystemTheme() {
 const VALID_THEME_MODES = { dark: true, light: true, system: true };
 
 function getThemeMode() {
-  const stored = localStorage.getItem('ironclaw-theme');
+  const stored = localStorage.getItem('lunarwing-theme');
   return (stored && VALID_THEME_MODES[stored]) ? stored : 'system';
 }
 
@@ -33,7 +33,7 @@ function toggleTheme() {
   const cycle = { dark: 'light', light: 'system', system: 'dark' };
   const current = getThemeMode();
   const next = cycle[current] || 'dark';
-  localStorage.setItem('ironclaw-theme', next);
+  localStorage.setItem('lunarwing-theme', next);
   applyTheme(next);
 }
 
@@ -67,7 +67,7 @@ document.getElementById('settings-theme-toggle')?.addEventListener('click', () =
   toggleTheme();
   const btn = document.getElementById('settings-theme-toggle');
   if (btn) {
-    const mode = localStorage.getItem('ironclaw-theme') || 'system';
+    const mode = localStorage.getItem('lunarwing-theme') || 'system';
     btn.textContent = 'Theme: ' + mode.charAt(0).toUpperCase() + mode.slice(1);
   }
 });
@@ -157,7 +157,7 @@ function authenticate() {
   // Test the token against the health-ish endpoint (chat/threads requires auth)
   apiFetch('/api/chat/threads')
     .then(() => {
-      sessionStorage.setItem('ironclaw_token', token);
+      sessionStorage.setItem('lunarwing_token', token);
       const authScreen = document.getElementById('auth-screen');
       const app = document.getElementById('app');
       // Cross-fade: fade out auth screen, then show app
@@ -198,7 +198,7 @@ function authenticate() {
       }
     })
     .catch(() => {
-      sessionStorage.removeItem('ironclaw_token');
+      sessionStorage.removeItem('lunarwing_token');
       document.getElementById('auth-screen').style.display = '';
       document.getElementById('auth-screen').style.opacity = '';
       document.getElementById('app').style.display = 'none';
@@ -227,7 +227,7 @@ document.getElementById('token-input').addEventListener('keydown', (e) => {
     authenticate();
     return;
   }
-  const saved = sessionStorage.getItem('ironclaw_token');
+  const saved = sessionStorage.getItem('lunarwing_token');
   if (saved) {
     document.getElementById('token-input').value = saved;
     // Hide auth screen immediately to prevent flash, authenticate() will
@@ -6087,7 +6087,7 @@ function exportSettings() {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'ironclaw-settings.json';
+    a.download = 'lunarwing-settings.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

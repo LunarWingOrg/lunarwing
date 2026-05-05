@@ -1,7 +1,9 @@
 // Prevent FOUC: apply saved theme before first paint.
 // This script must be loaded synchronously in <head> (no defer/async).
 (function() {
-  const stored = localStorage.getItem('ironclaw-theme');
+  var old = localStorage.getItem('ironclaw-theme');
+  if (old) { localStorage.setItem('lunarwing-theme', old); localStorage.removeItem('ironclaw-theme'); }
+  const stored = localStorage.getItem('lunarwing-theme');
   const mode = (stored === 'dark' || stored === 'light' || stored === 'system') ? stored : 'system';
   let resolved = mode;
   if (mode === 'system') {

@@ -8,7 +8,7 @@ const I18n = {
   // Initialize i18n
   init() {
     // Read user preference from localStorage
-    const savedLang = localStorage.getItem('ironclaw_language');
+    const savedLang = localStorage.getItem('lunarwing_language');
     if (savedLang && this.translations[savedLang]) {
       this.currentLang = savedLang;
     } else {
@@ -28,7 +28,7 @@ const I18n = {
   setLanguage(lang) {
     if (this.translations[lang]) {
       this.currentLang = lang;
-      localStorage.setItem('ironclaw_language', lang);
+      localStorage.setItem('lunarwing_language', lang);
       this.updateHtmlLang();
       this.updatePageContent();
       return true;

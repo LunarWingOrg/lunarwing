@@ -1,4 +1,4 @@
-// i18n Integration for IronClaw App
+// i18n Integration for LunarWing App
 // This file contains i18n-related functions that extend app.js
 
 // Initialize i18n when DOM is ready

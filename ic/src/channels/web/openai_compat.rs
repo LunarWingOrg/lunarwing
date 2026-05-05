@@ -1,7 +1,7 @@
 //! OpenAI-compatible HTTP API (`/v1/chat/completions`, `/v1/models`).
 //!
 //! This module provides a direct LLM proxy through the web gateway so any
-//! standard OpenAI client library can use IronClaw as a backend by simply
+//! standard OpenAI client library can use LunarWing as a backend by simply
 //! changing the `base_url`.
 
 use std::sync::Arc;

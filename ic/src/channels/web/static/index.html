@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>LunarWing</title>
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/favicon.ico" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -32,6 +33,7 @@
   <div id="auth-screen">
     <div class="auth-card-login">
       <div class="auth-brand">
+        <img src="/logo.svg" alt="LunarWing" class="auth-logo">
         <h1 data-i18n="auth.title">LunarWing</h1>
         <p class="auth-tagline" data-i18n="auth.tagline">Secure AI Assistant</p>
       </div>
@@ -74,6 +76,7 @@
   <div id="restart-loader" class="restart-loader" style="display: none;">
     <div class="restart-loader-overlay"></div>
     <div class="restart-loader-content">
+      <img src="/favicon.svg" alt="LunarWing" class="restart-logo">
       <div class="restart-spinner"></div>
       <div class="restart-loader-text">
         <p class="restart-title" data-i18n="restart.progressTitle">Restarting LunarWing</p>
@@ -92,6 +95,7 @@
   <div id="app">
     <!-- Tab Bar -->
     <div class="tab-bar">
+      <img src="/favicon.svg" alt="LunarWing" class="tab-logo">
       <div class="tab-indicator" id="tab-indicator"></div>
       <button class="active" data-tab="chat" data-i18n="tab.chat">Chat</button>
       <button data-tab="memory" data-i18n="tab.memory">Memory</button>
