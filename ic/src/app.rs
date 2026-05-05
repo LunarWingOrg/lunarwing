@@ -979,7 +979,7 @@ async fn seed_tool_permissions(
     db: Option<&Arc<dyn Database>>,
     owner_id: &str,
 ) {
-    use crate::tools::permissions::{TOOL_RISK_DEFAULTS, effective_permission};
+    use crate::tools::permissions::seeded_default_permission;
 
     let db = match db {
         Some(db) => db,
@@ -1008,11 +1008,9 @@ async fn seed_tool_permissions(
             continue;
         }
 
-        // Only insert if the tool appears in the static defaults table.
-        // Unknown/dynamic tools stay absent (they will fall back to AskEachTime
-        // at runtime via effective_permission) to avoid polluting the DB.
-        if TOOL_RISK_DEFAULTS.contains_key(name.as_str()) {
-            let default_state = effective_permission(name, &existing);
+        // Only insert seed defaults for known built-ins. Unknown/dynamic tools
+        // stay absent and fall back to AskEachTime at runtime.
+        if let Some(default_state) = seeded_default_permission(name) {
             let json_value = match serde_json::to_value(default_state) {
                 Ok(v) => v,
                 Err(e) => {

@@ -221,7 +221,7 @@ pub struct Settings {
     /// Per-tool permission overrides.
     ///
     /// Keys are tool names; values override the built-in tier defaults from
-    /// `TOOL_RISK_DEFAULTS`.  Absent tools fall back to the tier default, or
+    /// `seeded_default_permission`.  Absent tools fall back to the seeded default, or
     /// `AskEachTime` if the tool is unknown.
     #[serde(default)]
     pub tool_permissions: HashMap<String, crate::tools::permissions::PermissionState>,
