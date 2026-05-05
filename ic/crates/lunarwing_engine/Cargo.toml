@@ -1,10 +1,10 @@
 [package]
 name = "lunarwing_engine"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.92"
-description = "Unified thread-capability-CodeAct execution engine for IronClaw"
-authors = ["NEAR AI <support@near.ai>"]
+description = "Unified thread-capability-CodeAct execution engine for LunarWing"
+authors = ["LunarWing Team"]
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/LunarWingOrg/lunarwing"
 repository = "https://github.com/LunarWingOrg/lunarwing"
@@ -15,7 +15,7 @@ dist = false
 
 [dependencies]
 async-trait = "0.1"
-lunarwing_skills = { path = "../lunarwing_skills", version = "0.1.0", default-features = false }
+lunarwing_skills = { path = "../lunarwing_skills", version = "1.0.0", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 monty = { git = "https://github.com/pydantic/monty.git", rev = "7a0d4b75b72e6ddacafaf36e26486186cdb6eb68" }
 serde = { version = "1", features = ["derive"] }
