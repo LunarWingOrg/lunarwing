@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="sg" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </linearGradient>
+    <linearGradient id="sf" x1="16" y1="3" x2="16" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D47A1" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0D47A1" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="mg" x1="14" y1="8" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B3E5FC"/>
+      <stop offset="100%" stop-color="#4FC3F7"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield -->
+  <path d="M16 2 L27 7 Q28 7.5 28 8.5 L28 17 Q28 24 16 30 Q4 24 4 17 L4 8.5 Q4 7.5 5 7 Z"
+        fill="url(#sf)" stroke="url(#sg)" stroke-width="1.2"/>
+  <!-- Crescent moon -->
+  <circle cx="16" cy="15" r="6.5" fill="url(#mg)"/>
+  <circle cx="19.5" cy="12.5" r="5" fill="#0D47A1" opacity="0.85"/>
+  <!-- Star -->
+  <circle cx="22" cy="10" r="1" fill="#B3E5FC" opacity="0.7"/>
+</svg>

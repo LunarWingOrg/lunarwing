@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <defs>
+    <linearGradient id="shield-grad" x1="100" y1="10" x2="100" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </linearGradient>
+    <linearGradient id="shield-fill" x1="100" y1="20" x2="100" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D47A1" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#0D47A1" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="moon-grad" x1="80" y1="50" x2="120" y2="130" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B3E5FC"/>
+      <stop offset="100%" stop-color="#4FC3F7"/>
+    </linearGradient>
+    <linearGradient id="wing-grad" x1="40" y1="60" x2="160" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4FC3F7" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#1E88E5" stop-opacity="0.4"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Wing curves behind shield -->
+  <g filter="url(#glow)" opacity="0.6">
+    <!-- Left wing -->
+    <path d="M30 80 Q10 100 25 130 Q35 115 50 105" stroke="url(#wing-grad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M25 70 Q5 95 18 125 Q28 108 45 98" stroke="url(#wing-grad)" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+    <path d="M20 62 Q0 90 12 120" stroke="url(#wing-grad)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+    <!-- Right wing -->
+    <path d="M170 80 Q190 100 175 130 Q165 115 150 105" stroke="url(#wing-grad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M175 70 Q195 95 182 125 Q172 108 155 98" stroke="url(#wing-grad)" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+    <path d="M180 62 Q200 90 188 120" stroke="url(#wing-grad)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+  </g>
+
+  <!-- Shield body -->
+  <path d="M100 15 L165 45 Q170 48 170 55 L170 105 Q170 145 100 185 Q30 145 30 105 L30 55 Q30 48 35 45 Z"
+        fill="url(#shield-fill)" stroke="url(#shield-grad)" stroke-width="3"/>
+
+  <!-- Shield inner highlight -->
+  <path d="M100 28 L155 53 Q158 55 158 60 L158 102 Q158 136 100 170 Q42 136 42 102 L42 60 Q42 55 45 53 Z"
+        fill="none" stroke="url(#shield-grad)" stroke-width="1" opacity="0.3"/>
+
+  <!-- Crescent moon -->
+  <g filter="url(#glow)">
+    <circle cx="100" cy="95" r="38" fill="url(#moon-grad)" opacity="0.9"/>
+    <circle cx="118" cy="82" r="30" fill="#0D47A1" opacity="0.85"/>
+  </g>
+
+  <!-- Small star accent -->
+  <circle cx="130" cy="65" r="2.5" fill="#B3E5FC" opacity="0.8"/>
+  <circle cx="140" cy="78" r="1.5" fill="#B3E5FC" opacity="0.5"/>
+
+  <!-- LunarWing text -->
+  <text x="100" y="210" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="20" font-weight="700" fill="#4FC3F7" letter-spacing="1">LunarWing</text>
+</svg>

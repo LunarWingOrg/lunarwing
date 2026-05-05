@@ -529,6 +529,8 @@ pub async fn start_server(
         .route("/app.js", get(js_handler))
         .route("/theme-init.js", get(theme_init_handler))
         .route("/favicon.ico", get(favicon_handler))
+        .route("/favicon.svg", get(favicon_svg_handler))
+        .route("/logo.svg", get(logo_svg_handler))
         .route("/i18n/index.js", get(i18n_index_handler))
         .route("/i18n/en.js", get(i18n_en_handler))
         .route("/i18n/zh-CN.js", get(i18n_zh_handler))
@@ -666,6 +668,26 @@ async fn favicon_handler() -> impl IntoResponse {
             (header::CACHE_CONTROL, "public, max-age=86400"),
         ],
         include_bytes!("static/favicon.ico").as_slice(),
+    )
+}
+
+async fn favicon_svg_handler() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        include_str!("static/favicon.svg"),
+    )
+}
+
+async fn logo_svg_handler() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        include_str!("static/logo.svg"),
     )
 }
 
