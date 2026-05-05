@@ -1,0 +1,1 @@
+This is a test file created by Claude Code to verify write, commit, and push access.
