@@ -226,7 +226,7 @@ ports_allocate() {
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
 
-  say "allocated port block $base-$((base + PORT_BLOCK_SIZE - 1)) for tenant '$name'"
+  say "allocated port block $base-$((base + PORT_BLOCK_SIZE - 1)) for tenant '$name'" >&2
   printf '%s' "$base"
 }
 
@@ -284,7 +284,7 @@ create_tenant_user() {
   if id "$name" &>/dev/null; then
     say "user '$name' already exists"
   else
-    useradd --create-home --shell /bin/bash --comment "LunarWing tenant: $name" "$name"
+    useradd --create-home --shell /bin/bash --comment "LunarWing tenant $name" "$name"
     say "created user: $name"
   fi
 
@@ -318,13 +318,22 @@ create_tenant_user() {
   say "created directories under $lw_root"
 
   # Install rustup for tenant user if not already present
-  if ! sudo -u "$name" bash -c 'command -v rustup' &>/dev/null; then
+  local cargo_src='. "$HOME/.cargo/env" 2>/dev/null;'
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
     say "installing rustup for $name ..."
     sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
       || die "rustup installation failed for $name"
     say "rustup installed for $name"
   else
     say "rustup already available for $name"
+  fi
+
+  # Ensure WASM targets and cargo-component are installed
+  say "ensuring WASM toolchain for $name ..."
+  sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null; then
+    say "installing cargo-component and wasm-tools for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} cargo install cargo-component wasm-tools --locked 2>&1" || true
   fi
 }
 
@@ -352,13 +361,30 @@ clone_tenant_repo() {
   local dest
   dest="$(tenant_lw_root "$name")"
 
-  if [[ -d "$dest/ic/.git" ]]; then
-    say "repo already cloned at $dest/ic"
+  if [[ -d "$dest/.git" ]] && [[ -d "$dest/ic" ]]; then
+    say "repo already cloned at $dest"
     return 0
+  fi
+  # Clean up incomplete clone (has .git but missing content)
+  if [[ -d "$dest/.git" ]] && [[ ! -d "$dest/ic" ]]; then
+    say "incomplete clone detected, removing .git and re-cloning ..."
+    rm -rf "$dest/.git"
   fi
 
   say "cloning repo from $SOURCE_REPO to $dest ..."
-  sudo -u "$name" git clone --single-branch "$SOURCE_REPO" "$dest" 2>&1 | tail -1
+  local -a safedir=(-c "safe.directory=$dest" -c "safe.directory=$SOURCE_REPO")
+  if [[ -d "$dest" ]] && [[ -n "$(ls -A "$dest")" ]]; then
+    # Directory already has content (env/, state/, etc.) — init in place
+    git "${safedir[@]}" init "$dest" >/dev/null
+    git "${safedir[@]}" -C "$dest" remote add origin "$SOURCE_REPO"
+    git "${safedir[@]}" -C "$dest" fetch origin --quiet
+    local branch
+    branch="$(git "${safedir[@]}" -C "$SOURCE_REPO" symbolic-ref --short HEAD 2>/dev/null || echo staging)"
+    git "${safedir[@]}" -C "$dest" checkout -b "$branch" "origin/$branch" 2>&1 | tail -1
+  else
+    git "${safedir[@]}" clone --single-branch "$SOURCE_REPO" "$dest" 2>&1 | tail -1
+  fi
+  chown -R "$name:$name" "$dest"
   say "repo cloned for $name"
 }
 
@@ -388,7 +414,7 @@ build_tenant() {
 
     if [[ "$with_wasm" == "true" ]]; then
       say "building WASM extensions for $name ..."
-      sudo -u "$name" bash -c "$cargo_env cd '$repo' && scripts/build-wasm-extensions.sh" || true
+      sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" || true
     fi
 
     say "build complete for $name"
