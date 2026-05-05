@@ -749,6 +749,10 @@ _systemctl_user() {
 start_tenant_systemd() {
   local name="$1"
   _systemctl_user "$name" daemon-reload
+  _systemctl_user "$name" enable \
+    "lunarwing-${name}.service" \
+    "xmpp-bridge-${name}.service" \
+    "lunarwing-proxy-${name}.service"
   _systemctl_user "$name" start "lunarwing-${name}.service"
   sleep 2
   if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service"; then

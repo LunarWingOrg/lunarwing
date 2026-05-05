@@ -1,8 +1,10 @@
 # LunarWing
 
-## Secure, Privacy focused AI Agent
+## Claws are overrated. So, grow your wings and fly...
 
-### Our website:
+### Secure, Performant, Privacy focused AI Agent Software
+
+#### Our website:
 [LunarWing](https://lunarwing.org/)
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
