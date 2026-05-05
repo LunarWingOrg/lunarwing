@@ -7,9 +7,9 @@
   --border: rgba(255, 255, 255, 0.08);
   --text: #fafafa;
   --text-secondary: #a1a1aa;
-  --accent: #34d399;
-  --accent-hover: #2fc48d;
-  --accent-soft: rgba(52, 211, 153, 0.15);
+  --accent: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-soft: rgba(96, 165, 250, 0.15);
   --success: #34d399;
   --warning: #F5A623;
   --danger: #E64C4C;
@@ -26,8 +26,8 @@
   --text-muted: #888;
   --text-dimmed: #666;
   --text-on-accent: #09090b;
-  --accent-brand: #00D894;
-  --accent-brand-hover: #00be82;
+  --accent-brand: #2563eb;
+  --accent-brand-hover: #1d4ed8;
   --warning-bg: #1e1400;
   --warning-border: #3a2a00;
   --warning-text: #facc15;
@@ -36,26 +36,26 @@
   --badge-sandbox-bg: rgba(136, 132, 216, 0.15);
   --badge-sandbox-text: #b4b0e8;
   --hover-surface: rgba(255, 255, 255, 0.03);
-  --focus-ring: rgba(52, 211, 153, 0.1);
-  --accent-subtle: rgba(52, 211, 153, 0.15);
-  --accent-border-subtle: rgba(52, 211, 153, 0.3);
+  --focus-ring: rgba(96, 165, 250, 0.1);
+  --accent-subtle: rgba(96, 165, 250, 0.15);
+  --accent-border-subtle: rgba(96, 165, 250, 0.3);
   --danger-subtle: rgba(230, 76, 76, 0.15);
   --danger-border-subtle: rgba(230, 76, 76, 0.3);
   --warning-subtle: rgba(245, 166, 35, 0.15);
   --border-hover: rgba(255, 255, 255, 0.15);
-  --user-msg-bg: rgba(52, 211, 153, 0.08);
-  --user-msg-border: rgba(52, 211, 153, 0.2);
+  --user-msg-bg: rgba(96, 165, 250, 0.08);
+  --user-msg-border: rgba(96, 165, 250, 0.2);
   --danger-error-bg: rgba(230, 76, 76, 0.1);
-  --accent-tee-bg: rgba(52, 211, 153, 0.1);
-  --accent-tee-border: rgba(52, 211, 153, 0.25);
-  --accent-tee-hover: rgba(52, 211, 153, 0.18);
+  --accent-tee-bg: rgba(96, 165, 250, 0.1);
+  --accent-tee-border: rgba(96, 165, 250, 0.25);
+  --accent-tee-hover: rgba(96, 165, 250, 0.18);
   --text-on-danger: #fff;
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.4);
   --danger-error-border: rgba(230, 76, 76, 0.2);
   --note-bg: rgba(255, 255, 255, 0.04);
   --overlay-heavy: rgba(0, 0, 0, 0.6);
-  --highlight-bg: rgba(52, 211, 153, 0.3);
+  --highlight-bg: rgba(96, 165, 250, 0.3);
   --hover-subtle: rgba(255, 255, 255, 0.06);
   --transition-fast: 150ms ease;
   --transition-base: 0.2s ease;
@@ -66,7 +66,7 @@
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
 
   /* Accent glow */
-  --glow-accent: 0 0 20px rgba(52,211,153,0.1);
+  --glow-accent: 0 0 20px rgba(96,165,250,0.1);
 
   /* Glass morphism */
   --glass-bg: rgba(9,9,11,0.72);
@@ -1501,7 +1501,7 @@ body {
   margin: 0;
   align-self: auto;
   background: var(--bg);
-  border-color: rgba(52, 211, 153, 0.35);
+  border-color: rgba(96, 165, 250, 0.35);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
 }
 
@@ -4982,7 +4982,7 @@ input[type="checkbox"]:focus-visible {
 .settings-search input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.15);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
 }
 
 .settings-toolbar-btn {
@@ -5200,8 +5200,8 @@ input[type="checkbox"]:focus-visible {
   --border: rgba(0, 0, 0, 0.1);
   --text: #1a1a2e;
   --text-secondary: #555555;
-  --accent: #059669;
-  --accent-hover: #047857;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
@@ -5215,8 +5215,8 @@ input[type="checkbox"]:focus-visible {
   --text-muted: #777777;
   --text-dimmed: #999999;
   --text-on-accent: #ffffff;
-  --accent-brand: #059669;
-  --accent-brand-hover: #047857;
+  --accent-brand: #2563eb;
+  --accent-brand-hover: #1d4ed8;
   --warning-bg: #fffbeb;
   --warning-border: #fde68a;
   --warning-text: #92400e;
@@ -5225,19 +5225,19 @@ input[type="checkbox"]:focus-visible {
   --badge-sandbox-bg: rgba(136, 132, 216, 0.1);
   --badge-sandbox-text: #6b67b0;
   --hover-surface: rgba(0, 0, 0, 0.03);
-  --focus-ring: rgba(5, 150, 105, 0.15);
-  --accent-subtle: rgba(5, 150, 105, 0.1);
-  --accent-border-subtle: rgba(5, 150, 105, 0.3);
+  --focus-ring: rgba(37, 99, 235, 0.15);
+  --accent-subtle: rgba(37, 99, 235, 0.1);
+  --accent-border-subtle: rgba(37, 99, 235, 0.3);
   --danger-subtle: rgba(220, 38, 38, 0.1);
   --danger-border-subtle: rgba(220, 38, 38, 0.2);
   --warning-subtle: rgba(217, 119, 6, 0.1);
   --border-hover: rgba(0, 0, 0, 0.15);
-  --user-msg-bg: rgba(5, 150, 105, 0.08);
-  --user-msg-border: rgba(5, 150, 105, 0.2);
+  --user-msg-bg: rgba(37, 99, 235, 0.08);
+  --user-msg-border: rgba(37, 99, 235, 0.2);
   --danger-error-bg: rgba(220, 38, 38, 0.06);
-  --accent-tee-bg: rgba(5, 150, 105, 0.08);
-  --accent-tee-border: rgba(5, 150, 105, 0.2);
-  --accent-tee-hover: rgba(5, 150, 105, 0.15);
+  --accent-tee-bg: rgba(37, 99, 235, 0.08);
+  --accent-tee-border: rgba(37, 99, 235, 0.2);
+  --accent-tee-hover: rgba(37, 99, 235, 0.15);
   --text-on-danger: #fff;
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
   --shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -5245,11 +5245,11 @@ input[type="checkbox"]:focus-visible {
   --danger-error-border: rgba(220, 38, 38, 0.15);
   --note-bg: rgba(0, 0, 0, 0.02);
   --overlay-heavy: rgba(0, 0, 0, 0.4);
-  --highlight-bg: rgba(5, 150, 105, 0.2);
+  --highlight-bg: rgba(37, 99, 235, 0.2);
   --hover-subtle: rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --glow-accent: 0 0 20px rgba(5,150,105,0.08);
+  --glow-accent: 0 0 20px rgba(37,99,235,0.08);
   --glass-bg: rgba(255,255,255,0.85);
   --glass-blur: blur(16px) saturate(180%);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
