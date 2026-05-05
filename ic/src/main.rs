@@ -42,7 +42,24 @@ fn main() -> anyhow::Result<()> {
     // tokio-xmpp uses rustls directly and panics without this.
     rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("failed to install rustls crypto provider");
+        .map_err(|_| anyhow::anyhow!("failed to install rustls crypto provider"))?;
+
+    std::panic::set_hook(Box::new(|info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "unknown panic payload".to_string()
+        };
+        let location = info
+            .location()
+            .map(|loc| format!("{}:{}:{}", loc.file(), loc.line(), loc.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        eprintln!("PANIC at {}: {}", location, payload);
+        let bt = std::backtrace::Backtrace::force_capture();
+        eprintln!("Backtrace:\n{}", bt);
+    }));
 
     let _ = dotenvy::dotenv();
     lunarwing::bootstrap::load_lunarwing_env();
@@ -570,7 +587,14 @@ async fn async_main() -> anyhow::Result<()> {
         webhook_server_addr = Some(
             format!("{}:{}", host, port)
                 .parse()
-                .expect("HttpConfig host:port must be a valid SocketAddr"),
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "HttpConfig host:port '{}:{}' is not a valid SocketAddr: {}",
+                        host,
+                        port,
+                        e
+                    )
+                })?,
         );
         channel_names.push("http".to_string());
         channels.add(Box::new(http_channel)).await;

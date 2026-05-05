@@ -62,6 +62,13 @@ if systemctl is-active --quiet "$SERVICE"; then
   exit 0
 fi
 
+# If the unit hit StartLimitBurst, it enters "failed" state and systemctl restart
+# silently refuses to act. Reset the failure counter so restart can proceed.
+if systemctl is-failed --quiet "$SERVICE"; then
+  log "$SERVICE in failed state (possible StartLimitBurst lockout); running reset-failed"
+  systemctl reset-failed "$SERVICE" || log "reset-failed returned non-zero"
+fi
+
 before_state="$(state_summary || true)"
 log "$SERVICE not active; attempting restart; before_state=\"$before_state\""
 

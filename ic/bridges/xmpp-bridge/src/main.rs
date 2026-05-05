@@ -73,7 +73,7 @@ struct AppState {
 async fn main() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("failed to install rustls crypto provider");
+        .map_err(|_| anyhow::anyhow!("failed to install rustls crypto provider"))?;
 
     tracing_subscriber::fmt()
         .with_env_filter(

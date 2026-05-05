@@ -761,20 +761,45 @@ impl Agent {
         }
 
         // Main message loop
-        tracing::debug!("Agent {} ready and listening", self.config.name);
+        tracing::info!("Agent {} ready and listening", self.config.name);
+
+        #[cfg(unix)]
+        let mut sigterm = {
+            use tokio::signal::unix::{SignalKind, signal};
+            match signal(SignalKind::terminate()) {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    tracing::warn!("Failed to register SIGTERM handler: {}", e);
+                    None
+                }
+            }
+        };
 
         loop {
             let message = tokio::select! {
                 biased;
                 _ = tokio::signal::ctrl_c() => {
-                    tracing::debug!("Ctrl+C received, shutting down...");
+                    tracing::info!("Ctrl+C received, shutting down...");
+                    break;
+                }
+                _ = async {
+                    #[cfg(unix)]
+                    if let Some(ref mut s) = sigterm {
+                        s.recv().await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                    #[cfg(not(unix))]
+                    std::future::pending::<()>().await;
+                } => {
+                    tracing::warn!("SIGTERM received, shutting down gracefully...");
                     break;
                 }
                 msg = message_stream.next() => {
                     match msg {
                         Some(m) => m,
                         None => {
-                            tracing::debug!("All channel streams ended, shutting down...");
+                            tracing::warn!("All channel streams ended, shutting down...");
                             break;
                         }
                     }
@@ -849,7 +874,7 @@ impl Agent {
                 }
                 Ok(None) => {
                     // Shutdown signal received (/quit, /exit, /shutdown)
-                    tracing::debug!("Shutdown command received, exiting...");
+                    tracing::info!("Shutdown command received, exiting...");
                     break;
                 }
                 Err(e) => {
@@ -870,7 +895,7 @@ impl Agent {
         }
 
         // Cleanup
-        tracing::debug!("Agent shutting down...");
+        tracing::info!("Agent shutting down...");
         repair_handle.abort();
         pruning_handle.abort();
         if let Some(handle) = heartbeat_handle {
