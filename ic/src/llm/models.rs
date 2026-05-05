@@ -335,13 +335,20 @@ pub(crate) fn build_nearai_model_fetch_config() -> crate::config::LlmConfig {
     let auth_base_url = crate::config::helpers::env_or_override("NEARAI_AUTH_URL")
         .unwrap_or_else(|| "https://private.near.ai".to_string());
 
+    let nearai = crate::config::NearAiConfig::for_model_discovery();
     crate::config::LlmConfig {
         backend: "nearai".to_string(),
         session: crate::llm::session::SessionConfig {
             auth_base_url,
             session_path: crate::config::llm::default_session_path(),
         },
-        nearai: crate::config::NearAiConfig::for_model_discovery(),
+        max_retries: nearai.max_retries,
+        circuit_breaker_threshold: nearai.circuit_breaker_threshold,
+        circuit_breaker_recovery_secs: nearai.circuit_breaker_recovery_secs,
+        response_cache_enabled: nearai.response_cache_enabled,
+        response_cache_ttl_secs: nearai.response_cache_ttl_secs,
+        response_cache_max_entries: nearai.response_cache_max_entries,
+        nearai,
         provider: None,
         bedrock: None,
         gemini_oauth: None,

@@ -562,7 +562,7 @@ pub async fn build_provider_chain(
 
     // 1. Retry
     let retry_config = RetryConfig {
-        max_retries: config.nearai.max_retries,
+        max_retries: config.max_retries,
     };
     let llm: Arc<dyn LlmProvider> = if retry_config.max_retries > 0 {
         tracing::debug!(
@@ -643,34 +643,34 @@ pub async fn build_provider_chain(
     };
 
     // 4. Circuit breaker
-    let llm: Arc<dyn LlmProvider> = if let Some(threshold) = config.nearai.circuit_breaker_threshold
-    {
-        let cb_config = CircuitBreakerConfig {
-            failure_threshold: threshold,
-            recovery_timeout: std::time::Duration::from_secs(
-                config.nearai.circuit_breaker_recovery_secs,
-            ),
-            ..CircuitBreakerConfig::default()
+    let llm: Arc<dyn LlmProvider> =
+        if let Some(threshold) = config.circuit_breaker_threshold {
+            let cb_config = CircuitBreakerConfig {
+                failure_threshold: threshold,
+                recovery_timeout: std::time::Duration::from_secs(
+                    config.circuit_breaker_recovery_secs,
+                ),
+                ..CircuitBreakerConfig::default()
+            };
+            tracing::debug!(
+                threshold,
+                recovery_secs = config.circuit_breaker_recovery_secs,
+                "LLM circuit breaker enabled"
+            );
+            Arc::new(CircuitBreakerProvider::new(llm, cb_config))
+        } else {
+            llm
         };
-        tracing::debug!(
-            threshold,
-            recovery_secs = config.nearai.circuit_breaker_recovery_secs,
-            "LLM circuit breaker enabled"
-        );
-        Arc::new(CircuitBreakerProvider::new(llm, cb_config))
-    } else {
-        llm
-    };
 
     // 5. Response cache
-    let llm: Arc<dyn LlmProvider> = if config.nearai.response_cache_enabled {
+    let llm: Arc<dyn LlmProvider> = if config.response_cache_enabled {
         let rc_config = ResponseCacheConfig {
-            ttl: std::time::Duration::from_secs(config.nearai.response_cache_ttl_secs),
-            max_entries: config.nearai.response_cache_max_entries,
+            ttl: std::time::Duration::from_secs(config.response_cache_ttl_secs),
+            max_entries: config.response_cache_max_entries,
         };
         tracing::debug!(
-            ttl_secs = config.nearai.response_cache_ttl_secs,
-            max_entries = config.nearai.response_cache_max_entries,
+            ttl_secs = config.response_cache_ttl_secs,
+            max_entries = config.response_cache_max_entries,
             "LLM response cache enabled"
         );
         Arc::new(CachedProvider::new(llm, rc_config))
@@ -731,10 +731,17 @@ mod tests {
     }
 
     fn test_llm_config() -> LlmConfig {
+        let nearai = test_nearai_config();
         LlmConfig {
             backend: "nearai".to_string(),
             session: SessionConfig::default(),
-            nearai: test_nearai_config(),
+            max_retries: nearai.max_retries,
+            circuit_breaker_threshold: nearai.circuit_breaker_threshold,
+            circuit_breaker_recovery_secs: nearai.circuit_breaker_recovery_secs,
+            response_cache_enabled: nearai.response_cache_enabled,
+            response_cache_ttl_secs: nearai.response_cache_ttl_secs,
+            response_cache_max_entries: nearai.response_cache_max_entries,
+            nearai,
             provider: None,
             bedrock: None,
             gemini_oauth: None,

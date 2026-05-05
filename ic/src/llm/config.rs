@@ -180,6 +180,24 @@ pub struct LlmConfig {
     /// Enable cascade mode for smart routing (retry with primary if cheap model
     /// response seems uncertain). Default: true. Set via `SMART_ROUTING_CASCADE`.
     pub smart_routing_cascade: bool,
+    /// Maximum retries for transient LLM errors.
+    /// Set via `LLM_MAX_RETRIES`, falls back to NearAI config value.
+    pub max_retries: u32,
+    /// Consecutive failures before circuit breaker opens. None = disabled.
+    /// Set via `LLM_CIRCUIT_BREAKER_THRESHOLD`, falls back to NearAI config value.
+    pub circuit_breaker_threshold: Option<u32>,
+    /// Seconds the circuit stays open before probing.
+    /// Set via `LLM_CIRCUIT_BREAKER_RECOVERY_SECS`, falls back to NearAI config value.
+    pub circuit_breaker_recovery_secs: u64,
+    /// Enable in-memory response caching.
+    /// Set via `LLM_RESPONSE_CACHE_ENABLED`, falls back to NearAI config value.
+    pub response_cache_enabled: bool,
+    /// TTL in seconds for cached responses.
+    /// Set via `LLM_RESPONSE_CACHE_TTL_SECS`, falls back to NearAI config value.
+    pub response_cache_ttl_secs: u64,
+    /// Max cached responses before LRU eviction.
+    /// Set via `LLM_RESPONSE_CACHE_MAX_ENTRIES`, falls back to NearAI config value.
+    pub response_cache_max_entries: usize,
 }
 
 impl LlmConfig {

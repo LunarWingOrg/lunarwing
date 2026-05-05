@@ -43,6 +43,12 @@ impl LlmConfig {
             request_timeout_secs: 120,
             cheap_model: None,
             smart_routing_cascade: false,
+            max_retries: 0,
+            circuit_breaker_threshold: None,
+            circuit_breaker_recovery_secs: 30,
+            response_cache_enabled: false,
+            response_cache_ttl_secs: 3600,
+            response_cache_max_entries: 100,
         }
     }
 
@@ -95,7 +101,14 @@ impl LlmConfig {
         // Session config (used by NearAI provider for OAuth/session-token auth)
         let nearai_auth_url = optional_env("NEARAI_AUTH_URL")?
             .unwrap_or_else(|| "https://private.near.ai".to_string());
-        validate_base_url(&nearai_auth_url, "NEARAI_AUTH_URL")?;
+        // Only validate NearAI URLs when NearAI is actually being used or
+        // the user explicitly set the URL. Prevents startup failures in
+        // air-gapped environments that use a different backend.
+        let nearai_api_key = optional_env("NEARAI_API_KEY")?.map(SecretString::from);
+        let nearai_url_explicitly_set = optional_env("NEARAI_AUTH_URL")?.is_some();
+        if is_nearai || nearai_url_explicitly_set || nearai_api_key.is_some() {
+            validate_base_url(&nearai_auth_url, "NEARAI_AUTH_URL")?;
+        }
         let session = SessionConfig {
             auth_base_url: nearai_auth_url,
             session_path: optional_env("NEARAI_SESSION_PATH")?
@@ -104,7 +117,6 @@ impl LlmConfig {
         };
 
         // Always resolve NEAR AI config (used for embeddings even when not the primary backend)
-        let nearai_api_key = optional_env("NEARAI_API_KEY")?.map(SecretString::from);
         let nearai = NearAiConfig {
             model: Self::resolve_model("NEARAI_MODEL", settings, crate::llm::DEFAULT_MODEL)?,
             cheap_model: optional_env("NEARAI_CHEAP_MODEL")?,
@@ -116,7 +128,10 @@ impl LlmConfig {
                         "https://private.near.ai".to_string()
                     }
                 });
-                validate_base_url(&url, "NEARAI_BASE_URL")?;
+                let nearai_base_url_explicitly_set = optional_env("NEARAI_BASE_URL")?.is_some();
+                if is_nearai || nearai_base_url_explicitly_set || nearai_api_key.is_some() {
+                    validate_base_url(&url, "NEARAI_BASE_URL")?;
+                }
                 url
             },
             api_key: nearai_api_key,
@@ -241,6 +256,62 @@ impl LlmConfig {
         // Defaults to true. Overrides NearAI-specific smart_routing_cascade.
         let smart_routing_cascade = parse_optional_env("SMART_ROUTING_CASCADE", true)?;
 
+        // Decorator chain settings — top-level `LLM_*` vars with fallback to
+        // existing backend-specific vars for backward compatibility.
+        let max_retries = optional_env("LLM_MAX_RETRIES")?
+            .map(|s| s.parse::<u32>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_MAX_RETRIES".to_string(),
+                message: format!("must be a non-negative integer: {e}"),
+            })?
+            .unwrap_or(nearai.max_retries);
+
+        let circuit_breaker_threshold = optional_env("LLM_CIRCUIT_BREAKER_THRESHOLD")?
+            .map(|s| s.parse::<u32>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_CIRCUIT_BREAKER_THRESHOLD".to_string(),
+                message: format!("must be a positive integer: {e}"),
+            })?
+            .or(nearai.circuit_breaker_threshold);
+
+        let circuit_breaker_recovery_secs = optional_env("LLM_CIRCUIT_BREAKER_RECOVERY_SECS")?
+            .map(|s| s.parse::<u64>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_CIRCUIT_BREAKER_RECOVERY_SECS".to_string(),
+                message: format!("must be a non-negative integer: {e}"),
+            })?
+            .unwrap_or(nearai.circuit_breaker_recovery_secs);
+
+        let response_cache_enabled = optional_env("LLM_RESPONSE_CACHE_ENABLED")?
+            .map(|s| s.parse::<bool>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_RESPONSE_CACHE_ENABLED".to_string(),
+                message: format!("must be true or false: {e}"),
+            })?
+            .unwrap_or(nearai.response_cache_enabled);
+
+        let response_cache_ttl_secs = optional_env("LLM_RESPONSE_CACHE_TTL_SECS")?
+            .map(|s| s.parse::<u64>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_RESPONSE_CACHE_TTL_SECS".to_string(),
+                message: format!("must be a non-negative integer: {e}"),
+            })?
+            .unwrap_or(nearai.response_cache_ttl_secs);
+
+        let response_cache_max_entries = optional_env("LLM_RESPONSE_CACHE_MAX_ENTRIES")?
+            .map(|s| s.parse::<usize>())
+            .transpose()
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "LLM_RESPONSE_CACHE_MAX_ENTRIES".to_string(),
+                message: format!("must be a non-negative integer: {e}"),
+            })?
+            .unwrap_or(nearai.response_cache_max_entries);
+
         Ok(Self {
             backend: if is_nearai {
                 "nearai".to_string()
@@ -264,6 +335,12 @@ impl LlmConfig {
             request_timeout_secs,
             cheap_model,
             smart_routing_cascade,
+            max_retries,
+            circuit_breaker_threshold,
+            circuit_breaker_recovery_secs,
+            response_cache_enabled,
+            response_cache_ttl_secs,
+            response_cache_max_entries,
         })
     }
 
@@ -1393,5 +1470,122 @@ mod tests {
         unsafe {
             std::env::remove_var("OPENAI_CODEX_AUTH_URL");
         }
+    }
+
+    // ── Decorator chain LLM_* env var tests ────────────────────────
+
+    #[test]
+    fn llm_max_retries_overrides_nearai_default() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::set_var("LLM_MAX_RETRIES", "7");
+        }
+
+        let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
+        assert_eq!(cfg.max_retries, 7);
+
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_MAX_RETRIES");
+        }
+    }
+
+    #[test]
+    fn llm_max_retries_falls_back_to_nearai() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::remove_var("LLM_MAX_RETRIES");
+        }
+
+        let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
+        assert_eq!(cfg.max_retries, 3, "should fall back to NEARAI_MAX_RETRIES default");
+    }
+
+    #[test]
+    fn llm_max_retries_rejects_invalid() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::set_var("LLM_MAX_RETRIES", "not_a_number");
+        }
+
+        let err = LlmConfig::resolve(&Settings::default()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("LLM_MAX_RETRIES"), "error should name the var: {msg}");
+
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_MAX_RETRIES");
+        }
+    }
+
+    #[test]
+    fn llm_response_cache_enabled_overrides_nearai() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::set_var("LLM_RESPONSE_CACHE_ENABLED", "true");
+        }
+
+        let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
+        assert!(cfg.response_cache_enabled);
+
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_RESPONSE_CACHE_ENABLED");
+        }
+    }
+
+    #[test]
+    fn llm_circuit_breaker_threshold_overrides_nearai() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::set_var("LLM_CIRCUIT_BREAKER_THRESHOLD", "10");
+        }
+
+        let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
+        assert_eq!(cfg.circuit_breaker_threshold, Some(10));
+
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_CIRCUIT_BREAKER_THRESHOLD");
+        }
+    }
+
+    // ── Conditional NearAI URL validation tests ────────────────────
+
+    #[test]
+    fn non_nearai_backend_skips_nearai_url_validation() {
+        let _guard = lock_env();
+        clear_openai_compatible_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("NEARAI_AUTH_URL");
+            std::env::remove_var("NEARAI_BASE_URL");
+            std::env::remove_var("NEARAI_API_KEY");
+        }
+
+        let settings = Settings {
+            llm_backend: Some("openai_compatible".to_string()),
+            openai_compatible_base_url: Some("http://localhost:8000/v1".to_string()),
+            ..Default::default()
+        };
+
+        // Should succeed even though NearAI default URLs point to external hosts.
+        // Previously this could fail in air-gapped environments.
+        let result = LlmConfig::resolve(&settings);
+        assert!(
+            result.is_ok(),
+            "non-NearAI backend should not fail due to NearAI URL validation: {:?}",
+            result.err()
+        );
     }
 }
