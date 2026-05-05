@@ -316,6 +316,16 @@ create_tenant_user() {
     "$lw_root/run"
   chmod 0700 "$lw_root/env"
   say "created directories under $lw_root"
+
+  # Install rustup for tenant user if not already present
+  if ! sudo -u "$name" bash -c 'command -v rustup' &>/dev/null; then
+    say "installing rustup for $name ..."
+    sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
+      || die "rustup installation failed for $name"
+    say "rustup installed for $name"
+  else
+    say "rustup already available for $name"
+  fi
 }
 
 remove_tenant_user() {
@@ -366,17 +376,19 @@ build_tenant() {
   (
     flock -x 200
 
+    local cargo_env="test -f \"\$HOME/.cargo/env\" && . \"\$HOME/.cargo/env\";"
+
     say "building lunarwing for $name ..."
-    sudo -u "$name" bash -c "cd '$repo' && cargo build --profile $PROFILE --bin lunarwing" \
+    sudo -u "$name" bash -c "$cargo_env cd '$repo' && cargo build --profile $PROFILE --bin lunarwing" \
       || die "lunarwing build failed for $name"
 
     say "building xmpp-bridge for $name ..."
-    sudo -u "$name" bash -c "cd '$repo/bridges/xmpp-bridge' && cargo build --profile $PROFILE" \
+    sudo -u "$name" bash -c "$cargo_env cd '$repo/bridges/xmpp-bridge' && cargo build --profile $PROFILE" \
       || die "xmpp-bridge build failed for $name"
 
     if [[ "$with_wasm" == "true" ]]; then
       say "building WASM extensions for $name ..."
-      sudo -u "$name" bash -c "cd '$repo' && scripts/build-wasm-extensions.sh" || true
+      sudo -u "$name" bash -c "$cargo_env cd '$repo' && scripts/build-wasm-extensions.sh" || true
     fi
 
     say "build complete for $name"
