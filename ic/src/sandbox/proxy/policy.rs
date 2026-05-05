@@ -105,14 +105,20 @@ impl DefaultPolicyDecider {
         }
     }
 
-    /// Find credential mapping for a host (supports glob patterns like `*.example.com`).
-    fn find_credential(&self, host: &str) -> Option<&CredentialMapping> {
-        let host_lower = host.to_lowercase();
-        self.credential_mappings.iter().find(|m| {
-            m.host_patterns
-                .iter()
-                .any(|pattern| host_matches_pattern(&host_lower, pattern))
-        })
+    /// Find the most-specific credential mapping matching both `host` and
+    /// `path`. Longest matching path prefix wins, tie-broken alphabetically
+    /// on `secret_name`.
+    fn find_credential(&self, host: &str, path: &str) -> Option<&CredentialMapping> {
+        self.credential_mappings
+            .iter()
+            .filter(|m| m.matches(host, path))
+            .max_by(|a, b| {
+                let spec_a = crate::secrets::match_specificity(&a.path_patterns, path);
+                let spec_b = crate::secrets::match_specificity(&b.path_patterns, path);
+                spec_a
+                    .cmp(&spec_b)
+                    .then_with(|| a.secret_name.cmp(&b.secret_name))
+            })
     }
 }
 
@@ -129,7 +135,7 @@ impl NetworkPolicyDecider for DefaultPolicyDecider {
         }
 
         // Check if we need to inject credentials
-        if let Some(mapping) = self.find_credential(&request.host) {
+        if let Some(mapping) = self.find_credential(&request.host, &request.path) {
             return NetworkDecision::AllowWithCredentials {
                 secret_name: mapping.secret_name.clone(),
                 location: mapping.location.clone(),
@@ -138,27 +144,6 @@ impl NetworkPolicyDecider for DefaultPolicyDecider {
 
         NetworkDecision::Allow
     }
-}
-
-/// Check if a host matches a pattern (supports `*.example.com` wildcards).
-fn host_matches_pattern(host: &str, pattern: &str) -> bool {
-    let pattern_lower = pattern.to_lowercase();
-    if pattern_lower == host {
-        return true;
-    }
-
-    // Support wildcard: *.example.com matches sub.example.com
-    if let Some(suffix) = pattern_lower.strip_prefix("*.")
-        && host.ends_with(suffix)
-        && host.len() > suffix.len()
-    {
-        let prefix = &host[..host.len() - suffix.len()];
-        if prefix.ends_with('.') || prefix.is_empty() {
-            return true;
-        }
-    }
-
-    false
 }
 
 /// A policy decider that allows everything (use with FullAccess policy).
@@ -271,6 +256,8 @@ mod tests {
             secret_name: "EXAMPLE_KEY".to_string(),
             location: CredentialLocation::AuthorizationBearer,
             host_patterns: vec!["*.example.com".to_string()],
+            path_patterns: Vec::new(),
+            optional: false,
         }];
         let decider = DefaultPolicyDecider::new(allowlist, credentials);
 
@@ -292,14 +279,107 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_sandbox_proxy_honors_path_patterns() {
+        let allowlist = DomainAllowlist::new(&["api.example.com".to_string()]);
+        let credentials = vec![CredentialMapping {
+            secret_name: "WRITE_TOKEN".to_string(),
+            location: CredentialLocation::AuthorizationBearer,
+            host_patterns: vec!["api.example.com".to_string()],
+            path_patterns: vec!["/api/v1/write".to_string()],
+            optional: false,
+        }];
+        let decider = DefaultPolicyDecider::new(allowlist, credentials);
+
+        let write_req =
+            NetworkRequest::from_url("POST", "https://api.example.com/api/v1/write").unwrap();
+        let write_decision = decider.decide(&write_req).await;
+        assert!(
+            matches!(
+                write_decision,
+                NetworkDecision::AllowWithCredentials { ref secret_name, .. } if secret_name == "WRITE_TOKEN"
+            ),
+            "write path must inject; got {write_decision:?}"
+        );
+
+        let read_req =
+            NetworkRequest::from_url("GET", "https://api.example.com/api/v1/read").unwrap();
+        let read_decision = decider.decide(&read_req).await;
+        assert!(
+            matches!(read_decision, NetworkDecision::Allow),
+            "read path must NOT inject when credential is path-scoped to write; got {read_decision:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sandbox_proxy_most_specific_credential_wins() {
+        let allowlist = DomainAllowlist::new(&["api.example.com".to_string()]);
+
+        for (desc, mappings) in [
+            (
+                "global first",
+                vec![
+                    CredentialMapping {
+                        secret_name: "GLOBAL_TOKEN".into(),
+                        location: CredentialLocation::AuthorizationBearer,
+                        host_patterns: vec!["api.example.com".into()],
+                        path_patterns: Vec::new(),
+                        optional: false,
+                    },
+                    CredentialMapping {
+                        secret_name: "WRITE_TOKEN".into(),
+                        location: CredentialLocation::AuthorizationBearer,
+                        host_patterns: vec!["api.example.com".into()],
+                        path_patterns: vec!["/api/v1/write".into()],
+                        optional: false,
+                    },
+                ],
+            ),
+            (
+                "specific first",
+                vec![
+                    CredentialMapping {
+                        secret_name: "WRITE_TOKEN".into(),
+                        location: CredentialLocation::AuthorizationBearer,
+                        host_patterns: vec!["api.example.com".into()],
+                        path_patterns: vec!["/api/v1/write".into()],
+                        optional: false,
+                    },
+                    CredentialMapping {
+                        secret_name: "GLOBAL_TOKEN".into(),
+                        location: CredentialLocation::AuthorizationBearer,
+                        host_patterns: vec!["api.example.com".into()],
+                        path_patterns: Vec::new(),
+                        optional: false,
+                    },
+                ],
+            ),
+        ] {
+            let decider = DefaultPolicyDecider::new(allowlist.clone(), mappings);
+            let req =
+                NetworkRequest::from_url("POST", "https://api.example.com/api/v1/write").unwrap();
+            match decider.decide(&req).await {
+                NetworkDecision::AllowWithCredentials { secret_name, .. } => {
+                    assert_eq!(
+                        secret_name, "WRITE_TOKEN",
+                        "[{desc}] write path must select the most-specific token"
+                    );
+                }
+                other => panic!("[{desc}] expected AllowWithCredentials, got {other:?}"),
+            }
+        }
+    }
+
     #[test]
     fn test_host_matches_pattern_exact() {
+        use crate::secrets::host_matches_pattern;
         assert!(host_matches_pattern("api.openai.com", "api.openai.com"));
         assert!(!host_matches_pattern("api.openai.com", "evil.com"));
     }
 
     #[test]
     fn test_host_matches_pattern_wildcard() {
+        use crate::secrets::host_matches_pattern;
         assert!(host_matches_pattern("api.example.com", "*.example.com"));
         assert!(!host_matches_pattern("example.com", "*.example.com"));
     }

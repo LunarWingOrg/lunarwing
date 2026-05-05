@@ -222,6 +222,13 @@ pub struct CredentialMapping {
     pub location: CredentialLocation,
     /// Host patterns this credential applies to (glob syntax).
     pub host_patterns: Vec<String>,
+    /// Path prefix patterns this credential applies to.
+    /// Empty means all paths on the matched host.
+    #[serde(default)]
+    pub path_patterns: Vec<String>,
+    /// Whether the credential is optional (don't fail if the secret is missing).
+    #[serde(default)]
+    pub optional: bool,
 }
 
 impl CredentialMapping {
@@ -230,6 +237,8 @@ impl CredentialMapping {
             secret_name: secret_name.into(),
             location: CredentialLocation::AuthorizationBearer,
             host_patterns: vec![host_pattern.into()],
+            path_patterns: Vec::new(),
+            optional: false,
         }
     }
 
@@ -245,8 +254,85 @@ impl CredentialMapping {
                 prefix: None,
             },
             host_patterns: vec![host_pattern.into()],
+            path_patterns: Vec::new(),
+            optional: false,
         }
     }
+
+    /// Check whether this mapping matches both the host and path.
+    pub fn matches(&self, host: &str, path: &str) -> bool {
+        let host_lower = host.to_lowercase();
+        let host_ok = self
+            .host_patterns
+            .iter()
+            .any(|p| host_matches_pattern(&host_lower, p));
+        if !host_ok {
+            return false;
+        }
+        if self.path_patterns.is_empty() {
+            return true;
+        }
+        self.path_patterns
+            .iter()
+            .any(|prefix| path_matches_prefix(path, prefix))
+    }
+}
+
+/// Check if a host matches a pattern (supports `*.example.com` wildcards).
+pub fn host_matches_pattern(host: &str, pattern: &str) -> bool {
+    let pattern_lower = pattern.to_lowercase();
+    if pattern_lower == host {
+        return true;
+    }
+
+    if let Some(suffix) = pattern_lower.strip_prefix("*.")
+        && host.ends_with(suffix)
+        && host.len() > suffix.len()
+    {
+        let prefix = &host[..host.len() - suffix.len()];
+        if prefix.ends_with('.') || prefix.is_empty() {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if a request path matches a prefix pattern on a segment boundary.
+///
+/// Rejects dot-segment traversal (`/../`, `/./`) before matching.
+fn path_matches_prefix(path: &str, prefix: &str) -> bool {
+    if path_has_dot_segment(path) {
+        return false;
+    }
+    if path == prefix {
+        return true;
+    }
+    // Segment-boundary match: /api/v1 matches /api/v1/foo but not /api/v1extra
+    if path.starts_with(prefix)
+        && (prefix.ends_with('/') || path.as_bytes().get(prefix.len()) == Some(&b'/'))
+    {
+        return true;
+    }
+    false
+}
+
+fn path_has_dot_segment(path: &str) -> bool {
+    path.split('/').any(|seg| seg == "." || seg == "..")
+}
+
+/// Specificity score for credential matching: longer path prefix = more specific.
+/// Used to pick the most-specific credential when multiple match.
+pub fn match_specificity(path_patterns: &[String], path: &str) -> usize {
+    if path_patterns.is_empty() {
+        return 0;
+    }
+    path_patterns
+        .iter()
+        .filter(|p| path_matches_prefix(path, p))
+        .map(|p| p.len())
+        .max()
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

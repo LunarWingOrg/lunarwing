@@ -29,10 +29,17 @@ pub enum GrantedActions {
 
 impl GrantedActions {
     /// Check whether a specific action is covered.
+    ///
+    /// Normalizes hyphens and underscores so that a lease granting
+    /// `create-issue` also matches a tool call for `create_issue`.
     pub fn covers(&self, action_name: &str) -> bool {
+        let hyphenated = action_name.replace('_', "-");
+        let underscored = action_name.replace('-', "_");
         match self {
             GrantedActions::All => true,
-            GrantedActions::Specific(actions) => actions.iter().any(|a| a == action_name),
+            GrantedActions::Specific(actions) => actions.iter().any(|action| {
+                action == action_name || action == &hyphenated || action == &underscored
+            }),
         }
     }
 
@@ -344,5 +351,16 @@ mod tests {
         assert!(lease.covers_action("create_issue"));
         assert!(lease.covers_action("list_prs"));
         assert!(!lease.covers_action("delete_repo"));
+    }
+
+    #[test]
+    fn covers_action_normalizes_hyphens_and_underscores() {
+        let actions =
+            GrantedActions::Specific(vec!["create-issue".into(), "list_pull_requests".into()]);
+        assert!(actions.covers("create_issue"), "underscore must match hyphenated grant");
+        assert!(actions.covers("create-issue"), "exact match still works");
+        assert!(actions.covers("list-pull-requests"), "hyphenated must match underscored grant");
+        assert!(actions.covers("list_pull_requests"), "exact match still works");
+        assert!(!actions.covers("delete_repo"), "unrelated action must not match");
     }
 }

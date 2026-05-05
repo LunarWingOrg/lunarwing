@@ -71,7 +71,7 @@ pub use store::PostgresSecretsStore;
 pub use store::SecretsStore;
 pub use types::{
     CreateSecretParams, CredentialLocation, CredentialMapping, DecryptedSecret, Secret,
-    SecretError, SecretRef,
+    SecretError, SecretRef, host_matches_pattern, match_specificity,
 };
 
 pub use store::in_memory::InMemorySecretsStore;
