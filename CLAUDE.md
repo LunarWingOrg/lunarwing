@@ -8,6 +8,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a self-hosted, privacy-first AI agent. The fork prioritizes XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal.
 
+### Binary Rename (ironclaw → lunarwing)
+
+The binary, Cargo package, and all four internal crates have been renamed from `ironclaw` to `lunarwing`:
+
+| What | Old name | New name |
+|------|----------|----------|
+| Binary | `target/*/ironclaw` | `target/*/lunarwing` |
+| Cargo package | `name = "ironclaw"` | `name = "lunarwing"` |
+| Internal crates | `ironclaw_common`, `ironclaw_safety`, `ironclaw_skills`, `ironclaw_engine` | `lunarwing_common`, `lunarwing_safety`, `lunarwing_skills`, `lunarwing_engine` |
+| Proxy script | `ironclaw-proxy.py` | `lunarwing-proxy.py` |
+| Default DB name | `ironclaw` | `lunarwing` |
+| Socket file | `ironclaw.sock` | `lunarwing.sock` |
+| Service units | `ExecStart=.../ironclaw` | `ExecStart=.../lunarwing` |
+| RUST_LOG filter | `ironclaw=info` | `lunarwing=info` |
+
+**Preserved for backward compatibility:**
+- `IRONCLAW_BASE_DIR` env var — still accepted as legacy alias for `LUNARWING_BASE_DIR`
+- `IRONCLAW_SOCKET` env var — still accepted as legacy alias
+- Watchdog cleanup markers (detect old `ironclaw-watchdog` installations)
+
+**Intentionally NOT renamed:**
+- `codex4ironclaw/` and `nanocode-config/` directory names
+- WebSocket subprotocol `ironclaw-agent-v1` (shared external protocol)
+- Keyring service identifiers in `ic_sm/`
+- `tensorzero::function_name::ironclaw` TensorZero function name
+- GCP resource names in `ic/deploy/cloud-sql-proxy.service`
+- `ic/CHANGELOG.md` historical entries
+
 ## Build & Test
 
 All Rust work happens inside `ic/`. Rust edition 2024, MSRV 1.92. Run from `ic/`:

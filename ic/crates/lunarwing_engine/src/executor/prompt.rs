@@ -3,7 +3,7 @@
 //! Builds a CodeAct/RLM system prompt that instructs the LLM to write
 //! Python code in ```repl blocks with tools available as callable functions.
 //!
-//! Prompt templates live in `crates/ironclaw_engine/prompts/` as plain
+//! Prompt templates live in `crates/lunarwing_engine/prompts/` as plain
 //! markdown files for easy inspection and iteration. They are embedded
 //! at compile time via `include_str!` and can be extended at runtime with
 //! prompt overlays stored as MemoryDocs.
