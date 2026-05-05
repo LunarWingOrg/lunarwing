@@ -31,8 +31,10 @@ detect_service_manager() {
     case "${override,,}" in
       systemd) printf 'systemd'; return 0 ;;
       openrc)  printf 'openrc';  return 0 ;;
+      launchd) printf 'launchd'; return 0 ;;
     esac
   fi
+  [[ "$(uname -s)" == "Darwin" ]] && { printf 'launchd'; return 0; }
   [[ -e /run/openrc/softlevel ]] && { printf 'openrc'; return 0; }
   [[ -e /run/systemd/system ]]   && { printf 'systemd'; return 0; }
   command -v rc-service >/dev/null 2>&1 && ! command -v systemctl >/dev/null 2>&1 && { printf 'openrc'; return 0; }
@@ -100,6 +102,7 @@ run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models
 case "$SERVICE_MANAGER" in
   systemd) run_check "health-systemd.sh" "systemd" > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
   openrc)  run_check "health-openrc.sh"  "openrc"  > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
+  launchd) run_check "health-launchd.sh" "launchd" > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
   *)       log "WARNING: unknown service manager '$SERVICE_MANAGER', skipping service health check" ;;
 esac
 

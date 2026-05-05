@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${EUID}" -ne 0 ]]; then
-  echo "Run with sudo: sudo scripts/install-lunarwing-watchdog.sh" >&2
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 WATCHDOG_LOG="/var/log/lunarwing-watchdog.log"
@@ -17,6 +12,15 @@ FCRON_MARKER_BEGIN="# BEGIN lunarwing-watchdog managed block"
 FCRON_MARKER_END="# END lunarwing-watchdog managed block"
 LEGACY_FCRON_MARKER_BEGIN="# BEGIN ironclaw-watchdog managed block"
 LEGACY_FCRON_MARKER_END="# END ironclaw-watchdog managed block"
+
+# launchd paths (macOS — user-level, no root required)
+LAUNCHD_AGENTS_DIR="${HOME}/Library/LaunchAgents"
+LAUNCHD_SUPPORT_DIR="${HOME}/Library/Application Support/lunarwing"
+LAUNCHD_WATCHDOG_LABEL="com.lunarwing.watchdog"
+LAUNCHD_WRAPPER="${LAUNCHD_SUPPORT_DIR}/lunarwing-watchdog-launchd"
+LAUNCHD_PLIST="${LAUNCHD_AGENTS_DIR}/${LAUNCHD_WATCHDOG_LABEL}.plist"
+LAUNCHD_WATCHDOG_LOG="${HOME}/Library/Logs/lunarwing-watchdog.log"
+LAUNCHD_WATCHDOG_CONFD="${LAUNCHD_SUPPORT_DIR}/watchdog.conf"
 
 say() {
   printf '%s\n' "$*"
@@ -43,10 +47,19 @@ detect_service_manager() {
         printf 'openrc'
         return 0
         ;;
+      launchd)
+        printf 'launchd'
+        return 0
+        ;;
       *)
-        die "unsupported service manager override '$override'; use systemd or openrc"
+        die "unsupported service manager override '$override'; use systemd, openrc, or launchd"
         ;;
     esac
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    printf 'launchd'
+    return 0
   fi
 
   if [[ -e /run/openrc/softlevel ]]; then
@@ -70,7 +83,7 @@ detect_service_manager() {
     return 0
   fi
 
-  die "could not detect a supported service manager; set LUNARWING_SERVICE_MANAGER=systemd or openrc"
+  die "could not detect a supported service manager; set LUNARWING_SERVICE_MANAGER=systemd, openrc, or launchd"
 }
 
 ensure_log_file() {
@@ -116,6 +129,21 @@ cleanup_openrc_hourly_watchdog() {
 cleanup_openrc_watchdog() {
   cleanup_openrc_hourly_watchdog
   rm -f "${OPENRC_WRAPPER}"
+}
+
+cleanup_launchd_watchdog() {
+  if [[ -f "$LAUNCHD_PLIST" ]]; then
+    launchctl unload "$LAUNCHD_PLIST" 2>/dev/null || true
+    rm -f "$LAUNCHD_PLIST"
+  fi
+  rm -f "$LAUNCHD_WRAPPER"
+
+  # Legacy ironclaw plist
+  local legacy_plist="${LAUNCHD_AGENTS_DIR}/com.ironclaw.watchdog.plist"
+  if [[ -f "$legacy_plist" ]]; then
+    launchctl unload "$legacy_plist" 2>/dev/null || true
+    rm -f "$legacy_plist"
+  fi
 }
 
 strip_managed_block() {
@@ -368,14 +396,84 @@ install_openrc_watchdog() {
   say "Unlike the plain cron-hourly path, fcron can provide better catch-up behavior depending on your fcron policy."
 }
 
+install_launchd_confd() {
+  if [[ -f "$LAUNCHD_WATCHDOG_CONFD" ]]; then
+    chmod 0644 "$LAUNCHD_WATCHDOG_CONFD"
+    say "Preserved existing launchd watchdog config: $LAUNCHD_WATCHDOG_CONFD"
+    return 0
+  fi
+
+  cat >"$LAUNCHD_WATCHDOG_CONFD" <<'CONFD'
+# ~/Library/Application Support/lunarwing/watchdog.conf
+#
+# Optional configuration for the macOS/launchd watchdog wrapper.
+
+lunarwing_watchdog_label="com.lunarwing.daemon"
+lunarwing_watchdog_log="$HOME/Library/Logs/lunarwing-watchdog.log"
+lunarwing_watchdog_lock="/tmp/lunarwing-watchdog.lock"
+lunarwing_watchdog_post_restart_sleep_seconds="5"
+CONFD
+  chmod 0644 "$LAUNCHD_WATCHDOG_CONFD"
+  say "Installed launchd watchdog config: $LAUNCHD_WATCHDOG_CONFD"
+}
+
+install_launchd_watchdog() {
+  cleanup_launchd_watchdog
+
+  mkdir -p "$LAUNCHD_SUPPORT_DIR"
+  mkdir -p "$LAUNCHD_AGENTS_DIR"
+
+  install -m 0755 \
+    "${REPO_ROOT}/scripts/lunarwing-watchdog-launchd.sh" \
+    "$LAUNCHD_WRAPPER"
+
+  install_launchd_confd
+
+  local log_dir="${HOME}/Library/Logs"
+  mkdir -p "$log_dir"
+
+  sed \
+    -e "s|__WATCHDOG_SCRIPT__|${LAUNCHD_WRAPPER}|g" \
+    -e "s|__LOG_DIR__|${log_dir}|g" \
+    "${REPO_ROOT}/systemd/com.lunarwing.watchdog.plist" \
+    >"$LAUNCHD_PLIST"
+  chmod 0644 "$LAUNCHD_PLIST"
+
+  launchctl load -w "$LAUNCHD_PLIST"
+
+  say "Installed launchd watchdog agent."
+  say "Plist:  $LAUNCHD_PLIST"
+  say "Script: $LAUNCHD_WRAPPER"
+  say "Config: $LAUNCHD_WATCHDOG_CONFD"
+  say "Schedule: hourly at :00 (StartCalendarInterval)"
+  say "Note: unlike the systemd timer, launchd does not replay missed runs after sleep/shutdown."
+
+  if launchctl list 2>/dev/null | grep -q "$LAUNCHD_WATCHDOG_LABEL"; then
+    say "Status: loaded"
+  else
+    say "Status: load may be pending — check with: launchctl list | grep $LAUNCHD_WATCHDOG_LABEL"
+  fi
+}
+
+detected_manager="$(detect_service_manager)"
+
+# Root is required for systemd/openrc but NOT for launchd (user agents)
+if [[ "$detected_manager" != "launchd" && "${EUID}" -ne 0 ]]; then
+  echo "Run with sudo: sudo scripts/install-lunarwing-watchdog.sh" >&2
+  exit 1
+fi
+
 cleanup_legacy_names
 
-case "$(detect_service_manager)" in
+case "$detected_manager" in
   systemd)
     install_systemd_watchdog
     ;;
   openrc)
     install_openrc_watchdog
+    ;;
+  launchd)
+    install_launchd_watchdog
     ;;
   *)
     die "unsupported service manager"

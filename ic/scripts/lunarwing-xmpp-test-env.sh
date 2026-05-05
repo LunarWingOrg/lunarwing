@@ -1801,6 +1801,26 @@ doctor() {
           say "$label: not loaded"
         fi
       done
+
+      # Watchdog (launchd periodic agent)
+      say ""
+      say "=== launchd watchdog ==="
+      local wd_support_dir="${HOME}/Library/Application Support/lunarwing"
+      if [[ -x "${wd_support_dir}/lunarwing-watchdog-launchd" ]]; then
+        say "watchdog script: installed"
+      else
+        say "watchdog script: not installed"
+      fi
+      if [[ -f "${wd_support_dir}/watchdog.conf" ]]; then
+        say "watchdog config: present"
+      else
+        say "watchdog config: not present"
+      fi
+      if launchctl list 2>/dev/null | grep -q "com.lunarwing.watchdog"; then
+        say "watchdog agent: loaded"
+      else
+        say "watchdog agent: not loaded (run install-lunarwing-watchdog.sh)"
+      fi
       ;;
     *)
       if command -v systemctl >/dev/null 2>&1; then
