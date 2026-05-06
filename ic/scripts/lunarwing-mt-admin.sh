@@ -321,7 +321,7 @@ create_tenant_user() {
   say "created directories under $lw_root"
 
   # Install rustup for tenant user if not already present
-  local cargo_src='. "$HOME/.cargo/env" 2>/dev/null;'
+  local cargo_src='if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; else export PATH="$HOME/.cargo/bin:$PATH"; fi;'
   if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
     say "installing rustup for $name ..."
     sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
@@ -412,7 +412,7 @@ build_tenant() {
   (
     flock -x 200
 
-    local cargo_env="test -f \"\$HOME/.cargo/env\" && . \"\$HOME/.cargo/env\";"
+    local cargo_env="if [ -f \"\$HOME/.cargo/env\" ]; then . \"\$HOME/.cargo/env\"; else export PATH=\"\$HOME/.cargo/bin:\$PATH\"; fi;"
 
     say "building lunarwing for $name ..."
     sudo -u "$name" bash -c "$cargo_env cd '$repo' && cargo build --profile $PROFILE --bin lunarwing" \
