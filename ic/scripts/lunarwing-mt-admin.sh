@@ -331,6 +331,13 @@ create_tenant_user() {
     say "rustup already available for $name"
   fi
 
+  # Ensure a default toolchain is set (rustup install may leave none configured)
+  if ! sudo -u "$name" bash -c "${cargo_src} rustup show active-toolchain" &>/dev/null; then
+    say "setting default toolchain to stable for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} rustup default stable" \
+      || die "failed to set default toolchain for $name"
+  fi
+
   # Ensure WASM targets and cargo-component are installed
   say "ensuring WASM toolchain for $name ..."
   sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
