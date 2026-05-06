@@ -97,7 +97,7 @@ Env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
 `ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness. It manages PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon in an isolated environment. Works on Linux and macOS.
 
-Single-tenant quick start — see `HARNESS-SINGLE-TENANT.md`. Multi-tenant quick start — see `MULTITENANCY-HARNESS.md`.
+Single-tenant quick start — see `docs/ops/HARNESS-SINGLE-TENANT.md`. Multi-tenant quick start — see `docs/ops/MULTITENANCY-HARNESS.md`.
 
 Key difference: `up` (single-tenant) does **not** auto-build; `build --with-wasm` and `install-wasm` must be run first. `mt-up` auto-builds and installs WASM before starting services.
 
@@ -121,13 +121,19 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   scripts/                  # Operational + build scripts
 codex4ironclaw/             # Persistent Codex Worker container — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
+nanocode4ironclaw/          # Nanocode worker container — see nanocode4ironclaw/CLAUDE.md
 ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
 tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
 replv2git/                  # REPLv2 related tooling
 xmpp_bridge/                # XMPP bridge support resources
 ic_sm/                      # Supporting service resources
-docs/                       # Documentation
-custom_*/                   # Design docs for fork-specific features (bridges, channels, tools, etc.)
+darkirc_channel_for_ironclaw/    # DarkIRC WASM channel source
+gotify-wasm/                # Gotify WASM tool source
+ironclaw-gotify-tool/       # Gotify tool (legacy standalone)
+ironclaw_weechat_wss/       # WeeChat WSS channel source
+git-ironclaw-unix-socket-client-repo/  # REPLv2 Unix socket client
+git-ironclaw-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
+docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/)
 ```
 
 > `ic/customic/` is unused and will be removed. Ignore it.
@@ -139,8 +145,9 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Area | Spec |
 |------|------|
 | Agent rules & repo contract | `AGENTS.md` |
-| Fork goals & protected behavior | `FORK_CONTEXT.md` |
+| Fork goals & protected behavior | `docs/internal/FORK_CONTEXT.md` |
 | Main daemon development | `ic/CLAUDE.md` |
+| Engine crate architecture | `ic/crates/lunarwing_engine/CLAUDE.md` |
 | Agent loop, sessions, routines | `ic/src/agent/CLAUDE.md` |
 | Web gateway / REST / WebSocket | `ic/src/channels/web/CLAUDE.md` |
 | Database dual-backend | `ic/src/db/CLAUDE.md` |
@@ -149,9 +156,10 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Workspace / memory | `ic/src/workspace/README.md` |
 | E2E tests | `ic/tests/e2e/CLAUDE.md` |
 | Network security policy | `ic/src/NETWORK_SECURITY.md` |
-| Multi-tenancy (production) | `docs/MULTITENANCY-PRODUCTION.md` |
-| Single-tenant test harness | `HARNESS-SINGLE-TENANT.md` |
-| Multi-tenant test harness | `MULTITENANCY-HARNESS.md` |
+| Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
+| Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
+| Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
+| Docs organization | `docs/README.md` |
 
 ## Architecture Overview
 
@@ -197,7 +205,7 @@ For live DB checks, use read-only SQL unless the user explicitly requests mutati
 
 ## Gotify Pattern
 
-Gotify is a WASM tool, not a channel. Routines needing Gotify notifications should call the `gotify` tool in their prompt and return the same message as backup output. See `docs/GOTIFY_ROUTINE_PROMPT.md` for the working prompt pattern.
+Gotify is a WASM tool, not a channel. Routines needing Gotify notifications should call the `gotify` tool in their prompt and return the same message as backup output. See `ic/docs/GOTIFY_ROUTINE_PROMPT.md` for the working prompt pattern.
 
 ## XMPP / OMEMO Known Behavior
 
@@ -231,9 +239,9 @@ Override init system detection with `LUNARWING_SERVICE_MANAGER=systemd` or `LUNA
 
 ## Multi-Tenancy
 
-Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
+Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/ops/docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
 
-The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development and is fully cross-platform. See `MULTITENANCY-HARNESS.md`.
+The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development and is fully cross-platform. See `docs/ops/MULTITENANCY-HARNESS.md`.
 
 ## Test Harness (`lunarwing-xmpp-test-env.sh`)
 
