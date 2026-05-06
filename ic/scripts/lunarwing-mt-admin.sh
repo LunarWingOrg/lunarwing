@@ -80,6 +80,9 @@ Commands:
   build-all                        Build each tenant sequentially
     --with-wasm                    Also build WASM extensions
 
+  install-wasm <name>             Install built WASM tools/channels into tenant state dir
+  install-wasm-all                Install WASM for all tenants
+
   start-tenant <name>             Start all services for a tenant
   stop-tenant <name>              Stop all services for a tenant
   restart-tenant <name>           Stop then start
@@ -415,6 +418,9 @@ build_tenant() {
     if [[ "$with_wasm" == "true" ]]; then
       say "building WASM extensions for $name ..."
       sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" || true
+
+      say "installing WASM extensions for $name ..."
+      install_wasm_tenant "$name"
     fi
 
     say "build complete for $name"
@@ -435,6 +441,127 @@ build_all() {
     say ""
     say "=== Building tenant: $name ==="
     build_tenant "$name" "$with_wasm"
+  done <<< "$names"
+}
+
+# ── WASM install ─────────────────────────────────────────────────────────────
+
+channel_crate_name() {
+  case "$1" in
+    weechat) printf 'weechat_relay_channel' ;;
+    *)       printf '%s_channel' "$1" ;;
+  esac
+}
+
+tool_binary_name() {
+  printf '%s_tool' "$(printf '%s' "$1" | tr '-' '_')"
+}
+
+install_wasm_tenant() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local repo state_dir
+  repo="$(tenant_repo "$name")"
+  state_dir="$(tenant_state_dir "$name")"
+
+  local channels_dir="$state_dir/channels"
+  local tools_dir="$state_dir/tools"
+
+  mkdir -p "$channels_dir" "$tools_dir"
+
+  local has_wasm_tools=true
+  if ! command -v wasm-tools >/dev/null 2>&1; then
+    say "wasm-tools not found; copying raw WASM files without componentize/strip"
+    has_wasm_tools=false
+  fi
+
+  local installed=0 skipped=0
+
+  say "installing WASM channels to $channels_dir..."
+  for dir in "$repo/channels-src"/*/; do
+    [[ -d "$dir" ]] || continue
+    local ch_name crate_name src_wasm dest_wasm caps_src caps_dest
+    ch_name="$(basename "$dir")"
+    crate_name="$(channel_crate_name "$ch_name")"
+    src_wasm="$dir/target/wasm32-wasip2/release/${crate_name}.wasm"
+    dest_wasm="$channels_dir/${ch_name}.wasm"
+    caps_src="$dir/${ch_name}.capabilities.json"
+    caps_dest="$channels_dir/${ch_name}.capabilities.json"
+
+    if [[ ! -f "$src_wasm" ]]; then
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    if [[ "$has_wasm_tools" == "true" ]]; then
+      wasm-tools component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
+        || cp "$src_wasm" "$dest_wasm"
+      wasm-tools strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
+    else
+      cp "$src_wasm" "$dest_wasm"
+    fi
+
+    if [[ -f "$caps_src" ]]; then
+      cp "$caps_src" "$caps_dest"
+    fi
+    say "  installed channel: $ch_name"
+    installed=$((installed + 1))
+  done
+
+  say "installing WASM tools to $tools_dir..."
+  for dir in "$repo/tools-src"/*/; do
+    [[ -d "$dir" ]] || continue
+    local t_name bin_name install_name src_wasm dest_wasm caps_src caps_dest
+    t_name="$(basename "$dir")"
+    bin_name="$(tool_binary_name "$t_name")"
+    install_name="${t_name}-tool"
+    src_wasm="$dir/target/wasm32-wasip2/release/${bin_name}.wasm"
+    dest_wasm="$tools_dir/${install_name}.wasm"
+    caps_dest="$tools_dir/${install_name}.capabilities.json"
+
+    if [[ ! -f "$src_wasm" ]]; then
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    if [[ "$has_wasm_tools" == "true" ]]; then
+      wasm-tools component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
+        || cp "$src_wasm" "$dest_wasm"
+      wasm-tools strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
+    else
+      cp "$src_wasm" "$dest_wasm"
+    fi
+
+    caps_src="$dir/${install_name}.capabilities.json"
+    if [[ ! -f "$caps_src" ]]; then
+      caps_src="$dir/${t_name}.capabilities.json"
+    fi
+    if [[ -f "$caps_src" ]]; then
+      cp "$caps_src" "$caps_dest"
+    fi
+    say "  installed tool: $install_name"
+    installed=$((installed + 1))
+  done
+
+  chown -R "$name:$name" "$channels_dir" "$tools_dir"
+  say "WASM install for $name: $installed installed, $skipped skipped (not built)"
+}
+
+install_wasm_all() {
+  local names
+  names="$(all_tenant_names)"
+
+  if [[ -z "$names" ]]; then
+    say "no tenants registered"
+    return 0
+  fi
+
+  while IFS= read -r name; do
+    say ""
+    say "=== Installing WASM for tenant: $name ==="
+    install_wasm_tenant "$name"
   done <<< "$names"
 }
 
@@ -1094,7 +1221,7 @@ add_tenant() {
   say "  weechat:  $(ports_get "$name" weechat)"
   say ""
   say "Next steps:"
-  say "  sudo $0 build-tenant $name"
+  say "  sudo $0 build-tenant $name --with-wasm"
   say "  sudo $0 start-tenant $name"
 }
 
@@ -1442,6 +1569,17 @@ main() {
       local with_wasm="false"
       [[ "${1:-}" == "--with-wasm" ]] && with_wasm="true"
       build_all "$with_wasm"
+      ;;
+
+    install-wasm)
+      require_root
+      [[ -n "${1:-}" ]] || die "usage: install-wasm <name>"
+      install_wasm_tenant "$1"
+      ;;
+
+    install-wasm-all)
+      require_root
+      install_wasm_all
       ;;
 
     start-tenant)

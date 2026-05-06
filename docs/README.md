@@ -24,6 +24,7 @@ How-to guides, build instructions, and setup walkthroughs.
 |------|-------------|
 | [`BRANCH_GUIDE.md`](guides/BRANCH_GUIDE.md) | Branching strategy and conventions |
 | [`COMMIT_GUIDE.md`](guides/COMMIT_GUIDE.md) | Commit message format and guidelines |
+| [`MIGRATE_IRONCLAW_TO_LUNARWING.md`](guides/MIGRATE_IRONCLAW_TO_LUNARWING.md) | Migrating an existing IronClaw PostgreSQL instance to LunarWing |
 | [`codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md`](guides/codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md) | Connecting to LunarWing via Codex |
 | [`codex4ironclaw/INTEGRATION.md`](guides/codex4ironclaw/INTEGRATION.md) | Codex integration guide |
 | [`codex4ironclaw/KAGEHO_INTEGRATION_GUIDE.md`](guides/codex4ironclaw/KAGEHO_INTEGRATION_GUIDE.md) | Kageho integration walkthrough |
