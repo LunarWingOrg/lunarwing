@@ -162,12 +162,83 @@ async fn configure_handler(
         inner.channel = Some(Arc::clone(&channel));
     }
 
+    // Spawn resilient XMPP stream consumer with reconnect + exponential backoff
     let state_for_task = state.clone();
+    let normalized_for_task = normalized.clone();
     tokio::spawn(async move {
+        let mut backoff_secs: u64 = 1;
+        const MAX_BACKOFF_SECS: u64 = 300; // 5-minute cap
+
+        // Consume the initial stream
         while let Some(message) = stream.next().await {
             enqueue_message(&state_for_task, message).await;
         }
-        tracing::warn!("xmpp-bridge input stream ended");
+        tracing::warn!("xmpp-bridge input stream ended, entering reconnect loop");
+
+        // Reconnect loop with exponential backoff + jitter
+        loop {
+            let jitter_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_millis() as u64 % 500)
+                .unwrap_or(0);
+            let wait = tokio::time::Duration::from_secs(backoff_secs)
+                + tokio::time::Duration::from_millis(jitter_ms);
+            tracing::info!(
+                backoff_secs,
+                jitter_ms,
+                "xmpp-bridge reconnecting in {:?}",
+                wait
+            );
+            tokio::time::sleep(wait).await;
+
+            let native_config = to_native_config(&normalized_for_task);
+            match XmppChannel::new(native_config).await {
+                Ok(new_channel) => {
+                    let new_channel = Arc::new(new_channel);
+                    match new_channel.start().await {
+                        Ok(mut new_stream) => {
+                            tracing::info!(
+                                jid = %normalized_for_task.jid,
+                                "xmpp-bridge reconnected successfully"
+                            );
+
+                            // Update shared state with new channel reference
+                            {
+                                let mut inner = state_for_task.inner.write().await;
+                                inner.channel = Some(Arc::clone(&new_channel));
+                            }
+
+                            // Reset backoff on successful reconnection
+                            backoff_secs = 1;
+
+                            // Consume the new stream
+                            while let Some(message) = new_stream.next().await {
+                                enqueue_message(&state_for_task, message).await;
+                            }
+                            tracing::warn!(
+                                jid = %normalized_for_task.jid,
+                                "xmpp-bridge stream ended again, will reconnect"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                err = %e,
+                                "xmpp-bridge failed to start XMPP stream, will retry"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(
+                        err = %e,
+                        "xmpp-bridge failed to initialize XMPP client, will retry"
+                    );
+                }
+            }
+
+            // Increase backoff (capped at MAX_BACKOFF_SECS)
+            backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
+        }
     });
 
     Ok(Json(ConfigureResponse {
