@@ -95,6 +95,31 @@ fn description() -> String {
 
 // ── Logic ───────────────────────────────────────────────────────
 
+const DEFAULT_GOTIFY_URL: &str = "https://gotify.darkc.sobe.world";
+
+#[derive(Deserialize)]
+struct GotifyConfig {
+    url: String,
+}
+
+fn resolve_gotify_url() -> String {
+    if let Some(content) = near::agent::host::workspace_read("config/gotify.json") {
+        if let Ok(config) = serde_json::from_str::<GotifyConfig>(&content) {
+            let url = config.url.trim_end_matches('/').to_string();
+            near::agent::host::log(
+                near::agent::host::LogLevel::Info,
+                &format!("Using Gotify URL from workspace config: {url}"),
+            );
+            return url;
+        }
+        near::agent::host::log(
+            near::agent::host::LogLevel::Warn,
+            "config/gotify.json exists but failed to parse; using default URL",
+        );
+    }
+    DEFAULT_GOTIFY_URL.to_string()
+}
+
 fn dispatch(params_json: &str) -> Result<String, String> {
     let params: SendInput = match serde_json::from_str(params_json) {
         Ok(p) => p,
@@ -111,7 +136,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
                 priority: default_priority(),
             }
         }
-    };    
+    };
 
     if !near::agent::host::secret_exists("gotify_app_token") {
         return Err("Secret 'gotify_app_token' not configured.".into());
@@ -125,6 +150,9 @@ fn dispatch(params_json: &str) -> Result<String, String> {
 
     let body = serde_json::to_string(&msg).map_err(|e| format!("JSON error: {e}"))?;
 
+    let base_url = resolve_gotify_url();
+    let url = format!("{base_url}/message");
+
     near::agent::host::log(
         near::agent::host::LogLevel::Info,
         &format!("Sending Gotify notification: {}", msg.title),
@@ -134,11 +162,9 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         "Content-Type": "application/json"
     });
 
-    let url = "https://gotify.darkc.sobe.world/message";
-
     let response = near::agent::host::http_request(
         "POST",
-        url,
+        &url,
         &headers.to_string(),
         Some(body.as_bytes()),
         Some(10000),

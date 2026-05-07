@@ -1,32 +1,99 @@
-# IronClaw Gotify WASM Tool
+# LunarWing Gotify WASM Tool
 
-A WASM tool for IronClaw that sends notifications to Gotify.
+A WASM tool for LunarWing that sends push notifications to a self-hosted Gotify server.
 
-## Build Instructions
-
-**Recommended build method (OR use build.sh):**
+## Build
 
 ```bash
-cd /home/sun/ironclaw/ironclaw-gotify-tool
+cd ironclaw-gotify-tool
 cargo build --release --target wasm32-wasip2
-cp target/wasm32-wasip2/release/gotify_tool.wasm ~/.ironclaw/tools/gotify.wasm
+cp target/wasm32-wasip2/release/gotify_tool.wasm ~/.lunarwing/tools/gotify.wasm
 ```
 
 ## Installation
 
-After building:
-1. Copy `gotify.wasm` to `~/.ironclaw/tools/gotify.wasm`
-2. Restart IronClaw to pick up the new tool
+1. Copy `gotify.wasm` to `~/.lunarwing/tools/gotify.wasm`
+2. Copy `gotify.capabilities.json` alongside it at `~/.lunarwing/tools/gotify.capabilities.json`
+3. Store your Gotify app token as a secret named `gotify_app_token`
+4. Restart LunarWing to pick up the new tool
+
+## Configuration
+
+### Gotify URL
+
+By default the tool sends notifications to `https://gotify.darkc.sobe.world`. To point at a different Gotify instance, update two files:
+
+**1. Workspace config** — create `config/gotify.json` in the agent's workspace (`~/.lunarwing/workspace/config/gotify.json`):
+
+```json
+{"url": "https://your-gotify.example.com"}
+```
+
+The tool appends `/message` automatically, so provide just the base URL.
+
+**2. Capabilities file** — edit `gotify.capabilities.json` to allow HTTP to the new host. Update both the `allowlist` host and the `credentials.host_patterns`:
+
+```json
+{
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "your-gotify.example.com",
+          "path_prefix": "/"
+        }
+      ],
+      "credentials": {
+        "gotify": {
+          "secret_name": "gotify_app_token",
+          "location": {
+            "type": "header",
+            "name": "X-Gotify-Key"
+          },
+          "host_patterns": [
+            "your-gotify.example.com"
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+Both changes take effect on restart — no WASM rebuild needed.
+
+If `config/gotify.json` is absent or unparseable, the tool falls back to the compiled-in default URL.
+
+### Secrets
+
+The tool requires one secret:
+
+| Secret name | Description |
+|---|---|
+| `gotify_app_token` | Gotify application token (injected as `X-Gotify-Key` header by the host — never exposed to WASM) |
+
+Use `ic_sm` or `lunarwing config` to store the secret.
 
 ## Usage
 
-The Gotify capabilities are integrated into `tools/gotify`. Configure your Gotify endpoint in IronClaw's config.
+The agent calls the `gotify` tool with a JSON payload:
 
----
+```json
+{"message": "Deploy complete", "title": "CI", "priority": 8}
+```
 
-*Built for IronClaw agent infrastructure*
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `message` | string | yes | — | Notification body (supports markdown) |
+| `title` | string | no | `Kageho` | Notification title |
+| `priority` | integer | no | `3` | 1-3 low, 5-7 medium, 8-10 high |
 
-*Enhanced for latest Ironclaw Release*
+For routine prompts that use Gotify, see `ic/docs/GOTIFY_ROUTINE_PROMPT.md`.
 
-*works great with ic_sm, my custom secret management scripts (work for both libsql and postgres ironclaw databases to dynamically list and insert new secrets*
+## How It Works
 
+The tool runs inside the WASM sandbox. It cannot read secrets or environment variables directly. The host runtime:
+
+1. Reads `config/gotify.json` from the workspace when the tool calls `workspace-read`
+2. Injects the `gotify_app_token` into the HTTP request's `X-Gotify-Key` header at the host boundary
+3. Validates the outbound URL against the capabilities allowlist before sending
