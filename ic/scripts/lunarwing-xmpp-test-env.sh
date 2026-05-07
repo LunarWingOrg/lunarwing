@@ -37,6 +37,9 @@ BRIDGE_BIND="${LUNARWING_TEST_BRIDGE_BIND:-127.0.0.1:8787}"
 # Weechat relay (future)
 WEECHAT_PORT="${LUNARWING_TEST_WEECHAT_PORT:-9001}"
 
+# Gotify
+GOTIFY_URL="${LUNARWING_TEST_GOTIFY_URL:-https://gotify.darkc.sobe.world}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -944,6 +947,23 @@ install_wasm() {
     say "  installed tool: $install_name"
     installed=$((installed + 1))
   done
+
+  if [[ -n "$GOTIFY_URL" ]] && [[ -f "$TOOLS_DIR/gotify-tool.capabilities.json" ]]; then
+    local gotify_host gotify_config_dir
+    gotify_host="$(printf '%s' "$GOTIFY_URL" | sed -E 's|^https?://||; s|[:/].*||')"
+    if [[ -n "$gotify_host" ]]; then
+      _sed_i "s|\"host\": *\"[^\"]*\"|\"host\": \"$gotify_host\"|g" "$TOOLS_DIR/gotify-tool.capabilities.json"
+      _sed_i "s|\"host_patterns\": *\[[^]]*\]|\"host_patterns\": [\"$gotify_host\"]|" "$TOOLS_DIR/gotify-tool.capabilities.json"
+      say "  configured gotify capabilities for host: $gotify_host"
+    fi
+
+    gotify_config_dir="$STATE_DIR/workspace/config"
+    mkdir -p "$gotify_config_dir"
+    local gotify_url_clean
+    gotify_url_clean="$(printf '%s' "$GOTIFY_URL" | sed 's|/$||')"
+    printf '{"url": "%s"}\n' "$gotify_url_clean" >"$gotify_config_dir/gotify.json"
+    say "  wrote gotify workspace config: $gotify_config_dir/gotify.json"
+  fi
 
   say "WASM install: $installed installed, $skipped skipped (not built)"
 }

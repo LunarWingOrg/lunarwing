@@ -64,6 +64,38 @@ Both changes take effect on restart — no WASM rebuild needed.
 
 If `config/gotify.json` is absent or unparseable, the tool falls back to the compiled-in default URL.
 
+### Automated Setup via Scripts
+
+The setup scripts can configure the Gotify URL automatically during provisioning:
+
+**Single-instance** (`setup-instance.sh`):
+```bash
+scripts/setup-instance.sh --base-dir /srv/lunarwing --gotify-url https://gotify.example.com ...
+```
+Creates both `workspace/config/gotify.json` and `tools/gotify.capabilities.json` with the custom host.
+
+**Multi-tenant** (`lunarwing-mt-admin.sh`):
+```bash
+sudo lunarwing-mt-admin.sh add-tenant myagent --gotify-url https://gotify.example.com
+```
+Creates the workspace config at provisioning time. The capabilities file is automatically rewritten when WASM tools are installed (`install-wasm`).
+
+To reconfigure an existing tenant:
+```bash
+sudo lunarwing-mt-admin.sh configure-gotify myagent https://new-gotify.example.com
+```
+
+**Test harness** (`lunarwing-xmpp-test-env.sh`):
+
+Set `LUNARWING_TEST_GOTIFY_URL` before running `install-wasm`. Defaults to `https://gotify.darkc.sobe.world`.
+
+**Environment variables:**
+
+| Variable | Script | Description |
+|---|---|---|
+| `LUNARWING_MT_GOTIFY_URL` | `lunarwing-mt-admin.sh` | Default Gotify URL for new tenants |
+| `LUNARWING_TEST_GOTIFY_URL` | `lunarwing-xmpp-test-env.sh` | Gotify URL for test harness |
+
 ### Secrets
 
 The tool requires one secret:

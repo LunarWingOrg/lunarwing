@@ -18,6 +18,7 @@ TIMEZONE="America/New_York"
 LLM_API_KEY=""
 GATEWAY_TOKEN=""
 SECRETS_MASTER_KEY=""
+GOTIFY_URL=""
 BIN_PATH=""
 RUN_ONBOARD=0
 FORCE=0
@@ -43,6 +44,7 @@ Options:
   --gateway-token TOKEN      Optional. Writes GATEWAY_AUTH_TOKEN to .env
   --agent-name NAME          Default: lunarwing
   --secrets-master-key HEX   Optional 64-hex env master key for encrypted secrets
+  --gotify-url URL           Custom Gotify server URL (creates workspace config + capabilities)
   --timezone TZ              Default: America/New_York
   --bin PATH                 Path to lunarwing binary. Auto-detected if omitted
   --run-onboard              Launch `lunarwing onboard --quick` after seeding files
@@ -175,6 +177,63 @@ copy_workspace_template() {
   done
 }
 
+write_gotify_config() {
+  [[ -n "$GOTIFY_URL" ]] || return 0
+
+  local url config_dir tools_dir host
+  url="$(printf '%s' "$GOTIFY_URL" | sed 's|/$||')"
+  host="$(printf '%s' "$url" | sed -E 's|^https?://||; s|[:/].*||')"
+
+  config_dir="$BASE_DIR/workspace/config"
+  mkdir -p "$config_dir"
+  printf '{"url": "%s"}\n' "$url" >"$config_dir/gotify.json"
+
+  tools_dir="$BASE_DIR/tools"
+  mkdir -p "$tools_dir"
+  cat >"$tools_dir/gotify.capabilities.json" <<CAPSEOF
+{
+  "name": "gotify",
+  "display_name": "Gotify Notifications",
+  "description": "Send push notifications to a self-hosted Gotify server",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "gotify",
+      "description": "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: LunarWing Agent), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Notification title." },
+          "message": { "type": "string", "description": "Notification body text. Supports markdown." },
+          "priority": { "type": "integer", "description": "Priority: 1-3=low, 5-7=medium, 8-10=high. Default 3.", "default": 3 }
+        },
+        "required": ["message"]
+      }
+    }
+  ],
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        { "host": "$host", "path_prefix": "/" }
+      ],
+      "credentials": {
+        "gotify": {
+          "secret_name": "gotify_app_token",
+          "location": { "type": "header", "name": "X-Gotify-Key" },
+          "host_patterns": ["$host"]
+        }
+      }
+    },
+    "workspace": { "allowed_prefixes": ["config/"] },
+    "secrets": { "allowed_names": ["gotify_app_token", "gotify_url"] }
+  },
+  "setup": { "required_secrets": [] }
+}
+CAPSEOF
+  say "  Gotify config: $config_dir/gotify.json"
+  say "  Gotify capabilities: $tools_dir/gotify.capabilities.json (host: $host)"
+}
+
 print_summary() {
   local bin
   bin="$(resolve_bin_path)"
@@ -205,6 +264,13 @@ print_summary() {
   if [[ -n "$SECRETS_MASTER_KEY" ]]; then
     say "Secrets master key:"
     say "  configured in $BASE_DIR/.env"
+    say ""
+  fi
+  if [[ -n "$GOTIFY_URL" ]]; then
+    say "Gotify:"
+    say "  URL: $GOTIFY_URL"
+    say "  workspace config: $BASE_DIR/workspace/config/gotify.json"
+    say "  capabilities: $BASE_DIR/tools/gotify.capabilities.json"
     say ""
   fi
 
@@ -289,6 +355,11 @@ while [[ $# -gt 0 ]]; do
       SECRETS_MASTER_KEY="$2"
       shift 2
       ;;
+    --gotify-url)
+      [[ $# -ge 2 ]] || die "--gotify-url requires a value"
+      GOTIFY_URL="$2"
+      shift 2
+      ;;
     --timezone)
       [[ $# -ge 2 ]] || die "--timezone requires a value"
       TIMEZONE="$2"
@@ -339,5 +410,6 @@ mkdir -p "$BASE_DIR"
 write_env_file
 write_config_file
 copy_workspace_template
+write_gotify_config
 print_summary
 run_onboard_if_requested
