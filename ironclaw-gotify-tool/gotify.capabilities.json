@@ -51,6 +51,9 @@
         }
       }
     },
+    "workspace": {
+      "allowed_prefixes": ["config/"]
+    },
     "secrets": {
       "allowed_names": [
         "gotify_app_token",
