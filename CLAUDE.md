@@ -271,3 +271,7 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 ## Harness Environment Defaults
 
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
+
+## Things to do for future:
+
+* Test all three kinds of worker containers. This includes nanocode, codex, and worker container. Additionally, sandbox worker container if its still present

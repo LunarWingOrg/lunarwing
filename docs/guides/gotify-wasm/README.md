@@ -19,17 +19,17 @@ cp target/wasm32-wasip2/release/gotify_tool.wasm ~/.lunarwing/tools/gotify.wasm
 
 ## Configuration
 
-### Gotify URL
+### Gotify URL and Title
 
-By default the tool sends notifications to `https://gotify.darkc.sobe.world`. To point at a different Gotify instance, update two files:
+By default the tool sends notifications to `https://gotify.darkc.sobe.world` with the title `LunarWing`. Both are configurable via the workspace config.
 
 **1. Workspace config** — create `config/gotify.json` in the agent's workspace (`~/.lunarwing/workspace/config/gotify.json`):
 
 ```json
-{"url": "https://your-gotify.example.com"}
+{"url": "https://your-gotify.example.com", "title": "My Agent"}
 ```
 
-The tool appends `/message` automatically, so provide just the base URL.
+The tool appends `/message` automatically, so provide just the base URL. The `title` field is optional — if omitted, the compiled-in default (`LunarWing`) is used. The title serves as the default for notifications when the caller doesn't specify one explicitly.
 
 **2. Capabilities file** — edit `gotify.capabilities.json` to allow HTTP to the new host. Update both the `allowlist` host and the `credentials.host_patterns`:
 
@@ -62,7 +62,7 @@ The tool appends `/message` automatically, so provide just the base URL.
 
 Both changes take effect on restart — no WASM rebuild needed.
 
-If `config/gotify.json` is absent or unparseable, the tool falls back to the compiled-in default URL.
+If `config/gotify.json` is absent or unparseable, the tool falls back to the compiled-in defaults (URL and title).
 
 ### Automated Setup via Scripts
 
@@ -70,31 +70,33 @@ The setup scripts can configure the Gotify URL automatically during provisioning
 
 **Single-instance** (`setup-instance.sh`):
 ```bash
-scripts/setup-instance.sh --base-dir /srv/lunarwing --gotify-url https://gotify.example.com ...
+scripts/setup-instance.sh --base-dir /srv/lunarwing --gotify-url https://gotify.example.com --gotify-title "My Agent" ...
 ```
-Creates both `workspace/config/gotify.json` and `tools/gotify.capabilities.json` with the custom host.
+Creates both `workspace/config/gotify.json` and `tools/gotify.capabilities.json` with the custom host. The `--gotify-title` flag is optional.
 
 **Multi-tenant** (`lunarwing-mt-admin.sh`):
 ```bash
-sudo lunarwing-mt-admin.sh add-tenant myagent --gotify-url https://gotify.example.com
+sudo lunarwing-mt-admin.sh add-tenant myagent --gotify-url https://gotify.example.com --gotify-title "My Agent"
 ```
 Creates the workspace config at provisioning time. The capabilities file is automatically rewritten when WASM tools are installed (`install-wasm`).
 
 To reconfigure an existing tenant:
 ```bash
-sudo lunarwing-mt-admin.sh configure-gotify myagent https://new-gotify.example.com
+sudo lunarwing-mt-admin.sh configure-gotify myagent https://new-gotify.example.com "My Agent"
 ```
 
 **Test harness** (`lunarwing-xmpp-test-env.sh`):
 
-Set `LUNARWING_TEST_GOTIFY_URL` before running `install-wasm`. Defaults to `https://gotify.darkc.sobe.world`.
+Set `LUNARWING_TEST_GOTIFY_URL` and optionally `LUNARWING_TEST_GOTIFY_TITLE` before running `install-wasm`. URL defaults to `https://gotify.darkc.sobe.world`.
 
 **Environment variables:**
 
 | Variable | Script | Description |
 |---|---|---|
 | `LUNARWING_MT_GOTIFY_URL` | `lunarwing-mt-admin.sh` | Default Gotify URL for new tenants |
+| `LUNARWING_MT_GOTIFY_TITLE` | `lunarwing-mt-admin.sh` | Default Gotify notification title for new tenants |
 | `LUNARWING_TEST_GOTIFY_URL` | `lunarwing-xmpp-test-env.sh` | Gotify URL for test harness |
+| `LUNARWING_TEST_GOTIFY_TITLE` | `lunarwing-xmpp-test-env.sh` | Gotify notification title for test harness |
 
 ### Secrets
 
@@ -117,7 +119,7 @@ The agent calls the `gotify` tool with a JSON payload:
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `message` | string | yes | — | Notification body (supports markdown) |
-| `title` | string | no | `Kageho` | Notification title |
+| `title` | string | no | From `config/gotify.json`, or `LunarWing` | Notification title |
 | `priority` | integer | no | `3` | 1-3 low, 5-7 medium, 8-10 high |
 
 For routine prompts that use Gotify, see `ic/docs/GOTIFY_ROUTINE_PROMPT.md`.

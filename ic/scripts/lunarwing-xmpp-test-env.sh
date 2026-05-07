@@ -39,6 +39,7 @@ WEECHAT_PORT="${LUNARWING_TEST_WEECHAT_PORT:-9001}"
 
 # Gotify
 GOTIFY_URL="${LUNARWING_TEST_GOTIFY_URL:-https://gotify.darkc.sobe.world}"
+GOTIFY_TITLE="${LUNARWING_TEST_GOTIFY_TITLE:-}"
 
 usage() {
   cat <<'EOF'
@@ -961,7 +962,11 @@ install_wasm() {
     mkdir -p "$gotify_config_dir"
     local gotify_url_clean
     gotify_url_clean="$(printf '%s' "$GOTIFY_URL" | sed 's|/$||')"
-    printf '{"url": "%s"}\n' "$gotify_url_clean" >"$gotify_config_dir/gotify.json"
+    if [[ -n "$GOTIFY_TITLE" ]]; then
+      printf '{"url": "%s", "title": "%s"}\n' "$gotify_url_clean" "$GOTIFY_TITLE" >"$gotify_config_dir/gotify.json"
+    else
+      printf '{"url": "%s"}\n' "$gotify_url_clean" >"$gotify_config_dir/gotify.json"
+    fi
     say "  wrote gotify workspace config: $gotify_config_dir/gotify.json"
   fi
 

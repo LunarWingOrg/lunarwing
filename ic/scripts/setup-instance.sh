@@ -19,6 +19,7 @@ LLM_API_KEY=""
 GATEWAY_TOKEN=""
 SECRETS_MASTER_KEY=""
 GOTIFY_URL=""
+GOTIFY_TITLE=""
 BIN_PATH=""
 RUN_ONBOARD=0
 FORCE=0
@@ -45,6 +46,7 @@ Options:
   --agent-name NAME          Default: lunarwing
   --secrets-master-key HEX   Optional 64-hex env master key for encrypted secrets
   --gotify-url URL           Custom Gotify server URL (creates workspace config + capabilities)
+  --gotify-title TITLE       Custom default notification title (written to workspace config)
   --timezone TZ              Default: America/New_York
   --bin PATH                 Path to lunarwing binary. Auto-detected if omitted
   --run-onboard              Launch `lunarwing onboard --quick` after seeding files
@@ -186,7 +188,11 @@ write_gotify_config() {
 
   config_dir="$BASE_DIR/workspace/config"
   mkdir -p "$config_dir"
-  printf '{"url": "%s"}\n' "$url" >"$config_dir/gotify.json"
+  if [[ -n "$GOTIFY_TITLE" ]]; then
+    printf '{"url": "%s", "title": "%s"}\n' "$url" "$GOTIFY_TITLE" >"$config_dir/gotify.json"
+  else
+    printf '{"url": "%s"}\n' "$url" >"$config_dir/gotify.json"
+  fi
 
   tools_dir="$BASE_DIR/tools"
   mkdir -p "$tools_dir"
@@ -199,7 +205,7 @@ write_gotify_config() {
   "tools": [
     {
       "name": "gotify",
-      "description": "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: LunarWing Agent), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}",
+      "description": "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: configurable via config/gotify.json or 'LunarWing'), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}",
       "parameters": {
         "type": "object",
         "properties": {
@@ -269,6 +275,9 @@ print_summary() {
   if [[ -n "$GOTIFY_URL" ]]; then
     say "Gotify:"
     say "  URL: $GOTIFY_URL"
+    if [[ -n "$GOTIFY_TITLE" ]]; then
+      say "  Title: $GOTIFY_TITLE"
+    fi
     say "  workspace config: $BASE_DIR/workspace/config/gotify.json"
     say "  capabilities: $BASE_DIR/tools/gotify.capabilities.json"
     say ""
@@ -358,6 +367,11 @@ while [[ $# -gt 0 ]]; do
     --gotify-url)
       [[ $# -ge 2 ]] || die "--gotify-url requires a value"
       GOTIFY_URL="$2"
+      shift 2
+      ;;
+    --gotify-title)
+      [[ $# -ge 2 ]] || die "--gotify-title requires a value"
+      GOTIFY_TITLE="$2"
       shift 2
       ;;
     --timezone)

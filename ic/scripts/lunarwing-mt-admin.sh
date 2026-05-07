@@ -22,6 +22,7 @@ PROFILE="${LUNARWING_MT_PROFILE:-release}"
 SOURCE_REPO="${LUNARWING_MT_SOURCE_REPO:-$LUNARWING_ROOT}"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000}"
 DEFAULT_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
+DEFAULT_GOTIFY_TITLE="${LUNARWING_MT_GOTIFY_TITLE:-}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ Environment:
   LUNARWING_MT_SOURCE_REPO         Path to source repo to clone from
   LUNARWING_MT_TENSORZERO_URL      Default upstream TensorZero URL
   LUNARWING_MT_GOTIFY_URL          Default Gotify server URL for new tenants
+  LUNARWING_MT_GOTIFY_TITLE        Default Gotify notification title for new tenants
 EOF
 }
 
@@ -750,6 +752,7 @@ extract_host_from_url() {
 write_tenant_gotify_config() {
   local name="$1"
   local gotify_url="${2:-}"
+  local gotify_title="${3:-}"
 
   [[ -n "$gotify_url" ]] || return 0
 
@@ -760,7 +763,11 @@ write_tenant_gotify_config() {
 
   sudo -u "$name" mkdir -p "$config_dir"
   gotify_url="$(printf '%s' "$gotify_url" | sed 's|/$||')"
-  printf '{"url": "%s"}\n' "$gotify_url" >"$config_path"
+  if [[ -n "$gotify_title" ]]; then
+    printf '{"url": "%s", "title": "%s"}\n' "$gotify_url" "$gotify_title" >"$config_path"
+  else
+    printf '{"url": "%s"}\n' "$gotify_url" >"$config_path"
+  fi
   chown "$name:$name" "$config_path"
   say "wrote: $config_path"
 }
@@ -1246,6 +1253,7 @@ add_tenant() {
   local xmpp_password="${4:-}"
   local tensorzero_url="${5:-$DEFAULT_TENSORZERO_URL}"
   local gotify_url="${6:-$DEFAULT_GOTIFY_URL}"
+  local gotify_title="${7:-$DEFAULT_GOTIFY_TITLE}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -1268,7 +1276,7 @@ add_tenant() {
   write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
-  write_tenant_gotify_config "$name" "$gotify_url"
+  write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   say ""
 
   say "--- Starting PostgreSQL ---"
@@ -1552,7 +1560,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL"
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -1560,6 +1568,7 @@ main() {
           --xmpp-password)   xmpp_password="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
+          --gotify-title)    gotify_title="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
@@ -1570,18 +1579,19 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL"
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-domain)     xmpp_domain="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
+          --gotify-title)    gotify_title="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$names_csv" ]]; then names_csv="$1"; shift
@@ -1600,7 +1610,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title"
       done
       ;;
 
@@ -1692,11 +1702,11 @@ main() {
 
     configure-gotify)
       require_root
-      local name="${1:-}" gotify_url="${2:-}"
-      [[ -n "$name" && -n "$gotify_url" ]] || die "usage: configure-gotify <name> <url>"
+      local name="${1:-}" gotify_url="${2:-}" gotify_title="${3:-}"
+      [[ -n "$name" && -n "$gotify_url" ]] || die "usage: configure-gotify <name> <url> [title]"
       name="$(sanitize_name "$name")"
       tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
-      write_tenant_gotify_config "$name" "$gotify_url"
+      write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
       configure_gotify_capabilities "$name" "$gotify_url"
       say "Gotify configured for tenant '$name': $gotify_url"
       ;;

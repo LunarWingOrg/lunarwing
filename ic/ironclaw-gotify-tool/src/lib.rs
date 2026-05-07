@@ -15,22 +15,19 @@ use exports::near::agent::tool;
 
 // ── Types ───────────────────────────────────────────────────────
 
+const DEFAULT_TITLE: &str = "LunarWing";
+
 #[derive(Deserialize)]
 struct SendInput {
-    #[serde(default = "default_title")]
-    title: String,
+    title: Option<String>,
     #[serde(default = "default_message")]
     message: String,
     #[serde(default = "default_priority")]
     priority: i32,
 }
 
-fn default_title() -> String {
-    "Kageho".to_string()
-}
-
 fn default_message() -> String {
-    "Notification from Kageho".to_string()
+    format!("Notification from {DEFAULT_TITLE}")
 }
 
 fn default_priority() -> i32 {
@@ -71,7 +68,7 @@ impl tool::Guest for GotifyTool {
   "properties": {
     "title": {
       "type": "string",
-      "description": "Notification title. Defaults to 'Kageho'."
+      "description": "Notification title. Defaults to value from config/gotify.json, or 'LunarWing'."
     },
     "message": {
       "type": "string",
@@ -88,8 +85,8 @@ impl tool::Guest for GotifyTool {
         .to_string()
     }
 
-fn description() -> String {
-        "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: Kageho), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}".to_string()
+    fn description() -> String {
+        "Send a push notification via Gotify. Parameters (JSON object): message (string, REQUIRED), title (string, default: configurable via config/gotify.json or 'LunarWing'), priority (integer: 1-3=low, 5-7=medium, 8-10=high, default: 3). Example: {\"message\": \"hello\", \"priority\": 5}".to_string()
     }
 }
 
@@ -100,27 +97,42 @@ const DEFAULT_GOTIFY_URL: &str = "https://gotify.darkc.sobe.world";
 #[derive(Deserialize)]
 struct GotifyConfig {
     url: String,
+    title: Option<String>,
 }
 
-fn resolve_gotify_url() -> String {
+struct ResolvedConfig {
+    url: String,
+    title: String,
+}
+
+fn resolve_gotify_config() -> ResolvedConfig {
     if let Some(content) = near::agent::host::workspace_read("config/gotify.json") {
         if let Ok(config) = serde_json::from_str::<GotifyConfig>(&content) {
             let url = config.url.trim_end_matches('/').to_string();
+            let title = config
+                .title
+                .filter(|t| !t.is_empty())
+                .unwrap_or_else(|| DEFAULT_TITLE.to_string());
             near::agent::host::log(
                 near::agent::host::LogLevel::Info,
-                &format!("Using Gotify URL from workspace config: {url}"),
+                &format!("Using Gotify config from workspace: url={url}, title={title}"),
             );
-            return url;
+            return ResolvedConfig { url, title };
         }
         near::agent::host::log(
             near::agent::host::LogLevel::Warn,
-            "config/gotify.json exists but failed to parse; using default URL",
+            "config/gotify.json exists but failed to parse; using defaults",
         );
     }
-    DEFAULT_GOTIFY_URL.to_string()
+    ResolvedConfig {
+        url: DEFAULT_GOTIFY_URL.to_string(),
+        title: DEFAULT_TITLE.to_string(),
+    }
 }
 
 fn dispatch(params_json: &str) -> Result<String, String> {
+    let config = resolve_gotify_config();
+
     let params: SendInput = match serde_json::from_str(params_json) {
         Ok(p) => p,
         Err(_) => {
@@ -131,7 +143,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
                 default_message()
             };
             SendInput {
-                title: default_title(),
+                title: None,
                 message: msg,
                 priority: default_priority(),
             }
@@ -142,16 +154,17 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         return Err("Secret 'gotify_app_token' not configured.".into());
     }
 
+    let title = params.title.unwrap_or(config.title);
+
     let msg = GotifyMessage {
-        title: params.title,
+        title,
         message: params.message,
         priority: params.priority,
     };
 
     let body = serde_json::to_string(&msg).map_err(|e| format!("JSON error: {e}"))?;
 
-    let base_url = resolve_gotify_url();
-    let url = format!("{base_url}/message");
+    let url = format!("{}/message", config.url);
 
     near::agent::host::log(
         near::agent::host::LogLevel::Info,
