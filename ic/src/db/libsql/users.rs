@@ -44,6 +44,17 @@ fn row_to_api_token(row: &libsql::Row) -> Result<ApiTokenRecord, DatabaseError> 
     })
 }
 
+fn parse_libsql_decimal_text(
+    value: &str,
+    field_name: &str,
+) -> Result<rust_decimal::Decimal, DatabaseError> {
+    rust_decimal::Decimal::from_str_exact(value)
+        .or_else(|_| rust_decimal::Decimal::from_scientific(value))
+        .map_err(|e| {
+            DatabaseError::Query(format!("invalid {} value '{}': {}", field_name, value, e))
+        })
+}
+
 #[async_trait]
 impl UserStore for LibSqlBackend {
     async fn create_user(&self, user: &UserRecord) -> Result<(), DatabaseError> {
@@ -524,9 +535,7 @@ impl UserStore for LibSqlBackend {
             .map_err(|e| DatabaseError::Query(e.to_string()))?
         {
             let cost_str = get_text(&row, 5);
-            let total_cost = rust_decimal::Decimal::from_str_exact(&cost_str).map_err(|e| {
-                DatabaseError::Query(format!("invalid cost value '{}': {}", cost_str, e))
-            })?;
+            let total_cost = parse_libsql_decimal_text(&cost_str, "cost")?;
             stats.push(crate::db::UserUsageStats {
                 user_id: get_text(&row, 0),
                 model: get_text(&row, 1),
@@ -593,9 +602,7 @@ impl UserStore for LibSqlBackend {
             .map_err(|e| DatabaseError::Query(e.to_string()))?
         {
             let cost_str = get_text(&row, 2);
-            let total_cost = rust_decimal::Decimal::from_str_exact(&cost_str).map_err(|e| {
-                DatabaseError::Query(format!("invalid cost value '{}': {}", cost_str, e))
-            })?;
+            let total_cost = parse_libsql_decimal_text(&cost_str, "cost")?;
             stats.push(crate::db::UserSummaryStats {
                 user_id: get_text(&row, 0),
                 job_count: row
@@ -689,5 +696,39 @@ impl UserStore for LibSqlBackend {
             created_at: now,
             revoked_at: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_libsql_decimal_text_normal() {
+        let d = parse_libsql_decimal_text("0.05", "cost").unwrap();
+        assert_eq!(d, rust_decimal::Decimal::from_str_exact("0.05").unwrap());
+    }
+
+    #[test]
+    fn test_parse_libsql_decimal_text_scientific_notation() {
+        let d = parse_libsql_decimal_text("1.5E-7", "cost").unwrap();
+        assert_eq!(
+            d,
+            rust_decimal::Decimal::from_scientific("1.5E-7").unwrap()
+        );
+
+        let d = parse_libsql_decimal_text("3.0E+2", "cost").unwrap();
+        assert_eq!(
+            d,
+            rust_decimal::Decimal::from_scientific("3.0E+2").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_libsql_decimal_text_error() {
+        let result = parse_libsql_decimal_text("not_a_number", "cost");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("not_a_number"));
     }
 }

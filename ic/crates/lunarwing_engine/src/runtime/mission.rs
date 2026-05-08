@@ -366,6 +366,17 @@ impl MissionManager {
         self.store.load_mission(id).await
     }
 
+    /// Find a mission by name for a given user within a project.
+    pub async fn find_by_name(
+        &self,
+        project_id: ProjectId,
+        user_id: &str,
+        name: &str,
+    ) -> Result<Option<Mission>, EngineError> {
+        let missions = self.store.list_missions_with_shared(project_id, user_id).await?;
+        Ok(missions.into_iter().find(|m| m.name == name))
+    }
+
     /// Fire all active `OnSystemEvent` missions whose source and event_type match.
     ///
     /// The optional `payload` is forwarded as `trigger_payload` to each mission's

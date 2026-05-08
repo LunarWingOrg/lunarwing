@@ -200,6 +200,51 @@ impl EffectBridgeAdapter {
         false
     }
 
+    fn coerce_to_u64(v: &serde_json::Value) -> Option<u64> {
+        v.as_u64()
+            .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+    }
+
+    async fn resolve_mission_id(
+        params: &serde_json::Value,
+        context: &ThreadExecutionContext,
+        mgr: &lunarwing_engine::MissionManager,
+    ) -> Result<lunarwing_engine::MissionId, EngineError> {
+        let name = params.get("name").and_then(|v| v.as_str());
+        let id_str = params
+            .get("id")
+            .or_else(|| params.get("_args").and_then(|a| a.get(0)))
+            .and_then(|v| v.as_str());
+
+        if let Some(name) = name {
+            if let Some(mission) = mgr
+                .find_by_name(context.project_id, &context.user_id, name)
+                .await?
+            {
+                return Ok(mission.id);
+            }
+        }
+
+        if let Some(id_str) = id_str {
+            if let Ok(uuid) = uuid::Uuid::parse_str(id_str) {
+                return Ok(lunarwing_engine::MissionId(uuid));
+            }
+            if let Some(mission) = mgr
+                .find_by_name(context.project_id, &context.user_id, id_str)
+                .await?
+            {
+                return Ok(mission.id);
+            }
+        }
+
+        Err(EngineError::Effect {
+            reason: format!(
+                "mission not found — provide a valid mission name or UUID (got name={:?}, id={:?})",
+                name, id_str
+            ),
+        })
+    }
+
     /// Handle mission_* function calls. Returns None if not a mission call.
     async fn handle_mission_call(
         &self,
@@ -279,16 +324,7 @@ impl EffectBridgeAdapter {
                 Err(e) => Err(e),
             },
             "mission_fire" => {
-                let id_str = params
-                    .get("id")
-                    .or_else(|| params.get("_args").and_then(|a| a.get(0)))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let id = uuid::Uuid::parse_str(id_str)
-                    .map(lunarwing_engine::MissionId)
-                    .map_err(|e| EngineError::Effect {
-                        reason: format!("invalid mission id: {e}"),
-                    });
+                let id = Self::resolve_mission_id(params, context, mgr).await;
                 match id {
                     Ok(id) => match mgr.fire_mission(id, &context.user_id, None).await {
                         Ok(Some(tid)) => {
@@ -303,16 +339,7 @@ impl EffectBridgeAdapter {
                 }
             }
             "mission_pause" | "mission_resume" => {
-                let id_str = params
-                    .get("id")
-                    .or_else(|| params.get("_args").and_then(|a| a.get(0)))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let id = uuid::Uuid::parse_str(id_str)
-                    .map(lunarwing_engine::MissionId)
-                    .map_err(|e| EngineError::Effect {
-                        reason: format!("invalid mission id: {e}"),
-                    });
+                let id = Self::resolve_mission_id(params, context, mgr).await;
                 match id {
                     Ok(id) => {
                         let res = if action_name == "mission_pause" {
@@ -329,17 +356,7 @@ impl EffectBridgeAdapter {
                 }
             }
             "mission_delete" => {
-                let id_str = params
-                    .get("id")
-                    .or_else(|| params.get("name")) // routine_delete uses "name" param
-                    .or_else(|| params.get("_args").and_then(|a| a.get(0)))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let id = uuid::Uuid::parse_str(id_str)
-                    .map(lunarwing_engine::MissionId)
-                    .map_err(|e| EngineError::Effect {
-                        reason: format!("invalid mission id: {e}"),
-                    });
+                let id = Self::resolve_mission_id(params, context, mgr).await;
                 match id {
                     Ok(id) => match mgr.complete_mission(id).await {
                         Ok(()) => Ok(serde_json::json!({"status": "deleted"})),
@@ -349,21 +366,12 @@ impl EffectBridgeAdapter {
                 }
             }
             "mission_update" => {
-                let id_str = params
-                    .get("id")
-                    .or_else(|| params.get("_args").and_then(|a| a.get(0)))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let id = uuid::Uuid::parse_str(id_str)
-                    .map(lunarwing_engine::MissionId)
-                    .map_err(|e| EngineError::Effect {
-                        reason: format!("invalid mission id: {e}"),
-                    });
+                let id = Self::resolve_mission_id(params, context, mgr).await;
                 match id {
                     Ok(id) => {
                         let mut updates = lunarwing_engine::MissionUpdate::default();
-                        if let Some(name) = params.get("name").and_then(|v| v.as_str()) {
-                            updates.name = Some(name.to_string());
+                        if let Some(new_name) = params.get("new_name").and_then(|v| v.as_str()) {
+                            updates.name = Some(new_name.to_string());
                         }
                         if let Some(goal) = params.get("goal").and_then(|v| v.as_str()) {
                             updates.goal = Some(goal.to_string());
@@ -380,7 +388,7 @@ impl EffectBridgeAdapter {
                             );
                         }
                         if let Some(max) =
-                            params.get("max_threads_per_day").and_then(|v| v.as_u64())
+                            params.get("max_threads_per_day").and_then(Self::coerce_to_u64)
                         {
                             updates.max_threads_per_day = Some(max as u32);
                         }
@@ -1553,5 +1561,29 @@ mod tests {
             }
             other => panic!("expected auth gate pause, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn coerce_to_u64_from_number() {
+        let v = serde_json::json!(5);
+        assert_eq!(EffectBridgeAdapter::coerce_to_u64(&v), Some(5));
+    }
+
+    #[test]
+    fn coerce_to_u64_from_string() {
+        let v = serde_json::json!("120");
+        assert_eq!(EffectBridgeAdapter::coerce_to_u64(&v), Some(120));
+    }
+
+    #[test]
+    fn coerce_to_u64_from_invalid_string() {
+        let v = serde_json::json!("not_a_number");
+        assert_eq!(EffectBridgeAdapter::coerce_to_u64(&v), None);
+    }
+
+    #[test]
+    fn coerce_to_u64_from_null() {
+        let v = serde_json::json!(null);
+        assert_eq!(EffectBridgeAdapter::coerce_to_u64(&v), None);
     }
 }

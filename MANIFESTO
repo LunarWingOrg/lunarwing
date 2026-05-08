@@ -4,7 +4,6 @@ Inspired by:
 * Manifesto for a Democratic Civilization Part 3 by Abdullah Öcalan
 * Agorism in the 21st Century, Volumes I and II
 * https://www.gnu.org/philosophy/philosophy.html
-* The Sovereign Individual: How to survive and thrive during the collapse of the welfare state by William Rees-Mogg
 * Thus Spoke Zarathustra by Friedrich Nietzsche
 * Padraic Pearse: The Collected Works
 * Proofs, Arguments, and Zero-Knowledge by Justin Thaler.
@@ -17,8 +16,6 @@ LunarWing supports the Free Software Foundation.
 
 LunarWing supports freedom, user choice, locally hosted LLM set ups, various TEE environments, and less secure options of using LLMs. It is entirely up to the user how much trust you have in your model providers. 
 
-While we do support user choice, we do not necessarily want to pander to randoms online to support x, y, or z tool out of the box besides the ones which are core to the LunarWing project. This certainly means that no, we won't officially support proprietary communication channels, even if the code exists in the repo. Users can use it, but it will certainly not be updated or supported in the future. The team may, at its own discretion, even choose to entirely remove any or all of these channel source code components in the repo which disagrees with our philosophy. You have been warned. The LunarWing team uses secure, private, self-hostable communication methods such as Weechat IRC with end to end encryption on the plugin level (See: Enjin), DarkIRC and XMPP MUC chats with OMEMO encryption. We do use various locally developed MCP servers as well for our agents. We utilize our own notification servers and do not use Google services either, so these will also not be supported or given any love.
+While we do support user choice, we do not necessarily want to pander to randoms online to support x, y, or z tool out of the box besides the ones which are core to the LunarWing project. This certainly means that no, we won't officially support proprietary communication channels, even if the code exists in the repo. Users can use it, but it will certainly not be updated or supported in the future. The team may, at its own discretion, even choose to entirely remove any or all of these channel source code components in the repo which disagrees with our philosophy. You have been warned. The LunarWing team uses secure, private, self-hostable communication methods such as IRC with end to end encryption on the plugin level (See: Enjin), DarkIRC and XMPP MUC chats with OMEMO encryption. We do use various locally developed MCP servers as well for our agents. We utilize our own notification servers and do not use Google services either, so these will also not be supported or given any love.
 
-LunarWing is also not a democratic organization into itself. We are a private collective with very opinionated backgrounds in cybersecurity. Our own opinions and philosophy will have an impact on this project going forward. Our opinions, experience, and philosophy WILL have an impact on what we choose to focus on for LunarWing.
-
-Disclaimer: LunarWing has nothing in terms of external security audits (yet). Consider all of this alpha or beta software for the time being.
+LunarWing is also not a democratic organization into itself. We are a small group with very opinionated backgrounds in cybersecurity and technology. Our own opinions and philosophy will have an impact on this project going forward. Our opinions, experience, and philosophy affect the overall direction and focus of the project.
