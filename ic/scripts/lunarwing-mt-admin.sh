@@ -93,6 +93,9 @@ Commands:
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
                                    (updates workspace config + capabilities)
 
+  patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
+  patch-env-all                    Patch env for all registered tenants
+
   list-tenants                     Show all tenants with ports and status
   status <name>                    Detailed status for one tenant
   tokens [name]                    Print gateway auth tokens (all or one)
@@ -182,7 +185,7 @@ ports_registry_init() {
     tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
     cat >"$tmp" <<'ENDJSON'
 {
-  "version": 1,
+  "version": 2,
   "range": { "start": 10000, "end": 19999 },
   "block_size": 10,
   "tenants": {}
@@ -191,6 +194,37 @@ ENDJSON
     chmod 0644 "$tmp"
     mv "$tmp" "$PORTS_REGISTRY"
     say "initialized port registry: $PORTS_REGISTRY"
+  fi
+
+  ports_migrate
+}
+
+ports_migrate() {
+  [[ -f "$PORTS_REGISTRY" ]] || return 0
+  require_cmd jq
+
+  local current_version
+  current_version="$(jq -r '.version // 0' "$PORTS_REGISTRY")"
+
+  if [[ "$current_version" -lt 2 ]]; then
+    say "migrating port registry v${current_version} -> v2 (reserved_0 -> orchestrator) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .version = 2 |
+      .tenants |= with_entries(
+        .value.ports |= (
+          if .reserved_0 then
+            .orchestrator = .reserved_0 | del(.reserved_0)
+          else
+            .
+          end
+        )
+      )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v2"
   fi
 }
 
@@ -227,7 +261,7 @@ ports_allocate() {
         postgres:   ($base + 3),
         proxy:      ($base + 4),
         weechat:    ($base + 5),
-        reserved_0: ($base + 6),
+        orchestrator: ($base + 6),
         reserved_1: ($base + 7),
         reserved_2: ($base + 8),
         reserved_3: ($base + 9)
@@ -271,8 +305,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH"
 }
 
 tenant_exists_in_registry() {
@@ -598,13 +632,14 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port
+  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
   bridge_port="$(ports_get "$name" bridge)"
   pg_port="$(ports_get "$name" postgres)"
   proxy_port="$(ports_get "$name" proxy)"
+  orchestrator_port="$(ports_get "$name" orchestrator)"
 
   local state_dir run_dir repo_dir
   state_dir="$(tenant_state_dir "$name")"
@@ -669,6 +704,9 @@ GATEWAY_AUTH_TOKEN=$gateway_token
 
 # HTTP webhook
 HTTP_PORT=$http_port
+
+# Orchestrator (sandbox container callback)
+ORCHESTRATOR_PORT=$orchestrator_port
 
 # Daemon mode
 CLI_ENABLED=false
@@ -743,6 +781,26 @@ ENVEOF
   )
   chown "$name:$name" "$path"
   say "wrote: $path"
+}
+
+patch_tenant_env() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$env_path" ]] || die "env file not found: $env_path"
+
+  local orchestrator_port
+  orchestrator_port="$(ports_get "$name" orchestrator)"
+
+  if grep -q '^ORCHESTRATOR_PORT=' "$env_path"; then
+    say "ORCHESTRATOR_PORT already set in $env_path (skipping)"
+  else
+    printf '\n# Orchestrator (sandbox container callback)\nORCHESTRATOR_PORT=%s\n' "$orchestrator_port" >>"$env_path"
+    say "added ORCHESTRATOR_PORT=$orchestrator_port to $env_path"
+  fi
 }
 
 extract_host_from_url() {
@@ -1301,6 +1359,7 @@ add_tenant() {
   say "  postgres: $(ports_get "$name" postgres)"
   say "  proxy:    $(ports_get "$name" proxy)"
   say "  weechat:  $(ports_get "$name" weechat)"
+  say "  orchestrator: $(ports_get "$name" orchestrator)"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm"
@@ -1414,6 +1473,7 @@ status_tenant() {
   say "  postgres: $(ports_get "$name" postgres)"
   say "  proxy:    $(ports_get "$name" proxy)"
   say "  weechat:  $(ports_get "$name" weechat)"
+  say "  orchestrator: $(ports_get "$name" orchestrator)"
   say ""
 
   ensure_container_runtime
@@ -1454,20 +1514,21 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "----"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
       "$(ports_get "$name" bridge)" \
       "$(ports_get "$name" postgres)" \
       "$(ports_get "$name" proxy)" \
-      "$(ports_get "$name" weechat)"
+      "$(ports_get "$name" weechat)" \
+      "$(ports_get "$name" orchestrator)"
   done <<< "$names"
 }
 
@@ -1709,6 +1770,25 @@ main() {
       write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
       configure_gotify_capabilities "$name" "$gotify_url"
       say "Gotify configured for tenant '$name': $gotify_url"
+      ;;
+
+    patch-env)
+      require_root
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "usage: patch-env <name>"
+      ports_registry_init
+      patch_tenant_env "$name"
+      ;;
+
+    patch-env-all)
+      require_root
+      ports_registry_init
+      local names
+      names="$(all_tenant_names)"
+      [[ -n "$names" ]] || { say "no tenants registered"; exit 0; }
+      while IFS= read -r name; do
+        patch_tenant_env "$name"
+      done <<< "$names"
       ;;
 
     doctor)
