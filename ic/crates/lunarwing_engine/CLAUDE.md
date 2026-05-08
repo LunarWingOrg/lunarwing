@@ -1,10 +1,10 @@
-# IronClaw Engine Crate
+# LunarWing Engine Crate (V2)
 
 Unified thread-capability-CodeAct execution model. Replaces ~10 separate abstractions (Session, Job, Routine, Channel, Tool, Skill, Hook, Observer, Extension, LoopDelegate) with 5 primitives.
 
 ## Full Architecture Plan
 
-See `docs/plans/2026-03-20-engine-v2-architecture.md` for the 8-phase roadmap.
+See `docs/architecture/ENGINE-V2.md` for the complete architecture document covering execution tiers, capability leases, gates, learning missions, bridge adapters, and integration details.
 
 ## Five Primitives
 
@@ -19,9 +19,9 @@ See `docs/plans/2026-03-20-engine-v2-architecture.md` for the 8-phase roadmap.
 ## Build & Test
 
 ```bash
-cargo check -p ironclaw_engine
-cargo clippy -p ironclaw_engine --all-targets -- -D warnings
-cargo test -p ironclaw_engine
+cargo check -p lunarwing_engine
+cargo clippy -p lunarwing_engine --all-targets -- -D warnings
+cargo test -p lunarwing_engine
 ```
 
 ## Module Map
@@ -136,6 +136,16 @@ Python execution via Monty interpreter (`executor/scripting.rs`). Follows the RL
 
 **Resource limits**: 30s timeout, 64MB memory, 1M allocations. All execution wrapped in `catch_unwind` for Monty panic safety.
 
+## Python Orchestrator
+
+The orchestrator (`executor/orchestrator.rs`) is a self-modifiable Python execution layer that can replace the compiled Rust `ExecutionLoop::run()`:
+
+- Executes via Monty with resource limits (300s timeout, 128MB memory, 5M allocations)
+- Exposes host functions: `__llm_complete__`, `__execute_code_step__`, `__execute_action__`, `__execute_actions_parallel__`, `__check_signals__`, `__emit_event__`, `__save_checkpoint__`, `__transition_to__`, `__retrieve_docs__`, `__check_budget__`, `__get_actions__`
+- Can be patched by the self-improvement mission and versioned in the Store
+- Falls back to compiled-in default (v0 at `ic/orchestrator/default.py`) if disabled or patches fail (3+ consecutive failures triggers rollback)
+- Async dispatch of tool calls with `asyncio.gather()` for parallel execution
+
 ## Capability Leases
 
 Threads don't have static permissions. They receive **leases** — scoped, time-limited, use-limited grants:
@@ -162,7 +172,7 @@ CredentialedNetwork, Compute, Financial
 
 ## Key Design Decisions
 
-1. **No dependency on main `ironclaw` crate** — clean separation, testable in isolation
+1. **No dependency on main `lunarwing` crate** — clean separation, testable in isolation
 2. **No safety logic** — sanitization/leak detection is applied at the adapter boundary (`EffectExecutor` impl)
 3. **Event sourcing from day one** — every thread records a complete event log via `ThreadEvent`
 4. **Tier 0 + Tier 1** — structured tool calls (Tier 0) and embedded Python via Monty (Tier 1, CodeAct)

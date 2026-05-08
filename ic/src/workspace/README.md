@@ -79,6 +79,8 @@ Four tools for LLM use:
 
 ## Hybrid Search (RRF)
 
+For a deep dive into the full semantic search pipeline (embedding providers, chunking, fusion strategies, database schema, and configuration), see `docs/architecture/SEMANTIC-MEMORY-SEARCH.md`.
+
 Combines full-text search and vector similarity using Reciprocal Rank Fusion:
 
 ```

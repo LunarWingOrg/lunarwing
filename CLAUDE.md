@@ -147,7 +147,9 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Agent rules & repo contract | `AGENTS.md` |
 | Fork goals & protected behavior | `docs/internal/FORK_CONTEXT.md` |
 | Main daemon development | `ic/CLAUDE.md` |
-| Engine crate architecture | `ic/crates/lunarwing_engine/CLAUDE.md` |
+| Engine V2 architecture | `docs/architecture/ENGINE-V2.md` |
+| Engine crate dev guide | `ic/crates/lunarwing_engine/CLAUDE.md` |
+| Semantic memory search | `docs/architecture/SEMANTIC-MEMORY-SEARCH.md` |
 | Agent loop, sessions, routines | `ic/src/agent/CLAUDE.md` |
 | Web gateway / REST / WebSocket | `ic/src/channels/web/CLAUDE.md` |
 | Database dual-backend | `ic/src/db/CLAUDE.md` |

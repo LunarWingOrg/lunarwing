@@ -13,6 +13,8 @@ System design and technical architecture documents.
 | File | Description |
 |------|-------------|
 | [`DESIGN.md`](architecture/DESIGN.md) | Overall system design and architecture |
+| [`ENGINE-V2.md`](architecture/ENGINE-V2.md) | V2 engine architecture: threads, capabilities, CodeAct, gates, learning missions |
+| [`SEMANTIC-MEMORY-SEARCH.md`](architecture/SEMANTIC-MEMORY-SEARCH.md) | Semantic memory search: embeddings, hybrid FTS+vector, RRF fusion, configuration |
 
 ---
 
