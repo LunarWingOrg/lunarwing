@@ -1,0 +1,4 @@
+test-runs/
+*.pyc
+__pycache__/
+.env.test

@@ -1,0 +1,123 @@
+# Worker Test Harness — Docker Compose
+# Brings up all 4 worker types + mock services in isolation
+
+networks:
+  test_harness:
+    driver: bridge
+
+volumes:
+  codex_logs:
+  nanocode_logs:
+  orchestrator_data:
+
+services:
+  # ── Mock Orchestrator (for built-in worker HTTP API) ───────────────────
+  orchestrator:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./mock_orchestrator:/app
+    command: ["python3", "server.py", "--port", "8080"]
+    ports: ["8080:8080"]
+    networks: [test_harness]
+    environment:
+      - JOB_TIMEOUT_MS=30000
+      - MOCK_LLM_RESPONSE=mock llm response from test harness
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 3s
+      timeout: 2s
+      retries: 6
+
+  # ── Mock WebSocket Hub (for WS protocol testing) ───────────────────────
+  ws_hub:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./mock_orchestrator:/app
+      - ./mock_orchestrator/__init__.py:/app/__init__.py:ro
+    command: ["python3", "hub.py", "--port", "9000"]
+    ports: ["9000:9000"]
+    networks: [test_harness]
+    environment:
+      - HARNESS_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+      - TASK_PROMPT=print('hello from worker test')
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "python3 -c 'import socket; s=socket.socket(); s.connect((\"127.0.0.1\",9000)); s.close()'"]
+      interval: 5s
+      timeout: 2s
+      retries: 6
+
+  # ── Codex Worker ───────────────────────
+  codex_worker:
+    build:
+      context: ../../codex4ironclaw
+      dockerfile: Dockerfile
+    environment:
+      - CODEX_MODE=websocket
+      - WS_ROLE=client
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+      - OPENAI_API_KEY=${MOCK_API_KEY:-test-key}
+      - WS_URL=ws://ws_hub:9000
+    ports: ["8443:8443"]
+    networks: [test_harness]
+    depends_on:
+      ws_hub:
+        condition: service_healthy
+    volumes: [codex_logs:/logs]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Nanocode Worker ────────────────────
+  nanocode_worker:
+    build:
+      context: ../../nanocode4ironclaw
+      dockerfile: Dockerfile
+    environment:
+      - NANOCODE_MODE=websocket
+      - WS_ROLE=server
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+      - TENSORZERO_API_KEY=${MOCK_API_KEY:-test-key}
+      - WS_PORT=9090
+    ports: ["8444:8443", "9090:9090"]
+    networks: [test_harness]
+    volumes: [nanocode_logs:/logs]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Built-in Worker (requires lunarwing binary) ────────────────────────
+  builtin_worker:
+    image: ${BUILTIN_WORKER_IMAGE:-lunarwing:latest}
+    entrypoint: ["/lunarwing"]
+    command: ["worker", "--job-id", "test-harness-job", "--orchestrator-url", "http://orchestrator:8080"]
+    environment:
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    networks: [test_harness]
+    profiles: ["full"]  # requires built binary
+
+  # ── Sandbox Worker (requires lunarwing binary + docker socket) ─────────
+  sandbox_worker:
+    image: ${SANDBOX_WORKER_IMAGE:-lunarwing:latest}
+    entrypoint: ["/lunarwing"]
+    command: ["sandbox", "exec", "echo sandbox-ok"]
+    environment:
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    networks: [test_harness]
+    profiles: ["full"]  # requires built binary + docker socket
