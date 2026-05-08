@@ -54,6 +54,10 @@ pub struct OrchestratorState {
     /// In-memory cache of job_id → user_id for SSE scoping. Populated when
     /// sandbox jobs are created, avoiding a DB round-trip on every job event.
     pub job_owner_cache: Arc<std::sync::RwLock<HashMap<Uuid, String>>>,
+    /// Direct handle to the in-memory job state tracker. Used by
+    /// `report_complete` to guarantee the job transitions out of
+    /// `InProgress` even if the broadcast is missed by the monitor.
+    pub context_manager: Option<Arc<crate::context::ContextManager>>,
 }
 
 /// The orchestrator's internal API server.
@@ -292,6 +296,27 @@ async fn report_complete(
                 fallback_deliverable: None,
             },
         ));
+    }
+
+    // Directly update ContextManager so the job transitions out of
+    // InProgress even if the broadcast is missed by the monitor.
+    if let Some(ref cm) = state.context_manager {
+        let (target, reason) = match status {
+            "completed" => (crate::context::JobState::Completed, None),
+            "stuck" => (
+                crate::context::JobState::Stuck,
+                Some("Container is awaiting approval or manual attention".to_string()),
+            ),
+            other => (
+                crate::context::JobState::Failed,
+                Some(format!("Container finished: {}", other)),
+            ),
+        };
+        let _ = cm
+            .update_context(job_id, |ctx| {
+                let _ = ctx.transition_to(target, reason);
+            })
+            .await;
     }
 
     Ok(Json(serde_json::json!({"status": "ok"})))
@@ -600,6 +625,7 @@ mod tests {
             secrets_store: None,
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            context_manager: None,
         }
     }
 
@@ -830,6 +856,7 @@ mod tests {
             secrets_store: Some(secrets_store),
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            context_manager: None,
         };
 
         let router = OrchestratorApi::router(state);
@@ -866,6 +893,7 @@ mod tests {
             secrets_store: None,
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            context_manager: None,
         };
 
         let job_id = Uuid::new_v4();
@@ -924,6 +952,7 @@ mod tests {
             secrets_store: None,
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            context_manager: None,
         };
 
         let job_id = Uuid::new_v4();
@@ -973,6 +1002,7 @@ mod tests {
             secrets_store: None,
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            context_manager: None,
         };
 
         let job_id = Uuid::new_v4();

@@ -415,6 +415,7 @@ async fn async_main() -> anyhow::Result<()> {
         &components.llm,
         components.db.as_ref(),
         components.secrets_store.as_ref(),
+        Some(Arc::clone(&components.context_manager)),
     )
     .await;
     let container_job_manager = orch.container_job_manager;

@@ -75,6 +75,7 @@ pub async fn setup_orchestrator(
     llm: &Arc<dyn LlmProvider>,
     db: Option<&Arc<dyn Database>>,
     secrets_store: Option<&Arc<dyn SecretsStore + Send + Sync>>,
+    context_manager: Option<Arc<crate::context::ContextManager>>,
 ) -> OrchestratorSetup {
     let prompt_queue = Arc::new(Mutex::new(
         HashMap::<Uuid, VecDeque<api::PendingPrompt>>::new(),
@@ -123,7 +124,11 @@ pub async fn setup_orchestrator(
             claude_code_memory_limit_mb: config.claude_code.memory_limit_mb,
             claude_code_allowed_tools: config.claude_code.allowed_tools.clone(),
         };
-        let jm = Arc::new(ContainerJobManager::new(job_config, token_store.clone()));
+        let mut jm_inner = ContainerJobManager::new(job_config, token_store.clone());
+        if let (Some(etx), Some(cm)) = (&job_event_tx, &context_manager) {
+            jm_inner = jm_inner.with_completion_deps(etx.clone(), Arc::clone(cm));
+        }
+        let jm = Arc::new(jm_inner);
 
         let orchestrator_state = api::OrchestratorState {
             llm: Arc::clone(llm),
@@ -135,6 +140,7 @@ pub async fn setup_orchestrator(
             secrets_store: secrets_store.cloned(),
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            context_manager,
         };
 
         tokio::spawn(async move {

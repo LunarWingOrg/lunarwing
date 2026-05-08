@@ -275,16 +275,17 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
 
-## Things to do before 1.0.2 Release:
+## Things to do before 1.0.3 Release:
 
-1. Run full MT Admin Setup and test the following for functionality: A: routine which uses gotify to send a gotify notification at once per hour (requires gotify setup with app token stored as secret first), B: XMPP bridge with OMEMO, will require a xmpp account to be made and bridge needs to be configured with xmpp allow from jid, xmpp jid, password. 
-2. Write up some release notes for 1.0.2
+1. Test subagent fixes.
+2. Write up some release notes for 1.0.3 which explain all of the changes since 1.0.2
 3. Create a new branch to correspond with release
 4. Create gh release tag and add release notes to it like other releases already have rn.
 
-## Things to do after 1.0.2 Release:
+## Things to do after 1.0.3 Release:
 
-1. Review bug fixes.
-2. OCR and Image Recog with sidecar plan by Ruffles
-3. Expand testing of worker containers.
-4. Add support for Multica for multi-agent coordination (self-hostable free open source software)
+1. Review bug fixes thus far.
+2. Attempt to get MT working properly with the new MT admin script. Will need to do a lot of testing for this.
+3. OCR and Image Recog with sidecar plan by Ruffles
+4. Expand testing of worker containers.
+5. Add support for Multica for multi-agent coordination (self-hostable free open source software)

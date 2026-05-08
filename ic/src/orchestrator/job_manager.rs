@@ -11,6 +11,8 @@ use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use futures::StreamExt;
+
 use crate::bootstrap::lunarwing_base_dir;
 use crate::error::OrchestratorError;
 use crate::orchestrator::auth::{CredentialGrant, TokenStore};
@@ -213,6 +215,11 @@ pub struct ContainerJobManager {
     pub(crate) containers: Arc<RwLock<HashMap<Uuid, ContainerHandle>>>,
     /// Cached Docker connection (created on first use).
     docker: Arc<RwLock<Option<bollard::Docker>>>,
+    /// Broadcast channel for emitting job events when a container exits
+    /// without calling /complete.
+    job_event_tx: Option<tokio::sync::broadcast::Sender<(Uuid, String, crate::channels::web::types::SseEvent)>>,
+    /// Direct handle to ContextManager for force-completing abandoned jobs.
+    context_manager: Option<Arc<crate::context::ContextManager>>,
 }
 
 impl ContainerJobManager {
@@ -222,7 +229,19 @@ impl ContainerJobManager {
             token_store,
             containers: Arc::new(RwLock::new(HashMap::new())),
             docker: Arc::new(RwLock::new(None)),
+            job_event_tx: None,
+            context_manager: None,
         }
+    }
+
+    pub fn with_completion_deps(
+        mut self,
+        event_tx: tokio::sync::broadcast::Sender<(Uuid, String, crate::channels::web::types::SseEvent)>,
+        context_manager: Arc<crate::context::ContextManager>,
+    ) -> Self {
+        self.job_event_tx = Some(event_tx);
+        self.context_manager = Some(context_manager);
+        self
     }
 
     /// Get or create a Docker connection.
@@ -447,6 +466,9 @@ impl ContainerJobManager {
                 reason: format!("failed to start container: {}", e),
             })?;
 
+        // Clone container_id before moving it into the handle.
+        let watcher_container_id = container_id.clone();
+
         // Update handle with container ID
         if let Some(handle) = self.containers.write().await.get_mut(&job_id) {
             handle.container_id = container_id;
@@ -457,6 +479,114 @@ impl ContainerJobManager {
             job_id = %job_id,
             "Created and started worker container"
         );
+
+        // Spawn a background watcher that detects container exit.
+        // If the container exits without calling /complete (e.g. crash,
+        // OOM kill, network failure), this watcher force-completes the
+        // job so it doesn't stay InProgress forever.
+        let watcher_containers = Arc::clone(&self.containers);
+        let watcher_docker = Arc::clone(&self.docker);
+        let watcher_token_store = self.token_store.clone();
+        let watcher_event_tx = self.job_event_tx.clone();
+        let watcher_context_manager = self.context_manager.clone();
+        tokio::spawn(async move {
+            let docker = {
+                let guard = watcher_docker.read().await;
+                match guard.as_ref() {
+                    Some(d) => d.clone(),
+                    None => return,
+                }
+            };
+
+            let wait_result = docker
+                .wait_container::<String>(&watcher_container_id, None)
+                .next()
+                .await;
+
+            // Grace period: let /complete finish processing if it's in flight.
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+            let already_completed = {
+                let containers = watcher_containers.read().await;
+                containers
+                    .get(&job_id)
+                    .map(|h| h.state == ContainerState::Stopped)
+                    .unwrap_or(true)
+            };
+
+            if already_completed {
+                return;
+            }
+
+            let exit_info = match wait_result {
+                Some(Ok(resp)) => format!("exit code {}", resp.status_code),
+                Some(Err(e)) => format!("docker wait error: {}", e),
+                None => "container vanished".to_string(),
+            };
+
+            tracing::warn!(
+                job_id = %job_id,
+                info = %exit_info,
+                "Container exited without calling /complete — force-completing job"
+            );
+
+            {
+                let mut containers = watcher_containers.write().await;
+                if let Some(handle) = containers.get_mut(&job_id) {
+                    if handle.completion_result.is_none() {
+                        handle.completion_result = Some(CompletionResult {
+                            success: false,
+                            message: Some(format!(
+                                "Container exited without reporting completion ({})",
+                                exit_info
+                            )),
+                        });
+                    }
+                    handle.state = ContainerState::Stopped;
+                }
+            }
+
+            // Clean up container and revoke token
+            let _ = docker
+                .remove_container(
+                    &watcher_container_id,
+                    Some(bollard::container::RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
+                .await;
+            watcher_token_store.revoke(job_id).await;
+
+            // Update ContextManager so job_status shows the real state.
+            if let Some(ref cm) = watcher_context_manager {
+                let _ = cm
+                    .update_context(job_id, |ctx| {
+                        let _ = ctx.transition_to(
+                            crate::context::JobState::Failed,
+                            Some(format!(
+                                "Container exited without reporting completion ({})",
+                                exit_info
+                            )),
+                        );
+                    })
+                    .await;
+            }
+
+            // Broadcast JobResult so the job monitor can also react.
+            if let Some(ref tx) = watcher_event_tx {
+                let _ = tx.send((
+                    job_id,
+                    "default".to_string(),
+                    crate::channels::web::types::SseEvent::JobResult {
+                        job_id: job_id.to_string(),
+                        status: "failed".to_string(),
+                        session_id: None,
+                        fallback_deliverable: None,
+                    },
+                ));
+            }
+        });
 
         Ok(())
     }

@@ -157,10 +157,20 @@ pub fn spawn_job_monitor_with_context(
                     );
                 }
                 Ok(Err(broadcast::error::RecvError::Closed)) => {
-                    tracing::debug!(
+                    tracing::warn!(
                         job_id = %short_id,
                         "Broadcast channel closed, stopping monitor"
                     );
+                    if let Some(ref cm) = context_manager {
+                        let _ = cm
+                            .update_context(job_id, |ctx| {
+                                let _ = ctx.transition_to(
+                                    JobState::Failed,
+                                    Some("Broadcast channel closed before completion".to_string()),
+                                );
+                            })
+                            .await;
+                    }
                     break;
                 }
                 Err(_elapsed) => {
@@ -229,10 +239,18 @@ pub fn spawn_completion_watcher(
                     );
                 }
                 Ok(Err(broadcast::error::RecvError::Closed)) => {
-                    tracing::debug!(
+                    tracing::warn!(
                         job_id = %short_id,
                         "Broadcast channel closed, stopping completion watcher"
                     );
+                    let _ = context_manager
+                        .update_context(job_id, |ctx| {
+                            let _ = ctx.transition_to(
+                                JobState::Failed,
+                                Some("Broadcast channel closed before completion".to_string()),
+                            );
+                        })
+                        .await;
                     break;
                 }
                 Err(_elapsed) => {
