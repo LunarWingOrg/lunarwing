@@ -356,6 +356,7 @@ impl Channel for StubChannel {
         } else {
             Err(ChannelError::HealthCheckFailed {
                 name: self.name.clone(),
+                reason: "stub channel unhealthy".to_string(),
             })
         }
     }

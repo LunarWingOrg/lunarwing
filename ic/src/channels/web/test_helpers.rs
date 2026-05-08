@@ -94,6 +94,7 @@ impl TestGatewayBuilder {
             active_config: crate::channels::web::server::ActiveConfigSnapshot::default(),
             secrets_store: None,
             db_auth: None,
+            channel_manager: None,
         })
     }
 

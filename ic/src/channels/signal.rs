@@ -1076,14 +1076,16 @@ impl Channel for SignalChannel {
             .send()
             .await
             .map_err(|e| ChannelError::HealthCheckFailed {
-                name: format!("signal ({}): {e}", Self::redact_url(&url)),
+                name: "signal".to_string(),
+                reason: format!("{}: {e}", Self::redact_url(&url)),
             })?;
 
         if resp.status().is_success() {
             Ok(())
         } else {
             Err(ChannelError::HealthCheckFailed {
-                name: format!("signal: HTTP {}", resp.status()),
+                name: "signal".to_string(),
+                reason: format!("HTTP {}", resp.status()),
             })
         }
     }

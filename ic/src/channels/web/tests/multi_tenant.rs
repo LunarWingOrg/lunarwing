@@ -84,6 +84,7 @@ fn build_state(
         active_config: ActiveConfigSnapshot::default(),
         secrets_store: None,
         db_auth: None,
+        channel_manager: None,
     })
 }
 

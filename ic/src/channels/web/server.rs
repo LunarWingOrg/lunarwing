@@ -380,6 +380,8 @@ pub struct GatewayState {
     pub secrets_store: Option<Arc<dyn crate::secrets::SecretsStore + Send + Sync>>,
     /// DB-backed token authenticator (optional).
     pub db_auth: Option<Arc<crate::channels::web::auth::DbAuthenticator>>,
+    /// Channel manager for health checks.
+    pub channel_manager: Option<Arc<crate::channels::manager::ChannelManager>>,
 }
 
 /// Start the gateway HTTP server.
@@ -2777,6 +2779,30 @@ async fn gateway_status_handler(
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
 
+    let channel_health = if let Some(ref cm) = state.channel_manager {
+        let results = cm.health_check_all().await;
+        Some(
+            results
+                .into_iter()
+                .map(|(name, result)| {
+                    let entry = match result {
+                        Ok(()) => ChannelHealthEntry {
+                            healthy: true,
+                            error: None,
+                        },
+                        Err(e) => ChannelHealthEntry {
+                            healthy: false,
+                            error: Some(e.to_string()),
+                        },
+                    };
+                    (name, entry)
+                })
+                .collect(),
+        )
+    } else {
+        None
+    };
+
     Json(GatewayStatusResponse {
         version: env!("CARGO_PKG_VERSION").to_string(),
         sse_connections,
@@ -2790,6 +2816,7 @@ async fn gateway_status_handler(
         llm_backend: state.active_config.llm_backend.clone(),
         llm_model: state.active_config.llm_model.clone(),
         enabled_channels: state.active_config.enabled_channels.clone(),
+        channel_health,
     })
 }
 
@@ -2799,6 +2826,13 @@ struct ModelUsageEntry {
     input_tokens: u64,
     output_tokens: u64,
     cost: String,
+}
+
+#[derive(serde::Serialize)]
+struct ChannelHealthEntry {
+    healthy: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -2818,6 +2852,8 @@ struct GatewayStatusResponse {
     llm_backend: String,
     llm_model: String,
     enabled_channels: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel_health: Option<std::collections::HashMap<String, ChannelHealthEntry>>,
 }
 
 #[cfg(test)]
@@ -3020,6 +3056,7 @@ mod tests {
             active_config: ActiveConfigSnapshot::default(),
             secrets_store: None,
             db_auth: None,
+            channel_manager: None,
         })
     }
 

@@ -686,6 +686,7 @@ impl Channel for HttpChannel {
         } else {
             Err(ChannelError::HealthCheckFailed {
                 name: "http".to_string(),
+                reason: "sender unavailable".to_string(),
             })
         }
     }

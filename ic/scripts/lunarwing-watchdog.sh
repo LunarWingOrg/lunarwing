@@ -58,6 +58,31 @@ if command -v flock >/dev/null 2>&1; then
 fi
 
 if systemctl is-active --quiet "$SERVICE"; then
+  # Optional deep health check via gateway status endpoint.
+  GATEWAY_URL="${LUNARWING_WATCHDOG_GATEWAY_URL:-}"
+  GATEWAY_TOKEN="${LUNARWING_WATCHDOG_GATEWAY_TOKEN:-}"
+  if [[ -n "$GATEWAY_URL" && -n "$GATEWAY_TOKEN" ]] \
+     && command -v curl >/dev/null 2>&1 \
+     && command -v jq >/dev/null 2>&1; then
+    status_json="$(curl -sf -m 10 \
+      -H "Authorization: Bearer $GATEWAY_TOKEN" \
+      "$GATEWAY_URL/api/gateway/status" 2>/dev/null || true)"
+    if [[ -n "$status_json" ]]; then
+      unhealthy="$(printf '%s' "$status_json" \
+        | jq -r '.channel_health // {} | to_entries[] | select(.value.healthy == false) | .key' 2>/dev/null || true)"
+      if [[ -n "$unhealthy" ]]; then
+        log "$SERVICE active but channels unhealthy: $unhealthy; restarting"
+        systemctl restart "$SERVICE" || log "deep-check restart failed"
+        sleep "$POST_RESTART_SLEEP_SECONDS"
+        if systemctl is-active --quiet "$SERVICE"; then
+          log "$SERVICE deep-check restart succeeded"
+        else
+          log "$SERVICE deep-check restart failed; service not active"
+        fi
+        exit 0
+      fi
+    fi
+  fi
   log "$SERVICE active; no action"
   exit 0
 fi

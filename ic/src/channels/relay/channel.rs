@@ -399,6 +399,7 @@ impl Channel for RelayChannel {
             .await
             .map_err(|_| ChannelError::HealthCheckFailed {
                 name: self.name().to_string(),
+                reason: "relay connection check failed".to_string(),
             })?;
         Ok(())
     }

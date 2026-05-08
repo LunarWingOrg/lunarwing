@@ -691,6 +691,15 @@ pub struct WasmChannel {
     /// Polling shutdown signal sender (keeps polling alive while held).
     poll_shutdown_tx: RwLock<Option<oneshot::Sender<()>>>,
 
+    /// Handle to the supervised polling task (for health checking).
+    poll_task: RwLock<Option<tokio::task::JoinHandle<()>>>,
+
+    /// Epoch millis of the last successful poll tick (updated atomically by the polling task).
+    last_poll_epoch_ms: Arc<std::sync::atomic::AtomicU64>,
+
+    /// If no poll tick occurs within this duration, the channel is considered stalled.
+    poll_stall_threshold_ms: std::sync::atomic::AtomicU64,
+
     /// Registered HTTP endpoints.
     endpoints: RwLock<Vec<RegisteredEndpoint>>,
 
@@ -839,6 +848,9 @@ impl WasmChannel {
             rate_limiter: Arc::new(RwLock::new(rate_limiter)),
             shutdown_tx: RwLock::new(None),
             poll_shutdown_tx: RwLock::new(None),
+            poll_task: RwLock::new(None),
+            last_poll_epoch_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            poll_stall_threshold_ms: std::sync::atomic::AtomicU64::new(0),
             endpoints: RwLock::new(Vec::new()),
             credentials: Arc::new(RwLock::new(HashMap::new())),
             typing_task: RwLock::new(None),
@@ -2252,12 +2264,13 @@ impl WasmChannel {
         Ok(())
     }
 
-    /// Start the polling loop if configured.
+    /// Start the supervised polling loop.
     ///
-    /// Since we can't hold `Arc<Self>` from `&self`, we pass all the components
-    /// needed for polling to a spawned task. Each poll tick creates a fresh WASM
-    /// instance (matching our "fresh instance per callback" pattern).
-    fn start_polling(&self, interval: Duration, shutdown_rx: oneshot::Receiver<()>) {
+    /// Spawns an outer supervision task that monitors an inner polling loop.
+    /// If the inner loop exits unexpectedly (panic, error), the supervisor
+    /// respawns it with exponential backoff. The JoinHandle is stored so
+    /// `health_check()` can detect a dead supervisor.
+    async fn start_polling(&self, interval: Duration, shutdown_rx: oneshot::Receiver<()>) {
         let channel_name = self.name.clone();
         let runtime = Arc::clone(&self.runtime);
         let prepared = Arc::clone(&self.prepared);
@@ -2274,82 +2287,130 @@ impl WasmChannel {
         let poll_secrets_store = self.secrets_store.clone();
         let owner_scope_id = self.owner_scope_id.clone();
         let owner_actor_id = self.owner_actor_id.clone();
+        let last_poll_epoch_ms = Arc::clone(&self.last_poll_epoch_ms);
 
-        tokio::spawn(async move {
-            let mut interval_timer = tokio::time::interval(interval);
+        let handle = tokio::spawn(async move {
             let mut shutdown = std::pin::pin!(shutdown_rx);
+            let mut consecutive_failures: u32 = 0;
 
             loop {
-                tokio::select! {
-                    _ = interval_timer.tick() => {
-                        tracing::debug!(
-                            channel = %channel_name,
-                            "Polling tick - calling on_poll"
-                        );
+                let inner_handle = {
+                    let cn = channel_name.clone();
+                    let rt = Arc::clone(&runtime);
+                    let prep = Arc::clone(&prepared);
+                    let pc = poll_capabilities.clone();
+                    let caps = capabilities.clone();
+                    let mtx = message_tx.clone();
+                    let rl = rate_limiter.clone();
+                    let creds = credentials.clone();
+                    let ps = pairing_store.clone();
+                    let ws = workspace_store.clone();
+                    let lbm = last_broadcast_metadata.clone();
+                    let ss = settings_store.clone();
+                    let pss = poll_secrets_store.clone();
+                    let osi = owner_scope_id.clone();
+                    let oai = owner_actor_id.clone();
+                    let lpe = Arc::clone(&last_poll_epoch_ms);
 
-                        // Pre-resolve host credentials for this tick
-                        let host_credentials = resolve_channel_host_credentials(
-                            &poll_capabilities,
-                            poll_secrets_store.as_deref(),
-                            &owner_scope_id,
-                        )
-                        .await;
+                    tokio::spawn(async move {
+                        let mut interval_timer = tokio::time::interval(interval);
 
-                        // Execute on_poll with fresh WASM instance
-                        let result = Self::execute_poll(
-                            &channel_name,
-                            &runtime,
-                            &prepared,
-                            &capabilities,
-                            &credentials,
-                            host_credentials,
-                            pairing_store.clone(),
-                            callback_timeout,
-                            &workspace_store,
-                        ).await;
+                        loop {
+                            interval_timer.tick().await;
 
-                        match result {
-                            Ok(emitted_messages) => {
-                                // Process any emitted messages
-                                if !emitted_messages.is_empty()
-                                    && let Err(e) = Self::dispatch_emitted_messages(
-                                        EmitDispatchContext {
-                                            channel_name: &channel_name,
-                                            owner_scope_id: &owner_scope_id,
-                                            owner_actor_id: owner_actor_id.as_deref(),
-                                            message_tx: &message_tx,
-                                            rate_limiter: &rate_limiter,
-                                            last_broadcast_metadata: &last_broadcast_metadata,
-                                            settings_store: settings_store.as_ref(),
-                                        },
-                                        emitted_messages,
-                                    ).await {
-                                        tracing::warn!(
-                                            channel = %channel_name,
-                                            error = %e,
-                                            "Failed to dispatch emitted messages from poll"
-                                        );
+                            tracing::debug!(channel = %cn, "Polling tick - calling on_poll");
+
+                            let host_credentials = resolve_channel_host_credentials(
+                                &pc, pss.as_deref(), &osi,
+                            ).await;
+
+                            let result = Self::execute_poll(
+                                &cn, &rt, &prep, &caps, &creds,
+                                host_credentials, ps.clone(), callback_timeout, &ws,
+                            ).await;
+
+                            match result {
+                                Ok(emitted_messages) => {
+                                    lpe.store(
+                                        std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_millis() as u64,
+                                        std::sync::atomic::Ordering::Release,
+                                    );
+
+                                    if !emitted_messages.is_empty() {
+                                        if let Err(e) = Self::dispatch_emitted_messages(
+                                            EmitDispatchContext {
+                                                channel_name: &cn,
+                                                owner_scope_id: &osi,
+                                                owner_actor_id: oai.as_deref(),
+                                                message_tx: &mtx,
+                                                rate_limiter: &rl,
+                                                last_broadcast_metadata: &lbm,
+                                                settings_store: ss.as_ref(),
+                                            },
+                                            emitted_messages,
+                                        ).await {
+                                            tracing::warn!(
+                                                channel = %cn, error = %e,
+                                                "Failed to dispatch emitted messages from poll"
+                                            );
+                                        }
                                     }
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        channel = %cn, error = %e,
+                                        "Polling callback failed"
+                                    );
+                                }
                             }
-                            Err(e) => {
+                        }
+                    })
+                };
+
+                tokio::select! {
+                    result = inner_handle => {
+                        match result {
+                            Ok(()) => {
                                 tracing::warn!(
                                     channel = %channel_name,
+                                    "Polling loop exited unexpectedly"
+                                );
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    channel = %channel_name,
                                     error = %e,
-                                    "Polling callback failed"
+                                    "Polling loop panicked"
                                 );
                             }
                         }
+                        consecutive_failures += 1;
+                        let backoff_secs = 2u64
+                            .saturating_pow(consecutive_failures.min(6))
+                            .min(120);
+                        tracing::error!(
+                            channel = %channel_name,
+                            attempt = consecutive_failures,
+                            backoff_secs,
+                            "Respawning polling loop after backoff"
+                        );
+                        tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
                     }
                     _ = &mut shutdown => {
                         tracing::info!(
                             channel = %channel_name,
-                            "Polling stopped"
+                            "Polling stopped (shutdown signal)"
                         );
                         break;
                     }
                 }
             }
         });
+
+        *self.poll_task.write().await = Some(handle);
     }
 
     /// Execute a single poll callback with a fresh WASM instance.
@@ -2637,11 +2698,17 @@ impl Channel for WasmChannel {
                     reason: e,
                 })?;
 
+            let poll_interval = Duration::from_millis(interval as u64);
+            self.poll_stall_threshold_ms.store(
+                (poll_interval * 3).max(Duration::from_secs(30)).as_millis() as u64,
+                std::sync::atomic::Ordering::Release,
+            );
+
             // Create shutdown channel for polling and store the sender to keep it alive
             let (poll_shutdown_tx, poll_shutdown_rx) = oneshot::channel();
             *self.poll_shutdown_tx.write().await = Some(poll_shutdown_tx);
 
-            self.start_polling(Duration::from_millis(interval as u64), poll_shutdown_rx);
+            self.start_polling(poll_interval, poll_shutdown_rx).await;
         }
 
         tracing::info!(
@@ -2738,14 +2805,43 @@ impl Channel for WasmChannel {
     }
 
     async fn health_check(&self) -> Result<(), ChannelError> {
-        // Check if we have an active message sender
-        if self.message_tx.read().await.is_some() {
-            Ok(())
-        } else {
-            Err(ChannelError::HealthCheckFailed {
+        if self.message_tx.read().await.is_none() {
+            return Err(ChannelError::HealthCheckFailed {
                 name: self.name.clone(),
-            })
+                reason: "sender unavailable".to_string(),
+            });
         }
+
+        if let Some(ref handle) = *self.poll_task.read().await {
+            if handle.is_finished() {
+                return Err(ChannelError::HealthCheckFailed {
+                    name: self.name.clone(),
+                    reason: "polling task exited".to_string(),
+                });
+            }
+        }
+
+        let last_ms = self.last_poll_epoch_ms.load(std::sync::atomic::Ordering::Acquire);
+        let threshold_ms = self.poll_stall_threshold_ms.load(std::sync::atomic::Ordering::Acquire);
+        if last_ms > 0 && threshold_ms > 0 {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let elapsed_ms = now_ms.saturating_sub(last_ms);
+            if elapsed_ms > threshold_ms {
+                return Err(ChannelError::HealthCheckFailed {
+                    name: self.name.clone(),
+                    reason: format!(
+                        "polling stalled (no tick for {}s, threshold {}s)",
+                        elapsed_ms / 1000,
+                        threshold_ms / 1000
+                    ),
+                });
+            }
+        }
+
+        Ok(())
     }
 
     async fn shutdown(&self) -> Result<(), ChannelError> {
@@ -2759,6 +2855,11 @@ impl Channel for WasmChannel {
 
         // Stop polling by dropping the sender (receiver will complete)
         let _ = self.poll_shutdown_tx.write().await.take();
+
+        // Abort the poll supervision task
+        if let Some(handle) = self.poll_task.write().await.take() {
+            handle.abort();
+        }
 
         // Clear the message sender
         *self.message_tx.write().await = None;
@@ -4876,6 +4977,72 @@ mod tests {
         let msg = rx.try_recv().expect("Should receive message"); // safety: test-only assertion
         assert_eq!(msg.content, "Just text, no attachments"); // safety: test-only assertion
         assert!(msg.attachments.is_empty()); // safety: test-only assertion
+    }
+
+    #[tokio::test]
+    async fn test_health_check_detects_dead_poll_task() {
+        let channel = create_test_channel();
+        let _stream = channel.start().await.expect("Channel should start");
+
+        // Inject a poll task handle and immediately abort it
+        let handle = tokio::spawn(async { futures::future::pending::<()>().await });
+        handle.abort();
+        // Let the runtime propagate the cancellation
+        tokio::task::yield_now().await;
+        *channel.poll_task.write().await = Some(handle);
+
+        let result = channel.health_check().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("polling task exited"),
+            "Expected 'polling task exited', got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_health_check_detects_stalled_poll() {
+        let channel = create_test_channel();
+        let _stream = channel.start().await.expect("Channel should start");
+
+        channel
+            .poll_stall_threshold_ms
+            .store(5_000, std::sync::atomic::Ordering::Release);
+
+        // Set last_poll_epoch_ms to 60 seconds ago (well past the 5s threshold)
+        let stale_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+            - 60_000;
+        channel
+            .last_poll_epoch_ms
+            .store(stale_ms, std::sync::atomic::Ordering::Release);
+
+        let result = channel.health_check().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("polling stalled"),
+            "Expected 'polling stalled', got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_aborts_poll_task() {
+        let channel = create_test_channel();
+        let _stream = channel.start().await.expect("Channel should start");
+
+        // Inject a long-running poll task
+        let handle = tokio::spawn(async { futures::future::pending::<()>().await });
+        *channel.poll_task.write().await = Some(handle);
+
+        channel.shutdown().await.expect("Shutdown should succeed");
+
+        assert!(
+            channel.poll_task.read().await.is_none(),
+            "poll_task should be None after shutdown"
+        );
     }
 
     #[test]

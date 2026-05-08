@@ -119,6 +119,7 @@ impl GatewayChannel {
             active_config: server::ActiveConfigSnapshot::default(),
             secrets_store: None,
             db_auth: None,
+            channel_manager: None,
         });
 
         Self {
@@ -162,6 +163,7 @@ impl GatewayChannel {
             active_config: self.state.active_config.clone(),
             secrets_store: self.state.secrets_store.clone(),
             db_auth: self.state.db_auth.clone(),
+            channel_manager: self.state.channel_manager.clone(),
         };
         mutate(&mut new_state);
         self.state = Arc::new(new_state);
@@ -310,6 +312,15 @@ impl GatewayChannel {
     /// Inject the per-user workspace pool for multi-user mode.
     pub fn with_workspace_pool(mut self, pool: Arc<server::WorkspacePool>) -> Self {
         self.rebuild_state(|s| s.workspace_pool = Some(pool));
+        self
+    }
+
+    /// Inject the channel manager for health monitoring.
+    pub fn with_channel_manager(
+        mut self,
+        cm: Arc<crate::channels::manager::ChannelManager>,
+    ) -> Self {
+        self.rebuild_state(|s| s.channel_manager = Some(cm));
         self
     }
 
@@ -543,6 +554,7 @@ impl Channel for GatewayChannel {
         } else {
             Err(ChannelError::HealthCheckFailed {
                 name: "gateway".to_string(),
+                reason: "sender unavailable".to_string(),
             })
         }
     }

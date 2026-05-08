@@ -83,3 +83,29 @@ sudo env PATH="${PATH}" scripts/lunarwing-mt-admin.sh restart-tenant <name>
 - **This is a live reproduction of BUG-subagent-worker-hang**
 - Confirms the race condition: container exits, ContextManager never updated, job stays stuck
 
+
+
+
+---
+
+# BUG: `memory_write` fails when `layer` is omitted (null)
+**Severity:** Low  
+**Found:** 2026-05-08 during v1.0.2 pre-release testing  
+**Status:** Open  
+**Component:** Memory Storage API  
+
+## Symptoms
+- Calling `memory_write` with `layer: null` (or omitting the `layer` field) returns:  
+  `Tool error: Write failed: Layer not found: null`  
+- The write is aborted and no data is saved.
+
+## Root Cause
+The `memory_write` implementation requires a non-null layer name. When the parameter is omitted, it does not default to a sensible layer (e.g., `"private"`), causing validation to reject the request.
+
+## Proposed Fix
+- Set a default layer (e.g., `"private"`) when `layer` is omitted or null.
+- Alternatively, return a clear error message indicating that a layer must be specified.
+
+## Workaround
+Always specify a valid layer name (`"private"`, `"household"`, `"finance"`, etc.) when using `memory_write`.
+

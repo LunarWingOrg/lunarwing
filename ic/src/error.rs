@@ -137,8 +137,8 @@ pub enum ChannelError {
     #[error("HTTP error: {0}")]
     Http(String),
 
-    #[error("Channel health check failed: {name}")]
-    HealthCheckFailed { name: String },
+    #[error("Channel health check failed: {name}: {reason}")]
+    HealthCheckFailed { name: String, reason: String },
 }
 
 // LlmError lives in src/llm/error.rs; re-exported here for backward compatibility.

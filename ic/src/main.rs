@@ -677,6 +677,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     // ── Gateway channel ────────────────────────────────────────────────
 
+    let channels = Arc::new(channels);
     let mut gateway_url: Option<String> = None;
     let mut sse_manager: Option<std::sync::Arc<lunarwing::channels::web::sse::SseManager>> = None;
     if let Some(ref gw_config) = config.channels.gateway {
@@ -799,6 +800,8 @@ async fn async_main() -> anyhow::Result<()> {
 
         tracing::debug!("Web UI: http://{}:{}/", gw_config.host, gw_config.port);
 
+        gw = gw.with_channel_manager(Arc::clone(&channels));
+
         // Capture SSE sender and routine engine slot before moving gw into channels.
         // IMPORTANT: This must come after all `with_*` calls since `rebuild_state`
         // creates a new SseManager, which would orphan this sender.
@@ -857,8 +860,6 @@ async fn async_main() -> anyhow::Result<()> {
     }
 
     // ── Run the agent ──────────────────────────────────────────────────
-
-    let channels = Arc::new(channels);
 
     // Register message tool for sending messages to connected channels
     components
