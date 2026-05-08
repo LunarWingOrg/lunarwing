@@ -73,7 +73,7 @@ class Hub:
 
     async def run(self, host="0.0.0.0", port=9000):
         async with websockets.serve(self.handle, host, port):
-            print(f"[hub] WS on ws://host}:port}")
+            print(f"[hub] WS on ws://{host}:{port}")
             await asyncio.Future()
 
 

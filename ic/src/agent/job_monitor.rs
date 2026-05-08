@@ -15,6 +15,7 @@
 //! ```
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
@@ -23,6 +24,10 @@ use uuid::Uuid;
 use crate::channels::IncomingMessage;
 use crate::channels::web::types::SseEvent;
 use crate::context::{ContextManager, JobState};
+
+/// Default timeout for job monitors when no explicit value is provided.
+/// 11 minutes = 10-minute max container runtime + 1-minute grace period.
+const DEFAULT_MONITOR_TIMEOUT: Duration = Duration::from_secs(660);
 
 fn job_state_from_result_status(status: &str) -> (JobState, Option<String>) {
     match status {
@@ -62,7 +67,7 @@ pub fn spawn_job_monitor(
     inject_tx: mpsc::Sender<IncomingMessage>,
     route: JobMonitorRoute,
 ) -> JoinHandle<()> {
-    spawn_job_monitor_with_context(job_id, event_rx, inject_tx, route, None)
+    spawn_job_monitor_with_context(job_id, event_rx, inject_tx, route, None, DEFAULT_MONITOR_TIMEOUT)
 }
 
 /// Like `spawn_job_monitor`, but also transitions the job's in-memory state
@@ -74,15 +79,20 @@ pub fn spawn_job_monitor_with_context(
     inject_tx: mpsc::Sender<IncomingMessage>,
     route: JobMonitorRoute,
     context_manager: Option<Arc<ContextManager>>,
+    monitor_timeout: Duration,
 ) -> JoinHandle<()> {
     let short_id = job_id.to_string()[..8].to_string();
 
     tokio::spawn(async move {
         tracing::info!(job_id = %short_id, "Job monitor started successfully");
 
+        let deadline = tokio::time::Instant::now() + monitor_timeout;
+
         loop {
-            match event_rx.recv().await {
-                Ok((ev_job_id, _user_id, event)) => {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+
+            match tokio::time::timeout(remaining, event_rx.recv()).await {
+                Ok(Ok((ev_job_id, _user_id, event))) => {
                     if ev_job_id != job_id {
                         continue;
                     }
@@ -107,8 +117,6 @@ pub fn spawn_job_monitor_with_context(
                             }
                         }
                         SseEvent::JobResult { status, .. } => {
-                            // Transition in-memory state so the job frees its
-                            // max_jobs slot and query tools show the final state.
                             if let Some(ref cm) = context_manager {
                                 let (target, reason) = job_state_from_result_status(&status);
                                 let _ = cm
@@ -138,23 +146,39 @@ pub fn spawn_job_monitor_with_context(
                             );
                             break;
                         }
-                        _ => {
-                            // Skip tool_use, tool_result, status events
-                        }
+                        _ => {}
                     }
                 }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
+                Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
                     tracing::warn!(
                         job_id = %short_id,
                         skipped = n,
                         "Job monitor lagged, some events were dropped"
                     );
                 }
-                Err(broadcast::error::RecvError::Closed) => {
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
                     tracing::debug!(
                         job_id = %short_id,
                         "Broadcast channel closed, stopping monitor"
                     );
+                    break;
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        job_id = %short_id,
+                        timeout_secs = monitor_timeout.as_secs(),
+                        "Job monitor timed out — marking job as failed"
+                    );
+                    if let Some(ref cm) = context_manager {
+                        let _ = cm
+                            .update_context(job_id, |ctx| {
+                                let _ = ctx.transition_to(
+                                    JobState::Failed,
+                                    Some("Monitor timed out waiting for completion".to_string()),
+                                );
+                            })
+                            .await;
+                    }
                     break;
                 }
             }
@@ -169,13 +193,18 @@ pub fn spawn_completion_watcher(
     job_id: Uuid,
     mut event_rx: broadcast::Receiver<(Uuid, String, SseEvent)>,
     context_manager: Arc<ContextManager>,
+    monitor_timeout: Duration,
 ) -> JoinHandle<()> {
     let short_id = job_id.to_string()[..8].to_string();
 
     tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + monitor_timeout;
+
         loop {
-            match event_rx.recv().await {
-                Ok((ev_job_id, _user_id, SseEvent::JobResult { status, .. }))
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+
+            match tokio::time::timeout(remaining, event_rx.recv()).await {
+                Ok(Ok((ev_job_id, _user_id, SseEvent::JobResult { status, .. })))
                     if ev_job_id == job_id =>
                 {
                     let (target, reason) = job_state_from_result_status(&status);
@@ -191,19 +220,35 @@ pub fn spawn_completion_watcher(
                     );
                     break;
                 }
-                Ok(_) => {}
-                Err(broadcast::error::RecvError::Lagged(n)) => {
+                Ok(Ok(_)) => {}
+                Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
                     tracing::warn!(
                         job_id = %short_id,
                         skipped = n,
                         "Completion watcher lagged"
                     );
                 }
-                Err(broadcast::error::RecvError::Closed) => {
+                Ok(Err(broadcast::error::RecvError::Closed)) => {
                     tracing::debug!(
                         job_id = %short_id,
                         "Broadcast channel closed, stopping completion watcher"
                     );
+                    break;
+                }
+                Err(_elapsed) => {
+                    tracing::warn!(
+                        job_id = %short_id,
+                        timeout_secs = monitor_timeout.as_secs(),
+                        "Completion watcher timed out — marking job as failed"
+                    );
+                    let _ = context_manager
+                        .update_context(job_id, |ctx| {
+                            let _ = ctx.transition_to(
+                                JobState::Failed,
+                                Some("Monitor timed out waiting for completion".to_string()),
+                            );
+                        })
+                        .await;
                     break;
                 }
             }
@@ -414,6 +459,7 @@ mod tests {
             inject_tx,
             test_route(),
             Some(Arc::clone(&cm)),
+            Duration::from_secs(10),
         );
 
         // Send completion event
@@ -463,6 +509,7 @@ mod tests {
             inject_tx,
             test_route(),
             Some(Arc::clone(&cm)),
+            Duration::from_secs(10),
         );
 
         // Send failure event
@@ -508,6 +555,7 @@ mod tests {
             inject_tx,
             test_route(),
             Some(Arc::clone(&cm)),
+            Duration::from_secs(10),
         );
 
         event_tx
@@ -548,7 +596,12 @@ mod tests {
             .unwrap();
 
         let (event_tx, _) = broadcast::channel::<(Uuid, String, SseEvent)>(16);
-        let handle = spawn_completion_watcher(job_id, event_tx.subscribe(), Arc::clone(&cm));
+        let handle = spawn_completion_watcher(
+            job_id,
+            event_tx.subscribe(),
+            Arc::clone(&cm),
+            Duration::from_secs(10),
+        );
 
         event_tx
             .send((
@@ -570,5 +623,65 @@ mod tests {
 
         let ctx = cm.get_context(job_id).await.unwrap();
         assert_eq!(ctx.state, JobState::Completed);
+    }
+
+    // === Regression: monitor timeout transitions job to Failed ===
+
+    #[tokio::test]
+    async fn test_monitor_timeout_marks_job_failed() {
+        use crate::context::{ContextManager, JobState};
+
+        let cm = Arc::new(ContextManager::new(5));
+        let job_id = Uuid::new_v4();
+        cm.register_sandbox_job(job_id, "user-1", "Build app", "desc")
+            .await
+            .unwrap();
+
+        let (event_tx, _) = broadcast::channel::<(Uuid, String, SseEvent)>(16);
+        let (inject_tx, _inject_rx) = mpsc::channel::<IncomingMessage>(16);
+
+        let handle = spawn_job_monitor_with_context(
+            job_id,
+            event_tx.subscribe(),
+            inject_tx,
+            test_route(),
+            Some(Arc::clone(&cm)),
+            Duration::from_millis(100),
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("monitor should exit after timeout")
+            .expect("monitor should not panic");
+
+        let ctx = cm.get_context(job_id).await.unwrap();
+        assert_eq!(ctx.state, JobState::Failed);
+    }
+
+    #[tokio::test]
+    async fn test_completion_watcher_timeout_marks_job_failed() {
+        use crate::context::{ContextManager, JobState};
+
+        let cm = Arc::new(ContextManager::new(5));
+        let job_id = Uuid::new_v4();
+        cm.register_sandbox_job(job_id, "user-1", "Build app", "desc")
+            .await
+            .unwrap();
+
+        let (event_tx, _) = broadcast::channel::<(Uuid, String, SseEvent)>(16);
+        let handle = spawn_completion_watcher(
+            job_id,
+            event_tx.subscribe(),
+            Arc::clone(&cm),
+            Duration::from_millis(100),
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("watcher should exit after timeout")
+            .expect("watcher should not panic");
+
+        let ctx = cm.get_context(job_id).await.unwrap();
+        assert_eq!(ctx.state, JobState::Failed);
     }
 }

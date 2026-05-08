@@ -459,6 +459,15 @@ impl CreateJobTool {
             });
         }
 
+        // Subscribe to the broadcast channel BEFORE starting the container.
+        // This eliminates the race where the container completes and broadcasts
+        // its result before the monitor is listening.
+        let pre_subscribed_rx = if !wait {
+            self.event_tx.as_ref().map(|etx| etx.subscribe())
+        } else {
+            None
+        };
+
         // Create the container job with the pre-determined job_id.
         let _token = jm
             .create_job(job_id, task, Some(project_dir), mode, credential_grants)
@@ -481,31 +490,24 @@ impl CreateJobTool {
         self.update_status(job_id, "running", None, None, Some(now), None);
 
         if !wait {
-            // Spawn a background monitor that forwards Claude Code output
-            // into the main agent loop.
-            //
-            // This monitor is intentionally fire-and-forget: its lifetime is
-            // bound to the broadcast channel (etx) and the inject sender (itx).
-            // When the broadcast sender is dropped during shutdown the
-            // subscription closes and the monitor exits. Likewise, if the agent
-            // loop stops consuming from inject_tx the send will fail and the
-            // monitor terminates. No JoinHandle is retained.
-            if let (Some(etx), Some(itx)) = (&self.event_tx, &self.inject_tx) {
+            let monitor_timeout = std::time::Duration::from_secs(630);
+
+            if let (Some(rx), Some(itx)) = (pre_subscribed_rx, &self.inject_tx) {
                 if let Some(route) = monitor_route_from_ctx(ctx) {
                     crate::agent::job_monitor::spawn_job_monitor_with_context(
                         job_id,
-                        etx.subscribe(),
+                        rx,
                         itx.clone(),
                         route,
                         Some(self.context_manager.clone()),
+                        monitor_timeout,
                     );
                 } else {
-                    // No routing metadata — can't inject messages, but still
-                    // need to transition the job out of InProgress when done.
                     crate::agent::job_monitor::spawn_completion_watcher(
                         job_id,
-                        etx.subscribe(),
+                        rx,
                         self.context_manager.clone(),
+                        monitor_timeout,
                     );
                 }
             }

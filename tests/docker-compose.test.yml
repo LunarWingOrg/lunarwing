@@ -54,7 +54,7 @@ services:
   # ── Codex Worker ───────────────────────
   codex_worker:
     build:
-      context: ../../codex4ironclaw
+      context: ../codex4ironclaw
       dockerfile: Dockerfile
     environment:
       - CODEX_MODE=websocket
@@ -77,7 +77,7 @@ services:
   # ── Nanocode Worker ────────────────────
   nanocode_worker:
     build:
-      context: ../../nanocode4ironclaw
+      context: ../nanocode4ironclaw
       dockerfile: Dockerfile
     environment:
       - NANOCODE_MODE=websocket

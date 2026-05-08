@@ -248,8 +248,8 @@ async fn report_complete(
     if let Err(e) = state.job_manager.complete_job(job_id, result).await {
         tracing::error!(job_id = %job_id, "Failed to complete job cleanup: {}", e);
     }
+    let status = completion_report_status(&report);
     if let Some(ref store) = state.store {
-        let status = completion_report_status(&report);
         if let Err(e) = store
             .update_sandbox_job_status(
                 job_id,
@@ -268,6 +268,30 @@ async fn report_complete(
                 e
             );
         }
+    }
+
+    // Broadcast an SSE JobResult so the job monitor can transition the
+    // in-memory ContextManager state. Without this, monitors waiting on
+    // event_rx.recv() would block indefinitely when the worker reports
+    // completion via /complete instead of /event.
+    if let Some(ref tx) = state.job_event_tx {
+        let owner_uid = state
+            .job_owner_cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&job_id)
+            .cloned()
+            .unwrap_or_else(|| state.user_id.clone());
+        let _ = tx.send((
+            job_id,
+            owner_uid,
+            SseEvent::JobResult {
+                job_id: job_id.to_string(),
+                status: status.to_string(),
+                session_id: None,
+                fallback_deliverable: None,
+            },
+        ));
     }
 
     Ok(Json(serde_json::json!({"status": "ok"})))
