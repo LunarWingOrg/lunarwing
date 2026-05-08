@@ -243,6 +243,7 @@ impl GatewayWorkflowHarness {
             active_config: lunarwing::channels::web::server::ActiveConfigSnapshot::default(),
             secrets_store: None,
             db_auth: None,
+            channel_manager: None,
         });
 
         let mut agent = Agent::new(

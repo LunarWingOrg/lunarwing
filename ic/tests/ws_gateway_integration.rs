@@ -68,6 +68,7 @@ async fn start_test_server() -> (
         active_config: lunarwing::channels::web::server::ActiveConfigSnapshot::default(),
         secrets_store: None,
         db_auth: None,
+        channel_manager: None,
     });
 
     let auth = lunarwing::channels::web::auth::MultiAuthState::single(
