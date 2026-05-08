@@ -2,67 +2,70 @@
 
 ## Claws are overrated. So, grow your wings and fly...
 
-### Secure, Performant, Privacy focused AI Agent Software
+### Secure, Performant, Privacy-Focused AI Agent Software
 
-#### Our website:
 [LunarWing](https://lunarwing.org/)
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
 
-The LunarWing project is a hard fork of the Ironclaw project originally developed by NearAI. The fork was initially started in February 2026 and continues to expand far beyond what NearAI's project is currently capable of.
+LunarWing is a hard fork of the Ironclaw project originally developed by NearAI, started February 2026. The fork has grown far beyond the upstream project's capabilities.
 
-LunarWing adds much needed features to the project. There are far too many improvements to merge them all upstream.
+LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal.
 
-## Why "LunarWing"?:
+The LunarWing project maintains the AGPLv3 license on the core project and all extensions, tools, and channels.
 
-### `Lunar` - We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information as well as the philosophical journal, `Agorism in the 21st Century`
+## Why "LunarWing"?
 
-### `Wing` - Wings are extensions of the body which allow flight. We can soar and we believe we will soar to even greater heights in time. (Wings can often serve other purposes as well.) We are not required to remain on the ground. Our imagination has enabled us to innovate in this space, where others have not been able to. We also chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`.
+**Lunar** -- We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information as well as the philosophical journal, *Agorism in the 21st Century*.
 
-The LunarWing project team maintains AGPLv3 license forever as well as AGPLv3 license on its extensions, tools, and channels.
+**Wing** -- Wings are extensions of the body which allow flight. We chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`. We are not required to remain on the ground.
 
-The LunarWing project was created with free open source software in mind. The LunarWing project is dedicated free open source infrastructure.
+## Features
 
-The LunarWing project adds real privacy respecting tools and channels, with full secret support, right out of the box. These include, but are not limited to:
-* Gotify (Tool, WASM, agents can send notifications via gotify)
-* Weechat (Channel, allows Lunarwing agent to utilize Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client for an agent to communicate, WASM)
-* DarkIRC (Channel, Darkfi WASM)
-* XMPP with OMEMO (wasm channel, bridge service, and core code changes had to be made to accomodate properly)
-* Superior REPL Server and Client with better output formatting, better subagent support, polite reminders stating that the agent is still processing. Completely optional to use the new advanced REPLv2
-* Persistent Codex (developed primarily by OpenAI) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Woker Container)
-* Persistent Nanocode (developed and maintained by the NanoGPT community) Worker Container with optional support for ACP via a specialized bridge, optional persistent mounted storage, and much more! (Custom Worker container)
-* An eventual agnostic coding worker container as well
-* Plan to introduce advanced character trait functionality
+LunarWing adds real privacy-respecting tools and channels, with full secret support, right out of the box:
 
-LunarWing developers actually care about your freedom as a user. This means that we simply do not support adding tools and channels to our official repository which we do not think allign with our values (see MANIFESTO). We do not force users to shy away from said tools and channels, but we will not be supporting them in our main monorepo here. All wasm tools and channels that develepors wish to create and maintain for LunarWing can be done so elsewhere. We simply do not have the time or patience or willingness to develop and support certain proprietary platforms for LunarWing. Especially not when we feel there is so much more important work to accomplish for this project. What we DO care about is self-hostable communciation layers. We will NOT continue to develop or support proprietary channels such as Slack, Telegram, or Discord due to ethical reasons but also because we feel that it is not our place to do so.
+### Channels & Communication
+* **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group)
+* **Weechat** -- WASM channel allowing the agent to use Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client
+* **DarkIRC** -- DarkFi WASM channel
 
-The LunarWing core development team is ACTUALLY serious about security and privacy, unlike the vast majority of "Claw" software.
+### Tools & Notifications
+* **Gotify** -- WASM tool for agent-initiated push notifications
 
-LunarWing and its core contributers are not affiliated with NearAI.
+### Worker Containers
+* **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
+* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge and persistent storage (`nanocode4ironclaw/`)
+* **Built-in Worker** -- Native worker running inside the LunarWing daemon (`ic/src/worker/`)
+* **Sandbox Worker** -- Docker-isolated execution sandbox (`ic/src/sandbox/`)
 
-## A Partial List of Brand New Additional Features which LunarWing introduces which are not in the upstream repository:
-
-* Specialized secret management wrapper scripts for both Postgres (we've enhanced postgres with finer tuned controls in our project) and LibSQL. See Secrets_Manager for more details.
+### Infrastructure & Operations
+* Specialized secret management wrapper scripts for both PostgreSQL and libSQL
 * Optional systemd and OpenRC services for LunarWing, channel bridges, and healthcheck services
-* Improved Scheduling System with native retry and exponential backoff for transient failures (`RetryPolicy`: max_retries, initial_delay, backoff_multiplier, max_delay), stuck-run recovery, configurable lightweight execution timeouts (`ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`), and automatic sweeping of orphaned routine runs. Retries piggyback on the existing cron ticker via `next_fire_at` — no extra scheduler needed.
-* Support for external agentic coding tools developed independently from upstream.
-* Better support for logging common errors which still plague the upstream project as well as automatic recovery when things go wrong
-* Self-healing, advanced healthchecks for channel bridge services, the running LunarWing binary/daemon/service itself, and the routines system (stuck-run sweeper, lightweight timeout enforcement). Infrastructure health checks auto-detect init system and run the appropriate checks (systemd or OpenRC).
-* Automated Testing Suite for development work.
-* Actual setup harness script which can be customized way more than the basic 'onboard' functionality. It has OS detection and is smart about setting up systemd services, OpenRC, or launchd (macOS). The test harness (`lunarwing-xmpp-test-env.sh`) is fully cross-platform: direct PID management on all platforms, launchd user agent generation on macOS (`render-launchd`, `mt-render-launchd`), and a `doctor` command that reports service status for all three init systems (systemd, OpenRC, launchd) plus watchdog installation state.
-* Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, flock-serialized builds, and support for systemd (user-level with linger), macOS (launchd), and OpenRC (system-level with supervise-daemon). See `docs/MULTITENANCY-PRODUCTION.md`.
-* Support for function calls, Inference, and feedback for models (see Tensorzero for examples). Now you can train your locally hosted models to work better with your agents.
+* Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
+* Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
+* Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
+* TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
 
-## Additionally, we support custom HTTP proxies for TensorZero routing setups with optimized tool_choice routing for open source coding agent applications as well as other various purposes.
-### The Project Scope:
-Our scope is large and is mainly concerned with adding many essential features from Upstream which are still missing, including more advanced health checking and self-repair mechanisms. The LunarWing team is more interested in providing useful features instead of support for proprietary chinese document editing tools or other unecessary crapware. Our vision for LunarWing is expressed in our MANIFESTO.
+### Development & Testing
+* Automated test suite with trace-replay E2E testing (no real LLM required)
+* Worker test harness for all 4 worker types with Docker Compose isolation (`tests/`)
+* REPLv2 server and client with better output formatting and subagent support
+* Support for external agentic coding tools developed independently from upstream
+* Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support
 
-#### Our core team utilizes a self-hosted Vikunja kanban board to keep track of tasks.
+### Philosophy
 
-## Instance Setup Defaults
+LunarWing developers care about your freedom as a user. We do not support proprietary platforms in our official repository. All WASM tools and channels that developers wish to create for proprietary platforms can be maintained elsewhere. We focus on self-hostable communication layers and open protocols.
 
-LunarWing supports a preseeded instance layout for fresh installs. The easiest
-way to prepare one is:
+The LunarWing core development team is not affiliated with NearAI.
+
+Our core team uses a self-hosted Vikunja kanban board to track tasks.
+
+## Instance Setup
+
+LunarWing supports a preseeded instance layout for fresh installs.
+
+### PostgreSQL
 
 ```bash
 ic/scripts/setup-instance.sh \
@@ -73,7 +76,7 @@ ic/scripts/setup-instance.sh \
   --run-onboard
 ```
 
-For a local libSQL setup:
+### libSQL
 
 ```bash
 ic/scripts/setup-instance.sh \
@@ -83,8 +86,7 @@ ic/scripts/setup-instance.sh \
   --run-onboard
 ```
 
-To preseed the instance name, gateway token, and env-backed secrets master key
-as part of setup:
+### With Preseeded Secrets
 
 ```bash
 ic/scripts/setup-instance.sh \
@@ -98,67 +100,93 @@ ic/scripts/setup-instance.sh \
   --run-onboard
 ```
 
-This writes:
+Setup writes:
 - `$LUNARWING_BASE_DIR/config.toml`
 - `$LUNARWING_BASE_DIR/.env`
 - `$LUNARWING_BASE_DIR/workspace-template/*.md`
 
-Preferred env var: `LUNARWING_BASE_DIR`
-Legacy alias still accepted: `IRONCLAW_BASE_DIR`
+Preferred env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
-Current seeded config defaults:
-- `llm_backend = "openai_compatible"`
-- `openai_compatible_base_url = "http://192.168.1.157:3002"`
-- `selected_model = "tensorzero::function_name::lunarwing"`
-- `agent.name = "lunarwing"`
+### Setup Options
 
-Useful setup-time values:
-- `--agent-name` writes `[agent].name` to `config.toml`
-- `--gateway-token` writes `GATEWAY_AUTH_TOKEN` to `.env`
-- `--secrets-master-key` writes `SECRETS_MASTER_KEY` to `.env`
+| Flag | Effect |
+|------|--------|
+| `--agent-name` | Writes `[agent].name` to `config.toml` |
+| `--gateway-token` | Writes `GATEWAY_AUTH_TOKEN` to `.env` |
+| `--secrets-master-key` | Writes `SECRETS_MASTER_KEY` to `.env` (64-char hex) |
 
-`SECRETS_MASTER_KEY` must be a 64-character hex string. Use this when you want
-the encrypted secrets store and secret-management scripts to work without
-depending on the OS keychain.
+`SECRETS_MASTER_KEY` enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this value automatically when it is missing. macOS prefers keychain storage by default.
 
-During `lunarwing onboard --quick`, Linux/non-macOS setups now generate and
-persist this value automatically to the selected instance `.env` when it is
-missing. macOS still prefers keychain storage by default.
+### Config Defaults
 
-Those files are created automatically for a missing base dir on normal startup
-too, not only through the onboarding wizard.
+```
+llm_backend = "openai_compatible"
+openai_compatible_base_url = "http://192.168.1.157:3002"
+selected_model = "tensorzero::function_name::lunarwing"
+agent.name = "lunarwing"
+```
 
-For a simple local launcher wrapper, use:
+Seed files:
+- Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
+- Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
+
+At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and `USER.md` can be customized per instance.
+
+## Running Locally
 
 ```bash
 cd ic
 LUNARWING_BASE_DIR=/path/to/instance ./run.sh
 ```
 
-`ic/run.sh` defaults `AGENT_NAME=lunarwing` and will pass through any explicit
-`AGENT_NAME`, `LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR` you export.
-It does not inject LLM URL or model defaults, so fresh instances use
-`config.toml` unless you explicitly override them with env vars.
+`run.sh` defaults `AGENT_NAME=lunarwing` and passes through any explicit `AGENT_NAME`, `LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR` you export. It does not inject LLM URL or model defaults, so fresh instances use `config.toml` unless you override with env vars.
 
-Seed source files in this repository:
-- Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
-- Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
+## Testing
 
-At runtime those workspace files are imported from
-`$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so
-files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and
-`USER.md` can be customized on disk per instance.
+### Rust Unit & Integration Tests
 
-### Fresh Recreate Recipes
+```bash
+cd ic
+cargo test                          # unit tests
+cargo test --features integration   # + PostgreSQL tests
+cargo test test_name -- --nocapture # single test with output
+```
 
-For the full PostgreSQL + XMPP + user-systemd harness, including custom
-database credentials and custom gateway/bridge tokens, use the documented
-recipe in
-[ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
+### E2E Tests (Python/Playwright)
 
-### Watchdog Scheduler
+Browser-based E2E tests against a live instance with a mock LLM. See [ic/tests/e2e/CLAUDE.md](ic/tests/e2e/CLAUDE.md).
 
-For production healthchecks, use:
+```bash
+cd ic/tests/e2e
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+playwright install chromium
+pytest scenarios/
+```
+
+### Worker Test Harness
+
+Matrix test suite for all 4 worker types (Codex, Nanocode, Built-in, Sandbox) running in Docker Compose isolation. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
+
+```bash
+cd tests
+pip install -r requirements.txt
+python runner.py --mode smoke     # happy paths only (CI)
+python runner.py --mode full      # + chaos scenarios (nightly)
+python runner.py --worker codex   # single worker type
+```
+
+See [tests/README.md](tests/README.md) for the full test matrix and mock service architecture.
+
+### Integration Test Harness
+
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness for PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon. Works on Linux and macOS.
+
+- Single-tenant quick start: see [docs/ops/HARNESS-SINGLE-TENANT.md](docs/ops/HARNESS-SINGLE-TENANT.md)
+- Multi-tenant quick start: see [docs/ops/MULTITENANCY-HARNESS.md](docs/ops/MULTITENANCY-HARNESS.md)
+- Full single-tenant reference: [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md)
+
+## Watchdog Scheduler
 
 ```bash
 sudo ic/scripts/install-lunarwing-watchdog.sh
@@ -166,28 +194,29 @@ sudo ic/scripts/install-lunarwing-watchdog.sh
 
 Behavior depends on the detected service manager:
 
-- `systemd`: installs `lunarwing-watchdog.service` plus `lunarwing-watchdog.timer`
-- `OpenRC`: installs `lunarwing-watchdog-openrc` plus either an hourly hook or a
-  managed root `fcrontab` entry
+- **systemd**: installs `lunarwing-watchdog.service` + `lunarwing-watchdog.timer`
+- **OpenRC**: installs `lunarwing-watchdog-openrc` + either an hourly hook or a managed root `fcrontab` entry
 
 The OpenRC default is intentionally conservative:
+- If `cronie`, `crond`, or `dcron` is already present, the installer keeps the cron-hourly path
+- If no cron daemon is present but `fcron` is available, the installer uses `fcron` automatically
 
-- if `cronie`, `crond`, or `dcron` is already present, the installer keeps the
-  cron-hourly path and does not switch you to `fcron`
-- if no cron-hourly daemon is present but `fcron` is available, the installer
-  uses `fcron` automatically
-
-Force a specific OpenRC mode with:
+Force a specific OpenRC mode:
 
 ```bash
 sudo LUNARWING_WATCHDOG_SCHEDULER=fcron ic/scripts/install-lunarwing-watchdog.sh
 sudo LUNARWING_WATCHDOG_SCHEDULER=hourly ic/scripts/install-lunarwing-watchdog.sh
 ```
 
-Use `LUNARWING_WATCHDOG_CRON_DIR=/path/to/hourly-dir` when you need the
-hourly-hook path in a nonstandard directory layout.
+Use `LUNARWING_WATCHDOG_CRON_DIR=/path/to/hourly-dir` for nonstandard directory layouts.
 
-For a clean libSQL recreate with a custom gateway token:
+## Fresh Recreate Recipes
+
+### PostgreSQL + XMPP + systemd
+
+See the documented recipe in [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
+
+### libSQL with Custom Gateway Token
 
 ```bash
 cd ic
@@ -241,6 +270,8 @@ PY
 LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 ```
 
-### See: ic/testing/lunarwing-xmpp/README.md for more information and latest instructions
+## Further Reading
 
-#### also check REPLv2_Client_and_Server.md for information on REPLv2 Server and Client repos...
+- REPLv2 server and client: see `REPLv2_Client_and_Server.md`
+- Development guide: see [ic/CLAUDE.md](ic/CLAUDE.md)
+- Architecture docs: see [docs/](docs/)

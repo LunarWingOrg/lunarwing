@@ -133,6 +133,7 @@ ironclaw-gotify-tool/       # Gotify tool (legacy standalone)
 ironclaw_weechat_wss/       # WeeChat WSS channel source
 git-ironclaw-unix-socket-client-repo/  # REPLv2 Unix socket client
 git-ironclaw-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
+tests/                      # Worker test harness (Docker Compose matrix suite for all 4 worker types)
 docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/)
 ```
 
@@ -276,4 +277,4 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do for future:
 
-* Test all three kinds of worker containers. This includes nanocode, codex, and worker container. Additionally, sandbox worker container if its still present
+1. OCR and Image Recog with sidecar plan by Ruffles
