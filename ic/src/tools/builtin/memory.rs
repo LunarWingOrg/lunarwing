@@ -310,7 +310,10 @@ impl Tool for MemoryWriteTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        let layer = params.get("layer").and_then(|v| v.as_str());
+        let layer = params
+            .get("layer")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("null"));
         let force = params
             .get("force")
             .and_then(|v| v.as_bool())
@@ -970,5 +973,30 @@ mod tests {
             // Same user_id should return the same cached Arc (pointer equality)
             assert!(Arc::ptr_eq(&ws1, &ws2));
         }
+
+    }
+
+    #[test]
+    fn test_layer_null_string_treated_as_none() {
+        fn extract(val: &serde_json::Value) -> Option<&str> {
+            val.get("layer")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("null"))
+        }
+
+        let v = serde_json::json!({"layer": "null"});
+        assert!(extract(&v).is_none());
+
+        let v = serde_json::json!({"layer": null});
+        assert!(extract(&v).is_none());
+
+        let v = serde_json::json!({"layer": ""});
+        assert!(extract(&v).is_none());
+
+        let v = serde_json::json!({});
+        assert!(extract(&v).is_none());
+
+        let v = serde_json::json!({"layer": "private"});
+        assert_eq!(extract(&v), Some("private"));
     }
 }

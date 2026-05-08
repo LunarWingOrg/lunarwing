@@ -284,6 +284,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do after 1.0.2 Release:
 
-1. OCR and Image Recog with sidecar plan by Ruffles
-2. Expand testing of worker containers.
-3. Add support for Multica for multi-agent coordination (self-hostable free open source software)
+1. Review bug fixes.
+2. OCR and Image Recog with sidecar plan by Ruffles
+3. Expand testing of worker containers.
+4. Add support for Multica for multi-agent coordination (self-hostable free open source software)
