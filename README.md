@@ -8,15 +8,15 @@
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
 
-LunarWing is a hard fork of the Ironclaw project originally developed by NearAI, started February 2026. The fork has grown far beyond the upstream project's capabilities.
+LunarWing is a hard fork of the Ironclaw project originally developed by NearAI. The fork has grown far beyond the original project's capabilities, despite their best efforts. 
 
-LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal.
+LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes actually useful tools, bridges, and channels such as XMPP/OMEMO, Gotify, scheduled routines with fallbacks, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal whatsoever. The main project has been tainted from the beginning and a lot of the cruft from it is still being carved out. 
 
 The LunarWing project maintains the AGPLv3 license on the core project and all extensions, tools, and channels.
 
 ## Why "LunarWing"?
 
-**Lunar** -- We are firm believers in the Lunarpunk philosophy. See our MANIFESTO for more information as well as the philosophical journal, *Agorism in the 21st Century*.
+**Lunar** -- We are firm believers in Lunarpunk. We actually believe in freedom. Unlike every single other agentic AI project that exists, LunarWing stands out as being the ONLY one that protects your freedom. 
 
 **Wing** -- Wings are extensions of the body which allow flight. We chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`. We are not required to remain on the ground.
 
@@ -27,20 +27,22 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 ### Channels & Communication
 * **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group)
 * **Weechat** -- WASM channel allowing the agent to use Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client
-* **DarkIRC** -- DarkFi WASM channel
+* **Enjin** -- optional weechat plugin to enable E2E for normal IRC
+* **DarkIRC** -- DarkIRC WASM channel, p2p e2e protocol from DarkFi
 
 ### Tools & Notifications
 * **Gotify** -- WASM tool for agent-initiated push notifications
+* **OCR/Image Recognition** -- WASM Tool with sidecar to enable image support
 
 ### Worker Containers
 * **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge and persistent storage (`nanocode4ironclaw/`)
-* **Built-in Worker** -- Native worker running inside the LunarWing daemon (`ic/src/worker/`)
-* **Sandbox Worker** -- Docker-isolated execution sandbox (`ic/src/sandbox/`)
+* **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
+* **Debloated sandbox Worker** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
-### Infrastructure & Operations
+### Infrastructure & Operations (100% Unique to THIS project only)
 * Specialized secret management wrapper scripts for both PostgreSQL and libSQL
-* Optional systemd and OpenRC services for LunarWing, channel bridges, and healthcheck services
+* Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
 * Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
@@ -61,9 +63,11 @@ The LunarWing core development team is not affiliated with NearAI.
 
 Our core team uses a self-hosted Vikunja kanban board to track tasks.
 
+#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponserships/grants.
+
 ## Instance Setup
 
-LunarWing supports a preseeded instance layout for fresh installs.
+LunarWing supports a preseeded instance layout for fresh installs. This means that your agents can have any identity and any pre-seeded memories before you even interact with them for the first time if you wish. 
 
 ### PostgreSQL
 
