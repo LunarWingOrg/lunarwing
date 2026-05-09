@@ -1656,6 +1656,28 @@ mod tests {
         assert_eq!(loaded.heartbeat.interval_secs, 900);
     }
 
+    #[test]
+    fn toml_external_workers_parse_and_merge() {
+        let toml_str = r#"
+[sandbox]
+
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://localhost:9090/ws/agent"
+timeout_ms = 300000
+"#;
+        let parsed: Settings = toml::from_str(toml_str).unwrap();
+        assert_eq!(parsed.sandbox.external_workers.len(), 1);
+        assert_eq!(parsed.sandbox.external_workers[0].name, "nanocode");
+
+        let mut base = Settings::default();
+        assert!(base.sandbox.external_workers.is_empty());
+        base.merge_from(&parsed);
+        assert_eq!(base.sandbox.external_workers.len(), 1, "merge_from must pick up external_workers from TOML overlay");
+        assert_eq!(base.sandbox.external_workers[0].name, "nanocode");
+        assert_eq!(base.sandbox.external_workers[0].url, "ws://localhost:9090/ws/agent");
+    }
+
     /// Regression: /model writes a single key ("selected_model") to the DB via
     /// set_setting(). On restart, get_all_settings() returns ALL keys including
     /// wizard-written defaults. The single-key update must survive the full
