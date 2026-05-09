@@ -3,10 +3,15 @@
 //! Every request includes a bearer token from `IRONCLAW_WORKER_TOKEN` env var.
 //! The orchestrator validates this token is scoped to the correct job.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::WorkerError;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 use crate::llm::{
     ChatMessage, CompletionRequest, CompletionResponse, FinishReason, ToolCall,
     ToolCompletionRequest, ToolCompletionResponse, ToolDefinition,
@@ -123,7 +128,7 @@ impl WorkerHttpClient {
             std::env::var("IRONCLAW_WORKER_TOKEN").map_err(|_| WorkerError::MissingToken)?;
 
         Ok(Self {
-            client: reqwest::Client::new(),
+            client: Self::build_client(),
             orchestrator_url: orchestrator_url.trim_end_matches('/').to_string(),
             job_id,
             token,
@@ -133,11 +138,19 @@ impl WorkerHttpClient {
     /// Create with an explicit token (for testing).
     pub fn new(orchestrator_url: String, job_id: Uuid, token: String) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: Self::build_client(),
             orchestrator_url: orchestrator_url.trim_end_matches('/').to_string(),
             job_id,
             token,
         }
+    }
+
+    fn build_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
     }
 
     /// Get the base orchestrator URL.
