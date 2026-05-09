@@ -277,7 +277,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do before 1.0.4 Release:
 
-1. nanocode worker fixes and testing
+1. nanocode worker fixes and testing. rip out legacy claude_code
 2. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
 3. Create a new branch to correspond with release
 4. Create gh release tag and add release notes to it like other releases already have rn.
