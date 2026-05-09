@@ -275,17 +275,14 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
 
-## Things to do before 1.0.3 Release:
+## Things to do before 1.0.4 Release:
 
-1. Test subagent fixes.
-2. Write up some release notes for 1.0.3 which explain all of the changes since 1.0.2
+1. nanocode worker fixes and testing
+2. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
 3. Create a new branch to correspond with release
 4. Create gh release tag and add release notes to it like other releases already have rn.
 
-## Things to do after 1.0.3 Release:
+## Things to do after 1.0.4 Release:
 
-1. Review bug fixes thus far.
-2. Attempt to get MT working properly with the new MT admin script. Will need to do a lot of testing for this.
-3. OCR and Image Recog with sidecar plan by Ruffles
-4. Expand testing of worker containers.
-5. Add support for Multica for multi-agent coordination (self-hostable free open source software)
+1. OCR and Image Recog with sidecar plan by Ruffles
+2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
