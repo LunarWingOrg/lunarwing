@@ -38,10 +38,55 @@ docker compose --profile smoke up agent-smoke
 
 See `.env.example` for the full list with descriptions.
 
+## LunarWing integration
+
+The nanocode worker integrates with LunarWing via the **ExternalWorker** system. The agent's `create_job` tool accepts `mode: "nanocode"` to route tasks to this container.
+
+### LunarWing-side config
+
+Add to the agent's `config.toml` (under `LUNARWING_BASE_DIR`):
+
+```toml
+[sandbox]
+# ... existing sandbox settings ...
+
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://localhost:9090/ws/agent"
+timeout_ms = 300000
+```
+
+The `name` field must match the `mode` value used in `create_job` calls. The agent logs `External workers configured: nanocode` on startup when loaded correctly.
+
+### TensorZero routing
+
+The nanocode worker uses TensorZero as its LLM backend. A corresponding function must exist in `tensorzero.toml`:
+
+```toml
+[functions.lunarwing]
+type = "chat"
+
+[functions.lunarwing.variants.your_variant]
+type = "chat_completion"
+model = "your_model"
+```
+
+The model name in `config/nanocode.json` must use TensorZero's format: `tensorzero::function_name::lunarwing`.
+
+### End-to-end flow
+
+1. User asks agent to `create_job` with `mode: "nanocode"`
+2. LunarWing's `ExternalWorkerManager` connects via WebSocket to `ws://localhost:9090/ws/agent`
+3. Bridge receives `ready` → sends `task_request` with prompt
+4. Nanocode creates a session, sends prompt to TensorZero LLM
+5. Tools (write, read, bash) execute inside the container
+6. `task_progress` events stream back through the bridge
+7. `task_result` returns final output to the agent
+
 ## Architecture
 
 ### Entrypoint flow (`entrypoint.sh`)
-1. Links `config/opencode.json` into workspace `.nanocode/` dir
+1. Links `config/nanocode.json` into workspace `.nanocode/` dir
 2. Starts `health_server.py` in background (port 8443)
 3. **CLI mode**: `exec bun run ... src/index.ts run "$@"`
 4. **ACP mode**: `exec bun run ... src/index.ts acp`
@@ -65,6 +110,31 @@ Python stdlib HTTP server. `/ready` reads `/tmp/ironclaw_ws_state.json` written 
 - Stateful sessions (nanocode keeps session history in SQLite)
 - Bun runtime instead of Node.js
 
+## Known issues
+
+### Nanocode schema validation bug (v1.2.28)
+
+Nanocode's tool execution (write, read, bash) fails with `"Invalid string: must start with \"prt\""` — a `PartID` schema is incorrectly applied to a `SessionID` field in the permission check path. The actual session IDs are valid (`ses_*` format).
+
+**Workaround applied**: `src/util/fn.ts` is patched (via `docker cp` post-build) to use `safeParse` and continue with raw input on validation failure instead of crashing. This must be re-applied after `docker compose build`.
+
+To make the patch persistent, add to the Dockerfile after the nanocode COPY:
+```dockerfile
+COPY patches/fn.ts /app/nanocode/packages/opencode/src/util/fn.ts
+```
+
+### SELinux (Fedora/RHEL)
+
+Bind-mounted volumes require the `:z` SELinux label flag in `docker-compose.yml`. Without it, the container cannot read mounted config files or write to the workspace. The `docker-compose.yml` already includes `:z` on all bind mounts.
+
+### Provider ID restriction
+
+This nanocode fork hardcodes `if (providerID !== "nanogpt") return false` in `provider.ts`. All provider configs must use `"nanogpt"` as the provider key, regardless of the actual backend name.
+
+### Config filename
+
+Nanocode's config loader looks for `nanocode.json` (not `opencode.json`) in `.nanocode/` directories. The entrypoint symlinks `config/nanocode.json` into the workspace.
+
 ## File layout
 
 ```
@@ -75,7 +145,7 @@ health_server.py              # HTTP health/ready endpoint (Python)
 agent_comm_protocol.json      # WebSocket protocol spec
 .env.example                  # All env vars documented
 config/
-  opencode.json               # Nanocode config (TensorZero provider)
+  nanocode.json               # Nanocode config (TensorZero provider via nanogpt ID)
 scripts/
   ironclaw_bridge.ts          # WebSocket server/client bridge
   ironclaw_runtime.ts         # Protocol types, envelope helpers, state file

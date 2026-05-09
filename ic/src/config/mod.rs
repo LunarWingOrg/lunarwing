@@ -267,18 +267,7 @@ impl Config {
         match Settings::load_toml(&path) {
             Ok(Some(toml_settings)) => {
                 settings.merge_from(&toml_settings);
-                tracing::info!("Loaded TOML config from {}", path.display());
-                if !settings.sandbox.external_workers.is_empty() {
-                    tracing::info!(
-                        "TOML external_workers after merge: {:?}",
-                        settings
-                            .sandbox
-                            .external_workers
-                            .iter()
-                            .map(|ew| ew.name.as_str())
-                            .collect::<Vec<_>>()
-                    );
-                }
+                tracing::debug!("Loaded TOML config from {}", path.display());
             }
             Ok(None) => {
                 if explicit_path.is_some() {

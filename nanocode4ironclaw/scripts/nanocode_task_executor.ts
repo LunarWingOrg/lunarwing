@@ -66,6 +66,10 @@ export async function executeTask(
     const sessionResult = await sdk.session.create({
       title: `ironclaw-${request.task_id}`,
       permission: [
+        { permission: "edit", action: "allow", pattern: "*" },
+        { permission: "bash", action: "allow", pattern: "*" },
+        { permission: "read", action: "allow", pattern: "*" },
+        { permission: "write", action: "allow", pattern: "*" },
         { permission: "question", action: "deny", pattern: "*" },
         { permission: "plan_enter", action: "deny", pattern: "*" },
         { permission: "plan_exit", action: "deny", pattern: "*" },

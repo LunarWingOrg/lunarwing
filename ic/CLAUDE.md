@@ -100,10 +100,11 @@ src/
 │
 ├── observability/      # Pluggable event/metric recording (noop, log, multi)
 │
-├── orchestrator/       # Internal HTTP API for sandbox containers
+├── orchestrator/       # Internal HTTP API for sandbox containers + external workers
 │   ├── api.rs          # Axum endpoints (LLM proxy, events, prompts)
 │   ├── auth.rs         # Per-job bearer token store
-│   └── job_manager.rs  # Container lifecycle (create, stop, cleanup)
+│   ├── job_manager.rs  # Container lifecycle (create, stop, cleanup)
+│   └── external_worker.rs # ExternalWorkerManager: WebSocket client for persistent worker containers
 │
 ├── worker/             # Runs inside Docker containers
 │   ├── container.rs    # Container worker runtime (ContainerDelegate + shared agentic loop)

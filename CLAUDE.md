@@ -177,6 +177,44 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 
 Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`.
 
+## External Workers
+
+External workers are persistent containers that speak the `ironclaw-agent-v1` WebSocket protocol. Unlike Docker sandbox jobs (created/destroyed per task), external workers stay running and accept tasks on demand.
+
+### Configuration
+
+Add to `config.toml` under `LUNARWING_BASE_DIR`:
+
+```toml
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://localhost:9090/ws/agent"
+timeout_ms = 300000
+```
+
+Must be under the existing `[sandbox]` section (TOML doesn't allow duplicate table headers). The agent logs `External workers configured: nanocode` on startup.
+
+### Usage
+
+The agent's `create_job` tool accepts a `mode` parameter matching the worker name:
+
+```
+create_job(title: "...", description: "...", mode: "nanocode")
+```
+
+### Architecture
+
+- `ic/src/orchestrator/external_worker.rs` — `ExternalWorkerManager`: WebSocket client, task dispatch, progress streaming
+- `ic/src/tools/builtin/job.rs` — `execute_external()`: routes `create_job` calls to external workers
+- `ic/src/config/sandbox.rs` — `ExternalWorkerConfig`: resolved from `[[sandbox.external_workers]]` in settings
+- `ic/src/settings.rs` — `ExternalWorkerSettings`: TOML/JSON serialization for worker endpoints
+
+### Available workers
+
+| Worker | Container | Docs |
+|--------|-----------|------|
+| `nanocode` | `nanocode4ironclaw/` | `nanocode4ironclaw/CLAUDE.md` |
+
 ## Protected Runtime Behavior
 
 Do not break without explicit approval:
@@ -276,9 +314,9 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
 
 ## Things to do before 1.0.4 Release:
-
-1. nanocode worker fixes and testing. 
-2. ExternalWorker mode configuration stuff
+## WOW!
+1. nanocode worker fixes and testing. (DONE — nanocode container builds, bridges to LunarWing via WebSocket, executes coding tasks with TensorZero LLM routing. Known nanocode v1.2.28 schema validation bug patched via fn.ts safeParse workaround.)
+2. ExternalWorker mode configuration stuff (DONE — ExternalWorkerManager, WebSocket client, config.toml `[[sandbox.external_workers]]`, `create_job mode:"nanocode"` routing, TensorZero `functions.lunarwing` added.)
 3. rip out legacy claude_code mode from worker image (DONE — ClaudeCode enum variant, claude_bridge.rs, ClaudeCodeConfig, CLI subcommand, and Dockerfile npm install all removed. Only Worker mode remains.)
 4. Further testing of agents setup with MT Admin Setup Harness. Preferably some kind of fresh test and then test usual things from there...
 5. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
