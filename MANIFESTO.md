@@ -9,7 +9,7 @@
 * Thus Spoke Zarathustra by Friedrich Nietzsche
 * Proofs, Arguments, and Zero-Knowledge by Justin Thaler.
 
-##### LunarWing is NOT a corporate startup with VC Seed Funding. We DO NOT sell access to LLMs and we are NOT NearAI or affiliated with NearAI. See README.md for more information as to why this hard fork has been created as well as a partial list of the brand new features which do not exist in any form in Ironclaw. (At some point a full list of additional features which are not included in the upstream repo will be added)
+##### LunarWing is NOT a corporate startup with VC Seed Funding. We DO NOT sell access to LLMs and we are NOT NearAI or affiliated with NearAI. We have ACTUAL programming experience, unlike them. We can ACTUALLY utilize asynchronous Rust libraries, unlike them. See README.md for more information as to why this hard fork has been created as well as a partial list of the brand new features which do not exist in any form in Ironclaw, and likely never will, since it is clearly not a serious project. (At some point a full list of additional features which are not included in the upstream repo will be added)
 
 ##### LunarWing supports autonomous political formations.
 
