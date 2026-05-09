@@ -56,7 +56,7 @@ Browser-facing HTTP API and SSE/WebSocket real-time streaming. Axum-based, singl
 | GET | `/api/jobs/{id}` | Job detail |
 | POST | `/api/jobs/{id}/cancel` | Cancel a running job |
 | POST | `/api/jobs/{id}/restart` | Restart a failed job |
-| POST | `/api/jobs/{id}/prompt` | Send follow-up prompt to Claude Code bridge |
+| POST | `/api/jobs/{id}/prompt` | Send follow-up prompt (sandbox jobs return 501; agent jobs use scheduler) |
 | GET | `/api/jobs/{id}/events` | SSE stream for a specific job |
 | GET | `/api/jobs/{id}/files/list` | List files in job workspace |
 | GET | `/api/jobs/{id}/files/read` | Read a file from job workspace |

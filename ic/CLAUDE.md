@@ -108,7 +108,6 @@ src/
 ├── worker/             # Runs inside Docker containers
 │   ├── container.rs    # Container worker runtime (ContainerDelegate + shared agentic loop)
 │   ├── job.rs          # Background job worker (JobDelegate + shared agentic loop)
-│   ├── claude_bridge.rs # Claude Code bridge (spawns claude CLI)
 │   └── proxy_llm.rs    # LlmProvider that proxies through orchestrator
 │
 ├── safety/             # Re-export shim for crates/lunarwing_safety (see Extracted Crates)
