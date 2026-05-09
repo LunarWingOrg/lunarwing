@@ -191,7 +191,6 @@ pub async fn jobs_detail_handler(
             }
 
             let mode = store.get_sandbox_job_mode(job.id).await.ok().flatten();
-            let is_claude_code = mode.as_deref() == Some("claude_code");
 
             return Ok(Json(JobDetailResponse {
                 id: job.id,
@@ -208,7 +207,7 @@ pub async fn jobs_detail_handler(
                 job_mode: mode.filter(|m| m != "worker"),
                 transitions,
                 can_restart: state.job_manager.is_some(),
-                can_prompt: is_claude_code && state.prompt_queue.is_some(),
+                can_prompt: false,
                 job_kind: Some("sandbox".to_string()),
             }));
         }
@@ -424,12 +423,7 @@ pub async fn jobs_restart_handler(
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-            let mode = match store.get_sandbox_job_mode(old_job_id).await {
-                Ok(Some(m)) if m == "claude_code" => {
-                    crate::orchestrator::job_manager::JobMode::ClaudeCode
-                }
-                _ => crate::orchestrator::job_manager::JobMode::Worker,
-            };
+            let mode = crate::orchestrator::job_manager::JobMode::Worker;
 
             let credential_grants: Vec<crate::orchestrator::auth::CredentialGrant> =
                 serde_json::from_str(&old_job.credential_grants_json).unwrap_or_else(|e| {
@@ -563,9 +557,9 @@ pub async fn jobs_prompt_handler(
         ))?
         .to_string();
 
-    let done = body.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
+    let _done = body.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
 
-    // Try sandbox job path first: verify ownership, then route to Claude Code or reject.
+    // Try sandbox job path first: verify ownership, then reject (prompts not supported).
     if let Some(ref s) = state.store
         && let Ok(Some(sandbox_job)) = s.get_sandbox_job(job_id).await
     {
@@ -574,28 +568,10 @@ pub async fn jobs_prompt_handler(
             return Err((StatusCode::NOT_FOUND, "Job not found".to_string()));
         }
 
-        // It's a sandbox job. Check if Claude Code mode.
-        let mode = s.get_sandbox_job_mode(job_id).await.ok().flatten();
-        if mode.as_deref() == Some("claude_code") {
-            let prompt_queue = state.prompt_queue.as_ref().ok_or((
-                StatusCode::NOT_IMPLEMENTED,
-                "Claude Code not configured".to_string(),
-            ))?;
-            let prompt = crate::orchestrator::api::PendingPrompt { content, done };
-            {
-                let mut queue = prompt_queue.lock().await;
-                queue.entry(job_id).or_default().push_back(prompt);
-            }
-            return Ok(Json(serde_json::json!({
-                "status": "queued",
-                "job_id": job_id.to_string(),
-            })));
-        } else {
-            return Err((
-                StatusCode::NOT_IMPLEMENTED,
-                "Follow-up prompts are not supported for worker-mode sandbox jobs".to_string(),
-            ));
-        }
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            "Follow-up prompts are not supported for worker-mode sandbox jobs".to_string(),
+        ));
     }
 
     // Try agent job path: verify ownership, then send via scheduler.

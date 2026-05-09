@@ -51,9 +51,6 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.92.0 \
     && chmod -R a+r /usr/local/rustup /usr/local/cargo
 
-# Install Claude Code CLI (for claude-bridge mode)
-RUN npm install -g @anthropic-ai/claude-code@latest
-
 # Copy the binary
 COPY --from=builder /build/target/release/lunarwing /usr/local/bin/lunarwing
 

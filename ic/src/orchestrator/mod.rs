@@ -117,12 +117,6 @@ pub async fn setup_orchestrator(
             memory_limit_mb: config.sandbox.memory_limit_mb,
             cpu_shares: config.sandbox.cpu_shares,
             orchestrator_port,
-            claude_code_api_key: std::env::var("ANTHROPIC_API_KEY").ok(),
-            claude_code_oauth_token: crate::config::ClaudeCodeConfig::extract_oauth_token(),
-            claude_code_model: config.claude_code.model.clone(),
-            claude_code_max_turns: config.claude_code.max_turns,
-            claude_code_memory_limit_mb: config.claude_code.memory_limit_mb,
-            claude_code_allowed_tools: config.claude_code.allowed_tools.clone(),
         };
         let mut jm_inner = ContainerJobManager::new(job_config, token_store.clone());
         if let (Some(etx), Some(cm)) = (&job_event_tx, &context_manager) {
@@ -149,13 +143,6 @@ pub async fn setup_orchestrator(
             }
         });
 
-        if config.claude_code.enabled {
-            tracing::info!(
-                "Claude Code sandbox mode available (model: {}, max_turns: {})",
-                config.claude_code.model,
-                config.claude_code.max_turns
-            );
-        }
         (job_event_tx, Some(jm))
     } else {
         (None, None)

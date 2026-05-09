@@ -1512,7 +1512,7 @@ mod tests {
         assert!(mode.is_none() || mode.as_deref() == Some("worker"));
 
         // Update mode
-        db.update_sandbox_job_mode(job_id, "claude_code")
+        db.update_sandbox_job_mode(job_id, "worker")
             .await
             .expect("update mode");
         let mode = db
@@ -1520,7 +1520,7 @@ mod tests {
             .await
             .expect("get mode")
             .expect("should have mode");
-        assert_eq!(mode, "claude_code");
+        assert_eq!(mode, "worker");
     }
 
     #[cfg(feature = "libsql")]

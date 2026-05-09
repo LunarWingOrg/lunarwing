@@ -458,16 +458,16 @@ mod jobs_isolation {
     }
 
     #[tokio::test]
-    async fn test_jobs_prompt_works_for_agent_jobs() {
+    async fn test_jobs_prompt_rejects_sandbox_jobs() {
         let (db, _dir) = test_db().await;
 
-        // Insert a running sandbox job owned by alice in claude_code mode.
+        // Insert a running sandbox job owned by alice.
         let mut alice_job = make_sandbox_job("alice", "prompt test");
         alice_job.status = "running".to_string();
         alice_job.success = None;
         alice_job.completed_at = None;
         db.save_sandbox_job(&alice_job).await.unwrap();
-        db.update_sandbox_job_mode(alice_job.id, "claude_code")
+        db.update_sandbox_job_mode(alice_job.id, "worker")
             .await
             .unwrap();
 
@@ -477,7 +477,7 @@ mod jobs_isolation {
         let auth = two_user_auth();
         let app = jobs_router(state, auth);
 
-        // Alice prompts her own job.
+        // Alice tries to prompt her own sandbox job — not supported for worker mode.
         let req = Request::builder()
             .method(Method::POST)
             .uri(format!("/api/jobs/{}/prompt", alice_job.id))
@@ -490,15 +490,8 @@ mod jobs_isolation {
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(
             resp.status(),
-            StatusCode::OK,
-            "alice should be able to prompt her own job"
-        );
-
-        // Verify prompt was enqueued.
-        let queue = prompt_queue.lock().await;
-        assert!(
-            queue.contains_key(&alice_job.id),
-            "prompt queue should contain alice's job"
+            StatusCode::NOT_IMPLEMENTED,
+            "sandbox job prompts should be rejected"
         );
     }
 
@@ -511,7 +504,7 @@ mod jobs_isolation {
         alice_job.success = None;
         alice_job.completed_at = None;
         db.save_sandbox_job(&alice_job).await.unwrap();
-        db.update_sandbox_job_mode(alice_job.id, "claude_code")
+        db.update_sandbox_job_mode(alice_job.id, "worker")
             .await
             .unwrap();
 

@@ -140,191 +140,44 @@ impl SandboxModeConfig {
     }
 }
 
-/// Claude Code sandbox configuration.
-#[derive(Debug, Clone)]
-pub struct ClaudeCodeConfig {
-    /// Whether Claude Code sandbox mode is available.
-    pub enabled: bool,
-    /// Host directory containing Claude auth config (not mounted into containers;
-    /// auth is handled via ANTHROPIC_API_KEY env var instead).
-    pub config_dir: std::path::PathBuf,
-    /// Claude model to use (e.g. "sonnet", "opus").
-    pub model: String,
-    /// Maximum agentic turns before stopping.
-    pub max_turns: u32,
-    /// Memory limit in MB for Claude Code containers (heavier than workers).
-    pub memory_limit_mb: u64,
-    /// Allowed tool patterns for Claude Code permission settings.
-    ///
-    /// Written to `/workspace/.claude/settings.json` before spawning the CLI.
-    /// Provides defense-in-depth: only explicitly listed tools are auto-approved.
-    /// Any new/unknown tools would require interactive approval (which times out
-    /// in the non-interactive container, failing safely).
-    ///
-    /// Patterns follow Claude Code syntax: `"Bash(*)"`, `"Read"`, `"Edit(*)"`, etc.
-    pub allowed_tools: Vec<String>,
-}
-
-/// Default allowed tools for Claude Code inside containers.
+/// Extract an OAuth access token from the host's credential store.
 ///
-/// These cover all standard Claude Code tools needed for autonomous operation.
-/// The Docker container provides the primary security boundary; this allowlist
-/// provides defense-in-depth by preventing any future unknown tools from being
-/// silently auto-approved.
-fn default_claude_code_allowed_tools() -> Vec<String> {
-    [
-        // File system -- glob patterns match Claude Code's settings.json format
-        "Read(*)",
-        "Write(*)",
-        "Edit(*)",
-        "Glob(*)",
-        "Grep(*)",
-        "NotebookEdit(*)",
-        // Execution
-        "Bash(*)",
-        "Task(*)",
-        // Network
-        "WebFetch(*)",
-        "WebSearch(*)",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
-}
-
-impl Default for ClaudeCodeConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            config_dir: dirs::home_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .join(".claude"),
-            model: "sonnet".to_string(),
-            max_turns: 50,
-            memory_limit_mb: 4096,
-            allowed_tools: default_claude_code_allowed_tools(),
-        }
-    }
-}
-
-impl ClaudeCodeConfig {
-    /// Load from environment variables only (used inside containers where
-    /// there is no database or full config).
-    pub fn from_env() -> Self {
-        match Self::resolve_env_only() {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!("Failed to resolve ClaudeCodeConfig: {e}, using defaults");
-                Self::default()
-            }
-        }
-    }
-
-    /// Extract the OAuth access token from the host's credential store.
-    ///
-    /// On macOS: reads from Keychain (`Claude Code-credentials` service).
-    /// On Linux: reads from `~/.claude/.credentials.json`.
-    ///
-    /// Returns the access token if found. The token typically expires in
-    /// 8-12 hours, which is sufficient for any single container job.
-    pub fn extract_oauth_token() -> Option<String> {
-        // macOS: extract from Keychain
-        if cfg!(target_os = "macos") {
-            match std::process::Command::new("security")
-                .args([
-                    "find-generic-password",
-                    "-s",
-                    "Claude Code-credentials",
-                    "-w",
-                ])
-                .output()
-            {
-                Ok(output) if output.status.success() => {
-                    if let Ok(json) = String::from_utf8(output.stdout) {
-                        return parse_oauth_access_token(json.trim());
-                    }
-                }
-                Ok(_) => {
-                    tracing::debug!("No Claude Code credentials in macOS Keychain");
-                }
-                Err(e) => {
-                    tracing::debug!("Failed to query macOS Keychain: {e}");
+/// On macOS: reads from Keychain (`Claude Code-credentials` service).
+/// On Linux: reads from `~/.claude/.credentials.json`.
+pub fn extract_anthropic_oauth_token() -> Option<String> {
+    if cfg!(target_os = "macos") {
+        match std::process::Command::new("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ])
+            .output()
+        {
+            Ok(output) if output.status.success() => {
+                if let Ok(json) = String::from_utf8(output.stdout) {
+                    return parse_oauth_access_token(json.trim());
                 }
             }
+            _ => {}
         }
+    }
 
-        // Linux / fallback: read from ~/.claude/.credentials.json
-        if let Some(home) = dirs::home_dir() {
-            let creds_path = home.join(".claude").join(".credentials.json");
-            if let Ok(json) = std::fs::read_to_string(&creds_path) {
-                return parse_oauth_access_token(&json);
-            }
+    if let Some(home) = dirs::home_dir() {
+        let creds_path = home.join(".claude").join(".credentials.json");
+        if let Ok(json) = std::fs::read_to_string(&creds_path) {
+            return parse_oauth_access_token(&json);
         }
-
-        None
     }
 
-    pub(crate) fn resolve(settings: &crate::settings::Settings) -> Result<Self, ConfigError> {
-        let defaults = Self::default();
-        Ok(Self {
-            // Use settings.sandbox.claude_code_enabled as fallback (written by setup wizard).
-            enabled: parse_bool_env("CLAUDE_CODE_ENABLED", settings.sandbox.claude_code_enabled)?,
-            config_dir: optional_env("CLAUDE_CONFIG_DIR")?
-                .map(std::path::PathBuf::from)
-                .unwrap_or(defaults.config_dir),
-            model: parse_string_env("CLAUDE_CODE_MODEL", defaults.model)?,
-            max_turns: parse_optional_env("CLAUDE_CODE_MAX_TURNS", defaults.max_turns)?,
-            memory_limit_mb: parse_optional_env(
-                "CLAUDE_CODE_MEMORY_LIMIT_MB",
-                defaults.memory_limit_mb,
-            )?,
-            allowed_tools: optional_env("CLAUDE_CODE_ALLOWED_TOOLS")?
-                .map(|s| {
-                    s.split(',')
-                        .map(|t| t.trim().to_string())
-                        .filter(|t| !t.is_empty())
-                        .collect()
-                })
-                .unwrap_or(defaults.allowed_tools),
-        })
-    }
-
-    /// Resolve from env vars only, no Settings. Used inside containers.
-    fn resolve_env_only() -> Result<Self, ConfigError> {
-        let defaults = Self::default();
-        Ok(Self {
-            enabled: parse_bool_env("CLAUDE_CODE_ENABLED", defaults.enabled)?,
-            config_dir: optional_env("CLAUDE_CONFIG_DIR")?
-                .map(std::path::PathBuf::from)
-                .unwrap_or(defaults.config_dir),
-            model: parse_string_env("CLAUDE_CODE_MODEL", defaults.model)?,
-            max_turns: parse_optional_env("CLAUDE_CODE_MAX_TURNS", defaults.max_turns)?,
-            memory_limit_mb: parse_optional_env(
-                "CLAUDE_CODE_MEMORY_LIMIT_MB",
-                defaults.memory_limit_mb,
-            )?,
-            allowed_tools: optional_env("CLAUDE_CODE_ALLOWED_TOOLS")?
-                .map(|s| {
-                    s.split(',')
-                        .map(|t| t.trim().to_string())
-                        .filter(|t| !t.is_empty())
-                        .collect()
-                })
-                .unwrap_or(defaults.allowed_tools),
-        })
-    }
+    None
 }
 
-/// Parse the OAuth access token from a Claude Code credentials JSON blob.
-///
-/// Expected shape: `{"claudeAiOauth": {"accessToken": "sk-ant-oat01-..."}}`
 fn parse_oauth_access_token(json: &str) -> Option<String> {
     let creds: serde_json::Value = serde_json::from_str(json).ok()?;
     let token = creds["claudeAiOauth"]["accessToken"].as_str()?;
-    // Validate that the token looks like a real OAuth token before using it.
-    // Claude CLI tokens start with "sk-ant-oat".
     if !token.starts_with("sk-ant-oat") {
-        tracing::debug!("Ignoring credential store token with unexpected prefix");
         return None;
     }
     Some(token.to_string())
@@ -475,44 +328,6 @@ mod tests {
         );
     }
 
-    // ── ClaudeCodeConfig defaults ───────────────────────────────────
-
-    #[test]
-    fn claude_code_config_default_values() {
-        let cfg = ClaudeCodeConfig::default();
-        assert!(!cfg.enabled);
-        assert_eq!(cfg.model, "sonnet");
-        assert_eq!(cfg.max_turns, 50);
-        assert_eq!(cfg.memory_limit_mb, 4096);
-        assert!(cfg.config_dir.ends_with(".claude"));
-        // Should have all the standard tools
-        assert!(!cfg.allowed_tools.is_empty());
-        assert!(cfg.allowed_tools.contains(&"Bash(*)".to_string()));
-        assert!(cfg.allowed_tools.contains(&"Read(*)".to_string()));
-        assert!(cfg.allowed_tools.contains(&"Edit(*)".to_string()));
-        assert!(cfg.allowed_tools.contains(&"Write(*)".to_string()));
-        assert!(cfg.allowed_tools.contains(&"Grep(*)".to_string()));
-        assert!(cfg.allowed_tools.contains(&"WebFetch(*)".to_string()));
-    }
-
-    #[test]
-    fn claude_code_config_custom_values() {
-        let cfg = ClaudeCodeConfig {
-            enabled: true,
-            config_dir: std::path::PathBuf::from("/opt/claude"),
-            model: "opus".to_string(),
-            max_turns: 100,
-            memory_limit_mb: 8192,
-            allowed_tools: vec!["Read(*)".to_string(), "Bash(*)".to_string()],
-        };
-        assert!(cfg.enabled);
-        assert_eq!(cfg.config_dir, std::path::PathBuf::from("/opt/claude"));
-        assert_eq!(cfg.model, "opus");
-        assert_eq!(cfg.max_turns, 100);
-        assert_eq!(cfg.memory_limit_mb, 8192);
-        assert_eq!(cfg.allowed_tools.len(), 2);
-    }
-
     // ── parse_oauth_access_token ────────────────────────────────────
 
     #[test]
@@ -575,26 +390,6 @@ mod tests {
     fn parse_oauth_token_rejects_invalid_prefix() {
         let json = r#"{"claudeAiOauth": {"accessToken": "not-an-oauth-token"}}"#;
         assert_eq!(parse_oauth_access_token(json), None);
-    }
-
-    // ── default_claude_code_allowed_tools ───────────────────────────
-
-    #[test]
-    fn default_allowed_tools_has_expected_count() {
-        let tools = default_claude_code_allowed_tools();
-        // 10 tools: Read, Write, Edit, Glob, Grep, NotebookEdit, Bash, Task, WebFetch, WebSearch
-        assert_eq!(tools.len(), 10);
-    }
-
-    #[test]
-    fn default_allowed_tools_all_have_glob_pattern() {
-        let tools = default_claude_code_allowed_tools();
-        for tool in &tools {
-            assert!(
-                tool.ends_with("(*)"),
-                "tool '{tool}' should end with '(*)' glob pattern"
-            );
-        }
     }
 
     #[test]
@@ -667,40 +462,6 @@ mod tests {
         unsafe { std::env::remove_var("SANDBOX_TIMEOUT_SECS") };
 
         assert_eq!(cfg.timeout_secs, 5);
-    }
-
-    // ── ClaudeCodeConfig settings fallback tests ────────────────────
-
-    #[test]
-    fn claude_code_resolve_uses_settings_enabled() {
-        let _guard = crate::config::helpers::lock_env();
-        let mut settings = crate::settings::Settings::default();
-        settings.sandbox.claude_code_enabled = true;
-
-        let cfg = ClaudeCodeConfig::resolve(&settings).expect("resolve");
-        assert!(cfg.enabled);
-    }
-
-    #[test]
-    fn claude_code_resolve_defaults_disabled() {
-        let _guard = crate::config::helpers::lock_env();
-        let settings = crate::settings::Settings::default();
-        let cfg = ClaudeCodeConfig::resolve(&settings).expect("resolve");
-        assert!(!cfg.enabled);
-    }
-
-    #[test]
-    fn claude_code_env_overrides_settings() {
-        let _guard = crate::config::helpers::lock_env();
-        let mut settings = crate::settings::Settings::default();
-        settings.sandbox.claude_code_enabled = true;
-
-        // SAFETY: Under ENV_MUTEX, no concurrent env access.
-        unsafe { std::env::set_var("CLAUDE_CODE_ENABLED", "false") };
-        let cfg = ClaudeCodeConfig::resolve(&settings).expect("resolve");
-        unsafe { std::env::remove_var("CLAUDE_CODE_ENABLED") };
-
-        assert!(!cfg.enabled);
     }
 
     #[test]

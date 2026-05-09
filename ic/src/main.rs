@@ -217,21 +217,6 @@ async fn async_main() -> anyhow::Result<()> {
             init_worker_tracing();
             return lunarwing::worker::run_worker(*job_id, orchestrator_url, *max_iterations).await;
         }
-        Some(Command::ClaudeBridge {
-            job_id,
-            orchestrator_url,
-            max_turns,
-            model,
-        }) => {
-            init_worker_tracing();
-            return lunarwing::worker::run_claude_bridge(
-                *job_id,
-                orchestrator_url,
-                *max_turns,
-                model,
-            )
-            .await;
-        }
         Some(Command::Login { openai_codex }) => {
             init_cli_tracing();
             if *openai_codex {
@@ -841,7 +826,6 @@ async fn async_main() -> anyhow::Result<()> {
             heartbeat_interval_secs: config.heartbeat.interval_secs,
             sandbox_enabled: config.sandbox.enabled,
             docker_status,
-            claude_code_enabled: config.claude_code.enabled,
             acp_enabled: config.acp.enabled,
             routines_enabled: config.routines.enabled,
             skills_enabled: config.skills.enabled,

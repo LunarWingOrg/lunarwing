@@ -24,7 +24,6 @@ use crate::bootstrap::lunarwing_base_dir;
 use crate::channels::wasm::{
     ChannelCapabilitiesFile, available_channel_names, install_bundled_channel,
 };
-use crate::config::OAUTH_PLACEHOLDER;
 use crate::llm::models::{
     build_nearai_model_fetch_config, fetch_anthropic_models, fetch_ollama_models,
     fetch_openai_compatible_models, fetch_openai_models,
@@ -1888,7 +1887,7 @@ impl SetupWizard {
         self.set_llm_backend_preserving_model("anthropic");
 
         // Try to extract existing OAuth token from Claude Code credentials
-        if let Some(token) = crate::config::ClaudeCodeConfig::extract_oauth_token() {
+        if let Some(token) = crate::config::extract_anthropic_oauth_token() {
             print_info(&format!("Found OAuth token: {}", mask_api_key(&token)));
             if confirm("Use this token?", true).map_err(SetupError::Io)? {
                 return self.save_anthropic_oauth_token(&token).await;
@@ -1902,7 +1901,7 @@ impl SetupWizard {
                 // Block until the user has run `claude login` in another terminal
                 input("Press Enter after running `claude login` in another terminal...")
                     .map_err(SetupError::Io)?;
-                if let Some(token) = crate::config::ClaudeCodeConfig::extract_oauth_token() {
+                if let Some(token) = crate::config::extract_anthropic_oauth_token() {
                     print_info(&format!("Found OAuth token: {}", mask_api_key(&token)));
                     return self.save_anthropic_oauth_token(&token).await;
                 }
@@ -3227,67 +3226,6 @@ impl SetupWizard {
             }
         }
 
-        // Claude Code sandbox sub-step (only if Docker sandbox is enabled)
-        if self.settings.sandbox.enabled {
-            self.step_claude_code_sandbox().await?;
-        }
-
-        Ok(())
-    }
-
-    /// Claude Code sandbox sub-step: enable Claude CLI inside Docker containers.
-    async fn step_claude_code_sandbox(&mut self) -> Result<(), SetupError> {
-        println!();
-        print_info("Claude Code mode lets the agent delegate complex tasks to Claude CLI");
-        print_info("running inside sandboxed Docker containers.");
-        println!();
-
-        if !confirm("Enable Claude Code sandbox mode?", false).map_err(SetupError::Io)? {
-            self.settings.sandbox.claude_code_enabled = false;
-            return Ok(());
-        }
-
-        // Check for Anthropic credentials (API key or OAuth token).
-        // Uses `optional_env()` which reads both real env vars and the
-        // injected overlay (secrets DB, wizard-set values).
-        let has_credentials = || {
-            let has_api_key = crate::config::helpers::optional_env("ANTHROPIC_API_KEY")
-                .ok()
-                .flatten()
-                .is_some_and(|v| !v.is_empty() && v != OAUTH_PLACEHOLDER);
-            let has_oauth = crate::config::ClaudeCodeConfig::extract_oauth_token().is_some()
-                || crate::config::helpers::optional_env("ANTHROPIC_OAUTH_TOKEN")
-                    .ok()
-                    .flatten()
-                    .is_some_and(|v| !v.is_empty());
-            has_api_key || has_oauth
-        };
-
-        if has_credentials() {
-            self.settings.sandbox.claude_code_enabled = true;
-            print_success("Claude Code sandbox enabled");
-        } else {
-            print_error("No Anthropic credentials found.");
-            print_info(
-                "Claude Code needs ANTHROPIC_API_KEY or an OAuth token from `claude login`.",
-            );
-            println!();
-
-            if confirm("Retry after setting up credentials?", false).map_err(SetupError::Io)? {
-                if has_credentials() {
-                    self.settings.sandbox.claude_code_enabled = true;
-                    print_success("Claude Code sandbox enabled");
-                } else {
-                    self.settings.sandbox.claude_code_enabled = false;
-                    print_info("No credentials found. Claude Code disabled for now.");
-                    print_info("Set ANTHROPIC_API_KEY or run `claude login` and enable later.");
-                }
-            } else {
-                self.settings.sandbox.claude_code_enabled = false;
-                print_info("Claude Code disabled. Enable with CLAUDE_CODE_ENABLED=true later.");
-            }
-        }
-
         Ok(())
     }
 
@@ -3415,11 +3353,6 @@ impl SetupWizard {
         // (which runs before the DB is connected) knows to skip re-onboarding.
         if self.settings.onboard_completed {
             env_vars.push(("ONBOARD_COMPLETED".to_string(), "true".to_string()));
-        }
-
-        // Claude Code sandbox mode
-        if self.settings.sandbox.claude_code_enabled {
-            env_vars.push(("CLAUDE_CODE_ENABLED".to_string(), "true".to_string()));
         }
 
         // Signal channel env vars (chicken-and-egg: config resolves before DB).

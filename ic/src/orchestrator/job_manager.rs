@@ -21,17 +21,14 @@ use crate::sandbox::connect_docker;
 /// Which mode a sandbox container runs in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobMode {
-    /// Standard IronClaw worker with proxied LLM calls.
+    /// Standard LunarWing worker with proxied LLM calls.
     Worker,
-    /// Claude Code bridge that spawns the `claude` CLI directly.
-    ClaudeCode,
 }
 
 impl JobMode {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Worker => "worker",
-            Self::ClaudeCode => "claude_code",
         }
     }
 }
@@ -53,21 +50,6 @@ pub struct ContainerJobConfig {
     pub cpu_shares: u32,
     /// Port the orchestrator internal API listens on.
     pub orchestrator_port: u16,
-    /// Anthropic API key for Claude Code containers (read from ANTHROPIC_API_KEY).
-    /// Takes priority over OAuth token.
-    pub claude_code_api_key: Option<String>,
-    /// OAuth access token extracted from the host's `claude login` session.
-    /// Passed as CLAUDE_CODE_OAUTH_TOKEN to containers. Falls back to this
-    /// when no ANTHROPIC_API_KEY is available.
-    pub claude_code_oauth_token: Option<String>,
-    /// Claude model to use in ClaudeCode mode.
-    pub claude_code_model: String,
-    /// Maximum turns for Claude Code.
-    pub claude_code_max_turns: u32,
-    /// Memory limit in MB for Claude Code containers (heavier than workers).
-    pub claude_code_memory_limit_mb: u64,
-    /// Allowed tool patterns for Claude Code (passed as CLAUDE_CODE_ALLOWED_TOOLS env var).
-    pub claude_code_allowed_tools: Vec<String>,
 }
 
 impl Default for ContainerJobConfig {
@@ -77,12 +59,6 @@ impl Default for ContainerJobConfig {
             memory_limit_mb: 2048,
             cpu_shares: 1024,
             orchestrator_port: 50051,
-            claude_code_api_key: None,
-            claude_code_oauth_token: None,
-            claude_code_model: "sonnet".to_string(),
-            claude_code_max_turns: 50,
-            claude_code_memory_limit_mb: 4096,
-            claude_code_allowed_tools: crate::config::ClaudeCodeConfig::default().allowed_tools,
         }
     }
 }
@@ -325,7 +301,7 @@ impl ContainerJobManager {
         job_id: Uuid,
         token: &str,
         project_dir: Option<PathBuf>,
-        mode: JobMode,
+        _mode: JobMode,
     ) -> Result<(), OrchestratorError> {
         // Connect to Docker (reuses cached connection)
         let docker = self.docker().await?;
@@ -356,31 +332,7 @@ impl ContainerJobManager {
             env_vec.push("IRONCLAW_WORKSPACE=/workspace".to_string());
         }
 
-        // Claude Code mode: auth + tool allowlist.
-        //
-        // Auth strategies (first match wins):
-        //   1. ANTHROPIC_API_KEY: direct API key (pay-as-you-go billing).
-        //   2. CLAUDE_CODE_OAUTH_TOKEN: OAuth access token from `claude login`
-        //      session, extracted from the host's credential store.
-        if mode == JobMode::ClaudeCode {
-            if let Some(ref api_key) = self.config.claude_code_api_key {
-                env_vec.push(format!("ANTHROPIC_API_KEY={}", api_key));
-            } else if let Some(ref oauth_token) = self.config.claude_code_oauth_token {
-                env_vec.push(format!("CLAUDE_CODE_OAUTH_TOKEN={}", oauth_token));
-            }
-            if !self.config.claude_code_allowed_tools.is_empty() {
-                env_vec.push(format!(
-                    "CLAUDE_CODE_ALLOWED_TOOLS={}",
-                    self.config.claude_code_allowed_tools.join(",")
-                ));
-            }
-        }
-
-        // Memory limit: Claude Code gets more memory
-        let memory_mb = match mode {
-            JobMode::ClaudeCode => self.config.claude_code_memory_limit_mb,
-            JobMode::Worker => self.config.memory_limit_mb,
-        };
+        let memory_mb = self.config.memory_limit_mb;
 
         // Create the container
         use bollard::container::{Config, CreateContainerOptions};
@@ -403,27 +355,13 @@ impl ContainerJobManager {
             ..Default::default()
         };
 
-        // Build CMD based on mode
-        let cmd = match mode {
-            JobMode::Worker => vec![
-                "worker".to_string(),
-                "--job-id".to_string(),
-                job_id.to_string(),
-                "--orchestrator-url".to_string(),
-                orchestrator_url,
-            ],
-            JobMode::ClaudeCode => vec![
-                "claude-bridge".to_string(),
-                "--job-id".to_string(),
-                job_id.to_string(),
-                "--orchestrator-url".to_string(),
-                orchestrator_url,
-                "--max-turns".to_string(),
-                self.config.claude_code_max_turns.to_string(),
-                "--model".to_string(),
-                self.config.claude_code_model.clone(),
-            ],
-        };
+        let cmd = vec![
+            "worker".to_string(),
+            "--job-id".to_string(),
+            job_id.to_string(),
+            "--orchestrator-url".to_string(),
+            orchestrator_url,
+        ];
 
         // Add Docker labels for reaper identification and orphan detection
         let mut labels = std::collections::HashMap::new();
@@ -444,10 +382,7 @@ impl ContainerJobManager {
             ..Default::default()
         };
 
-        let container_name = match mode {
-            JobMode::Worker => format!("lunarwing-worker-{}", job_id),
-            JobMode::ClaudeCode => format!("lunarwing-claude-{}", job_id),
-        };
+        let container_name = format!("lunarwing-worker-{}", job_id);
         let options = CreateContainerOptions {
             name: container_name,
             ..Default::default()

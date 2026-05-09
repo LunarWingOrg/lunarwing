@@ -771,10 +771,6 @@ pub struct SandboxSettings {
     #[serde(default)]
     pub extra_allowed_domains: Vec<String>,
 
-    /// Whether Claude Code sandbox mode is enabled.
-    #[serde(default)]
-    pub claude_code_enabled: bool,
-
     /// Whether ACP (Agent Client Protocol) agent mode is enabled.
     #[serde(default)]
     pub acp_enabled: bool,
@@ -811,7 +807,6 @@ impl Default for SandboxSettings {
             image: default_sandbox_image(),
             auto_pull_image: true,
             extra_allowed_domains: Vec::new(),
-            claude_code_enabled: false,
             acp_enabled: false,
         }
     }

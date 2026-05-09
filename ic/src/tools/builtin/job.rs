@@ -444,21 +444,6 @@ impl CreateJobTool {
             credential_grants_json,
         });
 
-        // Persist the job mode to DB
-        if mode == JobMode::ClaudeCode
-            && let Some(store) = self.store.clone()
-        {
-            let job_id_copy = job_id;
-            tokio::spawn(async move {
-                if let Err(e) = store
-                    .update_sandbox_job_mode(job_id_copy, "claude_code")
-                    .await
-                {
-                    tracing::warn!(job_id = %job_id_copy, "Failed to set job mode: {}", e);
-                }
-            });
-        }
-
         // Subscribe to the broadcast channel BEFORE starting the container.
         // This eliminates the race where the container completes and broadcasts
         // its result before the monitor is listening.
@@ -863,9 +848,8 @@ impl Tool for CreateJobTool {
              sub-agent that has shell, file read/write, list_dir, and apply_patch tools. Use this \
              whenever the user asks you to build, create, or work on something. The task \
              description should be detailed enough for the sub-agent to work independently. \
-             Claude Code jobs default to wait=false so the conversation stays responsive while \
-             they stream progress. Set wait=true only when you explicitly want to block until \
-             the container exits. Set mode to 'claude_code' for complex software engineering tasks."
+             Jobs default to wait=true so the conversation blocks until the container exits. \
+             Set wait=false if you want the conversation to stay responsive while they stream progress."
         } else {
             "Create a new job or task for the agent to work on. Use this when the user wants \
              you to do something substantial that should be tracked as a separate job."
@@ -889,13 +873,7 @@ impl Tool for CreateJobTool {
                         "type": "boolean",
                         "description": "If true, wait for the container to complete and return results. \
                                         If false, start the container and return the job_id immediately. \
-                                        Defaults to false for claude_code jobs and true otherwise."
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["worker", "claude_code"],
-                        "description": "Execution mode. 'worker' (default) uses the LunarWing sub-agent. \
-                                        'claude_code' uses Claude Code CLI for full agentic software engineering."
+                                        Defaults to true."
                     },
                     "project_dir": {
                         "type": "string",
@@ -953,15 +931,12 @@ impl Tool for CreateJobTool {
         let description = require_str(&params, "description")?;
 
         if self.sandbox_enabled() {
-            let mode = match params.get("mode").and_then(|v| v.as_str()) {
-                Some("claude_code") => JobMode::ClaudeCode,
-                _ => JobMode::Worker,
-            };
+            let mode = JobMode::Worker;
 
             let wait = params
                 .get("wait")
                 .and_then(|v| v.as_bool())
-                .unwrap_or(mode != JobMode::ClaudeCode);
+                .unwrap_or(true);
 
             let explicit_dir = params
                 .get("project_dir")

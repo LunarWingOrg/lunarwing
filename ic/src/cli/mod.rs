@@ -315,27 +315,6 @@ pub enum Command {
         max_iterations: u32,
     },
 
-    /// Run as a Claude Code bridge inside a Docker container (internal use).
-    /// Spawns the `claude` CLI and streams output back to the orchestrator.
-    #[command(hide = true)]
-    ClaudeBridge {
-        /// Job ID to execute.
-        #[arg(long)]
-        job_id: uuid::Uuid,
-
-        /// URL of the orchestrator's internal API.
-        #[arg(long, default_value = "http://host.docker.internal:50051")]
-        orchestrator_url: String,
-
-        /// Maximum agentic turns for Claude Code.
-        #[arg(long, default_value = "50")]
-        max_turns: u32,
-
-        /// Claude model to use (e.g. "sonnet", "opus").
-        #[arg(long, default_value = "sonnet")]
-        model: String,
-    },
-
     /// Manage ACP (Agent Client Protocol) agents
     #[command(
         subcommand,

@@ -51,7 +51,7 @@ pub use self::relay::RelayConfig;
 pub use self::routines::RoutineConfig;
 pub use self::safety::SafetyConfig;
 use self::safety::resolve_safety_config;
-pub use self::sandbox::{AcpModeConfig, ClaudeCodeConfig, SandboxModeConfig};
+pub use self::sandbox::{AcpModeConfig, SandboxModeConfig, extract_anthropic_oauth_token};
 pub use self::search::WorkspaceSearchConfig;
 pub use self::secrets::SecretsConfig;
 pub use self::skills::SkillsConfig;
@@ -100,7 +100,6 @@ pub struct Config {
     pub hygiene: HygieneConfig,
     pub routines: RoutineConfig,
     pub sandbox: SandboxModeConfig,
-    pub claude_code: ClaudeCodeConfig,
     pub acp: AcpModeConfig,
     pub skills: SkillsConfig,
     pub transcription: TranscriptionConfig,
@@ -177,7 +176,6 @@ impl Config {
                 enabled: false,
                 ..SandboxModeConfig::default()
             },
-            claude_code: ClaudeCodeConfig::default(),
             acp: AcpModeConfig::default(),
             skills: SkillsConfig {
                 enabled: true,
@@ -344,7 +342,6 @@ impl Config {
             hygiene: HygieneConfig::resolve()?,
             routines: RoutineConfig::resolve()?,
             sandbox: SandboxModeConfig::resolve(settings)?,
-            claude_code: ClaudeCodeConfig::resolve(settings)?,
             acp: AcpModeConfig::resolve(settings)?,
             skills: SkillsConfig::resolve()?,
             transcription: TranscriptionConfig::resolve(settings)?,
@@ -504,11 +501,7 @@ pub fn inject_single_var(key: &str, value: &str) {
 
 /// Shared helper: extract tokens from OS credential stores into the overlay map.
 fn inject_os_credential_store_tokens(injected: &mut HashMap<String, String>) {
-    // Try the OS credential store for a fresh Anthropic OAuth token.
-    // Tokens from `claude login` expire in 8-12h, so the DB copy may be stale.
-    // A fresh extraction from macOS Keychain / Linux credentials.json wins
-    // over the (possibly expired) copy stored in the encrypted secrets DB.
-    if let Some(fresh) = crate::config::ClaudeCodeConfig::extract_oauth_token() {
+    if let Some(fresh) = crate::config::sandbox::extract_anthropic_oauth_token() {
         injected.insert("ANTHROPIC_OAUTH_TOKEN".to_string(), fresh);
         tracing::debug!("Refreshed ANTHROPIC_OAUTH_TOKEN from OS credential store");
     }
