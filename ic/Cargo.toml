@@ -23,7 +23,7 @@ exclude = [
 
 [package]
 name = "lunarwing"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 rust-version = "1.92"
 description = "Secure, privacy-first AI agent with XMPP/OMEMO, Gotify, and open-protocol channels"
