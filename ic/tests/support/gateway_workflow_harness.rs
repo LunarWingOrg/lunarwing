@@ -182,6 +182,7 @@ impl GatewayWorkflowHarness {
             Arc::clone(&components.context_manager),
             None,
             None,
+            None,
             components.db.clone(),
             None,
             None,

@@ -343,6 +343,18 @@ pub enum OrchestratorError {
 
     #[error("Docker error: {reason}")]
     Docker { reason: String },
+
+    #[error("External worker '{worker_name}' not found")]
+    ExternalWorkerNotFound { worker_name: String },
+
+    #[error("External worker '{worker_name}' connection failed: {reason}")]
+    ExternalWorkerConnectionFailed { worker_name: String, reason: String },
+
+    #[error("External worker '{worker_name}' protocol error: {reason}")]
+    ExternalWorkerProtocolError { worker_name: String, reason: String },
+
+    #[error("External worker '{worker_name}' task timed out (job {job_id})")]
+    ExternalWorkerTimeout { worker_name: String, job_id: Uuid },
 }
 
 /// Worker errors (container-side execution).

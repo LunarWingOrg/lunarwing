@@ -19,23 +19,50 @@ use crate::orchestrator::auth::{CredentialGrant, TokenStore};
 use crate::sandbox::connect_docker;
 
 /// Which mode a sandbox container runs in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobMode {
     /// Standard LunarWing worker with proxied LLM calls.
     Worker,
+    /// Delegates to a named external worker (persistent container speaking ironclaw-agent-v1).
+    External(String),
 }
 
 impl JobMode {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Worker => "worker",
+            Self::External(name) => name.as_str(),
+        }
+    }
+
+    pub fn is_external(&self) -> bool {
+        matches!(self, Self::External(_))
+    }
+
+    pub fn db_value(&self) -> String {
+        match self {
+            Self::Worker => "worker".to_string(),
+            Self::External(name) => format!("external:{name}"),
+        }
+    }
+
+    pub fn from_db_value(s: &str) -> Self {
+        if s == "worker" {
+            Self::Worker
+        } else if let Some(name) = s.strip_prefix("external:") {
+            Self::External(name.to_string())
+        } else {
+            Self::External(s.to_string())
         }
     }
 }
 
 impl std::fmt::Display for JobMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
+        match self {
+            Self::Worker => write!(f, "worker"),
+            Self::External(name) => write!(f, "external:{name}"),
+        }
     }
 }
 
@@ -270,7 +297,7 @@ impl ContainerJobManager {
             job_id,
             container_id: String::new(), // set after container creation
             state: ContainerState::Creating,
-            mode,
+            mode: mode.clone(),
             created_at: Utc::now(),
             project_dir: project_dir.clone(),
             task_description: task.to_string(),

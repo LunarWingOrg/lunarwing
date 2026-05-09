@@ -404,6 +404,7 @@ async fn async_main() -> anyhow::Result<()> {
     )
     .await;
     let container_job_manager = orch.container_job_manager;
+    let external_worker_manager = orch.external_worker_manager;
     let job_event_tx = orch.job_event_tx;
     let prompt_queue = orch.prompt_queue;
     let docker_status = orch.docker_status;
@@ -646,6 +647,7 @@ async fn async_main() -> anyhow::Result<()> {
         Arc::clone(&components.context_manager),
         Some(scheduler_slot.clone()),
         container_job_manager.clone(),
+        external_worker_manager.clone(),
         components.db.clone(),
         job_event_tx.clone(),
         Some(channels.inject_sender()),

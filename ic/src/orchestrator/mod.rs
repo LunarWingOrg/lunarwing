@@ -30,11 +30,13 @@
 
 pub mod api;
 pub mod auth;
+pub mod external_worker;
 pub mod job_manager;
 pub mod reaper;
 
 pub use api::OrchestratorApi;
 pub use auth::{CredentialGrant, TokenStore};
+pub use external_worker::{ExternalTaskResult, ExternalWorkerManager};
 pub use job_manager::{
     CompletionResult, ContainerHandle, ContainerJobConfig, ContainerJobManager, JobMode,
 };
@@ -63,6 +65,7 @@ fn resolve_orchestrator_port() -> u16 {
 /// Result of orchestrator setup, containing all handles needed by the agent.
 pub struct OrchestratorSetup {
     pub container_job_manager: Option<Arc<ContainerJobManager>>,
+    pub external_worker_manager: Option<Arc<ExternalWorkerManager>>,
     pub job_event_tx: Option<broadcast::Sender<(Uuid, String, SseEvent)>>,
     pub prompt_queue: Arc<Mutex<HashMap<Uuid, VecDeque<api::PendingPrompt>>>>,
     pub docker_status: crate::sandbox::DockerStatus,
@@ -106,10 +109,17 @@ pub async fn setup_orchestrator(
         crate::sandbox::DockerStatus::Disabled
     };
 
-    let (job_event_tx, container_job_manager) = if config.sandbox.enabled && docker_status.is_ok() {
+    // Create broadcast channel for job events (shared by container and external workers).
+    let has_external_workers = !config.external_workers.is_empty();
+    let needs_event_tx = (config.sandbox.enabled && docker_status.is_ok()) || has_external_workers;
+    let job_event_tx: Option<broadcast::Sender<(Uuid, String, SseEvent)>> = if needs_event_tx {
         let (tx, _) = broadcast::channel(256);
-        let job_event_tx = Some(tx);
+        Some(tx)
+    } else {
+        None
+    };
 
+    let container_job_manager = if config.sandbox.enabled && docker_status.is_ok() {
         let token_store = TokenStore::new();
         let orchestrator_port = resolve_orchestrator_port();
         let job_config = ContainerJobConfig {
@@ -134,7 +144,7 @@ pub async fn setup_orchestrator(
             secrets_store: secrets_store.cloned(),
             user_id: "default".to_string(),
             job_owner_cache: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            context_manager,
+            context_manager: context_manager.clone(),
         };
 
         tokio::spawn(async move {
@@ -143,13 +153,28 @@ pub async fn setup_orchestrator(
             }
         });
 
-        (job_event_tx, Some(jm))
+        Some(jm)
     } else {
-        (None, None)
+        None
+    };
+
+    // External worker manager (independent of Docker)
+    let external_worker_manager = if has_external_workers {
+        let mut mgr = ExternalWorkerManager::new(config.external_workers.clone());
+        if let (Some(etx), Some(cm)) = (&job_event_tx, &context_manager) {
+            mgr = mgr.with_event_deps(etx.clone(), Arc::clone(cm));
+        }
+        if let Some(store) = db {
+            mgr = mgr.with_store(Arc::clone(store));
+        }
+        Some(Arc::new(mgr))
+    } else {
+        None
     };
 
     OrchestratorSetup {
         container_job_manager,
+        external_worker_manager,
         job_event_tx,
         prompt_queue,
         docker_status,

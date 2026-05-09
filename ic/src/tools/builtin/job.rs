@@ -22,6 +22,7 @@ use crate::context::{ContextManager, JobContext, JobState};
 use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::auth::CredentialGrant;
+use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -113,6 +114,7 @@ pub struct CreateJobTool {
     /// Lazy scheduler for dispatching local (non-sandbox) jobs.
     scheduler_slot: Option<SchedulerSlot>,
     job_manager: Option<Arc<ContainerJobManager>>,
+    external_worker_manager: Option<Arc<ExternalWorkerManager>>,
     store: Option<Arc<dyn Database>>,
     /// Broadcast sender for job events (used to subscribe a monitor).
     event_tx: Option<tokio::sync::broadcast::Sender<(Uuid, String, SseEvent)>>,
@@ -128,6 +130,7 @@ impl CreateJobTool {
             context_manager,
             scheduler_slot: None,
             job_manager: None,
+            external_worker_manager: None,
             store: None,
             event_tx: None,
             inject_tx: None,
@@ -146,8 +149,21 @@ impl CreateJobTool {
         self
     }
 
+    /// Inject external worker manager for delegating to persistent worker containers.
+    pub fn with_external_workers(
+        mut self,
+        mgr: Arc<ExternalWorkerManager>,
+        store: Option<Arc<dyn Database>>,
+    ) -> Self {
+        self.external_worker_manager = Some(mgr);
+        if self.store.is_none() {
+            self.store = store;
+        }
+        self
+    }
+
     /// Inject monitor dependencies so fire-and-forget jobs spawn a background
-    /// monitor that forwards Claude Code output to the main agent loop.
+    /// monitor that forwards output to the main agent loop.
     pub fn with_monitor_deps(
         mut self,
         event_tx: tokio::sync::broadcast::Sender<(Uuid, String, SseEvent)>,
@@ -172,6 +188,12 @@ impl CreateJobTool {
 
     pub fn sandbox_enabled(&self) -> bool {
         self.job_manager.is_some()
+    }
+
+    fn has_external_workers(&self) -> bool {
+        self.external_worker_manager
+            .as_ref()
+            .is_some_and(|m| !m.is_empty())
     }
 
     /// Parse and validate the `credentials` parameter.
@@ -670,6 +692,163 @@ impl CreateJobTool {
             }
         }
     }
+
+    /// Execute via an external worker (nanocode, codex, etc.).
+    async fn execute_external(
+        &self,
+        task: &str,
+        worker_name: &str,
+        wait: bool,
+        ctx: &JobContext,
+    ) -> Result<ToolOutput, ToolError> {
+        let start = std::time::Instant::now();
+        let ewm = self.external_worker_manager.as_ref().ok_or_else(|| {
+            ToolError::ExecutionFailed(
+                "External worker execution requires a configured worker manager".to_string(),
+            )
+        })?;
+
+        let job_id = Uuid::new_v4();
+
+        self.context_manager
+            .register_sandbox_job(job_id, &ctx.user_id, task, task)
+            .await
+            .map_err(|e| {
+                ToolError::ExecutionFailed(format!("failed to register external job: {}", e))
+            })?;
+
+        self.persist_job(SandboxJobRecord {
+            id: job_id,
+            task: task.to_string(),
+            status: "creating".to_string(),
+            user_id: ctx.user_id.clone(),
+            project_dir: String::new(),
+            success: None,
+            failure_reason: None,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+            credential_grants_json: "[]".to_string(),
+        });
+
+        if let Some(store) = &self.store {
+            let store = store.clone();
+            let mode_val = JobMode::External(worker_name.to_string()).db_value();
+            tokio::spawn(async move {
+                let _ = store.update_sandbox_job_mode(job_id, &mode_val).await;
+            });
+        }
+
+        self.update_status(job_id, "running", None, None, Some(Utc::now()), None);
+
+        let pre_subscribed_rx = if !wait {
+            self.event_tx.as_ref().map(|etx| etx.subscribe())
+        } else {
+            None
+        };
+
+        if wait {
+            match ewm
+                .execute_task(job_id, worker_name, task, None, true)
+                .await
+            {
+                Ok(Some(result)) => {
+                    let success = result.status == "success";
+                    if success {
+                        let output = serde_json::json!({
+                            "job_id": job_id.to_string(),
+                            "status": "completed",
+                            "worker": worker_name,
+                            "output": result.output,
+                            "duration_ms": result.duration_ms,
+                        });
+                        Ok(ToolOutput::success(output, start.elapsed()))
+                    } else {
+                        Err(ToolError::ExecutionFailed(format!(
+                            "external worker '{}' failed: {}",
+                            worker_name,
+                            result.error.as_deref().unwrap_or(&result.output)
+                        )))
+                    }
+                }
+                Ok(None) => {
+                    let output = serde_json::json!({
+                        "job_id": job_id.to_string(),
+                        "status": "started",
+                        "worker": worker_name,
+                        "message": "Task dispatched (unexpected async return)",
+                    });
+                    Ok(ToolOutput::success(output, start.elapsed()))
+                }
+                Err(e) => {
+                    self.update_status(
+                        job_id,
+                        "failed",
+                        Some(false),
+                        Some(e.to_string()),
+                        None,
+                        Some(Utc::now()),
+                    );
+                    self.update_context_state(job_id, JobState::Failed, Some(e.to_string()));
+                    Err(ToolError::ExecutionFailed(format!(
+                        "external worker '{}' error: {}",
+                        worker_name, e
+                    )))
+                }
+            }
+        } else {
+            if let Err(e) = ewm
+                .execute_task(job_id, worker_name, task, None, false)
+                .await
+            {
+                self.update_status(
+                    job_id,
+                    "failed",
+                    Some(false),
+                    Some(e.to_string()),
+                    None,
+                    Some(Utc::now()),
+                );
+                self.update_context_state(job_id, JobState::Failed, Some(e.to_string()));
+                return Err(ToolError::ExecutionFailed(format!(
+                    "failed to start external worker '{}': {}",
+                    worker_name, e
+                )));
+            }
+
+            let monitor_timeout = std::time::Duration::from_secs(630);
+            if let (Some(rx), Some(itx)) = (pre_subscribed_rx, &self.inject_tx) {
+                if let Some(route) = monitor_route_from_ctx(ctx) {
+                    crate::agent::job_monitor::spawn_job_monitor_with_context(
+                        job_id,
+                        rx,
+                        itx.clone(),
+                        route,
+                        Some(self.context_manager.clone()),
+                        monitor_timeout,
+                    );
+                } else {
+                    crate::agent::job_monitor::spawn_completion_watcher(
+                        job_id,
+                        rx,
+                        self.context_manager.clone(),
+                        monitor_timeout,
+                    );
+                }
+            }
+
+            let output = serde_json::json!({
+                "job_id": job_id.to_string(),
+                "status": "started",
+                "worker": worker_name,
+                "message": format!(
+                    "Task dispatched to external worker '{}'. Use job_events to check progress.",
+                    worker_name
+                ),
+            });
+            Ok(ToolOutput::success(output, start.elapsed()))
+        }
+    }
 }
 
 /// The base directory where all project directories must live.
@@ -857,37 +1036,59 @@ impl Tool for CreateJobTool {
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
-        if self.sandbox_enabled() {
+        if self.sandbox_enabled() || self.has_external_workers() {
+            let mut props = serde_json::json!({
+                "title": {
+                    "type": "string",
+                    "description": "Clear description of what to accomplish"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Full description of what needs to be done"
+                },
+                "wait": {
+                    "type": "boolean",
+                    "description": "If true, wait for the job to complete and return results. \
+                                    If false, start the job and return the job_id immediately. \
+                                    Defaults to true."
+                }
+            });
+
+            if self.sandbox_enabled() {
+                props["project_dir"] = serde_json::json!({
+                    "type": "string",
+                    "description": "Path to an existing project directory to mount into the container. \
+                                    Must be under ~/.lunarwing/projects/. If omitted, a fresh directory is created."
+                });
+                props["credentials"] = serde_json::json!({
+                    "type": "object",
+                    "description": "Map of secret names to env var names. Each secret must exist in the \
+                                    secrets store (via 'lunarwing tool auth' or web UI). Example: \
+                                    {\"github_token\": \"GITHUB_TOKEN\", \"npm_token\": \"NPM_TOKEN\"}",
+                    "additionalProperties": { "type": "string" }
+                });
+            }
+
+            if self.has_external_workers() {
+                let names = self
+                    .external_worker_manager
+                    .as_ref()
+                    .map(|m| m.worker_names())
+                    .unwrap_or_default();
+                let mode_desc = format!(
+                    "Job execution mode. 'worker' for Docker container (default), \
+                     or a named external worker: {}.",
+                    names.join(", ")
+                );
+                props["mode"] = serde_json::json!({
+                    "type": "string",
+                    "description": mode_desc
+                });
+            }
+
             serde_json::json!({
                 "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Clear description of what to accomplish"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Full description of what needs to be done"
-                    },
-                    "wait": {
-                        "type": "boolean",
-                        "description": "If true, wait for the container to complete and return results. \
-                                        If false, start the container and return the job_id immediately. \
-                                        Defaults to true."
-                    },
-                    "project_dir": {
-                        "type": "string",
-                        "description": "Path to an existing project directory to mount into the container. \
-                                        Must be under ~/.lunarwing/projects/. If omitted, a fresh directory is created."
-                    },
-                    "credentials": {
-                        "type": "object",
-                        "description": "Map of secret names to env var names. Each secret must exist in the \
-                                        secrets store (via 'lunarwing tool auth' or web UI). Example: \
-                                        {\"github_token\": \"GITHUB_TOKEN\", \"npm_token\": \"NPM_TOKEN\"}",
-                        "additionalProperties": { "type": "string" }
-                    }
-                },
+                "properties": props,
                 "required": ["title", "description"]
             })
         } else {
@@ -909,8 +1110,8 @@ impl Tool for CreateJobTool {
     }
 
     fn execution_timeout(&self) -> Duration {
-        if self.sandbox_enabled() {
-            // Sandbox polls for up to 10 min internally; give an extra 60s buffer.
+        if self.sandbox_enabled() || self.has_external_workers() {
+            // Sandbox polls for up to 10 min; external workers have per-worker timeouts.
             Duration::from_secs(660)
         } else {
             Duration::from_secs(30)
@@ -929,6 +1130,42 @@ impl Tool for CreateJobTool {
         let title = require_str(&params, "title")?;
 
         let description = require_str(&params, "description")?;
+
+        let mode_str = params
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("worker");
+
+        // Route to external worker if requested and available
+        if mode_str != "worker" {
+            if let Some(ref ewm) = self.external_worker_manager {
+                if ewm.get_worker(mode_str).is_some() {
+                    let wait = params
+                        .get("wait")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true);
+                    let task = format!("{}\n\n{}", title, description);
+                    return self
+                        .execute_external(&task, mode_str, wait, ctx)
+                        .await;
+                }
+            }
+            return Err(ToolError::InvalidParameters(format!(
+                "Unknown job mode '{}'. Available: worker{}",
+                mode_str,
+                self.external_worker_manager
+                    .as_ref()
+                    .map(|m| {
+                        let names = m.worker_names();
+                        if names.is_empty() {
+                            String::new()
+                        } else {
+                            format!(", {}", names.join(", "))
+                        }
+                    })
+                    .unwrap_or_default()
+            )));
+        }
 
         if self.sandbox_enabled() {
             let mode = JobMode::Worker;
@@ -1141,6 +1378,7 @@ impl Tool for JobStatusTool {
 pub struct CancelJobTool {
     context_manager: Arc<ContextManager>,
     job_manager: Option<Arc<ContainerJobManager>>,
+    external_worker_manager: Option<Arc<ExternalWorkerManager>>,
     store: Option<Arc<dyn Database>>,
 }
 
@@ -1149,6 +1387,7 @@ impl CancelJobTool {
         Self {
             context_manager,
             job_manager: None,
+            external_worker_manager: None,
             store: None,
         }
     }
@@ -1161,6 +1400,12 @@ impl CancelJobTool {
     ) -> Self {
         self.job_manager = Some(job_manager);
         self.store = store;
+        self
+    }
+
+    /// Inject external worker manager so cancellation can reach external workers.
+    pub fn with_external_workers(mut self, mgr: Arc<ExternalWorkerManager>) -> Self {
+        self.external_worker_manager = Some(mgr);
         self
     }
 }
@@ -1219,6 +1464,11 @@ impl Tool for CancelJobTool {
                         job_id = %job_id,
                         "Failed to stop container during cancellation: {}", e
                     );
+                }
+
+                // Cancel via external worker manager if applicable.
+                if let Some(ref ewm) = self.external_worker_manager {
+                    let _ = ewm.cancel_task(job_id).await;
                 }
 
                 // Update DB status for sandbox jobs. Uses "failed" (not

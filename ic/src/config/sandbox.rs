@@ -183,6 +183,33 @@ fn parse_oauth_access_token(json: &str) -> Option<String> {
     Some(token.to_string())
 }
 
+/// Configuration for a named external worker endpoint.
+#[derive(Debug, Clone)]
+pub struct ExternalWorkerConfig {
+    pub name: String,
+    pub url: String,
+    pub auth_token: Option<String>,
+    pub timeout_ms: u64,
+}
+
+impl ExternalWorkerConfig {
+    pub fn resolve_from_settings(
+        settings: &crate::settings::Settings,
+    ) -> Vec<Self> {
+        settings
+            .sandbox
+            .external_workers
+            .iter()
+            .map(|ew| Self {
+                name: ew.name.clone(),
+                url: ew.url.clone(),
+                auth_token: ew.auth_token.clone(),
+                timeout_ms: ew.timeout_ms,
+            })
+            .collect()
+    }
+}
+
 /// ACP (Agent Client Protocol) mode configuration.
 #[derive(Debug, Clone)]
 pub struct AcpModeConfig {

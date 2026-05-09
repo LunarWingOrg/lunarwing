@@ -278,13 +278,15 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 ## Things to do before 1.0.4 Release:
 
 1. nanocode worker fixes and testing. 
-2. rip out legacy claude_code mode from worker image (DONE — ClaudeCode enum variant, claude_bridge.rs, ClaudeCodeConfig, CLI subcommand, and Dockerfile npm install all removed. Only Worker mode remains.)
-3. Further testing of agents setup with MT Admin Setup Harness. Will add suggested tests to this document
-4. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
-5. Create a new branch to correspond with release
-6. Create gh release tag and add release notes to it like other releases already have rn.
+2. ExternalWorker mode
+3. rip out legacy claude_code mode from worker image (DONE — ClaudeCode enum variant, claude_bridge.rs, ClaudeCodeConfig, CLI subcommand, and Dockerfile npm install all removed. Only Worker mode remains.)
+4. Further testing of agents setup with MT Admin Setup Harness. Will add suggested tests to this document
+5. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
+6. Create a new branch to correspond with release
+7. Create gh release tag and add release notes to it like other releases already have rn.
 
 ## Things to do after 1.0.4 Release:
 
 1. OCR and Image Recog with sidecar plan by Ruffles
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
+3. Continue to remove cruft, along with some of the unsupported channels.

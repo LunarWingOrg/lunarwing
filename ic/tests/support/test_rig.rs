@@ -626,6 +626,7 @@ impl TestRigBuilder {
                 Arc::clone(&components.context_manager),
                 Some(scheduler_slot.clone()),
                 None,
+                None,
                 components.db.clone(),
                 None,
                 None,

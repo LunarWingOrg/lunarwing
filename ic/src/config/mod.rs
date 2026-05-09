@@ -51,7 +51,9 @@ pub use self::relay::RelayConfig;
 pub use self::routines::RoutineConfig;
 pub use self::safety::SafetyConfig;
 use self::safety::resolve_safety_config;
-pub use self::sandbox::{AcpModeConfig, SandboxModeConfig, extract_anthropic_oauth_token};
+pub use self::sandbox::{
+    AcpModeConfig, ExternalWorkerConfig, SandboxModeConfig, extract_anthropic_oauth_token,
+};
 pub use self::search::WorkspaceSearchConfig;
 pub use self::secrets::SecretsConfig;
 pub use self::skills::SkillsConfig;
@@ -101,6 +103,7 @@ pub struct Config {
     pub routines: RoutineConfig,
     pub sandbox: SandboxModeConfig,
     pub acp: AcpModeConfig,
+    pub external_workers: Vec<ExternalWorkerConfig>,
     pub skills: SkillsConfig,
     pub transcription: TranscriptionConfig,
     pub search: WorkspaceSearchConfig,
@@ -177,6 +180,7 @@ impl Config {
                 ..SandboxModeConfig::default()
             },
             acp: AcpModeConfig::default(),
+            external_workers: Vec::new(),
             skills: SkillsConfig {
                 enabled: true,
                 local_dir: skills_dir,
@@ -343,6 +347,7 @@ impl Config {
             routines: RoutineConfig::resolve()?,
             sandbox: SandboxModeConfig::resolve(settings)?,
             acp: AcpModeConfig::resolve(settings)?,
+            external_workers: ExternalWorkerConfig::resolve_from_settings(settings),
             skills: SkillsConfig::resolve()?,
             transcription: TranscriptionConfig::resolve(settings)?,
             search: WorkspaceSearchConfig::resolve()?,

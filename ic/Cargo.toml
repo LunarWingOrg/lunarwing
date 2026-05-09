@@ -178,6 +178,10 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 hyper = { version = "1.5", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["server", "tokio", "http1", "http2"] }
 http-body-util = "0.1"
+http = "1"
+
+# External worker WebSocket client
+tokio-tungstenite = "0.26"
 bytes = "1"
 base64 = "0.22.1"
 mime_guess = "2.0.5"

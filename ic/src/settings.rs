@@ -774,6 +774,29 @@ pub struct SandboxSettings {
     /// Whether ACP (Agent Client Protocol) agent mode is enabled.
     #[serde(default)]
     pub acp_enabled: bool,
+
+    /// External worker endpoints (persistent containers speaking ironclaw-agent-v1).
+    #[serde(default)]
+    pub external_workers: Vec<ExternalWorkerSettings>,
+}
+
+/// A named external worker endpoint (persistent container speaking ironclaw-agent-v1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExternalWorkerSettings {
+    /// Unique name for this worker (e.g., "nanocode", "codex").
+    pub name: String,
+    /// WebSocket URL (e.g., "ws://localhost:9090/ws/agent").
+    pub url: String,
+    /// Bearer token for authentication (empty = no auth).
+    #[serde(default)]
+    pub auth_token: Option<String>,
+    /// Default task timeout in milliseconds.
+    #[serde(default = "default_external_worker_timeout")]
+    pub timeout_ms: u64,
+}
+
+fn default_external_worker_timeout() -> u64 {
+    300_000
 }
 
 fn default_sandbox_policy() -> String {
@@ -808,6 +831,7 @@ impl Default for SandboxSettings {
             auto_pull_image: true,
             extra_allowed_domains: Vec::new(),
             acp_enabled: false,
+            external_workers: Vec::new(),
         }
     }
 }
