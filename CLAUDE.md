@@ -278,9 +278,9 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 ## Things to do before 1.0.4 Release:
 
 1. nanocode worker fixes and testing. 
-2. ExternalWorker mode
+2. ExternalWorker mode configuration stuff
 3. rip out legacy claude_code mode from worker image (DONE — ClaudeCode enum variant, claude_bridge.rs, ClaudeCodeConfig, CLI subcommand, and Dockerfile npm install all removed. Only Worker mode remains.)
-4. Further testing of agents setup with MT Admin Setup Harness. Will add suggested tests to this document
+4. Further testing of agents setup with MT Admin Setup Harness. Preferably some kind of fresh test and then test usual things from there...
 5. Write up some release notes for 1.0.4 which explain all of the changes since 1.0.3
 6. Create a new branch to correspond with release
 7. Create gh release tag and add release notes to it like other releases already have rn.

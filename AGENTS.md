@@ -36,6 +36,45 @@ Start with these deeper docs as needed:
 - Extensions, tools, channels, MCP, WASM: `src/extensions/`, `src/tools/`, `src/channels/`
 - OpenClaw port staging work: `openclaw-ports/`. For OpenClaw port tasks, keep edits inside `openclaw-ports/` unless the user explicitly approves touching core IronClaw files.
 
+## Build, Test, and Lint Commands
+
+Run these from the `ic/` directory:
+
+```bash
+# Build
+cargo build
+cargo build --all-features
+
+# Run all tests
+cargo test -- --nocapture
+
+# Run a single test (exact match)
+cargo test <test_name> -- --exact --nocapture
+
+# Run a specific integration test file
+cargo test --test <file_name> -- --nocapture
+
+# Run tests with specific features
+cargo test --no-default-features --features libsql
+cargo test --all-features
+
+# Format check
+cargo fmt --all -- --check
+
+# Lint (zero warnings policy)
+cargo clippy --all --tests --examples -- -D warnings
+cargo clippy --all --tests --examples --all-features -- -D warnings
+
+# Dependency audit
+cargo deny check
+
+# Compile benchmarks without running
+cargo bench --all-features --no-run
+
+# Build WASM extensions (needed for some integration tests)
+./scripts/build-wasm-extensions.sh --channels
+```
+
 ## Ownership and Composition Rules
 
 - Keep `src/main.rs` and `src/app.rs` orchestration-focused. Do not move module-owned logic into entrypoints.
@@ -45,10 +84,16 @@ Start with these deeper docs as needed:
 
 ## Repo-Wide Coding Rules
 
-- Avoid `.unwrap()` and `.expect()` in production; prefer proper error handling. They are fine in tests, and in production only for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Edition**: Rust 2024, MSRV 1.92.
+- **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
+- **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
+- **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are allowed only in tests or for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Types**: Use strong types and enums over stringly-typed control flow when the shape is known.
+- **Naming**: Follow standard Rust conventions (`snake_case` for functions/variables, `PascalCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants).
+- **Complexity**: Keep functions under 100 lines, cognitive complexity under 15, and arguments under 7 (see `clippy.toml`).
+- **Secrets**: Use the `secrecy` crate for sensitive values; never log or expose secrets.
+- **Logging**: Use `tracing` macros (`info!`, `warn!`, `error!`) rather than `println!`.
 - Keep clippy clean with zero warnings.
-- Prefer `crate::` imports for cross-module references.
-- Use strong types and enums over stringly-typed control flow when the shape is known.
 
 ## Database, Setup, and Config Rules
 

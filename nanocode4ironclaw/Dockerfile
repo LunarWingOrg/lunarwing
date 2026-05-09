@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 1: build nanocode from source
 # ──────────────────────────────────────────────────────────────────────────────
-FROM oven/bun:1.3-debian AS builder
+FROM oven/bun:debian AS builder
 
 WORKDIR /build
 
@@ -21,6 +21,10 @@ RUN bun install --frozen-lockfile || bun install
 WORKDIR /build/nanocode/packages/sdk/js
 RUN bun run build 2>/dev/null || true
 
+# Build the app package (required by `serve` command)
+WORKDIR /build/nanocode/packages/app
+RUN bun run build 2>/dev/null || true
+
 # Build the opencode package
 WORKDIR /build/nanocode/packages/opencode
 RUN bun run build 2>/dev/null || true
@@ -28,7 +32,7 @@ RUN bun run build 2>/dev/null || true
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 2: runtime image
 # ──────────────────────────────────────────────────────────────────────────────
-FROM oven/bun:1.3-debian AS runtime
+FROM oven/bun:debian AS runtime
 
 LABEL org.opencontainers.image.title="IronClaw Nanocode Worker" \
       org.opencontainers.image.description="Persistent nanocode worker with WebSocket agent communication" \
@@ -65,6 +69,9 @@ COPY --chown=nanocode:nanocode config/ ./config/
 
 # Ensure scripts are executable
 RUN chmod +x /app/entrypoint.sh /app/health_server.py
+
+# Symlink node_modules so bridge scripts can resolve @nanogpt/sdk
+RUN ln -s /app/nanocode/node_modules /app/node_modules
 
 # ── XDG directories for nanocode state ────────────────────────────────────────
 RUN mkdir -p /home/nanocode/.local/share/nanocode \
