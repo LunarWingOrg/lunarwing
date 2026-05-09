@@ -35,11 +35,11 @@ while [ $# -gt 0 ]; do
 done
 
 # ── config setup ──────────────────────────────────────────────────────────────
-# Symlink project-level opencode.json into the workspace if a config is mounted
-if [ -f /app/config/opencode.json ]; then
+# Symlink project-level nanocode.json into the workspace if a config is mounted
+if [ -f /app/config/nanocode.json ]; then
   mkdir -p "$WORKSPACE_ROOT/.nanocode"
-  ln -sfn /app/config/opencode.json "$WORKSPACE_ROOT/.nanocode/opencode.json"
-  log "Config linked: /app/config/opencode.json → $WORKSPACE_ROOT/.nanocode/opencode.json"
+  ln -sfn /app/config/nanocode.json "$WORKSPACE_ROOT/.nanocode/nanocode.json"
+  log "Config linked: /app/config/nanocode.json → $WORKSPACE_ROOT/.nanocode/nanocode.json"
 fi
 
 # ── always start the health server in the background ──────────────────────────

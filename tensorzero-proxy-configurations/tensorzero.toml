@@ -1084,6 +1084,42 @@ model = "ds32_openrouter"
 type = "chat_completion"
 model = "gemma4_26b_nanogpt"
 
+# --- LUNARWING (nanocode worker) --------------------------------------------
+[functions.lunarwing]
+type = "chat"
+
+[functions.lunarwing.experimentation]
+type = "static"
+candidate_variants = { "qwen_tee" = 0.70, "gpt52_nearai" = 0.15, "gptoss120b_nearai" = 0.05, "glm5_fp8_nearai" = 0.05, "local_bigpc" = 0.05 }
+
+[functions.lunarwing.variants.local_bigpc]
+type = "chat_completion"
+model = "gemma_bigpc"
+
+[functions.lunarwing.variants.qwen_tee]
+type = "chat_completion"
+model = "qwen_tee_redundant"
+
+[functions.lunarwing.variants.gpt52_nearai]
+type = "chat_completion"
+model = "gpt52_nearai"
+
+[functions.lunarwing.variants.gptoss120b_nearai]
+type = "chat_completion"
+model = "gptoss120b_nearai"
+
+[functions.lunarwing.variants.glm5_fp8_nearai]
+type = "chat_completion"
+model = "glm5_fp8_nearai"
+
+[functions.lunarwing.variants.qwen235b_nanogpt]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.lunarwing.variants.gemma4_26b_ng]
+type = "chat_completion"
+model = "gemma4_26b_nanogpt"
+
 # --- SUMMARIZATION ----------------------------------------------------------
 [functions.summarization]
 type = "chat"

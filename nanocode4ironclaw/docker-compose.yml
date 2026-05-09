@@ -7,12 +7,12 @@ x-worker-base: &worker-base
   group_add:
     - "${HOST_GID:-1000}"
   volumes:
-    - ${NANOCODE_CONFIG_FILE:-./config/opencode.json}:/app/config/opencode.json:ro
+    - ${NANOCODE_CONFIG_FILE:-./config/nanocode.json}:/app/config/nanocode.json:ro,z
     - nanocode-data:/home/nanocode/.local/share/nanocode
     - nanocode-config-home:/home/nanocode/.config/nanocode
-    - ./workspace:/workspace
-    - ./logs:/var/log/ironclaw
-    - ./results:/app/results
+    - ./workspace:/workspace:z
+    - ./logs:/var/log/ironclaw:z
+    - ./results:/app/results:z
   environment: &worker-env
     # LLM / TensorZero
     TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-dummy}
