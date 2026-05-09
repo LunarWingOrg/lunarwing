@@ -170,6 +170,8 @@ Work independently to complete this job. Report when done."#,
                 extra_env: self.extra_env.clone(),
                 last_output: Mutex::new(String::new()),
                 iteration_tracker: iteration_tracker.clone(),
+                consecutive_text_only: Mutex::new(0),
+                consecutive_all_failed: Mutex::new(0),
             };
 
             let config = AgenticLoopConfig {
@@ -339,6 +341,25 @@ struct ContainerDelegate {
     /// Tracks the current iteration — shared with the outer `run` method so
     /// `CompletionReport` can include accurate iteration counts.
     iteration_tracker: Arc<Mutex<u32>>,
+    /// Consecutive text-only responses (no tool calls). When this reaches
+    /// the threshold the loop exits — the LLM has stopped doing work.
+    consecutive_text_only: Mutex<u32>,
+    /// Consecutive iterations where every tool call failed. When the LLM
+    /// keeps retrying a broken command, this triggers an exit with failure.
+    consecutive_all_failed: Mutex<u32>,
+}
+
+/// Detect post-work chatter: suggestions, follow-up offers, or XML tags
+/// that indicate the LLM finished the task but is looping on meta-content.
+fn is_post_work_chatter(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    lower.contains("<suggestions")
+        || lower.contains("<suggestion>")
+        || lower.contains("would you like me to")
+        || lower.contains("shall i ")
+        || lower.contains("let me know if")
+        || lower.contains("here are some suggestions")
+        || lower.contains("what would you like to do next")
 }
 
 impl ContainerDelegate {
@@ -441,8 +462,18 @@ impl LoopDelegate for ContainerDelegate {
         )
         .await;
 
-        // Check for completion
-        if crate::util::llm_signals_completion(text) {
+        // Track consecutive text-only responses. If the LLM produces 3+
+        // text responses in a row without tool calls, it's done working.
+        let mut text_count = self.consecutive_text_only.lock().await;
+        *text_count += 1;
+        let consecutive = *text_count;
+        drop(text_count);
+
+        let is_done = crate::util::llm_signals_completion(text)
+            || is_post_work_chatter(text)
+            || consecutive >= 3;
+
+        if is_done {
             let last = self.last_output.lock().await;
             let output = if last.is_empty() {
                 text.to_string()
@@ -462,6 +493,9 @@ impl LoopDelegate for ContainerDelegate {
         content: Option<String>,
         reason_ctx: &mut ReasoningContext,
     ) -> Result<Option<LoopOutcome>, crate::error::Error> {
+        // Tool calls mean the LLM is still working — reset text counter.
+        *self.consecutive_text_only.lock().await = 0;
+
         if let Some(ref text) = content {
             self.post_event(
                 "message",
@@ -482,6 +516,9 @@ impl LoopDelegate for ContainerDelegate {
             ));
 
         // Execute tools sequentially (container context — no parallel execution)
+        let mut any_succeeded = false;
+        let mut last_error = String::new();
+
         for tc in tool_calls {
             self.post_event(
                 "tool_use",
@@ -519,13 +556,36 @@ impl LoopDelegate for ContainerDelegate {
             )
             .await;
 
-            if let Ok(ref output) = result {
-                *self.last_output.lock().await = output.clone();
+            match &result {
+                Ok(output) => {
+                    any_succeeded = true;
+                    *self.last_output.lock().await = output.clone();
+                }
+                Err(e) => {
+                    last_error = e.clone();
+                }
             }
 
             // Use shared result processing
             let (_, message) = process_tool_result(&self.safety, &tc.name, &tc.id, &result);
             reason_ctx.messages.push(message);
+        }
+
+        // Track consecutive all-fail iterations to catch error loops
+        // (e.g., "Permission denied" retried endlessly).
+        let mut fail_count = self.consecutive_all_failed.lock().await;
+        if any_succeeded {
+            *fail_count = 0;
+        } else {
+            *fail_count += 1;
+            if *fail_count >= 3 {
+                drop(fail_count);
+                tracing::warn!("3 consecutive iterations with all tool calls failing — aborting");
+                return Ok(Some(LoopOutcome::Response(format!(
+                    "Job failed: tool calls failed 3 consecutive times. Last error: {}",
+                    last_error
+                ))));
+            }
         }
 
         Ok(None)
@@ -551,6 +611,7 @@ impl LoopDelegate for ContainerDelegate {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::agent::agentic_loop::truncate_for_preview;
 
     #[test]
@@ -571,9 +632,18 @@ mod tests {
 
     #[test]
     fn test_truncate_multibyte_safe() {
-        // "é" is 2 bytes in UTF-8; slicing at byte 1 would panic without safety
         let result = truncate_for_preview("é is fancy", 1);
-        // Should truncate to 0 chars (can't fit "é" in 1 byte)
         assert_eq!(result, "...");
+    }
+
+    #[test]
+    fn test_post_work_chatter_detection() {
+        assert!(is_post_work_chatter("Would you like me to do something else?"));
+        assert!(is_post_work_chatter("<suggestions>\n<suggestion>try X</suggestion>\n</suggestions>"));
+        assert!(is_post_work_chatter("Let me know if you need anything else."));
+        assert!(is_post_work_chatter("Shall I run the tests now?"));
+        assert!(is_post_work_chatter("What would you like to do next?"));
+        assert!(!is_post_work_chatter("Running command: echo hello"));
+        assert!(!is_post_work_chatter("The file has been updated."));
     }
 }
