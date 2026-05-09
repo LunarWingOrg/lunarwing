@@ -973,7 +973,6 @@ mod tests {
             // Same user_id should return the same cached Arc (pointer equality)
             assert!(Arc::ptr_eq(&ws1, &ws2));
         }
-
     }
 
     #[test]

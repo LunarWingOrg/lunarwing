@@ -373,7 +373,10 @@ impl MissionManager {
         user_id: &str,
         name: &str,
     ) -> Result<Option<Mission>, EngineError> {
-        let missions = self.store.list_missions_with_shared(project_id, user_id).await?;
+        let missions = self
+            .store
+            .list_missions_with_shared(project_id, user_id)
+            .await?;
         Ok(missions.into_iter().find(|m| m.name == name))
     }
 

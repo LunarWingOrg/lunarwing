@@ -8,6 +8,8 @@ use tokio::sync::{RwLock, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+const CLEANUP_MAX_POLLS: u32 = 1800; // 30 minutes at 1s intervals
+
 use crate::agent::task::{Task, TaskContext, TaskOutput};
 use crate::config::AgentConfig;
 use crate::context::{ContextManager, JobContext, JobState};
@@ -319,6 +321,7 @@ impl Scheduler {
         // Cleanup task for this job to avoid capacity leaks
         let jobs = Arc::clone(&self.jobs);
         tokio::spawn(async move {
+            let mut polls = 0u32;
             loop {
                 let finished = {
                     let jobs_read = jobs.read().await;
@@ -329,6 +332,13 @@ impl Scheduler {
                 };
 
                 if finished {
+                    jobs.write().await.remove(&job_id);
+                    break;
+                }
+
+                polls += 1;
+                if polls >= CLEANUP_MAX_POLLS {
+                    tracing::warn!(job_id = %job_id, "cleanup timed out after 30 min, force-removing");
                     jobs.write().await.remove(&job_id);
                     break;
                 }
@@ -425,6 +435,7 @@ impl Scheduler {
         // Cleanup task for subtask tracking
         let subtasks = Arc::clone(&self.subtasks);
         tokio::spawn(async move {
+            let mut polls = 0u32;
             loop {
                 let finished = {
                     let subtasks_read = subtasks.read().await;
@@ -435,6 +446,13 @@ impl Scheduler {
                 };
 
                 if finished {
+                    subtasks.write().await.remove(&task_id);
+                    break;
+                }
+
+                polls += 1;
+                if polls >= CLEANUP_MAX_POLLS {
+                    tracing::warn!(task_id = %task_id, "subtask cleanup timed out after 30 min, force-removing");
                     subtasks.write().await.remove(&task_id);
                     break;
                 }
@@ -784,6 +802,9 @@ mod tests {
             auto_approve_tools: true,
             default_timezone: "UTC".to_string(),
             max_tokens_per_job,
+            handle_message_timeout: std::time::Duration::from_secs(300),
+            self_repair_op_timeout: std::time::Duration::from_secs(60),
+            session_prune_timeout: std::time::Duration::from_secs(30),
         };
         let cm = Arc::new(ContextManager::new(5));
         let llm: Arc<dyn LlmProvider> = Arc::new(StubLlm);

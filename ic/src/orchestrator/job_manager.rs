@@ -217,7 +217,9 @@ pub struct ContainerJobManager {
     docker: Arc<RwLock<Option<bollard::Docker>>>,
     /// Broadcast channel for emitting job events when a container exits
     /// without calling /complete.
-    job_event_tx: Option<tokio::sync::broadcast::Sender<(Uuid, String, crate::channels::web::types::SseEvent)>>,
+    job_event_tx: Option<
+        tokio::sync::broadcast::Sender<(Uuid, String, crate::channels::web::types::SseEvent)>,
+    >,
     /// Direct handle to ContextManager for force-completing abandoned jobs.
     context_manager: Option<Arc<crate::context::ContextManager>>,
 }
@@ -236,7 +238,11 @@ impl ContainerJobManager {
 
     pub fn with_completion_deps(
         mut self,
-        event_tx: tokio::sync::broadcast::Sender<(Uuid, String, crate::channels::web::types::SseEvent)>,
+        event_tx: tokio::sync::broadcast::Sender<(
+            Uuid,
+            String,
+            crate::channels::web::types::SseEvent,
+        )>,
         context_manager: Arc<crate::context::ContextManager>,
     ) -> Self {
         self.job_event_tx = Some(event_tx);

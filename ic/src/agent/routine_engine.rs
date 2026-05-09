@@ -1009,8 +1009,8 @@ struct FullJobWatcher {
 impl FullJobWatcher {
     /// Poll interval between DB checks.
     const POLL_INTERVAL: Duration = Duration::from_secs(5);
-    /// Safety ceiling: 24 hours, derived from POLL_INTERVAL.
-    const MAX_POLLS: u32 = (24 * 60 * 60) / Self::POLL_INTERVAL.as_secs() as u32;
+    /// Safety ceiling: 30 minutes, derived from POLL_INTERVAL.
+    const MAX_POLLS: u32 = (30 * 60) / Self::POLL_INTERVAL.as_secs() as u32;
 
     fn new(store: Arc<dyn Database>, job_id: Uuid, routine_name: String) -> Self {
         Self {
@@ -1060,7 +1060,7 @@ impl FullJobWatcher {
                 tracing::error!(
                     routine = %self.routine_name,
                     job_id = %self.job_id,
-                    "full_job timed out after 24 hours, treating as failed"
+                    "full_job timed out after 30 minutes, treating as failed"
                 );
                 break RunStatus::Failed;
             }
@@ -1936,15 +1936,34 @@ pub fn spawn_cron_ticker(
     interval: Duration,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let op_timeout = Duration::from_secs(engine.config.cron_op_timeout_secs);
+        // Startup recovery gets 2x timeout since it may process backlog.
+        let startup_timeout = op_timeout * 2;
+
         // Recover orphaned runs from a previous process crash before
         // dispatching any new work, so we don't confuse fresh dispatches
         // with crash orphans.
-        engine.sync_dispatched_runs().await;
-        engine.sweep_stuck_lightweight_runs().await;
+        if tokio::time::timeout(startup_timeout, engine.sync_dispatched_runs())
+            .await
+            .is_err()
+        {
+            tracing::error!("startup sync_dispatched_runs timed out");
+        }
+        if tokio::time::timeout(startup_timeout, engine.sweep_stuck_lightweight_runs())
+            .await
+            .is_err()
+        {
+            tracing::error!("startup sweep_stuck_lightweight_runs timed out");
+        }
 
         // Run one cron check immediately so routines due at startup don't
         // wait an extra full polling interval.
-        engine.check_cron_triggers().await;
+        if tokio::time::timeout(startup_timeout, engine.check_cron_triggers())
+            .await
+            .is_err()
+        {
+            tracing::error!("startup check_cron_triggers timed out");
+        }
 
         let mut ticker = tokio::time::interval(interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1959,9 +1978,24 @@ pub fn spawn_cron_ticker(
             ticker.tick().await;
             // Sync first: only processes runs from before boot_time, so it
             // never races with FullJobWatcher instances from this process.
-            engine.sync_dispatched_runs().await;
-            engine.sweep_stuck_lightweight_runs().await;
-            engine.check_cron_triggers().await;
+            if tokio::time::timeout(op_timeout, engine.sync_dispatched_runs())
+                .await
+                .is_err()
+            {
+                tracing::error!("sync_dispatched_runs timed out");
+            }
+            if tokio::time::timeout(op_timeout, engine.sweep_stuck_lightweight_runs())
+                .await
+                .is_err()
+            {
+                tracing::error!("sweep_stuck_lightweight_runs timed out");
+            }
+            if tokio::time::timeout(op_timeout, engine.check_cron_triggers())
+                .await
+                .is_err()
+            {
+                tracing::error!("check_cron_triggers timed out");
+            }
 
             if last_refresh.elapsed() >= refresh_interval {
                 engine.refresh_event_cache().await;

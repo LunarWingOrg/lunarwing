@@ -387,8 +387,9 @@ impl EffectBridgeAdapter {
                                     .collect(),
                             );
                         }
-                        if let Some(max) =
-                            params.get("max_threads_per_day").and_then(Self::coerce_to_u64)
+                        if let Some(max) = params
+                            .get("max_threads_per_day")
+                            .and_then(Self::coerce_to_u64)
                         {
                             updates.max_threads_per_day = Some(max as u32);
                         }

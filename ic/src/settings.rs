@@ -590,6 +590,18 @@ pub struct AgentSettings {
     /// Maximum tokens per job (0 = unlimited).
     #[serde(default)]
     pub max_tokens_per_job: u64,
+
+    /// Max seconds per message before the agent loop skips it (default: 300).
+    #[serde(default = "default_handle_message_timeout")]
+    pub handle_message_timeout_secs: u64,
+
+    /// Max seconds per self-repair operation (default: 60).
+    #[serde(default = "default_self_repair_op_timeout")]
+    pub self_repair_op_timeout_secs: u64,
+
+    /// Max seconds for session pruning (default: 30).
+    #[serde(default = "default_session_prune_timeout")]
+    pub session_prune_timeout_secs: u64,
 }
 
 fn default_agent_name() -> String {
@@ -628,6 +640,18 @@ fn default_timezone() -> String {
     "UTC".to_string()
 }
 
+fn default_handle_message_timeout() -> u64 {
+    300
+}
+
+fn default_self_repair_op_timeout() -> u64 {
+    60
+}
+
+fn default_session_prune_timeout() -> u64 {
+    30
+}
+
 fn default_true() -> bool {
     true
 }
@@ -647,6 +671,9 @@ impl Default for AgentSettings {
             auto_approve_tools: false,
             default_timezone: default_timezone(),
             max_tokens_per_job: 0,
+            handle_message_timeout_secs: default_handle_message_timeout(),
+            self_repair_op_timeout_secs: default_self_repair_op_timeout(),
+            session_prune_timeout_secs: default_session_prune_timeout(),
         }
     }
 }

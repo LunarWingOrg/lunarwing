@@ -422,16 +422,36 @@ impl Agent {
         let repair = Arc::new(self_repair);
         let repair_interval = self.config.repair_check_interval;
         let repair_channels = self.channels.clone();
+        let repair_op_timeout = self.config.self_repair_op_timeout;
         let repair_owner_id = self.owner_id().to_string();
         let repair_handle = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(repair_interval).await;
 
                 // Check stuck jobs
-                let stuck_jobs = repair.detect_stuck_jobs().await;
+                let stuck_jobs =
+                    match tokio::time::timeout(repair_op_timeout, repair.detect_stuck_jobs()).await
+                    {
+                        Ok(jobs) => jobs,
+                        Err(_) => {
+                            tracing::warn!("detect_stuck_jobs timed out, skipping cycle");
+                            continue;
+                        }
+                    };
                 for job in stuck_jobs {
                     tracing::info!("Attempting to repair stuck job {}", job.job_id);
-                    let result = repair.repair_stuck_job(&job).await;
+                    let result = match tokio::time::timeout(
+                        repair_op_timeout,
+                        repair.repair_stuck_job(&job),
+                    )
+                    .await
+                    {
+                        Ok(r) => r,
+                        Err(_) => {
+                            tracing::warn!(job_id = %job.job_id, "repair_stuck_job timed out");
+                            continue;
+                        }
+                    };
                     let notification = match &result {
                         Ok(RepairResult::Success { message }) => {
                             tracing::info!("Repair succeeded: {}", message);
@@ -477,11 +497,30 @@ impl Agent {
                 }
 
                 // Check broken tools
-                let broken_tools = repair.detect_broken_tools().await;
+                let broken_tools =
+                    match tokio::time::timeout(repair_op_timeout, repair.detect_broken_tools())
+                        .await
+                    {
+                        Ok(tools) => tools,
+                        Err(_) => {
+                            tracing::warn!("detect_broken_tools timed out, skipping cycle");
+                            continue;
+                        }
+                    };
                 for tool in broken_tools {
                     tracing::info!("Attempting to repair broken tool: {}", tool.name);
-                    match repair.repair_broken_tool(&tool).await {
-                        Ok(RepairResult::Success { message }) => {
+                    match tokio::time::timeout(repair_op_timeout, repair.repair_broken_tool(&tool))
+                        .await
+                    {
+                        Err(_) => {
+                            tracing::warn!(tool = %tool.name, "repair_broken_tool timed out");
+                            continue;
+                        }
+                        Ok(Err(e)) => {
+                            tracing::error!("Tool repair error: {}", e);
+                            continue;
+                        }
+                        Ok(Ok(RepairResult::Success { message })) => {
                             let response = OutgoingResponse::text(format!(
                                 "Self-Repair: Tool '{}' repaired: {}",
                                 tool.name, message
@@ -490,11 +529,8 @@ impl Agent {
                                 .broadcast_all(&repair_owner_id, response)
                                 .await;
                         }
-                        Ok(result) => {
+                        Ok(Ok(result)) => {
                             tracing::info!("Tool repair result: {:?}", result);
-                        }
-                        Err(e) => {
-                            tracing::error!("Tool repair error: {}", e);
                         }
                     }
                 }
@@ -504,12 +540,24 @@ impl Agent {
         // Spawn session pruning task
         let session_mgr = self.session_manager.clone();
         let session_idle_timeout = self.config.session_idle_timeout;
+        let prune_timeout = self.config.session_prune_timeout;
         let pruning_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(600)); // Every 10 min
             interval.tick().await; // Skip immediate first tick
             loop {
                 interval.tick().await;
-                session_mgr.prune_stale_sessions(session_idle_timeout).await;
+                if tokio::time::timeout(
+                    prune_timeout,
+                    session_mgr.prune_stale_sessions(session_idle_timeout),
+                )
+                .await
+                .is_err()
+                {
+                    tracing::warn!(
+                        timeout_secs = prune_timeout.as_secs(),
+                        "session pruning timed out"
+                    );
+                }
             }
         });
 
@@ -820,8 +868,31 @@ impl Agent {
             // Store successfully extracted document text in workspace for indexing
             self.store_extracted_documents(&message).await;
 
-            match self.handle_message(&message).await {
-                Ok(Some(response)) if !response.is_empty() => {
+            match tokio::time::timeout(
+                self.config.handle_message_timeout,
+                self.handle_message(&message),
+            )
+            .await
+            {
+                Err(_elapsed) => {
+                    tracing::error!(
+                        timeout_secs = self.config.handle_message_timeout.as_secs(),
+                        channel = %message.channel,
+                        user = %message.user_id,
+                        "handle_message timed out — skipping message"
+                    );
+                    let _ = self
+                        .channels
+                        .respond(
+                            &message,
+                            OutgoingResponse::text(
+                                "Sorry, your request timed out. Please try again.".to_string(),
+                            ),
+                        )
+                        .await;
+                    continue;
+                }
+                Ok(Ok(Some(response))) if !response.is_empty() => {
                     // Hook: BeforeOutbound — allow hooks to modify or suppress outbound
                     let event = crate::hooks::HookEvent::Outbound {
                         user_id: message.user_id.clone(),
@@ -863,7 +934,7 @@ impl Agent {
                         }
                     }
                 }
-                Ok(Some(empty)) => {
+                Ok(Ok(Some(empty))) => {
                     // Empty response, nothing to send (e.g. approval handled via send_status)
                     tracing::debug!(
                         channel = %message.channel,
@@ -872,12 +943,12 @@ impl Agent {
                         "Suppressed empty response (not sent to channel)"
                     );
                 }
-                Ok(None) => {
+                Ok(Ok(None)) => {
                     // Shutdown signal received (/quit, /exit, /shutdown)
                     tracing::info!("Shutdown command received, exiting...");
                     break;
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     tracing::error!("Error handling message: {}", e);
                     if let Err(send_err) = self
                         .channels

@@ -585,18 +585,14 @@ async fn async_main() -> anyhow::Result<()> {
         }
         webhook_routes.push(http_channel.routes());
         let (host, port) = http_channel.addr();
-        webhook_server_addr = Some(
-            format!("{}:{}", host, port)
-                .parse()
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "HttpConfig host:port '{}:{}' is not a valid SocketAddr: {}",
-                        host,
-                        port,
-                        e
-                    )
-                })?,
-        );
+        webhook_server_addr = Some(format!("{}:{}", host, port).parse().map_err(|e| {
+            anyhow::anyhow!(
+                "HttpConfig host:port '{}:{}' is not a valid SocketAddr: {}",
+                host,
+                port,
+                e
+            )
+        })?);
         channel_names.push("http".to_string());
         channels.add(Box::new(http_channel)).await;
         tracing::debug!(

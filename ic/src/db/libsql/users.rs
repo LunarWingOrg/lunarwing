@@ -712,16 +712,10 @@ mod tests {
     #[test]
     fn test_parse_libsql_decimal_text_scientific_notation() {
         let d = parse_libsql_decimal_text("1.5E-7", "cost").unwrap();
-        assert_eq!(
-            d,
-            rust_decimal::Decimal::from_scientific("1.5E-7").unwrap()
-        );
+        assert_eq!(d, rust_decimal::Decimal::from_scientific("1.5E-7").unwrap());
 
         let d = parse_libsql_decimal_text("3.0E+2", "cost").unwrap();
-        assert_eq!(
-            d,
-            rust_decimal::Decimal::from_scientific("3.0E+2").unwrap()
-        );
+        assert_eq!(d, rust_decimal::Decimal::from_scientific("3.0E+2").unwrap());
     }
 
     #[test]

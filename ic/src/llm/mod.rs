@@ -643,24 +643,21 @@ pub async fn build_provider_chain(
     };
 
     // 4. Circuit breaker
-    let llm: Arc<dyn LlmProvider> =
-        if let Some(threshold) = config.circuit_breaker_threshold {
-            let cb_config = CircuitBreakerConfig {
-                failure_threshold: threshold,
-                recovery_timeout: std::time::Duration::from_secs(
-                    config.circuit_breaker_recovery_secs,
-                ),
-                ..CircuitBreakerConfig::default()
-            };
-            tracing::debug!(
-                threshold,
-                recovery_secs = config.circuit_breaker_recovery_secs,
-                "LLM circuit breaker enabled"
-            );
-            Arc::new(CircuitBreakerProvider::new(llm, cb_config))
-        } else {
-            llm
+    let llm: Arc<dyn LlmProvider> = if let Some(threshold) = config.circuit_breaker_threshold {
+        let cb_config = CircuitBreakerConfig {
+            failure_threshold: threshold,
+            recovery_timeout: std::time::Duration::from_secs(config.circuit_breaker_recovery_secs),
+            ..CircuitBreakerConfig::default()
         };
+        tracing::debug!(
+            threshold,
+            recovery_secs = config.circuit_breaker_recovery_secs,
+            "LLM circuit breaker enabled"
+        );
+        Arc::new(CircuitBreakerProvider::new(llm, cb_config))
+    } else {
+        llm
+    };
 
     // 5. Response cache
     let llm: Arc<dyn LlmProvider> = if config.response_cache_enabled {

@@ -2320,14 +2320,21 @@ impl WasmChannel {
 
                             tracing::debug!(channel = %cn, "Polling tick - calling on_poll");
 
-                            let host_credentials = resolve_channel_host_credentials(
-                                &pc, pss.as_deref(), &osi,
-                            ).await;
+                            let host_credentials =
+                                resolve_channel_host_credentials(&pc, pss.as_deref(), &osi).await;
 
                             let result = Self::execute_poll(
-                                &cn, &rt, &prep, &caps, &creds,
-                                host_credentials, ps.clone(), callback_timeout, &ws,
-                            ).await;
+                                &cn,
+                                &rt,
+                                &prep,
+                                &caps,
+                                &creds,
+                                host_credentials,
+                                ps.clone(),
+                                callback_timeout,
+                                &ws,
+                            )
+                            .await;
 
                             match result {
                                 Ok(emitted_messages) => {
@@ -2335,7 +2342,8 @@ impl WasmChannel {
                                         std::time::SystemTime::now()
                                             .duration_since(std::time::UNIX_EPOCH)
                                             .unwrap_or_default()
-                                            .as_millis() as u64,
+                                            .as_millis()
+                                            as u64,
                                         std::sync::atomic::Ordering::Release,
                                     );
 
@@ -2351,7 +2359,9 @@ impl WasmChannel {
                                                 settings_store: ss.as_ref(),
                                             },
                                             emitted_messages,
-                                        ).await {
+                                        )
+                                        .await
+                                        {
                                             tracing::warn!(
                                                 channel = %cn, error = %e,
                                                 "Failed to dispatch emitted messages from poll"
@@ -2821,8 +2831,12 @@ impl Channel for WasmChannel {
             }
         }
 
-        let last_ms = self.last_poll_epoch_ms.load(std::sync::atomic::Ordering::Acquire);
-        let threshold_ms = self.poll_stall_threshold_ms.load(std::sync::atomic::Ordering::Acquire);
+        let last_ms = self
+            .last_poll_epoch_ms
+            .load(std::sync::atomic::Ordering::Acquire);
+        let threshold_ms = self
+            .poll_stall_threshold_ms
+            .load(std::sync::atomic::Ordering::Acquire);
         if last_ms > 0 && threshold_ms > 0 {
             let now_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

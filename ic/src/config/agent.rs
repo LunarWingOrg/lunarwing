@@ -31,6 +31,12 @@ pub struct AgentConfig {
     pub default_timezone: String,
     /// Maximum tokens per job (0 = unlimited).
     pub max_tokens_per_job: u64,
+    /// Max time per `handle_message()` before the agent loop skips it.
+    pub handle_message_timeout: Duration,
+    /// Max time per self-repair operation (detect/repair stuck jobs, broken tools).
+    pub self_repair_op_timeout: Duration,
+    /// Max time for session pruning.
+    pub session_prune_timeout: Duration,
 }
 
 impl AgentConfig {
@@ -53,6 +59,9 @@ impl AgentConfig {
             auto_approve_tools: true,
             default_timezone: "UTC".to_string(),
             max_tokens_per_job: 0,
+            handle_message_timeout: Duration::from_secs(300),
+            self_repair_op_timeout: Duration::from_secs(60),
+            session_prune_timeout: Duration::from_secs(30),
         }
     }
 
@@ -112,6 +121,18 @@ impl AgentConfig {
                 "AGENT_MAX_TOKENS_PER_JOB",
                 settings.agent.max_tokens_per_job,
             )?,
+            handle_message_timeout: Duration::from_secs(parse_optional_env(
+                "AGENT_HANDLE_MESSAGE_TIMEOUT_SECS",
+                settings.agent.handle_message_timeout_secs,
+            )?),
+            self_repair_op_timeout: Duration::from_secs(parse_optional_env(
+                "AGENT_SELF_REPAIR_OP_TIMEOUT_SECS",
+                settings.agent.self_repair_op_timeout_secs,
+            )?),
+            session_prune_timeout: Duration::from_secs(parse_optional_env(
+                "AGENT_SESSION_PRUNE_TIMEOUT_SECS",
+                settings.agent.session_prune_timeout_secs,
+            )?),
         })
     }
 }

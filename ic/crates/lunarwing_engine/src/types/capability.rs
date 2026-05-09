@@ -357,10 +357,22 @@ mod tests {
     fn covers_action_normalizes_hyphens_and_underscores() {
         let actions =
             GrantedActions::Specific(vec!["create-issue".into(), "list_pull_requests".into()]);
-        assert!(actions.covers("create_issue"), "underscore must match hyphenated grant");
+        assert!(
+            actions.covers("create_issue"),
+            "underscore must match hyphenated grant"
+        );
         assert!(actions.covers("create-issue"), "exact match still works");
-        assert!(actions.covers("list-pull-requests"), "hyphenated must match underscored grant");
-        assert!(actions.covers("list_pull_requests"), "exact match still works");
-        assert!(!actions.covers("delete_repo"), "unrelated action must not match");
+        assert!(
+            actions.covers("list-pull-requests"),
+            "hyphenated must match underscored grant"
+        );
+        assert!(
+            actions.covers("list_pull_requests"),
+            "exact match still works"
+        );
+        assert!(
+            !actions.covers("delete_repo"),
+            "unrelated action must not match"
+        );
     }
 }

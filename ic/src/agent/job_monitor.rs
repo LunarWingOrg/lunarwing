@@ -67,7 +67,14 @@ pub fn spawn_job_monitor(
     inject_tx: mpsc::Sender<IncomingMessage>,
     route: JobMonitorRoute,
 ) -> JoinHandle<()> {
-    spawn_job_monitor_with_context(job_id, event_rx, inject_tx, route, None, DEFAULT_MONITOR_TIMEOUT)
+    spawn_job_monitor_with_context(
+        job_id,
+        event_rx,
+        inject_tx,
+        route,
+        None,
+        DEFAULT_MONITOR_TIMEOUT,
+    )
 }
 
 /// Like `spawn_job_monitor`, but also transitions the job's in-memory state

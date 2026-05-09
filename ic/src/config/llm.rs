@@ -1502,7 +1502,10 @@ mod tests {
         }
 
         let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
-        assert_eq!(cfg.max_retries, 3, "should fall back to NEARAI_MAX_RETRIES default");
+        assert_eq!(
+            cfg.max_retries, 3,
+            "should fall back to NEARAI_MAX_RETRIES default"
+        );
     }
 
     #[test]
@@ -1516,7 +1519,10 @@ mod tests {
 
         let err = LlmConfig::resolve(&Settings::default()).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("LLM_MAX_RETRIES"), "error should name the var: {msg}");
+        assert!(
+            msg.contains("LLM_MAX_RETRIES"),
+            "error should name the var: {msg}"
+        );
 
         // SAFETY: Under ENV_MUTEX.
         unsafe {

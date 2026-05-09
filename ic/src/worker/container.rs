@@ -638,9 +638,15 @@ mod tests {
 
     #[test]
     fn test_post_work_chatter_detection() {
-        assert!(is_post_work_chatter("Would you like me to do something else?"));
-        assert!(is_post_work_chatter("<suggestions>\n<suggestion>try X</suggestion>\n</suggestions>"));
-        assert!(is_post_work_chatter("Let me know if you need anything else."));
+        assert!(is_post_work_chatter(
+            "Would you like me to do something else?"
+        ));
+        assert!(is_post_work_chatter(
+            "<suggestions>\n<suggestion>try X</suggestion>\n</suggestions>"
+        ));
+        assert!(is_post_work_chatter(
+            "Let me know if you need anything else."
+        ));
         assert!(is_post_work_chatter("Shall I run the tests now?"));
         assert!(is_post_work_chatter("What would you like to do next?"));
         assert!(!is_post_work_chatter("Running command: echo hello"));
