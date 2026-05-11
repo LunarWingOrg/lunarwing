@@ -313,25 +313,26 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
 
-## Things to do before 1.0.5 Release:
+## Things to do before 1.0.5 (Minor) Release:
 
-* Ruffles is tracking all these now as TODOs, almost done
+* Ruffles is tracking all of these now as TODOs, almost done
 
-* removed from this file
+* all items removed from this file
 
-## Things to do after 1.0.5 Release:
+## Things to do after 1.0.5 (Minor) Release:
 
-* Remove these from this file too:
+* Remove these from this file too, add all items to Ruffles workspace under a seperate layer from 1.0.5 release layer list:
 
-1. OCR and Image Recog with sidecar plan by Ruffles and Kageho
-2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
+1. OCR and Image Recog with sidecar plan by Ruffles and Kageho (phases 1-4 planned out in detail under workspace of Ruffles)
+2. Begin to add support for LunarMultica for multi-agent coordination (forked version of Multica; self-hostable free open source software)
 3. Continue to remove cruft, along with some or all of the unsupported channels
 4. Rename custom external worker containers and modify any code to reference such containers, test before 1.0.6
 5. add option in web gateway and lunarwing.env for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. for example, see chris openclaw memory embedded server setup with haproxy clustered machines with RTX 4060s. remove options for nearai.
+6. begin work on audio input/output interface (no plan yet, needs proper planning)
 
-## Things to do before 1.0.6 Release:
+## Things to do before 1.0.6 (Feature) Release:
 
-* Remove these from this file too:
+* Remove these items from this file too (add all items to Ruffles workspace under a seperate layer for 1.0.6 release layer list):
 
 1. Ensure all of the previous steps were completed
 2. complete tests of everything that was changed
