@@ -327,7 +327,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
 3. Continue to remove cruft, along with some or all of the unsupported channels
 4. Rename custom external worker containers and modify any code to reference such containers, test before 1.0.6
-5. add option in web gateway for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. remove options for nearai.
+5. add option in web gateway and lunarwing.env for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. for example, see chris openclaw memory embedded server setup with haproxy clustered machines with RTX 4060s. remove options for nearai.
 
 ## Things to do before 1.0.6 Release:
 
