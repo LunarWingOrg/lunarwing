@@ -315,9 +315,13 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do before 1.0.5 Release:
 
-* Ruffles is tracking all these
+* Ruffles is tracking all these now as TODOs
+
+* removed from this file
 
 ## Things to do after 1.0.5 Release:
+
+* Remove these from this file too:
 
 1. OCR and Image Recog with sidecar plan by Ruffles and Kageho
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
@@ -326,6 +330,8 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 5. add option in web gateway for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. remove options for nearai.
 
 ## Things to do before 1.0.6 Release:
+
+* Remove these from this file too:
 
 1. Ensure all of the previous steps were completed
 2. Write up some release notes for 1.0.6 which explain all of the changes since 1.0.5
