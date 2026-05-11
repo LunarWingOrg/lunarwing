@@ -889,7 +889,7 @@ start_tenant_postgres() {
   local attempts=0
   while ! $CONTAINER_RT exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
-    [[ $attempts -lt 30 ]] || die "PostgreSQL for $name did not become ready"
+    [[ $attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
     sleep 1
   done
   say "PostgreSQL ready ($container_name, port $pg_port)"

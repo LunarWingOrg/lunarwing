@@ -316,13 +316,14 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 ## Things to do before 1.0.5 Release:
 
 1. A huge setup harness test using the new, improved MT admin setup harness and extensive test of all channels, tools, and bridges
-2. Test routines with custom tools once again
-3. Go through docs and update any outdated documentation
-4. Start to track ALL new feature planning in Vikunja
-5. Ensure bug reports from docs dir are tracked in Vikunja
-6. Write up some release notes for 1.0.5 which explain all of the changes since 1.0.4
-7. Create a new branch to correspond with release
-8. Create gh release tag and add release notes to it like other releases already have rn
+2. Test database migration from v17 to v18 (in progress)
+3. Test routines with custom tools once again
+4. Go through docs and update any outdated documentation
+5. Start to track ALL new feature planning in Vikunja
+6. Ensure bug reports from docs dir are tracked in Vikunja
+7. Write up some release notes for 1.0.5 which explain all of the changes since 1.0.4
+8. Create a new branch to correspond with release
+9. Create gh release tag and add release notes to it like other releases already have rn
 
 ## Things to do after 1.0.5 Release:
 
