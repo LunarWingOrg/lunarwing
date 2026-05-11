@@ -331,7 +331,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
 3. Continue to remove cruft, along with some of the unsupported channels
 4. Rename custom external worker containers and modify any code to refernece such containers, test before 1.0.6
-5. Attempt IC to LW migration. 
+5. Start decommissioning/removing proprietary garbage comm channels. 
 
 ## Things to do before 1.0.6 Release:
 
