@@ -315,7 +315,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do before 1.0.5 Release:
 
-* Ruffles is tracking all these now as TODOs
+* Ruffles is tracking all these now as TODOs, almost done
 
 * removed from this file
 
@@ -334,6 +334,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 * Remove these from this file too:
 
 1. Ensure all of the previous steps were completed
-2. Write up some release notes for 1.0.6 which explain all of the changes since 1.0.5
-3. Create a new branch to correspond with release
-4. Create gh release tag and add release notes to it like other releases already have rn
+2. complete tests of everything that was changed
+3. Write up some release notes for 1.0.6 which explain all of the changes since 1.0.5
+4. Create a new branch to correspond with release
+5. Create gh release tag and add release notes to it like other releases already have rn
