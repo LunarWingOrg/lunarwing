@@ -131,30 +131,48 @@ This should show the migration version from your IronClaw database (e.g. `17`).
 
 ## Step 5: Copy Workspace Files
 
-The tenant's base directory is `/home/<tenant>/lunarwing/state/`. Copy the workspace content from the IronClaw installation:
+The tenant's base directory (`LUNARWING_BASE_DIR`) is `/home/<tenant>/lunarwing/state/`. Only specific directories need to be copied from the IronClaw installation.
+
+### What to copy
+
+| Source | Destination | Purpose |
+|--------|-------------|---------|
+| `projects/` | `state/projects/` | Workspace memory documents (SOUL.md, IDENTITY.md, USER.md, conversation workspaces) |
+| `workspace-template/` | `state/workspace-template/` | Default templates applied when creating new workspaces |
+| `xmpp/` | `state/xmpp/` | OMEMO key state (only if preserving the same XMPP identity) |
+
+### What to skip
+
+| File/Dir | Reason |
+|----------|--------|
+| `.env` | Replaced by MT-generated `env/lunarwing.env` |
+| `config.toml` | MT admin generates appropriate config; merge custom settings manually if needed |
+| `ironclaw.db` | Empty file (PostgreSQL is the actual backend) |
+| `ironclaw.pid` | Runtime artifact |
+| `history` | CLI command history, not needed |
+| `memory_hygiene_state.json` | Regenerated automatically on startup |
+| `tools/` | WASM binaries — rebuilt by `build-tenant --with-wasm` and installed via `install-wasm` |
+| `channels/` | WASM binaries — same as above |
+| `xmpp.bak.*` | Old backups |
+
+### Copy command
 
 ```bash
-IRONCLAW_DIR=/home/<your_user>/.ironclaw
-TENANT_STATE=/home/<tenant>/lunarwing/state
-
-# Copy workspace files
-sudo cp -r "$IRONCLAW_DIR/projects"           "$TENANT_STATE/"
-sudo cp -r "$IRONCLAW_DIR/tools"              "$TENANT_STATE/"
-sudo cp -r "$IRONCLAW_DIR/channels"           "$TENANT_STATE/"
-sudo cp -r "$IRONCLAW_DIR/workspace-template" "$TENANT_STATE/"
-sudo cp -r "$IRONCLAW_DIR/xmpp"              "$TENANT_STATE/"  # if using XMPP
-
-# Fix ownership
-sudo chown -R <tenant>:<tenant> "$TENANT_STATE"
+sudo cp -r /home/<your_user>/.ironclaw/projects /home/<tenant>/lunarwing/state/ && \
+sudo cp -r /home/<your_user>/.ironclaw/workspace-template /home/<tenant>/lunarwing/state/ && \
+sudo cp -r /home/<your_user>/.ironclaw/xmpp /home/<tenant>/lunarwing/state/ && \
+sudo chown -R <tenant>:<tenant> /home/<tenant>/lunarwing/state/
 ```
+
+Drop the xmpp line if you don't need to preserve the OMEMO identity.
 
 ### Secrets / master key
 
 The `secrets` table contains AES-256-GCM encrypted data. The master key is stored in the OS keychain, tied to the original user. To migrate secrets:
 
 1. Export the master key from the original user's keychain
-2. Place it in the tenant user's keychain or home directory
-3. Ensure `LUNARWING_BASE_DIR` is set correctly in the tenant's env file so the daemon can find it
+2. Place it in the tenant user's home directory (the daemon looks for it at `$LUNARWING_BASE_DIR` or the user's home)
+3. The tenant's env file already sets `LUNARWING_BASE_DIR` correctly
 
 If you cannot migrate the key, the encrypted secrets will be unreadable. Re-enter them via the LunarWing CLI or web gateway after starting the tenant.
 
@@ -221,6 +239,27 @@ Verify data integrity:
 - Conversation history is preserved
 - XMPP bridge connects (if configured)
 
+## Step 9: Post-Migration Cleanup
+
+After verifying the migration, disable the old IronClaw services:
+
+```bash
+sudo systemctl stop ironclaw
+sudo systemctl disable ironclaw
+sudo systemctl stop xmpp-bridge        # if running
+sudo systemctl disable xmpp-bridge
+```
+
+Optionally remove old service files:
+
+```bash
+sudo rm /etc/systemd/system/ironclaw.service
+sudo rm /etc/systemd/system/ironclaw-watchdog.*
+sudo systemctl daemon-reload
+```
+
+The original IronClaw base directory (`~/.ironclaw/`) and database can be kept as a backup or removed once you're confident the migration is stable.
+
 ## Rollback
 
 The original IronClaw installation is untouched throughout this process. To roll back:
@@ -234,6 +273,40 @@ sudo systemctl start ironclaw
 ```
 
 The IronClaw database at port 5432 was never modified. The dump was read-only.
+
+## Troubleshooting
+
+### XMPP bridge not connecting after migration
+
+The MT admin defaults the XMPP JID to `<tenant>@xmpp.localhost`, which won't match the JID from your original IronClaw installation. Update the bridge env file with the correct JID and password:
+
+```bash
+sudo vim /home/<tenant>/lunarwing/env/xmpp-bridge.env
+# Set XMPP_JID and XMPP_PASSWORD to match the original instance
+```
+
+Then restart the bridge:
+
+```bash
+sudo ic/scripts/lunarwing-mt-admin.sh restart-tenant <tenant>
+```
+
+Alternatively, specify the JID at tenant creation time to avoid this:
+
+```bash
+sudo ic/scripts/lunarwing-mt-admin.sh add-tenant <name> --docker-group --xmpp-jid "agent@your-xmpp-server.example"
+```
+
+### V18 migration not applied
+
+If the tenant starts but routines behave unexpectedly, verify that V18 was applied:
+
+```bash
+PGPASSWORD=lunarwing psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing \
+  -c "SELECT version FROM refinery_schema_history ORDER BY version DESC LIMIT 1;"
+```
+
+If it still shows `17`, check the daemon logs for migration errors.
 
 ## What Changes vs What Stays the Same
 

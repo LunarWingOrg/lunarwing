@@ -315,23 +315,25 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do before 1.0.5 Release:
 
-1. A huge setup harness test using the new, improved MT admin setup harness and extensive test of all channels, tools, and bridges
-2. Test database migration from v17 to v18 (in progress)
-3. Test routines with custom tools once again
-4. Go through docs and update any outdated documentation
-5. Start to track ALL new feature planning in Vikunja
-6. Ensure bug reports from docs dir are tracked in Vikunja
-7. Write up some release notes for 1.0.5 which explain all of the changes since 1.0.4
-8. Create a new branch to correspond with release
-9. Create gh release tag and add release notes to it like other releases already have rn
+1. A huge setup harness test using the new, improved MT admin setup harness (DONE)
+2. extensive test of all channels, tools, and bridges (in progress)
+3. Test database migration from v17 to v18 (DONE)
+4. Test routines with custom tools once again (in progress)
+5. Go through docs and update any outdated documentation (in progress)
+6. Start to track ALL new feature planning in Vikunja
+7. Ensure bug reports from docs dir are tracked in Vikunja
+8. Utilize number 6 and 7 and stop using a markdown document (this) in the repo to track these sorts of things
+9. Write up some release notes for 1.0.5 which explain all of the changes since 1.0.4
+10. Create a new branch to correspond with release
+11. Create gh release tag and add release notes to it like other releases already have rn
 
 ## Things to do after 1.0.5 Release:
 
 1. OCR and Image Recog with sidecar plan by Ruffles
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
-3. Continue to remove cruft, along with some of the unsupported channels
-4. Rename custom external worker containers and modify any code to refernece such containers, test before 1.0.6
-5. Start decommissioning/removing proprietary garbage comm channels. 
+3. Continue to remove cruft, along with some or all of the unsupported channels
+4. Rename custom external worker containers and modify any code to reference such containers, test before 1.0.6
+5. add option in web gateway for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. remove options for nearai.
 
 ## Things to do before 1.0.6 Release:
 
