@@ -315,25 +315,11 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 
 ## Things to do before 1.0.5 Release:
 
-1. A huge setup harness test using the new, improved MT admin setup harness with configurable orchestrator port, v2 (DONE)
-2. extensive test of all channels, tools, and bridges (DONE)
-3. confirm XMPP omemo works across multi-device like it used to (in progress)
-4. Test database migration from v17 to v18 (DONE)
-5. Test routines with custom tools once again (DONE)
-6. Go through docs and update any outdated documentation (DONE)
-7. Start to track ALL new feature planning in Vikunja
-8. Ensure bug reports from docs dir are tracked in Vikunja
-9. Utilize number 7 and 8 and stop using a markdown document (this) in the repo to track these sorts of things
-10. alternative to number 9, have Ruffles track all of this
-11. test other channels not tested yet
-12. migrate either kageho or starforce over to MT setup which Ruffles now uses
-13. Write up some release notes for 1.0.5 which explain all of the changes since 1.0.4
-14. Create a new branch to correspond with release
-15. Create gh release tag and add release notes to it like other releases already have rn
+* Ruffles is tracking all these
 
 ## Things to do after 1.0.5 Release:
 
-1. OCR and Image Recog with sidecar plan by Ruffles
+1. OCR and Image Recog with sidecar plan by Ruffles and Kageho
 2. Add support for Multica for multi-agent coordination (self-hostable free open source software)
 3. Continue to remove cruft, along with some or all of the unsupported channels
 4. Rename custom external worker containers and modify any code to reference such containers, test before 1.0.6
