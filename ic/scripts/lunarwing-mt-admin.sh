@@ -984,6 +984,7 @@ Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
 Type=simple
 WorkingDirectory=$repo
 EnvironmentFile=$env_dir/lunarwing.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/${name}/.cargo/bin
 ExecStart=$repo/target/${PROFILE}/lunarwing --no-onboard run
 Restart=always
 RestartSec=5
