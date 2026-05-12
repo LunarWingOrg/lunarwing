@@ -15,6 +15,7 @@ Start with these deeper docs as needed:
 - `src/workspace/README.md`
 - `src/NETWORK_SECURITY.md`
 - `tests/e2e/CLAUDE.md`
+- `crates/lunarwing_engine/CLAUDE.md`
 - In this repo, `ic/` contains the core daemon; however, the product name is LunarWing.
 - In this repo, the path `ic/customic` is not used at all. It will be removed at some point.
 
@@ -34,6 +35,18 @@ Start with these deeper docs as needed:
 - LLM providers and routing: `src/llm/`
 - Workspace, memory, embeddings, search: `src/workspace/`
 - Extensions, tools, channels, MCP, WASM: `src/extensions/`, `src/tools/`, `src/channels/`
+- Docker sandbox and network proxy: `src/sandbox/`
+- Container orchestrator and external workers: `src/orchestrator/`
+- Secrets management: `src/secrets/`
+- Lifecycle hooks: `src/hooks/`
+- Tunnel abstraction (cloudflare, ngrok, tailscale): `src/tunnel/`
+- SKILL.md prompt extensions: `src/skills/`
+- Engine V2 bridge: `src/bridge/`
+- Execution gate and approval pending state: `src/gate/`
+- DM pairing for channels: `src/pairing/`
+- Webhook ingress for tools: `src/webhooks/`
+- Observability: `src/observability/`
+- Extension registry catalog: `src/registry/`
 - OpenClaw port staging work: `openclaw-ports/`. For OpenClaw port tasks, keep edits inside `openclaw-ports/` unless the user explicitly approves touching core IronClaw files.
 
 ## Build, Test, and Lint Commands
@@ -62,8 +75,8 @@ cargo test --all-features
 cargo fmt --all -- --check
 
 # Lint (zero warnings policy)
-cargo clippy --all --tests --examples -- -D warnings
-cargo clippy --all --tests --examples --all-features -- -D warnings
+cargo clippy --all --benches --tests --examples -- -D warnings
+cargo clippy --all --benches --tests --examples --all-features -- -D warnings
 
 # Dependency audit
 cargo deny check
@@ -72,7 +85,9 @@ cargo deny check
 cargo bench --all-features --no-run
 
 # Build WASM extensions (needed for some integration tests)
-./scripts/build-wasm-extensions.sh --channels
+./scripts/build-wasm-extensions.sh             # all (tools + channels)
+./scripts/build-wasm-extensions.sh --tools     # tools only
+./scripts/build-wasm-extensions.sh --channels  # channels only
 ```
 
 ## Ownership and Composition Rules
@@ -123,11 +138,11 @@ cargo bench --all-features --no-run
 
 - Treat systemd unit environment values as secret-bearing. Do not paste passwords, bearer tokens, or webhook secrets into user-facing output; summarize or redact them.
 - `xmpp-bridge.service` is coupled to `lunarwing.service` with `PartOf=lunarwing.service`, so LunarWing restarts can also restart the bridge. Do not assume the bridge caused a LunarWing stop just because both units restarted together.
-- For install-style harness tests on Linux, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
+- For install-style harness tests, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; `render-launchd` plus `launchctl` on macOS; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
 - The harness and service path intentionally seed `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless the task explicitly changes the network or SSL assumptions.
 - Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes. It requires `XMPP_BRIDGE_TOKEN`; `status`, `set <n>`, `off`, and `reset` are the main commands.
 - Use `scripts/xmpp-configure.sh` for bridge room/configuration checks and configure calls when working with the existing XMPP bridge API.
-- The local service watchdog assets are `scripts/lunarwing-watchdog.sh`, `scripts/lunarwing-watchdog-openrc.sh`, `scripts/install-lunarwing-watchdog.sh`, `systemd/lunarwing-watchdog.service`, `systemd/lunarwing-watchdog.timer`, `systemd/lunarwing-watchdog.confd`, and `systemd/lunarwing-watchdog.cron.hourly`. The installer auto-detects `systemd` vs `OpenRC`; on OpenRC it also auto-selects the scheduler. `auto` prefers an existing `cronie`/`crond`/`dcron` hourly setup and only falls back to a managed `fcron` entry when that avoids interfering.
+- The local service watchdog assets are `scripts/lunarwing-watchdog.sh` (systemd), `scripts/lunarwing-watchdog-openrc.sh` (OpenRC), `scripts/lunarwing-watchdog-launchd.sh` (macOS), `scripts/install-lunarwing-watchdog.sh`, `systemd/lunarwing-watchdog.service`, `systemd/lunarwing-watchdog.timer`, `systemd/lunarwing-watchdog.confd`, `systemd/lunarwing-watchdog.cron.hourly`, and `systemd/com.lunarwing.watchdog.plist` (launchd). The installer auto-detects `systemd` vs `OpenRC` vs `launchd`; on OpenRC it also auto-selects the scheduler. `auto` prefers an existing `cronie`/`crond`/`dcron` hourly setup and only falls back to a managed `fcron` entry when that avoids interfering.
 - Prefer read-only diagnostics first for service issues: `systemctl status`, `systemctl show`, `journalctl`, and bridge status endpoints. Only restart services after identifying the unit state or when the user explicitly asks.
 - If harness `verify` only fails the TensorZero proxy check, inspect the upstream `TENSORZERO_URL` before treating the local service install as broken. The local proxy can be bound and healthy while the upstream `/openai/v1/models` probe still returns `500`.
 

@@ -35,6 +35,7 @@ The binary, Cargo package, and all four internal crates have been renamed from `
 - `tensorzero::function_name::ironclaw` TensorZero function name
 - GCP resource names in `ic/deploy/cloud-sql-proxy.service`
 - `ic/CHANGELOG.md` historical entries
+- Shell completion scripts: `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh`
 
 ## Build & Test
 
@@ -52,9 +53,10 @@ RUST_LOG=lunarwing=debug cargo run
 
 Feature-flag compilation (required for dual-backend work):
 ```bash
-cargo check                                          # postgres (default)
+cargo check                                          # default: postgres + libsql + html-to-markdown
+cargo check --no-default-features --features postgres # postgres only
 cargo check --no-default-features --features libsql  # libsql only
-cargo check --all-features                           # both
+cargo check --all-features                           # all (same as default + integration)
 ```
 
 XMPP bridge (separate binary, build before full workspace):
@@ -115,9 +117,13 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   tools-src/                # WASM tool sources (gotify, github, google-*, etc.)
   bridges/xmpp-bridge/      # Standalone XMPP bridge service (separate process)
   migrations/               # Refinery DB migrations (PostgreSQL + libSQL)
+  skills/                   # SKILL.md prompt extensions (delegation, github, linear, plan-mode, etc.)
+  registry/                 # Extension registry catalog (manifest, installer, bundled JSON)
+  wit/                      # WebAssembly Interface Type definitions (channel.wit, tool.wit)
+  fuzz/                     # Fuzz testing targets
   tests/                    # Integration + E2E tests
   testing/lunarwing-xmpp/   # Full-stack test harness docs
-  systemd/                  # Systemd unit files + OpenRC init scripts (.openrc, .confd)
+  systemd/                  # Systemd units, OpenRC init scripts (.openrc, .confd), launchd plists
   scripts/                  # Operational + build scripts
 codex4ironclaw/             # Persistent Codex Worker container — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
@@ -159,6 +165,7 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Workspace / memory | `ic/src/workspace/README.md` |
 | E2E tests | `ic/tests/e2e/CLAUDE.md` |
 | Network security policy | `ic/src/NETWORK_SECURITY.md` |
+| Worker container images | `docs/ops/WORKER-CONTAINERS.md` |
 | Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
 | Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
 | Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
@@ -175,7 +182,7 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 - **Dual DB backend**: PostgreSQL (primary) + libSQL/Turso. All new persistence must support both.
 - **TensorZero proxy** routes LLM calls via `openai_compatible` backend, enabling function-call routing and model training feedback loops. Default local endpoint: `http://192.168.1.157:3002`.
 
-Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`.
+Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`, `Observer`, `SuccessEvaluator`, `NetworkPolicyDecider`.
 
 ## External Workers
 
@@ -233,7 +240,7 @@ Do not break without explicit approval:
 - `xmpp-bridge.service` has `PartOf=lunarwing.service` — LunarWing restarts can cascade to the bridge. Do not assume the bridge caused a stop just because both restarted.
 - Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes (`status`, `set <n>`, `off`, `reset`). Requires `XMPP_BRIDGE_TOKEN`.
 - Use `scripts/xmpp-configure.sh` for bridge room/configuration checks.
-- Watchdog: `scripts/lunarwing-watchdog.sh` (systemd) or `scripts/lunarwing-watchdog-openrc.sh` (OpenRC). Install via `scripts/install-lunarwing-watchdog.sh` (auto-detects init system).
+- Watchdog: `scripts/lunarwing-watchdog.sh` (systemd), `scripts/lunarwing-watchdog-openrc.sh` (OpenRC), or `scripts/lunarwing-watchdog-launchd.sh` (macOS launchd). Install via `scripts/install-lunarwing-watchdog.sh` (auto-detects init system). Launchd plist: `systemd/com.lunarwing.watchdog.plist`.
 - Prefer read-only diagnostics first (`systemctl status`, `journalctl`, gateway endpoints) before restarting services.
 - If harness `verify` only fails the TensorZero proxy check, inspect the upstream `TENSORZERO_URL` before treating the local service install as broken.
 - **Do not restart services or deploy binaries unless explicitly asked.**
