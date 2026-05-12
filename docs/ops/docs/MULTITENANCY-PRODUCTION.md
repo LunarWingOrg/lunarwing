@@ -249,14 +249,14 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 ```
 /home/<tenant>/lunarwing/
   ic/                          # Git clone of the LunarWing repo
-    target/<profile>/ironclaw  # Built main binary
+    target/<profile>/lunarwing  # Built main binary
     bridges/xmpp-bridge/
       target/<profile>/xmpp-bridge  # Built bridge binary
   env/
     lunarwing.env              # Main daemon env (mode 0600)
     xmpp-bridge.env            # Bridge env
     proxy.env                  # TensorZero proxy env
-  state/                       # IRONCLAW_BASE_DIR
+  state/                       # LUNARWING_BASE_DIR
     channels/                  # WASM channel artifacts
     tools/                     # WASM tool artifacts
     xmpp/                      # XMPP OMEMO state
@@ -308,7 +308,7 @@ rc-service lunarwing-<name> status
 
 ## PostgreSQL
 
-Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. Default credentials: `ironclaw/ironclaw/ironclaw` (user/password/database).
+Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. Default credentials: `lunarwing/lunarwing/lunarwing` (user/password/database).
 
 The container is created with `--restart unless-stopped` so it survives host reboots (when using Docker). For Podman, consider generating a systemd unit via `podman generate systemd`.
 

@@ -1,6 +1,6 @@
-# IronClaw Development Guide
+# LunarWing Development Guide
 
-**IronClaw** is a secure personal AI assistant — user-first security, self-expanding tools, defense in depth, multi-channel access with proactive background execution.
+**LunarWing** is a secure personal AI assistant — user-first security, self-expanding tools, defense in depth, multi-channel access with proactive background execution.
 
 ## Build & Test
 
@@ -41,7 +41,10 @@ Safety logic lives in `crates/lunarwing_safety/`. The `src/safety/mod.rs` shim r
 
 ```
 crates/
-└── lunarwing_safety/    # Extracted: prompt injection, validation, leak detection, policy
+├── lunarwing_common/    # Shared types and utilities
+├── lunarwing_engine/    # Engine V2 runtime
+├── lunarwing_safety/    # Prompt injection, validation, leak detection, policy
+└── lunarwing_skills/    # Skills system implementation
 
 src/
 ├── lib.rs              # Library root, module declarations
@@ -61,6 +64,7 @@ src/
 ├── error.rs            # Error types (thiserror)
 │
 ├── agent/              # Core agent loop, dispatcher, scheduler, sessions — see src/agent/CLAUDE.md
+├── bridge/             # Engine V2 bridge
 │
 ├── channels/           # Multi-channel input
 │   ├── channel.rs      # Channel trait, IncomingMessage, OutgoingResponse
@@ -88,7 +92,11 @@ src/
 │   ├── catalog.rs      # RegistryCatalog: load from filesystem and embedded JSON
 │   └── installer.rs    # RegistryInstaller: download, verify, install WASM artifacts
 │
+├── history/            # Persistence (PostgreSQL repositories, analytics)
+│
 ├── hooks/              # Lifecycle hooks (6 points: BeforeInbound, BeforeToolCall, BeforeOutbound, OnSessionStart, OnSessionEnd, TransformResponse)
+│
+├── import/             # OpenClaw import
 │
 ├── tunnel/             # Tunnel abstraction for public internet exposure
 │   ├── mod.rs          # Tunnel trait, TunnelProviderConfig, create_tunnel(), start_managed_tunnel()
@@ -110,6 +118,8 @@ src/
 │   ├── container.rs    # Container worker runtime (ContainerDelegate + shared agentic loop)
 │   ├── job.rs          # Background job worker (JobDelegate + shared agentic loop)
 │   └── proxy_llm.rs    # LlmProvider that proxies through orchestrator
+│
+├── pairing/            # DM pairing system
 │
 ├── safety/             # Re-export shim for crates/lunarwing_safety (see Extracted Crates)
 │
@@ -147,8 +157,12 @@ src/
 ├── workspace/          # Persistent memory system — see src/workspace/README.md
 │
 ├── context/            # Job context isolation (JobState, JobContext, ContextManager)
+├── document_extraction/ # Document extraction utilities
 ├── estimation/         # Cost/time/value estimation with EMA learning
 ├── evaluation/         # Success evaluation (rule-based, LLM-based)
+├── extensions/         # Extension management
+│
+├── gate/               # Execution gate / approval system
 │
 ├── sandbox/            # Docker execution sandbox
 │   ├── config.rs       # SandboxConfig, SandboxPolicy enum (ReadOnly/WorkspaceWrite/FullAccess)
@@ -164,7 +178,9 @@ src/
 │
 ├── skills/             # SKILL.md prompt extension system — see .claude/rules/skills.md
 │
-└── history/            # Persistence (PostgreSQL repositories, analytics)
+├── testing/            # Test utilities
+│
+└── webhooks/           # Webhook handling
 
 tests/
 ├── *.rs                # Integration tests (workspace, heartbeat, WS gateway, pairing, etc.)

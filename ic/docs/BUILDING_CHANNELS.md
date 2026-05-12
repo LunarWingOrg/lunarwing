@@ -1,6 +1,6 @@
 # Building WASM Channels
 
-This guide covers how to build WASM channel modules for IronClaw.
+This guide covers how to build WASM channel modules for LunarWing.
 
 ## Overview
 
@@ -20,7 +20,7 @@ channels/                    # Or channels-src/
 
 After building, deploy to:
 ```
-~/.ironclaw/channels/
+~/.lunarwing/channels/
 ├── my-channel.wasm
 └── my-channel.capabilities.json
 ```
@@ -33,7 +33,7 @@ channels-src/xmpp/           # installable WASM channel
 bridges/xmpp-bridge/         # local helper binary that owns the real protocol session
 ```
 
-The WASM channel remains the installable IronClaw artifact; the bridge is a
+The WASM channel remains the installable LunarWing artifact; the bridge is a
 separate user-built or user-run helper process.
 
 ## Cargo.toml Template
@@ -43,7 +43,7 @@ separate user-built or user-run helper process.
 name = "my-channel"
 version = "0.1.0"
 edition = "2021"
-description = "My messaging platform channel for IronClaw"
+description = "My messaging platform channel for LunarWing"
 
 [lib]
 crate-type = ["cdylib"]
@@ -279,7 +279,7 @@ secrets store.
 
 ### Supply Chain Security: No Committed Binaries
 
-**Do not commit compiled WASM binaries.** They are a supply chain risk — the binary in a PR may not match the source. IronClaw builds channels from source:
+**Do not commit compiled WASM binaries.** They are a supply chain risk — the binary in a PR may not match the source. LunarWing builds channels from source:
 
 - `cargo build` automatically builds `telegram.wasm` via `build.rs`
 - The built binary is in `.gitignore` and is not committed
@@ -301,12 +301,12 @@ rustup target add wasm32-wasip2
 # Build Telegram channel
 ./channels-src/telegram/build.sh
 
-# Install (or use ironclaw onboard to install bundled channel)
-mkdir -p ~/.ironclaw/channels
-cp channels-src/telegram/telegram.wasm channels-src/telegram/telegram.capabilities.json ~/.ironclaw/channels/
+# Install (or use lunarwing onboard to install bundled channel)
+mkdir -p ~/.lunarwing/channels
+cp channels-src/telegram/telegram.wasm channels-src/telegram/telegram.capabilities.json ~/.lunarwing/channels/
 ```
 
-**Note**: The main IronClaw binary bundles `telegram.wasm` via `include_bytes!`. When modifying the Telegram channel source, run `./channels-src/telegram/build.sh` **before** building the main crate, so the updated WASM is included.
+**Note**: The main LunarWing binary bundles `telegram.wasm` via `include_bytes!`. When modifying the Telegram channel source, run `./channels-src/telegram/build.sh` **before** building the main crate, so the updated WASM is included.
 
 ### Other Channels
 
@@ -315,9 +315,9 @@ cp channels-src/telegram/telegram.wasm channels-src/telegram/telegram.capabiliti
 cd channels-src/my-channel
 cargo build --release --target wasm32-wasip2
 
-# Deploy to ~/.ironclaw/channels/
-cp target/wasm32-wasip2/release/my_channel.wasm ~/.ironclaw/channels/my-channel.wasm
-cp my-channel.capabilities.json ~/.ironclaw/channels/
+# Deploy to ~/.lunarwing/channels/
+cp target/wasm32-wasip2/release/my_channel.wasm ~/.lunarwing/channels/my-channel.wasm
+cp my-channel.capabilities.json ~/.lunarwing/channels/
 ```
 
 ### XMPP Channel and Bridge
@@ -330,8 +330,8 @@ cp my-channel.capabilities.json ~/.ironclaw/channels/
 ./bridges/xmpp-bridge/build.sh
 
 # Install the WASM channel artifact
-mkdir -p ~/.ironclaw/channels
-cp channels-src/xmpp/xmpp.wasm channels-src/xmpp/xmpp.capabilities.json ~/.ironclaw/channels/
+mkdir -p ~/.lunarwing/channels
+cp channels-src/xmpp/xmpp.wasm channels-src/xmpp/xmpp.capabilities.json ~/.lunarwing/channels/
 
 # Run the bridge on loopback
 XMPP_BRIDGE_BIND=127.0.0.1:8787 \

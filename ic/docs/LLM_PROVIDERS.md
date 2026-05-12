@@ -1,6 +1,6 @@
 # LLM Provider Configuration
 
-IronClaw defaults to NEAR AI for model access, but supports any OpenAI-compatible
+LunarWing defaults to NEAR AI for model access, but supports any OpenAI-compatible
 endpoint as well as Anthropic, Ollama, and Google Gemini directly. This guide covers
 the most common configurations.
 
@@ -30,7 +30,7 @@ the most common configurations.
 
 ## NEAR AI (default)
 
-No additional configuration required. On first run, `ironclaw onboard` opens a browser
+No additional configuration required. On first run, `lunarwing onboard` opens a browser
 for OAuth authentication. Credentials are saved to `~/.ironclaw/session.json`.
 
 ```env
@@ -110,7 +110,7 @@ API (`generativelanguage.googleapis.com`).
 ## GitHub Copilot
 
 GitHub Copilot exposes chat endpoint at
-`https://api.githubcopilot.com`. IronClaw uses that endpoint directly through the
+`https://api.githubcopilot.com`. LunarWing uses that endpoint directly through the
 built-in `github_copilot` provider.
 
 ```env
@@ -121,14 +121,14 @@ GITHUB_COPILOT_MODEL=gpt-4o
 # GITHUB_COPILOT_EXTRA_HEADERS=Copilot-Integration-Id:vscode-chat
 ```
 
-`ironclaw onboard` can acquire this token for you using GitHub device login. If you
+`lunarwing onboard` can acquire this token for you using GitHub device login. If you
 already signed into Copilot through VS Code or a JetBrains IDE, you can also reuse
 the `oauth_token` stored in `~/.config/github-copilot/apps.json`. If you prefer,
 `LLM_BACKEND=github-copilot` also works as an alias.
 
-Popular models vary by subscription, but `gpt-4o` is a safe default. IronClaw keeps
+Popular models vary by subscription, but `gpt-4o` is a safe default. LunarWing keeps
 model entry manual for this provider because GitHub Copilot model listing may require
-extra integration headers on some clients. IronClaw automatically injects the standard
+extra integration headers on some clients. LunarWing automatically injects the standard
 VS Code identity headers (`User-Agent`, `Editor-Version`, `Editor-Plugin-Version`,
 `Copilot-Integration-Id`) and lets you override them with
 `GITHUB_COPILOT_EXTRA_HEADERS`.
@@ -313,7 +313,7 @@ LLM_MODEL=llama-3.2-3b-instruct-q4_K_M
 Instead of editing `.env` manually, run the onboarding wizard:
 
 ```bash
-ironclaw onboard
+lunarwing onboard
 ```
 
 Select **"OpenAI-compatible"** for OpenRouter, Together AI, Fireworks, vLLM, LiteLLM,

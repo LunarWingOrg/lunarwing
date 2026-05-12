@@ -46,8 +46,8 @@ Set via `LLM_BACKEND` env var:
 
 Codex auth reuse:
 - Set `LLM_USE_CODEX_AUTH=true` to load credentials from `~/.codex/auth.json` (override with `CODEX_AUTH_PATH`).
-- If Codex is logged in with API-key mode, IronClaw uses the standard OpenAI endpoint.
-- If Codex is logged in with ChatGPT OAuth mode, IronClaw routes to the private `chatgpt.com/backend-api/codex` Responses API via `codex_chatgpt.rs`.
+- If Codex is logged in with API-key mode, LunarWing uses the standard OpenAI endpoint.
+- If Codex is logged in with ChatGPT OAuth mode, LunarWing routes to the private `chatgpt.com/backend-api/codex` Responses API via `codex_chatgpt.rs`.
 - ChatGPT mode supports one automatic 401 refresh using the refresh token persisted in `auth.json`.
 
 ## AWS Bedrock Provider

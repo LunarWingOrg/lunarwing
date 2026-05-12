@@ -247,7 +247,7 @@ Do not break without explicit approval:
 
 ## Deployment & Secrets
 
-Secrets may live in `/home/cmc/.lunarwing/.env`, systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
+Secrets may live in `~/.ironclaw/.env` (the default base dir — code still defaults to `.ironclaw`), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
 
 For live DB checks, use read-only SQL unless the user explicitly requests mutation. Stop the service before mutating routine state; back up the DB first.
 

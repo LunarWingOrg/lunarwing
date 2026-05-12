@@ -1,6 +1,6 @@
-# IronClaw Network Security Reference
+# LunarWing Network Security Reference
 
-This document catalogs every network-facing surface in IronClaw, its authentication mechanism, bind address, security controls, and known findings. Use this as the authoritative reference during code reviews that touch network-facing code.
+This document catalogs every network-facing surface in LunarWing, its authentication mechanism, bind address, security controls, and known findings. Use this as the authoritative reference during code reviews that touch network-facing code.
 
 **Last updated:** 2026-02-18
 
@@ -8,7 +8,7 @@ This document catalogs every network-facing surface in IronClaw, its authenticat
 
 ## Threat Model
 
-IronClaw operates across four trust boundaries:
+LunarWing operates across four trust boundaries:
 
 | Boundary | Trust Level | Examples |
 |----------|------------|---------|
@@ -21,7 +21,7 @@ IronClaw operates across four trust boundaries:
 
 - The local machine is single-user. The web gateway and OAuth listener bind to loopback and do not defend against other local users.
 - Docker containers are adversarial. A compromised container should not be able to access other jobs, exfiltrate secrets, or reach the host network beyond the orchestrator API.
-- Webhook senders must prove knowledge of the shared secret. The secret is never transmitted in the clear by IronClaw itself.
+- Webhook senders must prove knowledge of the shared secret. The secret is never transmitted in the clear by LunarWing itself.
 - MCP server URLs are operator-configured and treated as trusted destinations (see [MCP Client](#mcp-client)).
 
 ---
@@ -427,7 +427,7 @@ The `http` tool (`src/tools/builtin/http.rs`) has its own SSRF protections:
 
 MCP servers are external processes accessed via HTTP. The MCP client (`src/tools/mcp/client.rs`) uses `reqwest` with a 30-second timeout but has **no SSRF protections** — it connects to whatever URL is configured for the MCP server.
 
-This is by design: MCP server URLs come from **operator-controlled configuration** (config files, environment variables, or the CLI `tool install` command), not from user input or LLM output. A compromised config file is outside IronClaw's threat model — it would imply the operator's machine is already compromised.
+This is by design: MCP server URLs come from **operator-controlled configuration** (config files, environment variables, or the CLI `tool install` command), not from user input or LLM output. A compromised config file is outside LunarWing's threat model — it would imply the operator's machine is already compromised.
 
 **Reference:** `src/tools/mcp/client.rs` — `reqwest::Client` builder
 
