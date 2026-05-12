@@ -43,7 +43,7 @@ default `config/config.toml` uses the repo's TensorZero provider. The
 the container.
 
 ```bash
-CODEX_CONFIG_FILE=./config/chatgpt-pro.toml docker compose up -d --build ironclaw-worker
+CODEX_CONFIG_FILE=./config/chatgpt-pro.toml docker compose up -d --build lunarwing-codex-worker
 ```
 
 The Compose stack also persists `/home/codex/.codex` in the `codex-home` named
@@ -81,7 +81,7 @@ If `WS_URL` is not set, WebSocket mode falls back to the `connection.uri` value 
 3. Start the worker:
 
 ```bash
-docker compose up -d --build ironclaw-worker
+docker compose up -d --build lunarwing-codex-worker
 ```
 
 4. Verify host-side access:
@@ -174,7 +174,7 @@ An Ironclaw agent should then connect to `ws://<worker-host>:9090/ws/agent`.
 To start the same server mode through Compose:
 
 ```bash
-docker compose up -d --build ironclaw-worker
+docker compose up -d --build lunarwing-codex-worker
 ```
 
 Useful follow-up commands:
@@ -206,7 +206,7 @@ That host-side install is what makes the `WS_URL="ws://host.docker.internal:9000
 [`scripts/internal_ironclaw_agent_example.py`](scripts/internal_ironclaw_agent_example.py) is the dedicated example for an IronClaw agent running inside the same Docker Compose network as the worker.
 
 ```bash
-docker compose up -d --build ironclaw-worker
+docker compose up -d --build lunarwing-codex-worker
 docker compose --profile internal-agent run --rm internal-ironclaw-agent
 ```
 
@@ -215,7 +215,7 @@ The Compose stack also includes optional helper services:
 - `docker compose --profile smoke run --rm agent-smoke`
   Verifies `/health`, `/ready`, websocket connect, worker `ready`, and `pong` from inside the Compose network.
 - `docker compose --profile internal-agent run --rm internal-ironclaw-agent`
-  Connects to `ws://ironclaw-worker:9090/ws/agent` and sends a demo `task_request` using `TASK_PROMPT` from `.env`.
+  Connects to `ws://lunarwing-codex-worker:9090/ws/agent` and sends a demo `task_request` using `TASK_PROMPT` from `.env`.
 
 The internal agent example only proves the full task path if the worker's Codex provider in `config/config.toml` is reachable and authorized.
 
@@ -257,7 +257,7 @@ Start the Codex worker first:
 
 ```bash
 source .env 2>/dev/null || true
-docker compose up -d --build ironclaw-worker
+docker compose up -d --build lunarwing-codex-worker
 ```
 
 Then configure OpenClaw/acpx to launch the bridge as a stdio adapter:
@@ -365,7 +365,7 @@ Minimal `task_request` example:
 
 Internal agents running inside the same Compose network should connect to:
 
-- URL: `ws://ironclaw-worker:9090/ws/agent`
+- URL: `ws://lunarwing-codex-worker:9090/ws/agent`
 - Header: `Authorization: Bearer <AGENT_AUTH_TOKEN>`
 - WebSocket subprotocol: `ironclaw-agent-v1`
 

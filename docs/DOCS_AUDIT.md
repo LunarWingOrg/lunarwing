@@ -182,7 +182,7 @@ These are injected into agent prompts and directly affect how coding agents refe
 - `docs/proposals/` directory (contains `MULTICA_SUPPORT.md`)
 - `docs/bugs/` directory (contains 6 bug documents)
 - `docs/REORG.md`
-- Several guide subdirectory README files (nanocode4ironclaw, ic-infrastructure-health-check, ic_sm, replv2git)
+- Several guide subdirectory README files (lunarcode4lunarwing, ic-infrastructure-health-check, ic_sm, replv2git)
 - `docs/guides/ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md`
 
 **Fix:** Add missing entries to the index under their appropriate sections.
@@ -213,9 +213,9 @@ These are injected into agent prompts and directly affect how coding agents refe
 
 ## M19. `lunarcode4lunarwing/CLAUDE.md` — Says "IronClaw Nanocode Worker"
 
-**What's wrong:** Uses "IronClaw" product name and `ironclaw-worker` Docker compose service name. The `lunarcode4lunarwing/` directory name is intentionally preserved per the rename table, but content descriptions should say LunarWing.
+**What's wrong:** Uses "IronClaw" product name and `lunarwing-worker` Docker compose service name. The `lunarcode4lunarwing/` directory name is intentionally preserved per the rename table, but content descriptions should say LunarWing.
 
-**Fix:** Replace product name `IronClaw` → `LunarWing` in descriptions. Leave Docker service names as-is if they're used in compose files.
+**Fix:** Replace product name `IronClaw` → `LunarWing` in descriptions. Docker service names should use `lunarwing-worker`.
 
 ---
 

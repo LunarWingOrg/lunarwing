@@ -2,7 +2,7 @@ x-worker-base: &worker-base
   build:
     context: .
     dockerfile: Dockerfile
-  image: ironclaw-worker-codex:latest
+  image: lunarwing-worker-codex:latest
   working_dir: /workspace
   group_add:
     - "${HOST_GID:-1000}"
@@ -23,7 +23,7 @@ x-worker-base: &worker-base
     WORKSPACE_ROOT: /workspace
 
 services:
-  ironclaw-worker:
+  lunarwing-codex-worker:
     <<: *worker-base
     command: ["--mode", "websocket"]
     environment:
@@ -49,12 +49,12 @@ services:
     <<: *worker-base
     profiles: ["smoke"]
     depends_on:
-      ironclaw-worker:
+      lunarwing-codex-worker:
         condition: service_healthy
     entrypoint: ["python3", "/app/scripts/check_worker_connectivity.py"]
     command:
       - "--host"
-      - "ironclaw-worker"
+      - "lunarwing-codex-worker"
       - "--health-port"
       - "${HEALTH_PORT:-8443}"
       - "--ws-port"
@@ -65,7 +65,7 @@ services:
     <<: *worker-base
     profiles: ["internal-agent"]
     depends_on:
-      ironclaw-worker:
+      lunarwing-codex-worker:
         condition: service_healthy
     entrypoint: ["python3", "/app/scripts/internal_ironclaw_agent_example.py"]
     environment:

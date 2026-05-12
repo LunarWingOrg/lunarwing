@@ -22,9 +22,9 @@
 
   Searched for 1 pattern, read 1 file (ctrl+o to expand)
 
-● Bash(docker ps | grep nanocode; echo "---"; docker inspect ironclaw-worker-nanocode-1 2>/dev/null | grep -A2 "TENSORZERO\|NANOGPT\|API_KEY" | head -10)
-  ⎿  d3ea60d94fcc   ironclaw-worker-nanocode:latest                 "/usr/bin/tini -- /a…"   18 minutes ago   Up 18 minutes (healthy)         0.0.0.0:8443->8443/tcp, [::]:8443->8443/tcp, 0.0.0.0:9090->9090/
-     tcp, [::]:9090->9090/tcp   nanocode4ironclaw-ironclaw-worker-1
+● Bash(docker ps | grep nanocode; echo "---"; docker inspect lunarwing-worker-nanocode-1 2>/dev/null | grep -A2 "TENSORZERO\|NANOGPT\|API_KEY" | head -10)
+  ⎿  d3ea60d94fcc   lunarwing-worker-nanocode:latest                 "/usr/bin/tini -- /a…"   18 minutes ago   Up 18 minutes (healthy)         0.0.0.0:8443->8443/tcp, [::]:8443->8443/tcp, 0.0.0.0:9090->9090/
+     tcp, [::]:9090->9090/tcp   lunarcode4lunarwing-lunarwing-worker-1
      ---
 
 ● The nanocode container is running. It's configured to use TensorZero at http://192.168.1.157:3000/openai/v1/ as its LLM backend — same TensorZero proxy that noko uses. So the API key it needs is
@@ -32,10 +32,9 @@
 
   Check if it's already set in the container:
 
-  docker exec nanocode4ironclaw-ironclaw-worker-1 env | grep -i "API_KEY\|TENSORZERO\|NANOGPT"
+  docker exec lunarcode4lunarwing-lunarwing-worker-1 env | grep -i "API_KEY\|TENSORZERO\|NANOGPT"
 
   If TENSORZERO_API_KEY is set (even to dummy), the nanocode worker should be able to hit TensorZero and get LLM responses. The key question is whether the TensorZero proxy has a nanocode function configured —
   check your TZ config for that.
 
 ✻ Cooked for 21s
-
