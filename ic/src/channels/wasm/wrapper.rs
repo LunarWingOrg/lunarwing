@@ -770,10 +770,13 @@ fn resolve_message_scope(
     owner_actor_id: Option<&str>,
     sender_id: &str,
 ) -> (String, bool) {
-    if owner_actor_id.is_some_and(|owner_actor_id| owner_actor_id == sender_id) {
-        (owner_scope_id.to_string(), true)
-    } else {
-        (sender_id.to_string(), false)
+    match owner_actor_id {
+        Some(actor_id) if actor_id == sender_id => (owner_scope_id.to_string(), true),
+        Some(_) => (sender_id.to_string(), false),
+        // No owner_actor_id configured: all senders execute under the instance
+        // owner's scope so they inherit the owner's secrets and workspace.
+        // sender_id is preserved separately on the message for response routing.
+        None => (owner_scope_id.to_string(), false),
     }
 }
 
@@ -3729,13 +3732,15 @@ mod tests {
 
         assert!(result.is_ok()); // safety: test-only assertion
 
-        // Verify messages were sent
+        // Verify messages were sent — no owner_actor_id, so both resolve to owner scope
         let msg1 = rx.try_recv().expect("Should receive first message"); // safety: test-only assertion
-        assert_eq!(msg1.user_id, "user1"); // safety: test-only assertion
+        assert_eq!(msg1.user_id, "default"); // safety: test-only assertion
+        assert_eq!(msg1.sender_id, "user1"); // safety: test-only assertion
         assert_eq!(msg1.content, "Hello from polling!"); // safety: test-only assertion
 
         let msg2 = rx.try_recv().expect("Should receive second message"); // safety: test-only assertion
-        assert_eq!(msg2.user_id, "user2"); // safety: test-only assertion
+        assert_eq!(msg2.user_id, "default"); // safety: test-only assertion
+        assert_eq!(msg2.sender_id, "user2"); // safety: test-only assertion
         assert_eq!(msg2.content, "Another message"); // safety: test-only assertion
 
         // No more messages
@@ -4911,6 +4916,48 @@ mod tests {
         assert_eq!(msg.owner_id, "owner-scope"); // safety: test-only assertion
         assert_eq!(msg.sender_id, "guest-42"); // safety: test-only assertion
         assert_eq!(msg.conversation_scope(), Some("999")); // safety: test-only assertion
+        assert!(last_broadcast_metadata.read().await.is_none()); // safety: test-only assertion
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_no_owner_actor_id_maps_all_senders_to_owner_scope() {
+        use crate::channels::wasm::host::EmittedMessage;
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+        let message_tx = Arc::new(tokio::sync::RwLock::new(Some(tx)));
+        let rate_limiter = Arc::new(tokio::sync::RwLock::new(
+            crate::channels::wasm::host::ChannelEmitRateLimiter::new(
+                crate::channels::wasm::capabilities::EmitRateLimitConfig::default(),
+            ),
+        ));
+        let last_broadcast_metadata = Arc::new(tokio::sync::RwLock::new(None));
+
+        let messages = vec![
+            EmittedMessage::new("id:someone!user@host", "Hello from IRC")
+                .with_metadata(r#"{"buffer":"irc.libera.#test"}"#),
+        ];
+
+        let result = WasmChannel::dispatch_emitted_messages(
+            EmitDispatchContext {
+                channel_name: "weechat",
+                owner_scope_id: "default",
+                owner_actor_id: None,
+                message_tx: &message_tx,
+                rate_limiter: &rate_limiter,
+                last_broadcast_metadata: &last_broadcast_metadata,
+                settings_store: None,
+            },
+            messages,
+        )
+        .await;
+
+        assert!(result.is_ok()); // safety: test-only assertion
+
+        let msg = rx.try_recv().expect("Should receive message"); // safety: test-only assertion
+        assert_eq!(msg.user_id, "default"); // safety: test-only assertion
+        assert_eq!(msg.owner_id, "default"); // safety: test-only assertion
+        assert_eq!(msg.sender_id, "id:someone!user@host"); // safety: test-only assertion
+        // Broadcast metadata should NOT be updated (is_owner_sender = false)
         assert!(last_broadcast_metadata.read().await.is_none()); // safety: test-only assertion
     }
 

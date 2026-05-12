@@ -49,7 +49,7 @@ except ImportError:
 
 log = logging.getLogger("weechat_ws")
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MAX_LINES_PER_BUFFER = 500  # Max buffered lines per IRC buffer
 
 
