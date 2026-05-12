@@ -313,12 +313,6 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 
 The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.
 
-## Things to do before 1.0.5 (Minor) Release:
-
-* Ruffles is tracking all of these now as TODOs, almost done
-
-* all items removed from this file
-
 ## Things to do after 1.0.5 (Minor) Release:
 
 * Remove these from this file too, add all items to Ruffles workspace under a seperate layer from 1.0.5 release layer list:
@@ -330,6 +324,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 5. add option in web gateway and lunarwing.env for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. for example, see chris openclaw memory embedded server setup with haproxy clustered machines with RTX 4060s. remove options for nearai.
 6. begin work on audio input/output interface (no plan yet, needs proper planning)
 7. libsql instance from old project to lunarwing using mt admin setup
+8. full migration of an old project libsql instance to lunarwing to prove 7 can work
 
 ## Things to do before 1.0.6 (Feature) Release:
 
