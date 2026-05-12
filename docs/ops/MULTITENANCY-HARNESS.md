@@ -131,5 +131,5 @@ The test harness documented here is for development/testing only. See the compar
 ## Future Work
 
 - Weechat relay port integration (currently reserved, no harness plumbing yet)
-- Per-instance worker container ports (nanocode4ironclaw, codex4ironclaw)
+- Per-instance worker container ports (lunarcode4lunarwing, codex4ironclaw)
 - Automatic port conflict detection in `doctor` command

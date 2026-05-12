@@ -79,7 +79,7 @@ export interface WsState {
   connected_to?: string
 }
 
-const WS_STATE_FILE = process.env.WS_STATE_FILE || "/tmp/ironclaw_ws_state.json"
+const WS_STATE_FILE = process.env.WS_STATE_FILE || "/tmp/lunarwing_ws_state.json"
 
 export function writeWsState(state: WsState): void {
   try {
@@ -102,5 +102,5 @@ export function readWsState(): WsState | null {
 
 export const SUBPROTOCOL = "ironclaw-agent-v1"
 export const DEFAULT_TIMEOUT_MS = 300_000
-export const WORKER_ID = process.env.IRONCLAW_WORKER_ID || "worker-nanocode-01"
+export const WORKER_ID = process.env.LUNARWING_WORKER_ID || "worker-nanocode-01"
 export const WORKER_VERSION = "nanocode-worker-1.0.0"

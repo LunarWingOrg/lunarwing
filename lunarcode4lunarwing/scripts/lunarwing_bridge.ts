@@ -17,7 +17,7 @@ import {
   type Envelope,
   type TaskRequest,
   type WsState,
-} from "./ironclaw_runtime"
+} from "./lunarwing_runtime"
 import { executeTask } from "./nanocode_task_executor"
 
 // ── Configuration ─────────────────────────────────────────────────────────────

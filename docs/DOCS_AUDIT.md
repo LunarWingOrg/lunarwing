@@ -211,9 +211,9 @@ These are injected into agent prompts and directly affect how coding agents refe
 
 ---
 
-## M19. `nanocode4ironclaw/CLAUDE.md` — Says "IronClaw Nanocode Worker"
+## M19. `lunarcode4lunarwing/CLAUDE.md` — Says "IronClaw Nanocode Worker"
 
-**What's wrong:** Uses "IronClaw" product name and `ironclaw-worker` Docker compose service name. The `nanocode4ironclaw/` directory name is intentionally preserved per the rename table, but content descriptions should say LunarWing.
+**What's wrong:** Uses "IronClaw" product name and `ironclaw-worker` Docker compose service name. The `lunarcode4lunarwing/` directory name is intentionally preserved per the rename table, but content descriptions should say LunarWing.
 
 **Fix:** Replace product name `IronClaw` → `LunarWing` in descriptions. Leave Docker service names as-is if they're used in compose files.
 
@@ -352,7 +352,7 @@ Option 1 is the correct long-term fix but requires verifying no scripts or servi
 
 ## L10. `RELEASE-v1.0.6.md` — Placeholder content
 
-**What's wrong:** Release date is `2026-??-??`, features are `Stuff`, fixes are `Thing 1`. References `ironclaw-worker-nanocode:latest` image name.
+**What's wrong:** Release date is `2026-??-??`, features are `Stuff`, fixes are `Thing 1`. References `lunarwing-worker-nanocode:latest` image name.
 **Fix:** Fill in actual release content when ready, update image name.
 
 ---

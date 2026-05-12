@@ -127,7 +127,7 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   scripts/                  # Operational + build scripts
 codex4ironclaw/             # Persistent Codex Worker container — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
-nanocode4ironclaw/          # Nanocode worker container — see nanocode4ironclaw/CLAUDE.md
+lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
 ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
 tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
 replv2git/                  # REPLv2 related tooling
@@ -220,7 +220,7 @@ create_job(title: "...", description: "...", mode: "nanocode")
 
 | Worker | Container | Docs |
 |--------|-----------|------|
-| `nanocode` | `nanocode4ironclaw/` | `nanocode4ironclaw/CLAUDE.md` |
+| `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
 
 ## Protected Runtime Behavior
 

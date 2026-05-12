@@ -36,7 +36,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 
 ### Worker Containers
 * **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
-* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge and persistent storage (`nanocode4ironclaw/`)
+* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge and persistent storage (`lunarcode4lunarwing/`)
 * **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
 * **Debloated sandbox Worker** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 

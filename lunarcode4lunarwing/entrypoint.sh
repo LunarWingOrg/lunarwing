@@ -1,5 +1,5 @@
 #!/bin/bash
-# entrypoint.sh — IronClaw Nanocode Worker startup script
+# entrypoint.sh — LunarWing Nanocode Worker startup script
 # Supports three modes:
 #   --mode websocket  (default) persistent worker with WebSocket agent communication
 #   --mode cli                  one-shot nanocode run with a prompt
@@ -16,7 +16,7 @@ HEALTH_PORT="${HEALTH_PORT:-8443}"
 NANOCODE_SERVE_PORT="${NANOCODE_SERVE_PORT:-4096}"
 NANOCODE_SERVE_HOST="${NANOCODE_SERVE_HOST:-127.0.0.1}"
 WS_ROLE="${WS_ROLE:-server}"
-WS_STATE_FILE="${WS_STATE_FILE:-/tmp/ironclaw_ws_state.json}"
+WS_STATE_FILE="${WS_STATE_FILE:-/tmp/lunarwing_ws_state.json}"
 FILE_UMASK="${FILE_UMASK:-0002}"
 NANOCODE_ROOT="${NANOCODE_ROOT:-/app/nanocode/packages/opencode}"
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace}"
@@ -111,7 +111,7 @@ case "$MODE" in
     export WS_STATE_FILE
     export WORKSPACE_ROOT
 
-    exec bun run /app/scripts/ironclaw_bridge.ts
+    exec bun run /app/scripts/lunarwing_bridge.ts
     ;;
 
   *)

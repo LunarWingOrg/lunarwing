@@ -11,7 +11,7 @@ import {
   type TaskProgress,
   type TaskResult,
   DEFAULT_TIMEOUT_MS,
-} from "./ironclaw_runtime"
+} from "./lunarwing_runtime"
 
 const NANOCODE_HOST = process.env.NANOCODE_SERVE_HOST || "127.0.0.1"
 const NANOCODE_PORT = process.env.NANOCODE_SERVE_PORT || "4096"

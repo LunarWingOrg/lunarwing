@@ -34,7 +34,7 @@ RUN bun run build 2>/dev/null || true
 # ──────────────────────────────────────────────────────────────────────────────
 FROM oven/bun:debian AS runtime
 
-LABEL org.opencontainers.image.title="IronClaw Nanocode Worker" \
+LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
       org.opencontainers.image.description="Persistent nanocode worker with WebSocket agent communication" \
       org.opencontainers.image.version="1.0.0"
 
@@ -77,13 +77,13 @@ RUN ln -s /app/nanocode/node_modules /app/node_modules
 RUN mkdir -p /home/nanocode/.local/share/nanocode \
              /home/nanocode/.config/nanocode \
              /workspace \
-             /var/log/ironclaw \
-             /app/results \
-    && chown -R nanocode:nanocode /home/nanocode /workspace /var/log/ironclaw /app/results
+              /var/log/lunarwing \
+              /app/results \
+    && chown -R nanocode:nanocode /home/nanocode /workspace /var/log/lunarwing /app/results
 
 # ── ports ──────────────────────────────────────────────────────────────────────
 # 8443 : health-check HTTP endpoint
-# 9090 : inbound IronClaw WebSocket server (server role)
+# 9090 : inbound LunarWing WebSocket server (server role)
 EXPOSE 8443
 EXPOSE 9090
 

@@ -1,4 +1,4 @@
-# IronClaw Nanocode Worker
+# LunarWing Nanocode Worker
 
 Persistent Docker container wrapping [nanocode](https://github.com/nanogpt-community/nanocode) as a managed coding worker for LunarWing. Agents connect via WebSocket, send coding tasks, and receive streaming progress/results.
 
@@ -10,7 +10,7 @@ Persistent Docker container wrapping [nanocode](https://github.com/nanogpt-commu
 │  entrypoint.sh (tini)                                                 │
 │    ├── health_server.py      → port 8443 (/health, /ready)            │
 │    ├── nanocode serve         → port 4096 (internal HTTP/SSE)          │
-│    └── ironclaw_bridge.ts    → port 9090 (WebSocket, ironclaw-agent-v1)│
+│    └── lunarwing_bridge.ts    → port 9090 (WebSocket, ironclaw-agent-v1)│
 │                                                                       │
 │  Bridge ←─ SDK (HTTP/SSE) ─→ nanocode serve ←─ LLM ─→ TensorZero    │
 │                                                                       │
@@ -26,7 +26,7 @@ The bridge uses nanocode's SDK (`createOpencodeClient`) to communicate with the 
 docker compose build
 
 # Start the worker (WebSocket server mode)
-docker compose up -d ironclaw-worker
+docker compose up -d lunarwing-worker
 
 # Run smoke tests
 docker compose --profile smoke up agent-smoke
@@ -83,7 +83,7 @@ The nanocode config (`config/opencode.json`) is bind-mounted read-only. Edit it 
 | `nanocode-config-home` | `/home/nanocode/.config/nanocode` | Global config, auth state |
 | `./workspace` | `/workspace` | Coding workspace (persistent) |
 | `./config/opencode.json` | `/app/config/opencode.json` | Nanocode config (read-only) |
-| `./logs` | `/var/log/ironclaw` | Container logs |
+| `./logs` | `/var/log/lunarwing` | Container logs |
 | `./results` | `/app/results` | Task output artifacts |
 
 ## Health Endpoints

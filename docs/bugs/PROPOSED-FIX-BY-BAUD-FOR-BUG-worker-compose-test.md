@@ -3,7 +3,7 @@
 ## What It Is
 Matrix test suite for the 4 worker types:
 - **Codex** (`codex4ironclaw/`)
-- **Nanocode** (`nanocode4ironclaw/`)
+- **Nanocode** (`lunarcode4lunarwing/`)
 - **Built-in** (`ic/src/worker/`)
 - **Sandbox** (`ic/src/sandbox/`)
 
@@ -34,7 +34,7 @@ python runner.py --worker codex   # single worker
 ```bash
 cd tests
 sed -i 's|../../codex4ironclaw|../codex4ironclaw|g' docker-compose.test.yml
-sed -i 's|../../nanocode4ironclaw|../nanocode4ironclaw|g' docker-compose.test.yml
+sed -i 's|../../nanocode4ironclaw|../lunarcode4lunarwing|g' docker-compose.test.yml
 ```
 
 ### 2. Missing `hub.py` Healthcheck

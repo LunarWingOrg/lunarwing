@@ -16,7 +16,7 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 START_TIME = time.time()
-WS_STATE_FILE = os.environ.get("WS_STATE_FILE", "/tmp/ironclaw_ws_state.json")
+WS_STATE_FILE = os.environ.get("WS_STATE_FILE", "/tmp/lunarwing_ws_state.json")
 
 def _uptime() -> float:
     return round(time.time() - START_TIME, 2)
@@ -27,7 +27,7 @@ def _build_health() -> dict:
         "uptime_seconds": _uptime(),
         "mode": os.environ.get("CODEX_MODE", "websocket"),
         "version": os.environ.get("CODEX_VERSION", "nanocode-worker-1.0.0"),
-        "worker_id": os.environ.get("IRONCLAW_WORKER_ID", "worker-nanocode-01"),
+        "worker_id": os.environ.get("LUNARWING_WORKER_ID", "worker-nanocode-01"),
     }
 
 def _load_ws_state() -> dict | None:

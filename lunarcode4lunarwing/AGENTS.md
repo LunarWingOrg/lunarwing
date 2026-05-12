@@ -1,4 +1,4 @@
-# Agent Rules — nanocode4ironclaw
+# Agent Rules — lunarcode4lunarwing
 
 ## What This Is
 
@@ -6,9 +6,9 @@ Persistent container worker for nanocode, following the same pattern as `codex4i
 
 ## Key Files
 
-- `scripts/ironclaw_bridge.ts` — The WebSocket server/client. Changes here affect protocol behavior.
+- `scripts/lunarwing_bridge.ts` — The WebSocket server/client. Changes here affect protocol behavior.
 - `scripts/nanocode_task_executor.ts` — Task execution via nanocode SDK. Controls session creation, permissions, event streaming.
-- `scripts/ironclaw_runtime.ts` — Shared types and envelope helpers. Keep in sync with `agent_comm_protocol.json`.
+- `scripts/lunarwing_runtime.ts` — Shared types and envelope helpers. Keep in sync with `agent_comm_protocol.json`.
 - `entrypoint.sh` — Startup orchestration. Three modes: websocket, cli, acp.
 - `config/opencode.json` — Mounted into container; controls LLM provider, plugins, MCP servers.
 

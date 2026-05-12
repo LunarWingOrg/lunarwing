@@ -2,7 +2,7 @@ x-worker-base: &worker-base
   build:
     context: .
     dockerfile: Dockerfile
-  image: ironclaw-worker-nanocode:latest
+  image: lunarwing-worker-nanocode:latest
   working_dir: /workspace
   group_add:
     - "${HOST_GID:-1000}"
@@ -11,7 +11,7 @@ x-worker-base: &worker-base
     - nanocode-data:/home/nanocode/.local/share/nanocode
     - nanocode-config-home:/home/nanocode/.config/nanocode
     - ./workspace:/workspace:z
-    - ./logs:/var/log/ironclaw:z
+    - ./logs:/var/log/lunarwing:z
     - ./results:/app/results:z
   environment: &worker-env
     # LLM / TensorZero
@@ -23,7 +23,7 @@ x-worker-base: &worker-base
     NANOGPT_SERVER_USERNAME: ${NANOGPT_SERVER_USERNAME:-nanocode}
     # IronClaw WebSocket auth
     AGENT_AUTH_TOKEN: ${AGENT_AUTH_TOKEN:-}
-    IRONCLAW_WORKER_ID: ${IRONCLAW_WORKER_ID:-worker-nanocode-01}
+    LUNARWING_WORKER_ID: ${LUNARWING_WORKER_ID:-worker-nanocode-01}
     # Paths
     WORKSPACE_ROOT: /workspace
     NANOCODE_ROOT: /app/nanocode/packages/opencode
@@ -31,7 +31,7 @@ x-worker-base: &worker-base
     FILE_UMASK: ${FILE_UMASK:-0002}
 
 services:
-  ironclaw-worker:
+  lunarwing-worker:
     <<: *worker-base
     command: ["--mode", "websocket"]
     environment:
@@ -59,13 +59,13 @@ services:
     <<: *worker-base
     profiles: ["smoke"]
     depends_on:
-      ironclaw-worker:
+      lunarwing-worker:
         condition: service_healthy
     entrypoint: ["bun", "run", "/app/scripts/smoke_test.ts"]
     command: []
     environment:
       <<: *worker-env
-      SMOKE_WS_HOST: ironclaw-worker
+      SMOKE_WS_HOST: lunarwing-worker
       SMOKE_WS_PORT: ${WS_PORT:-9090}
       SMOKE_HEALTH_PORT: ${HEALTH_PORT:-8443}
     restart: "no"
