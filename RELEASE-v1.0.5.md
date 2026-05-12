@@ -34,7 +34,6 @@ This release focuses on production multi-tenant operations: comprehensive migrat
 - `codex4ironclaw/DEPRECATE.md` — Deprecation notice for codex worker (superseded by nanocode)
 
 ### Updated
-- `CLAUDE.md` — Updated todo lists for v1.0.5 and v1.0.6 release planning, added post-release roadmap items (OCR/image recognition, Multica multi-agent coordination, container renaming)
 - `MANIFESTO.md` — Minor updates
 
 ### Removed
