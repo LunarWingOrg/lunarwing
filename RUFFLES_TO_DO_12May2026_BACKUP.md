@@ -4,4 +4,4 @@
 * create gh rel tag
 * further testing of nanocode and external worker mode
 * log omemo muc bug
-* sandbox fixed
+* sandbox fixed logged
