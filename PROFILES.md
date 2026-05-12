@@ -1,0 +1,3 @@
+# Idea
+
+agent profiles?
