@@ -1,0 +1,5 @@
+# Server mode: bind address and port
+WS_BIND_HOST=0.0.0.0
+WS_PORT=9096
+# ── Health Check ──────────────────────────────────────────────────────────────
+HEALTH_PORT=8445

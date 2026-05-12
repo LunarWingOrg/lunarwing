@@ -329,6 +329,7 @@ The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLM
 4. Rename custom external worker containers and modify any code to reference such containers, test before 1.0.6
 5. add option in web gateway and lunarwing.env for embedding tool for embedded memory vector database to be given a specific targetted URL. option will be custom URL. for example, see chris openclaw memory embedded server setup with haproxy clustered machines with RTX 4060s. remove options for nearai.
 6. begin work on audio input/output interface (no plan yet, needs proper planning)
+7. libsql instance from old project to lunarwing using mt admin setup
 
 ## Things to do before 1.0.6 (Feature) Release:
 
