@@ -37,6 +37,59 @@ struct HealthResponse {
     uptime_secs: u64,
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct VisionAnalyzeRequest {
+    image: String,
+    #[serde(default = "default_mode")]
+    mode: String,
+    #[serde(default)]
+    prompt: Option<String>,
+    #[serde(default = "default_ocr_lang")]
+    ocr_lang: String,
+    #[serde(default = "default_detail_level")]
+    detail_level: String,
+}
+
+fn default_mode() -> String { "auto".to_string() }
+fn default_ocr_lang() -> String { "eng".to_string() }
+fn default_detail_level() -> String { "medium".to_string() }
+
+#[derive(Debug, Serialize)]
+struct VisionAnalyzeResponse {
+    mode_used: String,
+    ocr: OcrResult,
+    vision: Option<VisionResult>,
+    meta: MetaInfo,
+}
+
+#[derive(Debug, Serialize)]
+struct OcrResult {
+    full_text: String,
+    blocks: Vec<TextBlock>,
+    avg_confidence: f32,
+}
+
+#[derive(Debug, Serialize)]
+struct TextBlock {
+    text: String,
+    confidence: f32,
+    bbox: [i32; 4],
+}
+
+#[derive(Debug, Serialize)]
+struct VisionResult {
+    description: String,
+    prompt_answer: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct MetaInfo {
+    backends_used: Vec<String>,
+    latency_ms: u64,
+    tokens_used: Option<u32>,
+}
+
 #[derive(Debug, Serialize)]
 struct ErrorResponse {
     error: String,
@@ -157,7 +210,7 @@ fn validate_image_format(body: &[u8]) -> Result<(), AppError> {
     }
 }
 
-async fn run_tesseract(image_bytes: &[u8]) -> Result<String, AppError> {
+async fn run_tesseract(image_bytes: &[u8], lang: &str) -> Result<OcrResult, AppError> {
     let mut temp_file = tempfile::Builder::new()
         .suffix(".png")
         .tempfile()
@@ -169,7 +222,7 @@ async fn run_tesseract(image_bytes: &[u8]) -> Result<String, AppError> {
     let output = tokio::process::Command::new("tesseract")
         .arg(temp_file.path())
         .arg("stdout")
-        .arg("-l").arg("eng")
+        .arg("-l").arg(lang)
         .output()
         .await
         .map_err(|e| AppError::OcrEngineFailure(e.to_string()))?;
@@ -183,7 +236,176 @@ async fn run_tesseract(image_bytes: &[u8]) -> Result<String, AppError> {
         .trim()
         .to_string();
 
-    Ok(text)
+    let confidence = estimate_confidence(&text);
+
+    Ok(OcrResult {
+        full_text: text.clone(),
+        blocks: vec![TextBlock {
+            text,
+            confidence,
+            bbox: [0, 0, 0, 0],
+        }],
+        avg_confidence: confidence,
+    })
+}
+
+fn estimate_confidence(text: &str) -> f32 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    let non_empty_lines = lines.iter().filter(|l| !l.trim().is_empty()).count();
+    let ratio = non_empty_lines as f32 / lines.len().max(1) as f32;
+    (0.5 + ratio * 0.5).min(1.0)
+}
+
+fn should_use_vl(ocr_result: &OcrResult, prompt: &Option<String>, mode: &str) -> bool {
+    match mode {
+        "text" => false,
+        "describe" => true,
+        "auto" => {
+            if let Some(p) = prompt {
+                let p_lower = p.to_lowercase();
+                let vl_keywords = ["describe", "compare", "which", "looks", "color", "best", "scene", "style", "vibe"];
+                let ocr_keywords = ["read", "say", "text", "says", "what does", "extract", "error", "log", "code"];
+                
+                let vl_score = vl_keywords.iter().filter(|&&k| p_lower.contains(k)).count();
+                let ocr_score = ocr_keywords.iter().filter(|&&k| p_lower.contains(k)).count();
+                
+                if vl_score > ocr_score {
+                    return true;
+                }
+                if ocr_score > vl_score {
+                    return false;
+                }
+            }
+            ocr_result.avg_confidence < 0.85
+        }
+        _ => false,
+    }
+}
+
+async fn run_vl(image_b64: &str, prompt: &str, config: &Config) -> Result<VisionResult, AppError> {
+    let vl_url = config.vl_url.as_ref()
+        .ok_or_else(|| AppError::InternalError)?;
+    
+    let client = reqwest::Client::new();
+    
+    let request_body = serde_json::json!({
+        "model": config.vl_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": format!("data:image/png;base64,{})", image_b64)
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 1024
+    });
+    
+    let mut request = client.post(vl_url)
+        .header("Content-Type", "application/json")
+        .json(&request_body);
+    
+    if let Some(key) = &config.vl_api_key {
+        request = request.header("Authorization", format!("Bearer {}", key));
+    }
+    
+    let response = request.send()
+        .await
+        .map_err(|e| AppError::OcrEngineFailure(format!("VL request failed: {}", e)))?;
+    
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(AppError::OcrEngineFailure(format!("VL API error {}: {}", status, text)));
+    }
+    
+    let json: serde_json::Value = response.json()
+        .await
+        .map_err(|e| AppError::OcrEngineFailure(format!("VL JSON parse error: {}", e)))?;
+    
+    let description = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    
+    Ok(VisionResult {
+        description,
+        prompt_answer: None,
+    })
+}
+
+async fn vision_analyze_handler(
+    body: bytes::Bytes,
+    config: Config,
+) -> Result<impl Reply, Rejection> {
+    let start = Instant::now();
+    
+    let req: VisionAnalyzeRequest = serde_json::from_slice(&body)
+        .map_err(|e| warp::reject::custom(AppError::BadRequest(e.to_string())))?;
+    
+    let image_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&req.image)
+        .map_err(|e| warp::reject::custom(AppError::BadRequest(format!("Invalid base64: {}", e))))?;
+    
+    validate_image_format(&image_bytes)
+        .map_err(warp::reject::custom)?;
+    
+    let ocr_result = run_tesseract(&image_bytes, &req.ocr_lang)
+        .await
+        .map_err(warp::reject::custom)?;
+    
+    let use_vl = should_use_vl(&ocr_result, &req.prompt, &req.mode);
+    
+    let vision_result = if use_vl {
+        let prompt = req.prompt.as_deref().unwrap_or("Describe this image.");
+        match run_vl(&req.image, prompt, &config).await {
+            Ok(result) => Some(result),
+            Err(e) => {
+                tracing::warn!("VL failed, falling back to OCR only: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    
+    let mode_used = if vision_result.is_some() {
+        if req.mode == "auto" { "hybrid" } else { "describe" }
+    } else {
+        "text"
+    };
+    
+    let mut backends = vec!["tesseract".to_string()];
+    if vision_result.is_some() {
+        backends.push("qwen3vl".to_string());
+    }
+    
+    let elapsed = start.elapsed().as_millis() as u64;
+    
+    let response = VisionAnalyzeResponse {
+        mode_used: mode_used.to_string(),
+        ocr: ocr_result,
+        vision: vision_result,
+        meta: MetaInfo {
+            backends_used: backends,
+            latency_ms: elapsed,
+            tokens_used: None,
+        },
+    };
+    
+    Ok(warp::reply::json(&response))
 }
 
 async fn ocr_handler(
@@ -202,14 +424,14 @@ async fn ocr_handler(
     validate_image_format(&image_bytes)
         .map_err(warp::reject::custom)?;
 
-    let text = run_tesseract(&image_bytes)
+    let ocr_result = run_tesseract(&image_bytes, "eng")
         .await
         .map_err(warp::reject::custom)?;
 
     let elapsed = start.elapsed().as_millis() as u64;
 
     let response = OcrResponse {
-        text,
+        text: ocr_result.full_text,
         engine: "tesseract".to_string(),
         model: None,
         elapsed_ms: elapsed,
@@ -249,9 +471,16 @@ async fn main() {
         .and_then(|p| p.parse().ok())
         .unwrap_or(8088);
 
+    let vl_url = std::env::var("VL_URL").ok();
+    let vl_api_key = std::env::var("VL_API_KEY").ok();
+    let vl_model = std::env::var("VL_MODEL").unwrap_or_else(|_| "qwen3-vl".to_string());
+
     let config = Config {
         auth_token,
         port,
+        vl_url,
+        vl_api_key,
+        vl_model,
     };
 
     let config_clone = config.clone();
@@ -264,11 +493,21 @@ async fn main() {
         .and(with_config(config_clone.clone()))
         .and_then(ocr_handler);
 
+    let vision_route = warp::path("vision")
+        .and(warp::path("analyze"))
+        .and(warp::post())
+        .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+        .and(warp::body::bytes())
+        .and(auth_filter(config.clone()))
+        .and(with_config(config.clone()))
+        .and_then(vision_analyze_handler);
+
     let health_route = warp::path("health")
         .and(warp::get())
         .and_then(health_handler);
 
     let routes = ocr_route
+        .or(vision_route)
         .or(health_route)
         .recover(handle_rejection);
 
