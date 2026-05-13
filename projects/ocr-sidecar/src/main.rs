@@ -1,11 +1,10 @@
 use std::convert::Infallible;
-use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use base64::Engine;
 use dashmap::DashMap;
-use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
+use governor::{Quota, RateLimiter};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use warp::{Filter, Rejection, Reply};
@@ -30,7 +29,7 @@ struct Config {
 struct AppState {
     config: Config,
     cache: Arc<DashMap<String, CachedResponse>>,
-    rate_limiter: Arc<DefaultDirectRateLimiter>,
+    rate_limiter: Arc<governor::RateLimiter<governor::state::NotKeyed, governor::state::InMemoryState, governor::clock::QuantaClock>>,
     metrics: Arc<Metrics>,
 }
 
@@ -40,7 +39,7 @@ struct CachedResponse {
     created_at: Instant,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 struct Metrics {
     total_requests: std::sync::atomic::AtomicU64,
     ocr_requests: std::sync::atomic::AtomicU64,
@@ -49,6 +48,20 @@ struct Metrics {
     cache_misses: std::sync::atomic::AtomicU64,
     rate_limited: std::sync::atomic::AtomicU64,
     avg_latency_ms: std::sync::atomic::AtomicU64,
+}
+
+impl Clone for Metrics {
+    fn clone(&self) -> Self {
+        Self {
+            total_requests: std::sync::atomic::AtomicU64::new(self.total_requests.load(std::sync::atomic::Ordering::Relaxed)),
+            ocr_requests: std::sync::atomic::AtomicU64::new(self.ocr_requests.load(std::sync::atomic::Ordering::Relaxed)),
+            vision_requests: std::sync::atomic::AtomicU64::new(self.vision_requests.load(std::sync::atomic::Ordering::Relaxed)),
+            cache_hits: std::sync::atomic::AtomicU64::new(self.cache_hits.load(std::sync::atomic::Ordering::Relaxed)),
+            cache_misses: std::sync::atomic::AtomicU64::new(self.cache_misses.load(std::sync::atomic::Ordering::Relaxed)),
+            rate_limited: std::sync::atomic::AtomicU64::new(self.rate_limited.load(std::sync::atomic::Ordering::Relaxed)),
+            avg_latency_ms: std::sync::atomic::AtomicU64::new(self.avg_latency_ms.load(std::sync::atomic::Ordering::Relaxed)),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,22 +218,16 @@ fn with_state(state: AppState) -> impl Filter<Extract = (AppState,), Error = Inf
 }
 
 fn rate_limit_filter(state: AppState) -> impl Filter<Extract = (), Error = Rejection> + Clone {
-    warp::addr::remote()
-        .and_then(move |addr: Option<SocketAddr>| {
+    warp::any()
+        .and_then(move || {
             let state = state.clone();
             async move {
-                match addr {
-                    Some(socket_addr) => {
-                        let ip = socket_addr.ip().to_string();
-                        match state.rate_limiter.check_key(&ip) {
-                            Ok(()) => Ok(()),
-                            Err(_) => {
-                                state.metrics.rate_limited.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                Err(warp::reject::custom(AppError::BadRequest("Rate limit exceeded".to_string())))
-                            }
-                        }
+                match state.rate_limiter.check() {
+                    Ok(()) => Ok(()),
+                    Err(_) => {
+                        state.metrics.rate_limited.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        Err(warp::reject::custom(AppError::BadRequest("Rate limit exceeded".to_string())))
                     }
-                    None => Ok(()),
                 }
             }
         })
@@ -229,21 +236,23 @@ fn rate_limit_filter(state: AppState) -> impl Filter<Extract = (), Error = Rejec
 
 fn auth_filter(config: Config) -> impl Filter<Extract = (), Error = Rejection> + Clone {
     warp::header::optional("authorization")
-        .and(with_config(config))
-        .and_then(|auth: Option<String>, cfg: Config| async move {
-            match cfg.auth_token {
-                None => Ok(()),
-                Some(expected) => {
-                    match auth {
-                        Some(header) if header.starts_with("Bearer ") => {
-                            let provided = header.trim_start_matches("Bearer ");
-                            if provided == expected {
-                                Ok(())
-                            } else {
-                                Err(warp::reject::custom(AppError::Unauthorized))
+        .and_then(move |auth: Option<String>| {
+            let expected = config.auth_token.clone();
+            async move {
+                match expected {
+                    None => Ok(()),
+                    Some(token) => {
+                        match auth {
+                            Some(header) if header.starts_with("Bearer ") => {
+                                let provided = header.trim_start_matches("Bearer ");
+                                if provided == token {
+                                    Ok(())
+                                } else {
+                                    Err(warp::reject::custom(AppError::Unauthorized))
+                                }
                             }
+                            _ => Err(warp::reject::custom(AppError::Unauthorized)),
                         }
-                        _ => Err(warp::reject::custom(AppError::Unauthorized)),
                     }
                 }
             }
@@ -357,7 +366,7 @@ async fn run_paddleocr(image_bytes: &[u8]) -> Result<OcrResult, AppError> {
 }
 
 async fn run_ocr_with_fallback(image_bytes: &[u8], lang: &str, enable_paddle: bool) -> Result<OcrResult, AppError> {
-    let mut result = run_tesseract(image_bytes, lang).await?;
+    let result = run_tesseract(image_bytes, lang).await?;
     
     if result.avg_confidence < 0.7 && enable_paddle {
         tracing::info!("Tesseract confidence {:.2} < 0.7, trying PaddleOCR fallback", result.avg_confidence);

@@ -98,6 +98,23 @@ Health check endpoint (no auth required).
 }
 ```
 
+### GET /vision/metrics
+Metrics endpoint (no auth required, Phase 3).
+
+**Response:**
+```json
+{
+  "total_requests": 1523,
+  "ocr_requests": 987,
+  "vision_requests": 536,
+  "cache_hits": 342,
+  "cache_misses": 194,
+  "rate_limited": 12,
+  "cache_hit_rate": 0.638,
+  "avg_latency_ms": 245
+}
+```
+
 ## Authentication
 
 Set `LUNARWING_AUTH_TOKEN` environment variable to enable bearer token auth:
@@ -141,6 +158,9 @@ OCR_PORT=8088 ./ic-ocr /tmp/screenshot.png
 | `VL_URL` | none | Vision-Language backend URL (e.g., llama.cpp OpenAI-compatible endpoint) |
 | `VL_API_KEY` | none | API key for VL backend (optional) |
 | `VL_MODEL` | `qwen3-vl` | VL model name |
+| `ENABLE_PADDLEOCR` | `false` | Enable PaddleOCR fallback when Tesseract confidence < 0.7 |
+| `ENABLE_CACHE` | `true` | Enable response caching (5 min TTL) |
+| `RATE_LIMIT_PER_SECOND` | `10` | Per-IP rate limit for OCR/vision endpoints |
 
 ## Supported Image Formats
 
@@ -222,10 +242,23 @@ External:
   WASM tool (Phase 4) ──→ POST /vision/analyze
 ```
 
-## Phase 3+ Roadmap
+## Phase 3 Features
 
-- Phase 3: PaddleOCR fallback, response caching, metrics endpoint, rate limiting
-- Phase 4: WASM tool interface for native IronClaw integration
+### PaddleOCR Fallback
+When `ENABLE_PADDLEOCR=true`, if Tesseract confidence < 0.7, the service automatically tries PaddleOCR and uses the better result.
+
+### Response Caching
+When `ENABLE_CACHE=true` (default), responses are cached for 5 minutes based on image hash + prompt + mode. Identical requests return cached results instantly.
+
+### Rate Limiting
+All `/ocr` and `/vision/analyze` endpoints are rate-limited per IP (default: 10 req/s). Excess requests receive `400 Bad Request` with "Rate limit exceeded".
+
+### Metrics
+`GET /vision/metrics` provides real-time counters for requests, cache performance, and rate limiting.
+
+## Phase 4 Roadmap
+
+- WASM tool interface for native IronClaw integration
 
 ## License
 
