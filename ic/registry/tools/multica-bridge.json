@@ -1,0 +1,40 @@
+{
+  "name": "multica-bridge",
+  "display_name": "Multica/Lunartica Bridge",
+  "kind": "tool",
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Bridge between LunarWing and a Multica/Lunartica task management server. Enables LunarWing to act as a Multica daemon runtime.",
+  "keywords": [
+    "multica",
+    "lunartica",
+    "task-management",
+    "daemon",
+    "bridge"
+  ],
+  "source": {
+    "dir": "tools-src/multica-bridge",
+    "capabilities": "multica-bridge.capabilities.json",
+    "crate_name": "multica-bridge-tool"
+  },
+  "artifacts": {
+    "wasm32-wasip2": {
+      "url": null,
+      "sha256": null
+    }
+  },
+  "auth_summary": {
+    "method": "manual",
+    "provider": "Multica/Lunartica",
+    "secrets": [
+      "multica_api_token"
+    ],
+    "shared_auth": null,
+    "setup_url": null
+  },
+  "tags": [
+    "lunarwing",
+    "task-management",
+    "daemon"
+  ]
+}
