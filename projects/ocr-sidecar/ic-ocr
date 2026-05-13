@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OCR_PORT=${OCR_PORT:-8088}
+OCR_ENDPOINT=${OCR_ENDPOINT:-http://127.0.0.1:$OCR_PORT}
+JSON_OUTPUT=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: ic-ocr [--json] <image-file>"
+            echo "Environment:"
+            echo "  OCR_PORT              Sidecar port (default: 8088)"
+            echo "  OCR_ENDPOINT          Full URL (default: http://127.0.0.1:\$OCR_PORT)"
+            echo "  LUNARWING_AUTH_TOKEN  Bearer token for authentication"
+            exit 0
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: ic-ocr [--json] <image-file>" >&2
+    exit 1
+fi
+
+IMAGE_FILE="$1"
+
+if [[ ! -f "$IMAGE_FILE" ]]; then
+    echo "Error: File not found: $IMAGE_FILE" >&2
+    exit 1
+fi
+
+B64=$(base64 -w 0 "$IMAGE_FILE")
+
+PAYLOAD=$(jq -n \
+    --arg image "$B64" \
+    '{image: $image}')
+
+AUTH_HEADER=""
+if [[ -n "${LUNARWING_AUTH_TOKEN:-}" ]]; then
+    AUTH_HEADER="Authorization: Bearer $LUNARWING_AUTH_TOKEN"
+fi
+
+if [[ "$JSON_OUTPUT" == true ]]; then
+    if [[ -n "$AUTH_HEADER" ]]; then
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "$AUTH_HEADER" \
+            -d "$PAYLOAD" \
+            "$OCR_ENDPOINT/ocr"
+    else
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$OCR_ENDPOINT/ocr"
+    fi
+else
+    if [[ -n "$AUTH_HEADER" ]]; then
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "$AUTH_HEADER" \
+            -d "$PAYLOAD" \
+            "$OCR_ENDPOINT/ocr" | jq -r '.text'
+    else
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$OCR_ENDPOINT/ocr" | jq -r '.text'
+    fi
+fi

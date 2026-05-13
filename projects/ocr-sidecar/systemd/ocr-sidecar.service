@@ -1,0 +1,17 @@
+[Unit]
+Description=LunarWing OCR Sidecar
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+WorkingDirectory=/opt/lunarwing-ocr-sidecar
+Environment="OCR_PORT=8088"
+Environment="LUNARWING_AUTH_TOKEN=change-me-in-production"
+ExecStart=/usr/local/bin/lunarwing-ocr-sidecar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
