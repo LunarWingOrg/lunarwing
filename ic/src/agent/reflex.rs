@@ -278,10 +278,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "libsql")]
     async fn test_reflex_router_refresh() {
         use crate::db::libsql::LibSqlBackend;
 
-        let backend = LibSqlBackend::new_memory().await.unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_reflex_router.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
         backend.run_migrations().await.unwrap();
 
         let router = ReflexRouter::new();
@@ -306,10 +309,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "libsql")]
     async fn test_reflex_store_libsql_crud() {
         use crate::db::libsql::LibSqlBackend;
 
-        let backend = LibSqlBackend::new_memory().await.unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_reflex_crud.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
         backend.run_migrations().await.unwrap();
 
         // Initially empty
@@ -357,12 +363,15 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "libsql")]
     async fn test_reflex_store_find_recurring() {
         use crate::db::libsql::LibSqlBackend;
         use crate::context::JobContext;
         use crate::db::JobStore;
 
-        let backend = LibSqlBackend::new_memory().await.unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_reflex_recurring.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
         backend.run_migrations().await.unwrap();
 
         // Create some completed jobs with the same description
@@ -370,6 +379,14 @@ mod tests {
             let mut ctx = JobContext::with_user("test-user", "test-job", "Summarize my logs");
             ctx.state = crate::context::JobState::Completed;
             backend.save_job(&ctx).await.unwrap();
+            // Set success = 1 since save_job doesn't include it
+            let conn = backend.connect().await.unwrap();
+            conn.execute(
+                "UPDATE agent_jobs SET success = 1 WHERE id = ?1",
+                libsql::params![ctx.job_id.to_string()],
+            )
+            .await
+            .unwrap();
         }
 
         // Should find the recurring pattern
