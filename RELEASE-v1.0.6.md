@@ -1,5 +1,7 @@
 # Release Notes for LunarWing v1.0.6
 
+# will update when ready
+
 **Release Date:** 2026-??-??
 
 ## Overview
