@@ -118,6 +118,25 @@ impl Agent {
             None
         };
 
+        // Reflex fast-path: check for compiled patterns before invoking LLM
+        if let Some(tool_name) = self.reflex_router.try_route(&message.content).await {
+            tracing::info!("Reflex fast-path: routing to compiled tool '{}'", tool_name);
+            let mut job_ctx =
+                JobContext::with_user(&message.user_id, "reflex", "Reflex fast-path execution")
+                    .with_requester_id(&message.sender_id);
+            job_ctx.user_timezone = user_tz.name().to_string();
+            
+            let params = serde_json::json!({"input": message.content});
+            match self.execute_chat_tool(&tool_name, &params, &job_ctx).await {
+                Ok(output) => {
+                    return Ok(AgenticLoopResult::Response(output));
+                }
+                Err(e) => {
+                    tracing::warn!("Reflex tool '{}' failed, falling back to LLM: {}", tool_name, e);
+                }
+            }
+        }
+
         let mut reasoning = Reasoning::new(self.llm().clone())
             .with_channel(message.channel.clone())
             .with_model_name(self.llm().active_model_name())

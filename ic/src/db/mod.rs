@@ -684,6 +684,65 @@ pub trait SettingsStore: Send + Sync {
 }
 
 #[async_trait]
+pub trait ReflexStore: Send + Sync {
+    /// Find job descriptions that appear at least `min_count` times.
+    /// Returns up to `limit` recurring patterns.
+    async fn find_recurring_job_patterns(
+        &self,
+        min_count: i32,
+        limit: i32,
+    ) -> Result<Vec<String>, DatabaseError>;
+
+    /// Insert or update a reflex pattern mapping.
+    async fn upsert_reflex_pattern(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+        original_pattern: &str,
+        tool_name: &str,
+    ) -> Result<(), DatabaseError>;
+
+    /// Look up a reflex pattern by normalized text.
+    async fn get_reflex_pattern(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+    ) -> Result<Option<(String, String)>, DatabaseError>;
+
+    /// List all reflex patterns for a user.
+    async fn list_reflex_patterns(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<ReflexPatternRecord>, DatabaseError>;
+
+    /// Disable a reflex pattern by ID.
+    async fn disable_reflex_pattern(&self, id: Uuid) -> Result<bool, DatabaseError>;
+
+    /// Increment match count and update last_matched_at for a pattern.
+    async fn bump_reflex_pattern_match(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+    ) -> Result<(), DatabaseError>;
+}
+
+/// A persisted reflex pattern record.
+#[derive(Debug, Clone)]
+pub struct ReflexPatternRecord {
+    pub id: Uuid,
+    pub user_id: String,
+    pub normalized_pattern: String,
+    pub original_pattern: String,
+    pub tool_name: String,
+    pub match_count: i32,
+    pub last_matched_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub status: String,
+    pub compilation_attempts: i32,
+}
+
+#[async_trait]
 pub trait WorkspaceStore: Send + Sync {
     async fn get_document_by_path(
         &self,
@@ -1099,6 +1158,7 @@ pub trait Database:
     + WorkspaceStore
     + UserStore
     + IdentityStore
+    + ReflexStore
     + Send
     + Sync
 {
