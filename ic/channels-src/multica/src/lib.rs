@@ -133,6 +133,39 @@ struct ClaimedAgent {
     #[allow(dead_code)]
     name: Option<String>,
     system_prompt: Option<String>,
+    skills: Option<Vec<AgentSkillData>>,
+}
+
+#[derive(Deserialize)]
+struct AgentSkillData {
+    name: String,
+    content: String,
+    files: Option<Vec<AgentSkillFileData>>,
+}
+
+#[derive(Deserialize)]
+struct AgentSkillFileData {
+    path: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct HeartbeatResponse {
+    #[allow(dead_code)]
+    status: Option<String>,
+    pending_local_skills: Option<PendingLocalSkills>,
+    pending_local_skill_import: Option<PendingLocalSkillImport>,
+}
+
+#[derive(Deserialize)]
+struct PendingLocalSkills {
+    request_id: String,
+}
+
+#[derive(Deserialize)]
+struct PendingLocalSkillImport {
+    request_id: String,
+    skill_key: String,
 }
 
 // ── Channel implementation ────────────────────────────────────
@@ -200,12 +233,15 @@ impl Guest for MulticaChannel {
             None => return,
         };
 
-        // Heartbeat.
-        if let Err(e) = send_heartbeat(&config, &runtime_id) {
-            channel_host::log(
-                channel_host::LogLevel::Warn,
-                &format!("heartbeat failed: {e}"),
-            );
+        // Heartbeat — also handles pending skill requests from the server.
+        match send_heartbeat(&config, &runtime_id) {
+            Ok(hb) => handle_heartbeat_actions(&config, &runtime_id, &hb),
+            Err(e) => {
+                channel_host::log(
+                    channel_host::LogLevel::Warn,
+                    &format!("heartbeat failed: {e}"),
+                );
+            }
         }
 
         // Claim a task.
@@ -349,7 +385,10 @@ fn do_register(config: &RuntimeConfig) -> Result<String, String> {
         .ok_or_else(|| "register response missing runtime id".to_string())
 }
 
-fn send_heartbeat(config: &RuntimeConfig, runtime_id: &str) -> Result<(), String> {
+fn send_heartbeat(
+    config: &RuntimeConfig,
+    runtime_id: &str,
+) -> Result<HeartbeatResponse, String> {
     let body = serde_json::json!({ "runtime_id": runtime_id });
     let url = api_url(&config.multica_url, "/api/daemon/heartbeat");
     let (status, resp_bytes) = http_post(&url, body.to_string().as_bytes())?;
@@ -359,7 +398,108 @@ fn send_heartbeat(config: &RuntimeConfig, runtime_id: &str) -> Result<(), String
             String::from_utf8_lossy(&resp_bytes)
         ));
     }
-    Ok(())
+    serde_json::from_slice(&resp_bytes)
+        .map_err(|e| format!("failed to parse heartbeat response: {e}"))
+}
+
+fn handle_heartbeat_actions(
+    config: &RuntimeConfig,
+    runtime_id: &str,
+    hb: &HeartbeatResponse,
+) {
+    if let Some(pending) = &hb.pending_local_skills {
+        report_local_skills(config, runtime_id, &pending.request_id);
+    }
+    if let Some(pending) = &hb.pending_local_skill_import {
+        report_local_skill_import(config, runtime_id, &pending.request_id, &pending.skill_key);
+    }
+}
+
+fn report_local_skills(config: &RuntimeConfig, runtime_id: &str, request_id: &str) {
+    let skills = discover_local_skills();
+    let body = serde_json::json!({
+        "status": "completed",
+        "skills": skills,
+        "supported": true
+    });
+    let url = api_url(
+        &config.multica_url,
+        &format!("/api/daemon/runtimes/{runtime_id}/local-skills/{request_id}/result"),
+    );
+    match http_post(&url, body.to_string().as_bytes()) {
+        Ok((status, _)) if status >= 200 && status < 300 => {
+            channel_host::log(
+                channel_host::LogLevel::Info,
+                &format!("reported {} local skills", skills.len()),
+            );
+        }
+        Ok((status, resp)) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!(
+                    "report local skills failed (HTTP {status}): {}",
+                    String::from_utf8_lossy(&resp)
+                ),
+            );
+        }
+        Err(e) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("report local skills failed: {e}"),
+            );
+        }
+    }
+}
+
+fn discover_local_skills() -> Vec<serde_json::Value> {
+    let mut skills = Vec::new();
+    // Read skill index from workspace. The channel workspace prefix is
+    // channels/multica/, but we read from the agent's skill discovery cache
+    // at config/multica-skills.json if available.
+    if let Some(index_json) = channel_host::workspace_read("skill-index.json") {
+        if let Ok(entries) = serde_json::from_str::<Vec<serde_json::Value>>(&index_json) {
+            return entries;
+        }
+    }
+    skills
+}
+
+fn report_local_skill_import(
+    config: &RuntimeConfig,
+    runtime_id: &str,
+    request_id: &str,
+    skill_key: &str,
+) {
+    // Read the skill content from workspace cache.
+    let skill_path = format!("skills/{skill_key}.md");
+    let content = channel_host::workspace_read(&skill_path);
+
+    let body = if let Some(content) = content {
+        serde_json::json!({
+            "status": "completed",
+            "skill": {
+                "name": skill_key,
+                "description": format!("Imported from LunarWing: {skill_key}"),
+                "content": content
+            }
+        })
+    } else {
+        serde_json::json!({
+            "status": "failed",
+            "error": format!("skill '{skill_key}' not found locally")
+        })
+    };
+
+    let url = api_url(
+        &config.multica_url,
+        &format!("/api/daemon/runtimes/{runtime_id}/local-skills/import/{request_id}/result"),
+    );
+    if let Err(e) = http_post(&url, body.to_string().as_bytes()) {
+        channel_host::log(
+            channel_host::LogLevel::Warn,
+            &format!("report skill import failed: {e}"),
+        );
+    }
 }
 
 fn claim_task(config: &RuntimeConfig, runtime_id: &str) -> Result<Option<ClaimedTask>, String> {
@@ -414,6 +554,11 @@ fn emit_task_message(task: &ClaimedTask) {
         .as_ref()
         .and_then(|a| a.system_prompt.as_deref())
         .unwrap_or("");
+    let agent_skills = task
+        .agent
+        .as_ref()
+        .and_then(|a| a.skills.as_deref())
+        .unwrap_or(&[]);
 
     let mut content = format!("[Multica Task] {identifier}: {issue_title}");
     if !issue_desc.is_empty() {
@@ -423,6 +568,16 @@ fn emit_task_message(task: &ClaimedTask) {
     if !agent_prompt.is_empty() {
         content.push_str("\n\n--- Agent Instructions ---\n");
         content.push_str(agent_prompt);
+    }
+    for skill in agent_skills {
+        content.push_str(&format!("\n\n--- Skill: {} ---\n", skill.name));
+        content.push_str(&skill.content);
+        if let Some(files) = &skill.files {
+            for file in files {
+                content.push_str(&format!("\n\n[Skill File: {}]\n", file.path));
+                content.push_str(&file.content);
+            }
+        }
     }
 
     let metadata = serde_json::json!({

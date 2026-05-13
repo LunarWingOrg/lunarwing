@@ -6,13 +6,13 @@
   "tools": [
     {
       "name": "multica",
-      "description": "Interact with a Multica/Lunartica server. Use action parameter to select operation. Actions: register (register as runtime), heartbeat (keep alive), claim_task (claim next pending task), start_task (mark task started), complete_task (mark task done), fail_task (mark task failed), report_progress (report step progress), list_issues (list workspace issues), get_issue (get issue details), update_issue (update issue fields), post_comment (comment on issue), recover_orphans (recover crashed tasks), report_messages (report agent messages).",
+      "description": "Interact with a Multica/Lunartica server. Use action parameter to select operation. Actions: register, heartbeat, claim_task, start_task, complete_task, fail_task, report_progress, list_issues, get_issue, update_issue, post_comment, recover_orphans, report_messages, list_skills (list board skills), get_skill (get skill details), export_skill (publish local skill to board).",
       "parameters": {
         "type": "object",
         "properties": {
           "action": {
             "type": "string",
-            "description": "Operation to perform: register, heartbeat, claim_task, start_task, complete_task, fail_task, report_progress, list_issues, get_issue, update_issue, post_comment, recover_orphans, report_messages",
+            "description": "Operation to perform",
             "enum": [
               "register",
               "heartbeat",
@@ -26,7 +26,10 @@
               "update_issue",
               "post_comment",
               "recover_orphans",
-              "report_messages"
+              "report_messages",
+              "list_skills",
+              "get_skill",
+              "export_skill"
             ]
           },
           "task_id": {
@@ -82,6 +85,33 @@
                 "type": { "type": "string" },
                 "content": { "type": "string" },
                 "tool": { "type": "string" }
+              }
+            }
+          },
+          "skill_id": {
+            "type": "string",
+            "description": "Skill UUID (for get_skill)"
+          },
+          "skill_name": {
+            "type": "string",
+            "description": "Skill name (for export_skill)"
+          },
+          "skill_description": {
+            "type": "string",
+            "description": "Skill description (for export_skill)"
+          },
+          "skill_content": {
+            "type": "string",
+            "description": "SKILL.md content body (for export_skill)"
+          },
+          "skill_files": {
+            "type": "array",
+            "description": "Supporting files for the skill (for export_skill)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string" },
+                "content": { "type": "string" }
               }
             }
           }
