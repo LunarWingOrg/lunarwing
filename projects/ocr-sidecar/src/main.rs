@@ -12,6 +12,9 @@ const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 struct Config {
     auth_token: Option<String>,
     port: u16,
+    vl_url: Option<String>,
+    vl_api_key: Option<String>,
+    vl_model: String,
 }
 
 #[derive(Debug, Deserialize)]
