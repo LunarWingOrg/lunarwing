@@ -885,6 +885,18 @@ patch_tenant_env() {
     printf '\n# Orchestrator (sandbox container callback)\nORCHESTRATOR_PORT=%s\n' "$orchestrator_port" >>"$env_path"
     say "added ORCHESTRATOR_PORT=$orchestrator_port to $env_path"
   fi
+
+  local nanocode_wss_port
+  nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
+  if [[ -n "$nanocode_wss_port" ]]; then
+    if grep -q '^NANOCODE_WSS_PORT=' "$env_path"; then
+      say "NANOCODE_WSS_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# Nanocode worker (WebSocket port for agent communication)\nNANOCODE_WSS_PORT=%s\n' "$nanocode_wss_port" >>"$env_path"
+      say "added NANOCODE_WSS_PORT=$nanocode_wss_port to $env_path"
+    fi
+
+  fi
 }
 
 extract_host_from_url() {
