@@ -64,7 +64,7 @@ export async function executeTask(
   try {
     // Create session with full-auto permissions (headless mode)
     const sessionResult = await sdk.session.create({
-      title: `ironclaw-${request.task_id}`,
+      title: `lunarwing-${request.task_id}`,
       permission: [
         { permission: "edit", action: "allow", pattern: "*" },
         { permission: "bash", action: "allow", pattern: "*" },

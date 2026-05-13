@@ -143,8 +143,6 @@ tests/                      # Worker test harness (Docker Compose matrix suite f
 docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/)
 ```
 
-> `ic/customic/` is unused and will be removed. Ignore it.
-
 ## Key Guidance Docs
 
 Before modifying complex areas, read the relevant spec. Specs are authoritative.

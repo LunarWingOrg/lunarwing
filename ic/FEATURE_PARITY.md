@@ -68,7 +68,6 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | HTTP webhook | ✅ | ✅ | - | axum with secret validation |
 | REPL (simple) | ✅ | ✅ | - | For testing |
 | WASM channels | ❌ | ✅ | - | IronClaw innovation; host resolves owner scope vs sender identity |
-| WhatsApp | ✅ | ❌ | P1 | Baileys (Web), same-phone mode with echo detection |
 | Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username, DM topics, setup-time owner auto-verification, owner-scoped persistence |
 | Discord | ✅ | ❌ | P2 | discord.js, thread parent binding inheritance |
 | Signal | ✅ | ✅ | P2 | signal-cli daemonPC, SSE listener HTTP/JSON-R, user/group allowlists, DM pairing |
@@ -140,7 +139,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Mention-based activation | ✅ | ✅ | bot_username + respond_to_all_group_messages |
 | Per-group tool policies | ✅ | ❌ | Allow/deny specific tools |
 | Thread isolation | ✅ | ✅ | Separate sessions per thread/topic |
-| Per-channel media limits | ✅ | 🚧 | Caption support plus `mediaMaxMb` enforcement for WhatsApp, Telegram, and Discord |
+| Per-channel media limits | ✅ | 🚧 | Caption support plus `mediaMaxMb` enforcement for Telegram and Discord |
 | Typing indicators | ✅ | 🚧 | TUI + channel typing, with configurable silence timeout; richer parity pending |
 | Per-channel ackReaction config | ✅ | ❌ | Customizable acknowledgement reactions/scopes |
 | Group session priming | ✅ | ❌ | Member roster injected for context |
@@ -560,7 +559,6 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 - ❌ Slack channel (real implementation)
 - ✅ Telegram channel (WASM, DM pairing, caption, /start)
-- ❌ WhatsApp channel
 - ✅ Multi-provider failover (`FailoverProvider` with retryable error classification)
 - ✅ Hooks system (core lifecycle hooks + bundled/plugin/workspace hooks + outbound webhooks)
 

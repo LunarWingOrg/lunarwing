@@ -103,8 +103,8 @@ case "$MODE" in
     done
     log "nanocode server ready on http://$NANOCODE_SERVE_HOST:$NANOCODE_SERVE_PORT"
 
-    # Launch the IronClaw WebSocket bridge
-    log "Starting IronClaw bridge — role: $WS_ROLE"
+    # Launch the LunarWing WebSocket bridge
+    log "Starting LunarWing bridge — role: $WS_ROLE"
     export NANOCODE_SERVE_PORT
     export NANOCODE_SERVE_HOST
     export WS_ROLE

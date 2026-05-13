@@ -1,8 +1,0 @@
-target/
-.git/
-.env
-.env.*
-*.md
-!CLAUDE.md
-node_modules/
-tools-src/

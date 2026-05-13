@@ -4,7 +4,7 @@ This guide covers how to build WASM channel modules for LunarWing.
 
 ## Overview
 
-Channels are WASM components that handle communication with external messaging platforms (Telegram, WhatsApp, Slack, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
+Channels are WASM components that handle communication with external messaging platforms (Telegram, Slack, XMPP, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
 
 ## Directory Structure
 

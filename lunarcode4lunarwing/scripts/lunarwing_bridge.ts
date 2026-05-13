@@ -1,5 +1,5 @@
 /**
- * ironclaw_bridge.ts — WebSocket bridge between LunarWing agents and the
+ * lunarwing_bridge.ts — WebSocket bridge between LunarWing agents and the
  * nanocode headless server. Implements the ironclaw-agent-v1 subprotocol.
  *
  * Supports two roles:

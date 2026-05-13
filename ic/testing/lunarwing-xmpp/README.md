@@ -25,8 +25,6 @@ The harness is cross-platform. Single-tenant `up`/`down` uses direct PID managem
 - Linux (systemd): implemented, not recently re-verified with current harness version
 - Linux (OpenRC): **implemented but not FULLY tested end-to-end on a real Gentoo machine yet (will be done very soon though)** — the code path exists but has never been run on a real OpenRC system yet (Gentoo, Alpine, Artix, postmarketOS, Devuan, Hyberbola, etc.); treat as best-effort until validated...
 
-The `customic/` tree is not part of this setup.
-
 ## 1. Pick a Test Root
 
 Use the default `/tmp` root for throwaway tests:

@@ -21,7 +21,7 @@ x-worker-base: &worker-base
     # nanocode server auth (Basic auth for internal serve endpoint)
     NANOGPT_SERVER_PASSWORD: ${NANOGPT_SERVER_PASSWORD:-}
     NANOGPT_SERVER_USERNAME: ${NANOGPT_SERVER_USERNAME:-nanocode}
-    # IronClaw WebSocket auth
+    # LunarWing WebSocket auth
     AGENT_AUTH_TOKEN: ${AGENT_AUTH_TOKEN:-}
     LUNARWING_WORKER_ID: ${LUNARWING_WORKER_ID:-worker-nanocode-01}
     # Paths

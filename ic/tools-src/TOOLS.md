@@ -17,7 +17,6 @@ For all messengers: receive notifications of new messages, read contacts, groups
 
 - [x] Slack - post messages, read channels, manage conversations
 - [x] Telegram - user-mode via direct MTProto over HTTPS (contacts, messages, send, search, forward, delete); no Docker needed
-- [ ] WhatsApp - Cloud API for messaging via Meta Business platform
 - [ ] Signal - messaging (note: no official public API exists)
 
 # Transportation

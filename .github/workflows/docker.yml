@@ -22,7 +22,7 @@ on:
     - cron: '0 * * * *'
 
 env:
-  IMAGE_NAME: nearaidev/ironclaw
+  IMAGE_NAME: nearaidev/lunarwing
   WORKER_IMAGE_NAME: nearaidev/lunarwing-worker
 
 jobs:
@@ -122,7 +122,7 @@ jobs:
             WORKER_BUILT_SHA=$(docker inspect --format='{{index .Config.Labels "ironclaw.git.sha"}}' "${WORKER_IMAGE_NAME}:staging" 2>/dev/null || echo "")
           fi
 
-          echo "Current built commit (ironclaw): ${CURRENT_BUILT_SHA:-<none>}"
+          echo "Current built commit (lunarwing): ${CURRENT_BUILT_SHA:-<none>}"
           echo "Current built commit (lunarwing-worker): ${WORKER_BUILT_SHA:-<none>}"
           echo "Current source commit: ${SOURCE_SHA}"
 

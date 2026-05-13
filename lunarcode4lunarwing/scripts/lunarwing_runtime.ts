@@ -1,6 +1,6 @@
 /**
- * ironclaw_runtime.ts — Shared types, envelope helpers, and state file management
- * for the IronClaw WebSocket protocol (ironclaw-agent-v1).
+ * lunarwing_runtime.ts — Shared types, envelope helpers, and state file management
+ * for the LunarWing WebSocket protocol (ironclaw-agent-v1).
  */
 
 import { randomUUID } from "crypto"
@@ -85,7 +85,7 @@ export function writeWsState(state: WsState): void {
   try {
     writeFileSync(WS_STATE_FILE, JSON.stringify(state, null, 2))
   } catch (err) {
-    console.error("[ironclaw_runtime] failed to write state file:", err)
+    console.error("[lunarwing_runtime] failed to write state file:", err)
   }
 }
 
