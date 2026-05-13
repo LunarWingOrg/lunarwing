@@ -1,5 +1,7 @@
 # Branch Guide:
 
+* recently merged some branches in here
+
 ## Guide for agents:
 
 ### When making changes, checkout staging and create new branch based on agent name and number can be incremented if multiple agent branches exist for an agent:
