@@ -544,11 +544,15 @@ build_nanocode_worker() {
 
   ensure_container_runtime
 
-  # Ensure nanocode source is available in the build context
-  if [[ ! -d "$nanocode_dir/nanocode" ]]; then
+  # Ensure nanocode source is available in the build context.
+  # Docker COPY cannot follow symlinks outside the build context, so we
+  # must copy the directory rather than symlinking it.
+  if [[ ! -d "$nanocode_dir/nanocode" ]] || [[ -L "$nanocode_dir/nanocode" ]]; then
     if [[ -d "$nanocode_src" ]]; then
-      say "symlinking nanocode source into build context ..."
-      ln -s "$nanocode_src" "$nanocode_dir/nanocode"
+      # Remove stale symlink if present
+      rm -f "$nanocode_dir/nanocode" 2>/dev/null || true
+      say "copying nanocode source into build context ..."
+      cp -rL "$nanocode_src" "$nanocode_dir/nanocode"
     else
       die "nanocode source not found at $nanocode_src; cannot build worker image"
     fi
