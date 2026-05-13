@@ -39,18 +39,39 @@ LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
       org.opencontainers.image.version="1.0.0"
 
 # ── system packages ────────────────────────────────────────────────────────────
-# tini      : PID-1 signal reaping
-# python3   : health server (reused from codex4ironclaw)
-# git       : nanocode needs git for project context
-# ripgrep   : nanocode grep tool dependency
-# curl      : readiness checks in entrypoint
+# tini            : PID-1 signal reaping
+# python3 + pip   : health server + installable Python packages
+# git             : nanocode needs git for project context
+# ripgrep         : nanocode grep tool dependency
+# curl            : readiness checks in entrypoint
+# build-essential : C/C++ toolchain for native extensions
+# nodejs + npm    : JavaScript runtime and package manager
+# gh              : GitHub CLI for PRs, issues, commits
+# openssh-client  : SSH for git auth and remote access
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       python3 \
+      python3-pip \
+      python3-venv \
       git \
       ripgrep \
       curl \
       ca-certificates \
+      build-essential \
+      pkg-config \
+      libssl-dev \
+      nodejs \
+      npm \
+      openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── GitHub CLI ─────────────────────────────────────────────────────────────────
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
 # ── non-root user ──────────────────────────────────────────────────────────────
