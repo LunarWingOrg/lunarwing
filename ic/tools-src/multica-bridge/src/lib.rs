@@ -168,6 +168,21 @@ impl tool::Guest for MulticaBridgeTool {
           "tool": { "type": "string" }
         }
       }
+    },
+    "skill_id": { "type": "string", "description": "Skill UUID (get_skill)" },
+    "skill_name": { "type": "string", "description": "Skill name (export_skill)" },
+    "skill_description": { "type": "string", "description": "Skill description (export_skill)" },
+    "skill_content": { "type": "string", "description": "Skill SKILL.md content (export_skill)" },
+    "skill_files": {
+      "type": "array",
+      "description": "Skill supporting files (export_skill)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" }
+        }
+      }
     }
   },
   "required": ["action"]
