@@ -1994,7 +1994,8 @@ timeout_ms = 300000
             embeddings: EmbeddingsSettings {
                 enabled: true,
                 provider: "openai".to_string(),
-                ..Default::default()
+                model: "text-embedding-3-small".to_string(),
+                base_url: None,
             },
             ..Default::default()
         };
@@ -2097,6 +2098,7 @@ timeout_ms = 300000
                 enabled: true,
                 provider: "nearai".to_string(),
                 model: "text-embedding-3-large".to_string(),
+                base_url: None,
             },
             tunnel: TunnelSettings {
                 provider: Some("ngrok".to_string()),
@@ -2325,6 +2327,7 @@ timeout_ms = 300000
                 enabled: true,
                 provider: "openai".to_string(),
                 model: "text-embedding-3-small".to_string(),
+                base_url: None,
             },
             channels: ChannelSettings {
                 http_enabled: true,
@@ -2392,7 +2395,8 @@ timeout_ms = 300000
             embeddings: EmbeddingsSettings {
                 enabled: true,
                 provider: "nearai".to_string(),
-                model: "text-embedding-3-small".to_string(),
+                model: "text-embedding-3-large".to_string(),
+                base_url: None,
             },
             heartbeat: HeartbeatSettings {
                 enabled: true,
@@ -2453,6 +2457,7 @@ timeout_ms = 300000
                 enabled: true,
                 provider: "openai".to_string(),
                 model: "text-embedding-3-small".to_string(),
+                base_url: None,
             },
             heartbeat: HeartbeatSettings {
                 enabled: true,
@@ -2781,6 +2786,7 @@ timeout_ms = 300000
                 enabled: true,
                 provider: "nearai".to_string(),
                 model: "text-embedding-3-large".to_string(),
+                base_url: None,
             },
             ..Default::default()
         };
