@@ -4,4 +4,4 @@
 
 ### PHASE 10
 
-#### added running tests section
+#### added running tests section to docs
