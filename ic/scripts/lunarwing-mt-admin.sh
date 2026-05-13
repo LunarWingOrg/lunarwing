@@ -190,7 +190,7 @@ ports_registry_init() {
     tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
     cat >"$tmp" <<'ENDJSON'
 {
-  "version": 2,
+  "version": 3,
   "range": { "start": 10000, "end": 19999 },
   "block_size": 10,
   "tenants": {}
@@ -230,6 +230,28 @@ ports_migrate() {
     chmod 0644 "$tmp"
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v2"
+    current_version=2
+  fi
+
+  if [[ "$current_version" -lt 3 ]]; then
+    say "migrating port registry v2 -> v3 (reserved_1 -> nanocode_wss) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .version = 3 |
+      .tenants |= with_entries(
+        .value.ports |= (
+          if .reserved_1 then
+            .nanocode_wss = .reserved_1 | del(.reserved_1)
+          else
+            . + { nanocode_wss: (.orchestrator + 1) }
+          end
+        )
+      )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v3"
   fi
 }
 
@@ -260,16 +282,16 @@ ports_allocate() {
       user: $name,
       created_at: $ts,
       ports: {
-        gateway:    ($base + 0),
-        http:       ($base + 1),
-        bridge:     ($base + 2),
-        postgres:   ($base + 3),
-        proxy:      ($base + 4),
-        weechat:    ($base + 5),
+        gateway:      ($base + 0),
+        http:         ($base + 1),
+        bridge:       ($base + 2),
+        postgres:     ($base + 3),
+        proxy:        ($base + 4),
+        weechat:      ($base + 5),
         orchestrator: ($base + 6),
-        reserved_1: ($base + 7),
-        reserved_2: ($base + 8),
-        reserved_3: ($base + 9)
+        nanocode_wss: ($base + 7),
+        reserved_2:   ($base + 8),
+        reserved_3:   ($base + 9)
       }
     }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -310,8 +332,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH,NANOCODE"
 }
 
 tenant_exists_in_registry() {
@@ -686,7 +708,7 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port
+  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port nanocode_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
@@ -694,6 +716,7 @@ write_tenant_lunarwing_env() {
   pg_port="$(ports_get "$name" postgres)"
   proxy_port="$(ports_get "$name" proxy)"
   orchestrator_port="$(ports_get "$name" orchestrator)"
+  nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
 
   local state_dir run_dir repo_dir
   state_dir="$(tenant_state_dir "$name")"
@@ -761,6 +784,9 @@ HTTP_PORT=$http_port
 
 # Orchestrator (sandbox container callback)
 ORCHESTRATOR_PORT=$orchestrator_port
+
+# Nanocode worker (WebSocket port for agent communication)
+NANOCODE_WSS_PORT=$nanocode_wss_port
 
 # Daemon mode
 CLI_ENABLED=false
@@ -909,6 +935,99 @@ configure_gotify_capabilities() {
   mv "$tmp" "$caps_path"
   chown "$name:$name" "$caps_path"
   say "  configured gotify capabilities for host: $host"
+}
+
+# ── Nanocode worker container ─────────────────────────────────────────────────
+
+start_tenant_nanocode() {
+  local name="$1"
+  ensure_container_runtime
+
+  local wss_port container_name nanocode_dir
+  wss_port="$(ports_get "$name" nanocode_wss)"
+  container_name="lunarwing-nanocode-$name"
+  nanocode_dir="${LUNARWING_ROOT}/lunarcode4lunarwing"
+
+  if [[ -z "$wss_port" ]]; then
+    say "no nanocode_wss port allocated for $name (skipping nanocode worker)"
+    return 0
+  fi
+
+  # Check if the image exists
+  if ! $CONTAINER_RT image inspect lunarwing-worker-nanocode:latest &>/dev/null; then
+    say "nanocode worker image not found; run 'build-nanocode-worker' first (skipping)"
+    return 0
+  fi
+
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
+    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "nanocode worker already running ($container_name, WSS port $wss_port)"
+      return 0
+    fi
+    say "starting existing nanocode worker container $container_name"
+    $CONTAINER_RT start "$container_name" >/dev/null
+  else
+    say "creating nanocode worker container $container_name on WSS port $wss_port"
+
+    # Read tenant env for secrets to pass through
+    local tenant_env_path
+    tenant_env_path="$(tenant_env_dir "$name")/lunarwing.env"
+
+    # Read nanocode-specific env if it exists
+    local nanocode_env_path
+    nanocode_env_path="$(tenant_env_dir "$name")/nanocode.env"
+
+    local env_flags=()
+    # Core env vars from tenant lunarwing.env
+    if [[ -f "$tenant_env_path" ]]; then
+      local gateway_token
+      gateway_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$gateway_token" ]] && env_flags+=(-e "AGENT_AUTH_TOKEN=$gateway_token")
+
+      local llm_api_key
+      llm_api_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$llm_api_key" ]] && env_flags+=(-e "TENSORZERO_API_KEY=$llm_api_key")
+    fi
+
+    # Override with nanocode-specific env file if present
+    if [[ -f "$nanocode_env_path" ]]; then
+      env_flags+=(--env-file "$nanocode_env_path")
+    fi
+
+    local workspace_dir
+    workspace_dir="$(tenant_lw_root "$name")/nanocode-workspace"
+    mkdir -p "$workspace_dir"
+    chown "$name:$name" "$workspace_dir"
+
+    $CONTAINER_RT run -d \
+      --name "$container_name" \
+      -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
+      -e WS_PORT="$wss_port" \
+      -e HEALTH_PORT="0" \
+      -e NANOCODE_MODE=websocket \
+      -e WS_ROLE=server \
+      -e WS_BIND_HOST=0.0.0.0 \
+      -e WS_PATH=/ws/agent \
+      "${env_flags[@]}" \
+      -p "127.0.0.1:${wss_port}:${wss_port}" \
+      -v "$workspace_dir:/workspace:z" \
+      --restart unless-stopped \
+      lunarwing-worker-nanocode:latest \
+      --mode websocket >/dev/null
+  fi
+
+  say "nanocode worker ready ($container_name, WSS port $wss_port)"
+}
+
+stop_tenant_nanocode() {
+  local name="$1"
+  ensure_container_runtime
+
+  local container_name="lunarwing-nanocode-$name"
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
+    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+    say "nanocode worker stopped ($container_name)"
+  fi
 }
 
 # ── PostgreSQL container ─────────────────────────────────────────────────────
@@ -1408,13 +1527,14 @@ add_tenant() {
   say "=== Tenant '$name' added ==="
   say ""
   say "Port block: $base_port-$((base_port + PORT_BLOCK_SIZE - 1))"
-  say "  gateway:  $(ports_get "$name" gateway)"
-  say "  http:     $(ports_get "$name" http)"
-  say "  bridge:   $(ports_get "$name" bridge)"
-  say "  postgres: $(ports_get "$name" postgres)"
-  say "  proxy:    $(ports_get "$name" proxy)"
-  say "  weechat:  $(ports_get "$name" weechat)"
+  say "  gateway:      $(ports_get "$name" gateway)"
+  say "  http:         $(ports_get "$name" http)"
+  say "  bridge:       $(ports_get "$name" bridge)"
+  say "  postgres:     $(ports_get "$name" postgres)"
+  say "  proxy:        $(ports_get "$name" proxy)"
+  say "  weechat:      $(ports_get "$name" weechat)"
   say "  orchestrator: $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -1479,6 +1599,7 @@ start_tenant() {
   say "=== Starting tenant: $name ==="
 
   start_tenant_postgres "$name"
+  start_tenant_nanocode "$name"
 
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
@@ -1501,6 +1622,7 @@ stop_tenant() {
     stop_tenant_openrc "$name"
   fi
 
+  stop_tenant_nanocode "$name"
   stop_tenant_postgres "$name"
 }
 
@@ -1522,13 +1644,14 @@ status_tenant() {
   say "=== Tenant: $name ==="
   say ""
   say "Ports:"
-  say "  gateway:  $(ports_get "$name" gateway)"
-  say "  http:     $(ports_get "$name" http)"
-  say "  bridge:   $(ports_get "$name" bridge)"
-  say "  postgres: $(ports_get "$name" postgres)"
-  say "  proxy:    $(ports_get "$name" proxy)"
-  say "  weechat:  $(ports_get "$name" weechat)"
+  say "  gateway:      $(ports_get "$name" gateway)"
+  say "  http:         $(ports_get "$name" http)"
+  say "  bridge:       $(ports_get "$name" bridge)"
+  say "  postgres:     $(ports_get "$name" postgres)"
+  say "  proxy:        $(ports_get "$name" proxy)"
+  say "  weechat:      $(ports_get "$name" weechat)"
   say "  orchestrator: $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
   say ""
 
   ensure_container_runtime
@@ -1537,6 +1660,15 @@ status_tenant() {
     say "PostgreSQL: running ($container_name)"
   else
     say "PostgreSQL: stopped ($container_name)"
+  fi
+
+  local nanocode_container="lunarwing-nanocode-$name"
+  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$nanocode_container" 2>/dev/null | grep -q true; then
+    say "Nanocode worker: running ($nanocode_container, WSS port $(ports_get "$name" nanocode_wss))"
+  elif $CONTAINER_RT inspect "$nanocode_container" &>/dev/null; then
+    say "Nanocode worker: stopped ($nanocode_container)"
+  else
+    say "Nanocode worker: not created"
   fi
 
   ensure_init_system
@@ -1569,13 +1701,13 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------" "----"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH" "NANOCODE"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "----" "--------"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
@@ -1583,7 +1715,8 @@ list_tenants() {
       "$(ports_get "$name" postgres)" \
       "$(ports_get "$name" proxy)" \
       "$(ports_get "$name" weechat)" \
-      "$(ports_get "$name" orchestrator)"
+      "$(ports_get "$name" orchestrator)" \
+      "$(ports_get "$name" nanocode_wss)"
   done <<< "$names"
 }
 
