@@ -48,7 +48,6 @@ assert_parse "tool-google-slides-0.1.0-wasm32-wasip2.tar.gz" "tool" "google-slid
 
 # Simple names
 assert_parse "channel-discord-0.2.0-wasm32-wasip2.tar.gz" "channel" "discord"
-assert_parse "channel-whatsapp-0.1.0-wasm32-wasip2.tar.gz" "channel" "whatsapp"
 assert_parse "tool-github-0.2.0-wasm32-wasip2.tar.gz" "tool" "github"
 assert_parse "tool-gmail-0.1.0-wasm32-wasip2.tar.gz" "tool" "gmail"
 

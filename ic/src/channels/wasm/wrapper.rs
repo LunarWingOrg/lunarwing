@@ -133,7 +133,7 @@ impl ChannelStoreData {
 
     /// Inject credentials into a string by replacing placeholders.
     ///
-    /// Replaces patterns like `{TELEGRAM_BOT_TOKEN}` or `{WHATSAPP_ACCESS_TOKEN}`
+    /// Replaces patterns like `{TELEGRAM_BOT_TOKEN}` or `{SLACK_BOT_TOKEN}`
     /// with actual values from the injected credentials map. This allows WASM
     /// channels to reference credentials without ever seeing the actual values.
     ///
@@ -330,7 +330,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
         })?;
 
         // Parse headers and inject credentials into header values
-        // This allows patterns like "Authorization": "Bearer {WHATSAPP_ACCESS_TOKEN}"
+        // This allows patterns like "Authorization": "Bearer {SLACK_BOT_TOKEN}"
         let raw_headers: std::collections::HashMap<String, String> =
             serde_json::from_str(&headers_json).unwrap_or_default();
 

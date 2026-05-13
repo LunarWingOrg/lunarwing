@@ -24,7 +24,6 @@ const KNOWN_CHANNELS: &[(&str, &str)] = &[
     ("slack", "slack_channel"),
     ("telegram", "telegram_channel"),
     ("weechat", "weechat_relay_channel"),
-    ("whatsapp", "whatsapp_channel"),
     ("xmpp", "xmpp_channel"),
 ];
 
@@ -154,7 +153,6 @@ mod tests {
         assert!(names.contains(&"slack"));
         assert!(names.contains(&"telegram"));
         assert!(names.contains(&"weechat"));
-        assert!(names.contains(&"whatsapp"));
         assert!(names.contains(&"xmpp"));
     }
 
