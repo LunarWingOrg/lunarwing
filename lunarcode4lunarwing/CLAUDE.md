@@ -116,11 +116,14 @@ Python stdlib HTTP server. `/ready` reads `/tmp/lunarwing_ws_state.json` written
 
 Nanocode's tool execution (write, read, bash) fails with `"Invalid string: must start with \"prt\""` — a `PartID` schema is incorrectly applied to a `SessionID` field in the permission check path. The actual session IDs are valid (`ses_*` format).
 
-**Workaround applied**: `src/util/fn.ts` is patched (via `docker cp` post-build) to use `safeParse` and continue with raw input on validation failure instead of crashing. This must be re-applied after `docker compose build`.
+**Root cause**: `id/id.ts` defines `Identifier.schema("part")` as `z.string().startsWith("prt")`. The generic `fn()` wrapper in `src/util/fn.ts` applies strict `schema.parse()` to all inputs. When tool execution hits the permission check path, a `SessionID` (`ses_...`) is validated against the `PartID` schema, and `parse()` throws — blocking all bash, write, and read tool calls. The LLM can reason and generate code but cannot execute anything.
 
-To make the patch persistent, add to the Dockerfile after the nanocode COPY:
-```dockerfile
-COPY patches/fn.ts /app/nanocode/packages/opencode/src/util/fn.ts
+**Fix applied**: `patches/fn.ts` replaces `schema.parse()` with `schema.safeParse()` and falls back to the raw input on validation failure (logging a warning instead of throwing). The Dockerfile includes a persistent `COPY patches/fn.ts` line so the fix survives rebuilds.
+
+**Hot-patching a running container** (if rebuilding isn't feasible):
+```bash
+docker cp patches/fn.ts <container_id>:/app/nanocode/packages/opencode/src/util/fn.ts
+docker restart <container_id>
 ```
 
 ### SELinux (Fedora/RHEL)
@@ -146,6 +149,8 @@ agent_comm_protocol.json      # WebSocket protocol spec
 .env.example                  # All env vars documented
 config/
   nanocode.json               # Nanocode config (TensorZero provider via nanogpt ID)
+patches/
+  fn.ts                       # safeParse fix for PartID/SessionID schema mismatch
 scripts/
   lunarwing_bridge.ts          # WebSocket server/client bridge
   lunarwing_runtime.ts         # Protocol types, envelope helpers, state file

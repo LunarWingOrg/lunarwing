@@ -62,6 +62,9 @@ WORKDIR /app
 # Copy built nanocode
 COPY --from=builder /build/nanocode /app/nanocode
 
+# Patch fn.ts: safeParse workaround for PartID/SessionID schema mismatch (nanocode v1.2.28)
+COPY patches/fn.ts /app/nanocode/packages/opencode/src/util/fn.ts
+
 # Copy worker scripts and config
 COPY --chown=nanocode:nanocode entrypoint.sh health_server.py agent_comm_protocol.json ./
 COPY --chown=nanocode:nanocode scripts/ ./scripts/
