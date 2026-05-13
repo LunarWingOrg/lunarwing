@@ -48,3 +48,13 @@ When a task is claimed:
 - Report agent messages for observability: `multica(action: "report_messages", task_id: "<id>", messages: [...])`.
 - If a task is unclear, post a comment asking for clarification rather than failing.
 - Never leave a task in "started" state without completing or failing it.
+
+## Skill Sharing
+
+You can share skills with the Multica board:
+
+- **List board skills**: `multica(action: "list_skills")` — see what skills are available.
+- **Get skill details**: `multica(action: "get_skill", skill_id: "<uuid>")` — fetch a specific skill's content and files.
+- **Export a local skill**: `multica(action: "export_skill", skill_name: "my-skill", skill_description: "Does X", skill_content: "<SKILL.md body>")` — publish a skill to the board so other agents can use it. Include `skill_files` for supporting files.
+
+When a claimed task includes agent skills, they are embedded in the task message. Follow any skill instructions provided — they extend your capabilities for that task.
