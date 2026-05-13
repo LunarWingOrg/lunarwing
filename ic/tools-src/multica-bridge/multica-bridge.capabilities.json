@@ -1,0 +1,131 @@
+{
+  "name": "multica-bridge",
+  "display_name": "Multica/Lunartica Bridge",
+  "description": "Bridge between LunarWing and a Multica/Lunartica task management server. Enables LunarWing to act as a Multica daemon runtime — register, claim tasks, report progress, and post comments.",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "multica",
+      "description": "Interact with a Multica/Lunartica server. Use action parameter to select operation. Actions: register (register as runtime), heartbeat (keep alive), claim_task (claim next pending task), start_task (mark task started), complete_task (mark task done), fail_task (mark task failed), report_progress (report step progress), list_issues (list workspace issues), get_issue (get issue details), update_issue (update issue fields), post_comment (comment on issue), recover_orphans (recover crashed tasks), report_messages (report agent messages).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Operation to perform: register, heartbeat, claim_task, start_task, complete_task, fail_task, report_progress, list_issues, get_issue, update_issue, post_comment, recover_orphans, report_messages",
+            "enum": [
+              "register",
+              "heartbeat",
+              "claim_task",
+              "start_task",
+              "complete_task",
+              "fail_task",
+              "report_progress",
+              "list_issues",
+              "get_issue",
+              "update_issue",
+              "post_comment",
+              "recover_orphans",
+              "report_messages"
+            ]
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Task UUID (required for start_task, complete_task, fail_task, report_progress, report_messages)"
+          },
+          "issue_id": {
+            "type": "string",
+            "description": "Issue ID — UUID or identifier like MUL-123 (required for get_issue, update_issue, post_comment)"
+          },
+          "output": {
+            "type": "string",
+            "description": "Completion output text (for complete_task) or progress summary (for report_progress)"
+          },
+          "pr_url": {
+            "type": "string",
+            "description": "Pull request URL to attach on completion (for complete_task)"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Failure reason (for fail_task)"
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment body text (for post_comment)"
+          },
+          "status": {
+            "type": "string",
+            "description": "Issue status to set (for update_issue) or filter (for list_issues)"
+          },
+          "priority": {
+            "type": "string",
+            "description": "Issue priority to set (for update_issue)"
+          },
+          "assignee_id": {
+            "type": "string",
+            "description": "Agent UUID to filter by (for list_issues)"
+          },
+          "step": {
+            "type": "integer",
+            "description": "Current step number (for report_progress)"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total steps (for report_progress)"
+          },
+          "messages": {
+            "type": "array",
+            "description": "Agent execution messages (for report_messages)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "content": { "type": "string" },
+                "tool": { "type": "string" }
+              }
+            }
+          }
+        },
+        "required": ["action"]
+      }
+    }
+  ],
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "*",
+          "path_prefix": "/api/"
+        }
+      ],
+      "credentials": {
+        "multica_api": {
+          "secret_name": "multica_api_token",
+          "location": {
+            "type": "header",
+            "name": "Authorization"
+          },
+          "format": "Bearer ${secret}",
+          "host_patterns": ["*"]
+        }
+      }
+    },
+    "workspace": {
+      "allowed_prefixes": ["config/"]
+    },
+    "secrets": {
+      "allowed_names": [
+        "multica_api_token",
+        "multica_url",
+        "multica_workspace_id"
+      ]
+    }
+  },
+  "auth": {
+    "secret_name": "multica_api_token",
+    "display_name": "Multica/Lunartica",
+    "instructions": "Create a Personal Access Token in your Multica/Lunartica instance: Settings → Tokens → Create Token. Copy the token starting with 'mul_'.",
+    "token_hint": "Starts with 'mul_'",
+    "env_var": "MULTICA_API_TOKEN"
+  }
+}
