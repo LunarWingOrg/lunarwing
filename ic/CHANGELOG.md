@@ -515,7 +515,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Changed default sandbox image to `ironclaw-worker:latest` in config/settings/sandbox defaults.
+- Changed default sandbox image to `lunarwing-worker:latest` in config/settings/sandbox defaults.
 - Improved tool-message sanitization and provider compatibility handling across NEAR AI, rig adapter, and shared LLM provider code.
 
 ### Fixed

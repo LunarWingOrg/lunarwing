@@ -11,7 +11,7 @@ source .env 2>/dev/null || true
 export CODEX_CONFIG_FILE=./config/chatgpt-pro.toml
 export HOST_GID="$(id -g)"
 
-docker compose up -d --build ironclaw-worker
+docker compose up -d --build lunarwing-codex-worker
 ```
 
 ## Check The Worker

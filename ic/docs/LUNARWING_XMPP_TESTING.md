@@ -11,8 +11,6 @@ The goal is to test in layers:
 3. Configure the bridge against a live XMPP account when needed.
 4. Run LunarWing and the bridge under either the script harness or user systemd.
 
-The `customic/` tree is intentionally not part of this workflow.
-
 ## Quick Start
 
 From the repo's `ic/` directory:

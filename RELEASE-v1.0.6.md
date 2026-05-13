@@ -28,7 +28,7 @@ Stuff
 - `AUDIT.md`, `RIPOUTCLAUDECODE.md`, `IDEA_TRACKING.md` — Superseded by Vikunja task tracking
 **Docker Images:**
 - `lunarwing-worker:latest` (sandbox worker)
-- `ironclaw-worker-nanocode:latest` (nanocode external worker)
+- `lunarwing-worker-nanocode:latest` (nanocode external worker)
 
 **Binaries:**
 - `lunarwing` (main daemon)

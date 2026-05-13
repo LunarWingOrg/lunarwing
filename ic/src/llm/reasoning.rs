@@ -1001,11 +1001,6 @@ Example:
 - No markdown tables (Discord renders them as plaintext). Use bullet lists instead.\n\
 - Wrap multiple URLs in `<>` to suppress embeds: `<https://example.com>`."
             }
-            "whatsapp" => {
-                "\
-- No markdown headers or tables (WhatsApp ignores them). Use **bold** for emphasis.\n\
-- Keep messages concise; long replies get truncated on mobile."
-            }
             "telegram" => {
                 "\
 - No markdown tables (Telegram strips them). Bullet lists and bold work well."

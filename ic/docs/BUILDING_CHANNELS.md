@@ -4,7 +4,7 @@ This guide covers how to build WASM channel modules for LunarWing.
 
 ## Overview
 
-Channels are WASM components that handle communication with external messaging platforms (Telegram, WhatsApp, Slack, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
+Channels are WASM components that handle communication with external messaging platforms (Telegram, Slack, XMPP, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
 
 ## Directory Structure
 
@@ -185,18 +185,18 @@ let url = "https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage";
 channel_host::http_request("POST", url, &headers_json, Some(&body));
 ```
 
-### Header Placeholders (WhatsApp-style)
+### Header Placeholders (Slack-style)
 
 ```rust
-// The host replaces {WHATSAPP_ACCESS_TOKEN} in headers too
+// The host replaces {SLACK_BOT_TOKEN} in headers too
 let headers = serde_json::json!({
     "Content-Type": "application/json",
-    "Authorization": "Bearer {WHATSAPP_ACCESS_TOKEN}"
+    "Authorization": "Bearer {SLACK_BOT_TOKEN}"
 });
 channel_host::http_request("POST", &url, &headers.to_string(), Some(&body));
 ```
 
-The placeholder format is `{SECRET_NAME}` where `SECRET_NAME` matches the credential name in uppercase with underscores (e.g., `whatsapp_access_token` → `{WHATSAPP_ACCESS_TOKEN}`).
+The placeholder format is `{SECRET_NAME}` where `SECRET_NAME` matches the credential name in uppercase with underscores (e.g., `slack_bot_token` → `{SLACK_BOT_TOKEN}`).
 
 ## Capabilities File
 

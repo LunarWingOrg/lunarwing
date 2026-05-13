@@ -7,7 +7,7 @@ Matrix test suite for all 4 LunarWing worker types:
 | Worker | Source | Docker Service | Description |
 |--------|--------|----------------|-------------|
 | **Codex** | `codex4ironclaw/` | `codex_worker` | OpenAI Codex persistent worker container |
-| **Nanocode** | `nanocode4ironclaw/` | `nanocode_worker` | NanoGPT community Nanocode worker container |
+| **Nanocode** | `lunarcode4lunarwing/` | `nanocode_worker` | NanoGPT community Nanocode worker container |
 | **Built-in** | `ic/src/worker/` | `builtin_worker` | Native worker inside the LunarWing daemon |
 | **Sandbox** | `ic/src/sandbox/` | `sandbox_worker` | Docker-isolated execution sandbox |
 
@@ -131,7 +131,7 @@ Scenarios with `chaos: true` only run in `--mode full`. These test error paths l
 | `orchestrator` | `python:3.12-slim` | 8080 | default | Mock HTTP API |
 | `ws_hub` | `python:3.12-slim` | 9000 | default | Mock WebSocket hub |
 | `codex_worker` | Built from `codex4ironclaw/` | 8443 | default | Codex worker under test |
-| `nanocode_worker` | Built from `nanocode4ironclaw/` | 8444, 9090 | default | Nanocode worker under test |
+| `nanocode_worker` | Built from `lunarcode4lunarwing/` | 8444, 9090 | default | Nanocode worker under test |
 | `builtin_worker` | `lunarwing:latest` | -- | `full` | Built-in worker (requires binary) |
 | `sandbox_worker` | `lunarwing:latest` | -- | `full` | Sandbox worker (requires binary + Docker socket) |
 

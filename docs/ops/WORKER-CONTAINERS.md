@@ -35,20 +35,20 @@ Modes: `--mode cli` (one-shot) or `--mode websocket` (persistent). Requires `OPE
 
 Bun-based Nanocode agent. Runs nanocode headless server internally (port 4096) with a TypeScript bridge to the WebSocket protocol. Health on 8443, WebSocket on 9090.
 
-**Dockerfile:** `nanocode4ironclaw/Dockerfile`
+**Dockerfile:** `lunarcode4lunarwing/Dockerfile`
 
 ```bash
 # Copy nanocode source (required, not checked in)
-cp -R nanocode-config/nanocode nanocode4ironclaw/nanocode
+cp -R nanocode-config/nanocode lunarcode4lunarwing/nanocode
 
-cd nanocode4ironclaw
+cd lunarcode4lunarwing
 docker build -t lunarwing-nanocode-worker:latest .
 
 # Or via docker-compose
 docker compose up --build
 ```
 
-Modes: `--mode websocket` (default, persistent), `--mode cli` (one-shot), `--mode acp`. Requires `AGENT_AUTH_TOKEN` for WebSocket auth. See `nanocode4ironclaw/CLAUDE.md` for full env var reference.
+Modes: `--mode websocket` (default, persistent), `--mode cli` (one-shot), `--mode acp`. Requires `AGENT_AUTH_TOKEN` for WebSocket auth. See `lunarcode4lunarwing/CLAUDE.md` for full env var reference.
 
 ## Shared Protocol
 

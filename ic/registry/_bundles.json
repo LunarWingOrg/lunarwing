@@ -15,12 +15,11 @@
     },
     "messaging": {
       "display_name": "Messaging Channels",
-      "description": "Discord, Telegram, Slack, and WhatsApp channels",
+      "description": "Discord, Telegram, and Slack channels",
       "extensions": [
         "channels/discord",
         "channels/telegram",
         "channels/slack",
-        "channels/whatsapp",
         "channels/feishu"
       ],
       "shared_auth": null
