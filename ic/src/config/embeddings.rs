@@ -16,7 +16,7 @@ pub const DEFAULT_EMBEDDING_CACHE_SIZE: usize = 10_000;
 pub struct EmbeddingsConfig {
     /// Whether embeddings are enabled.
     pub enabled: bool,
-    /// Provider to use: "openai", "nearai", or "ollama"
+    /// Provider to use: "openai", "nearai", "ollama", or "openai_compatible"
     pub provider: String,
     /// OpenAI API key (for OpenAI provider).
     pub openai_api_key: Option<SecretString>,
@@ -88,7 +88,8 @@ impl EmbeddingsConfig {
 
         let enabled = parse_bool_env("EMBEDDING_ENABLED", settings.embeddings.enabled)?;
 
-        let openai_base_url = optional_env("EMBEDDING_BASE_URL")?;
+        let openai_base_url =
+            optional_env("EMBEDDING_BASE_URL")?.or_else(|| settings.embeddings.base_url.clone());
 
         // Validate base URLs to prevent SSRF attacks (#1103).
         validate_base_url(&ollama_base_url, "OLLAMA_BASE_URL")?;
@@ -160,6 +161,32 @@ impl EmbeddingsConfig {
                     crate::workspace::OllamaEmbeddings::new(&self.ollama_base_url)
                         .with_model(&self.model, self.dimension),
                 ))
+            }
+            "openai_compatible" => {
+                if let Some(api_key) = self.openai_api_key() {
+                    let base_url = self
+                        .openai_base_url
+                        .as_deref()
+                        .unwrap_or("https://api.openai.com");
+                    tracing::debug!(
+                        "Embeddings enabled via OpenAI-compatible (model: {}, base_url: {}, dim: {})",
+                        self.model,
+                        base_url,
+                        self.dimension,
+                    );
+                    let provider = crate::workspace::OpenAiEmbeddings::with_model(
+                        api_key,
+                        &self.model,
+                        self.dimension,
+                    )
+                    .with_base_url(base_url);
+                    Some(Arc::new(provider))
+                } else {
+                    tracing::warn!(
+                        "Embeddings configured for openai_compatible but OPENAI_API_KEY not set"
+                    );
+                    None
+                }
             }
             _ => {
                 if let Some(api_key) = self.openai_api_key() {

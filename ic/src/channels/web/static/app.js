@@ -5058,7 +5058,9 @@ var INFERENCE_SETTINGS = [
     settings: [
       { key: 'embeddings.enabled', label: 'cfg.embeddings_enabled.label', description: 'cfg.embeddings_enabled.desc', type: 'boolean' },
       { key: 'embeddings.provider', label: 'cfg.embeddings_provider.label', description: 'cfg.embeddings_provider.desc',
-        type: 'select', options: ['openai', 'nearai'] },
+        type: 'select', options: ['openai', 'nearai', 'openai_compatible'] },
+      { key: 'embeddings.base_url', label: 'cfg.embeddings_base_url.label', description: 'cfg.embeddings_base_url.desc', type: 'text',
+        showWhen: { key: 'embeddings.provider', value: 'openai_compatible' } },
       { key: 'embeddings.model', label: 'cfg.embeddings_model.label', description: 'cfg.embeddings_model.desc', type: 'text' },
     ]
   },
@@ -5444,7 +5446,7 @@ function renderStructuredSettingsRow(def, value, activeValue) {
 }
 
 var RESTART_REQUIRED_KEYS = ['llm_backend', 'selected_model', 'ollama_base_url', 'openai_compatible_base_url',
-  'bedrock_region', 'bedrock_cross_region', 'bedrock_profile', 'embeddings.enabled', 'embeddings.provider', 'embeddings.model',
+  'bedrock_region', 'bedrock_cross_region', 'bedrock_profile', 'embeddings.enabled', 'embeddings.provider', 'embeddings.base_url', 'embeddings.model',
   'agent.auto_approve_tools', 'tunnel.provider', 'tunnel.public_url', 'gateway.rate_limit', 'gateway.max_connections'];
 
 var _settingsSavedTimers = {};

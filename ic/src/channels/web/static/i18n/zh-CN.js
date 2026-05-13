@@ -416,6 +416,8 @@ I18n.register('zh-CN', {
   'cfg.embeddings_enabled.desc': '启用向量嵌入以支持记忆搜索',
   'cfg.embeddings_provider.label': '提供商',
   'cfg.embeddings_provider.desc': '嵌入向量 API 提供商',
+  'cfg.embeddings_base_url.label': 'OpenAI 兼容 URL',
+  'cfg.embeddings_base_url.desc': 'OpenAI 兼容嵌入向量 API 基础 URL',
   'cfg.embeddings_model.label': '模型',
   'cfg.embeddings_model.desc': '嵌入向量模型名称',
 

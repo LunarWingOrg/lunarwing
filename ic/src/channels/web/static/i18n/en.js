@@ -417,6 +417,8 @@ I18n.register('en', {
   'cfg.embeddings_enabled.desc': 'Enable vector embeddings for memory search',
   'cfg.embeddings_provider.label': 'Provider',
   'cfg.embeddings_provider.desc': 'Embeddings API provider',
+  'cfg.embeddings_base_url.label': 'OpenAI-compatible URL',
+  'cfg.embeddings_base_url.desc': 'Base URL for OpenAI-compatible embeddings API',
   'cfg.embeddings_model.label': 'Model',
   'cfg.embeddings_model.desc': 'Embedding model name',
 

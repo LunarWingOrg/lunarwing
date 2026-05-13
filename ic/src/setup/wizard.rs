@@ -2540,12 +2540,15 @@ impl SetupWizard {
             options.push("NEAR AI (uses same auth, no extra cost)");
         }
         options.push("OpenAI (requires API key)");
+        options.push("OpenAI-compatible (custom URL)");
 
         let choice = select_one("Select embeddings provider:", &options).map_err(SetupError::Io)?;
 
         // Map choice back to provider name
         let provider = if has_nearai && choice == 0 {
             "nearai"
+        } else if (!has_nearai && choice == 1) || (has_nearai && choice == 2) {
+            "openai_compatible"
         } else {
             "openai"
         };
@@ -2556,6 +2559,13 @@ impl SetupWizard {
                 self.settings.embeddings.provider = "nearai".to_string();
                 self.settings.embeddings.model = "text-embedding-3-small".to_string();
                 print_success("Embeddings enabled via NEAR AI");
+            }
+            "openai_compatible" => {
+                self.settings.embeddings.enabled = true;
+                self.settings.embeddings.provider = "openai_compatible".to_string();
+                self.settings.embeddings.model = "text-embedding-3-small".to_string();
+                print_info("Embeddings configured for OpenAI-compatible endpoint.");
+                print_info("Set the custom URL via the web UI or EMBEDDING_BASE_URL env var.");
             }
             _ => {
                 if !has_openai_key {

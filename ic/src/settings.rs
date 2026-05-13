@@ -247,13 +247,17 @@ pub struct EmbeddingsSettings {
     #[serde(default)]
     pub enabled: bool,
 
-    /// Provider to use: "openai" or "nearai".
+    /// Provider to use: "openai", "nearai", or "openai_compatible".
     #[serde(default = "default_embeddings_provider")]
     pub provider: String,
 
     /// Model to use for embeddings.
     #[serde(default = "default_embeddings_model")]
     pub model: String,
+
+    /// Custom base URL for OpenAI-compatible embedding providers.
+    #[serde(default)]
+    pub base_url: Option<String>,
 }
 
 fn default_embeddings_provider() -> String {
@@ -270,6 +274,7 @@ impl Default for EmbeddingsSettings {
             enabled: false,
             provider: default_embeddings_provider(),
             model: default_embeddings_model(),
+            base_url: None,
         }
     }
 }
@@ -1673,9 +1678,16 @@ timeout_ms = 300000
         let mut base = Settings::default();
         assert!(base.sandbox.external_workers.is_empty());
         base.merge_from(&parsed);
-        assert_eq!(base.sandbox.external_workers.len(), 1, "merge_from must pick up external_workers from TOML overlay");
+        assert_eq!(
+            base.sandbox.external_workers.len(),
+            1,
+            "merge_from must pick up external_workers from TOML overlay"
+        );
         assert_eq!(base.sandbox.external_workers[0].name, "nanocode");
-        assert_eq!(base.sandbox.external_workers[0].url, "ws://localhost:9090/ws/agent");
+        assert_eq!(
+            base.sandbox.external_workers[0].url,
+            "ws://localhost:9090/ws/agent"
+        );
     }
 
     /// Regression: /model writes a single key ("selected_model") to the DB via
