@@ -256,9 +256,44 @@ All `/ocr` and `/vision/analyze` endpoints are rate-limited per IP (default: 10 
 ### Metrics
 `GET /vision/metrics` provides real-time counters for requests, cache performance, and rate limiting.
 
-## Phase 4 Roadmap
+## Phase 4: WASM Tool Integration
 
-- WASM tool interface for native IronClaw integration
+The `vision-analyze-tool` WASM component provides native IronClaw integration.
+
+### Installation
+
+```bash
+# Build the WASM component
+cd ic/tools-src/vision-analyze
+cargo build --target wasm32-wasi --release
+
+# Register with IronClaw
+ironclaw tool install target/wasm32-wasi/release/vision_analyze_tool.wasm
+```
+
+### Usage from IronClaw
+
+```
+@vision_analyze image="./screenshot.png" mode="auto"
+@vision_analyze image="<base64-data>" mode="describe" prompt="What colors are in this image?"
+@vision_analyze image="./document.jpg" mode="text" ocr_lang="eng"
+```
+
+### Tool Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `image` | yes | Base64-encoded image or workspace file path |
+| `mode` | no | `text`, `describe`, or `auto` (default: auto) |
+| `prompt` | no | Custom question for vision analysis |
+| `ocr_lang` | no | OCR language code (default: eng) |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_SERVICE_URL` | `http://127.0.0.1:8088` | Vision service endpoint |
+| `VISION_AUTH_TOKEN` | none | Bearer token for authentication |
 
 ## License
 

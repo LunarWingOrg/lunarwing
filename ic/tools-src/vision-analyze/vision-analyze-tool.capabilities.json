@@ -1,0 +1,38 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Analyze images using OCR and vision-language models. Extract text, describe scenes, or get answers about image content. Supports smart auto-routing between OCR and vision backends.",
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "*",
+          "path_prefix": "/",
+          "methods": ["POST", "GET"]
+        }
+      ],
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "requests_per_hour": 1000
+      }
+    },
+    "workspace": {
+      "read": true
+    }
+  },
+  "setup": {
+    "required_secrets": [],
+    "env_vars": [
+      {
+        "name": "VISION_SERVICE_URL",
+        "default": "http://127.0.0.1:8088",
+        "description": "URL of the vision analysis service"
+      },
+      {
+        "name": "VISION_AUTH_TOKEN",
+        "default": "",
+        "description": "Optional bearer token for vision service authentication"
+      }
+    ]
+  }
+}
