@@ -19,7 +19,7 @@
 
 ## Overview
 
-The LunarWing Vision Service is a unified image analysis service that provides OCR (Optical Character Recognition) and vision-language (VL) capabilities to all IronClaw/LunarWing siblings. It combines Tesseract for fast text extraction with Qwen3-VL (via llama.cpp) for semantic image understanding, exposed through a single REST API.
+The LunarWing Vision Service is a unified image analysis service that provides OCR (Optical Character Recognition) and vision-language (VL) capabilities to LunarWing instances. It combines Tesseract for fast text extraction with Qwen3-VL (via llama.cpp) for semantic image understanding, exposed through a single REST API.
 
 ### Key Features
 
@@ -29,7 +29,7 @@ The LunarWing Vision Service is a unified image analysis service that provides O
 - **Response Caching**: Caches results for 5 minutes to reduce redundant processing
 - **Rate Limiting**: Per-IP rate limiting prevents abuse
 - **Metrics**: Real-time endpoint for monitoring usage and performance
-- **WASM Tool**: Native IronClaw integration via sandboxed WebAssembly component
+- **WASM Tool**: Native LunarWing integration via sandboxed WebAssembly component
 
 ### Service Information
 

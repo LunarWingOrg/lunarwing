@@ -32,7 +32,8 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 
 ### Tools & Notifications
 * **Gotify** -- WASM tool for agent-initiated push notifications
-* **OCR/Image Recognition** -- WASM Tool with sidecar to enable image support
+* **Vision Service / OCR Sidecar** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, caching, rate limiting, and metrics (`projects/ocr-sidecar/`)
+* **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the Vision Service sidecar (`ic/tools-src/vision-analyze/`)
 
 ### Worker Containers
 * **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
@@ -276,6 +277,9 @@ LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 
 ## Further Reading
 
-- REPLv2 server and client: see `REPLv2_Client_and_Server.md`
 - Development guide: see [ic/CLAUDE.md](ic/CLAUDE.md)
 - Architecture docs: see [docs/](docs/)
+- Vision service: see [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
+- Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
+- Release notes: see [RELEASE-v1.0.6.md](RELEASE-v1.0.6.md)
+- REPLv2 server and client: see [docs/internal/REPLv2_Client_and_Server.md](docs/internal/REPLv2_Client_and_Server.md)

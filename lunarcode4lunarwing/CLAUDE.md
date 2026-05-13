@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this project is
+## What This Project Is
 
-LunarWing Nanocode Worker — a Docker image that wraps nanocode (a fork of opencode) as a persistent managed worker. It runs the nanocode headless HTTP/SSE server internally and bridges it to the LunarWing WebSocket protocol for LunarWing agent communication.
+**LunarWing Nanocode Worker** — a Docker image that wraps nanocode (a fork of opencode) as a persistent managed worker. It runs the nanocode headless HTTP/SSE server internally and bridges it to the LunarWing WebSocket protocol for agent communication.
 
 ## Build & run
 

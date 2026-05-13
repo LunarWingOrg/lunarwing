@@ -114,7 +114,7 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   src/                      # Source tree
   crates/                   # lunarwing_common, lunarwing_safety, lunarwing_skills, lunarwing_engine
   channels-src/             # WASM channel sources (xmpp, weechat, darkirc, etc.)
-  tools-src/                # WASM tool sources (gotify, github, google-*, etc.)
+  tools-src/                # WASM tool sources (gotify, github, google-*, vision-analyze, etc.)
   bridges/xmpp-bridge/      # Standalone XMPP bridge service (separate process)
   migrations/               # Refinery DB migrations (PostgreSQL + libSQL)
   skills/                   # SKILL.md prompt extensions (delegation, github, linear, plan-mode, etc.)
@@ -139,8 +139,10 @@ ironclaw-gotify-tool/       # Gotify tool (legacy standalone)
 ironclaw_weechat_wss/       # WeeChat WSS channel source
 git-ironclaw-unix-socket-client-repo/  # REPLv2 Unix socket client
 git-ironclaw-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
+projects/                   # Satellite services
+  ocr-sidecar/              # Vision/OCR sidecar service (Rust/Warp, Tesseract + VL) — see projects/ocr-sidecar/README.md
 tests/                      # Worker test harness (Docker Compose matrix suite for all 4 worker types)
-docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/)
+docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/, proposals/, bugs/)
 ```
 
 ## Key Guidance Docs
@@ -163,11 +165,17 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Workspace / memory | `ic/src/workspace/README.md` |
 | E2E tests | `ic/tests/e2e/CLAUDE.md` |
 | Network security policy | `ic/src/NETWORK_SECURITY.md` |
+| Vision service (OCR sidecar) | `projects/ocr-sidecar/README.md` |
+| Vision service full docs | `projects/ocr-sidecar/DOCUMENTATION.md` |
+| WASM tools catalog | `ic/tools-src/TOOLS.md` |
 | Worker container images | `docs/ops/WORKER-CONTAINERS.md` |
 | Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
 | Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
 | Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
+| Documentation audit | `docs/DOCS_AUDIT.md` |
 | Docs organization | `docs/README.md` |
+| Testing guide | `docs/guides/TESTING_GUIDE.md` |
+| Branch guide | `docs/guides/BRANCH_GUIDE.md` |
 
 ## Architecture Overview
 
@@ -181,6 +189,25 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 - **TensorZero proxy** routes LLM calls via `openai_compatible` backend, enabling function-call routing and model training feedback loops. Default local endpoint: `http://192.168.1.157:3002`.
 
 Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`, `Observer`, `SuccessEvaluator`, `NetworkPolicyDecider`.
+
+## Vision Service (OCR Sidecar)
+
+The OCR sidecar (`projects/ocr-sidecar/`) is a standalone Rust service providing image analysis capabilities via REST API. It runs as a separate container or process on port 8088.
+
+- **Phase 1**: Tesseract OCR — `POST /ocr` for basic text extraction
+- **Phase 2**: Vision-Language integration — `POST /vision/analyze` with smart routing (OCR, VL, or hybrid based on confidence + prompt keywords)
+- **Phase 3**: Production hardening — PaddleOCR fallback, response caching (5min TTL), per-IP rate limiting, `GET /vision/metrics`
+- **Phase 4**: WASM tool — `vision-analyze` tool in `ic/tools-src/vision-analyze/` provides native LunarWing integration via the sandboxed WASM runtime
+
+Environment: `VISION_SERVICE_URL` (default `http://127.0.0.1:8088`), `VISION_AUTH_TOKEN`, `LUNARWING_AUTH_TOKEN`.
+
+See `projects/ocr-sidecar/README.md` for the full API reference and `projects/ocr-sidecar/DOCUMENTATION.md` for the complete technical documentation.
+
+## Embeddings
+
+The embedding system supports four providers: `openai`, `nearai`, `ollama`, and `openai_compatible`.
+
+The `openai_compatible` provider allows connecting to any OpenAI-compatible embedding endpoint (e.g., TensorZero, local models) via a configurable base URL. Set the URL through the `EMBEDDING_BASE_URL` env var or the `base_url` field in `settings.json` under the `embeddings` section. The setup wizard offers this as a provider choice.
 
 ## External Workers
 

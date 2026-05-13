@@ -1,6 +1,6 @@
 # LunarWing OCR Sidecar
 
-Lightweight OCR sidecar service for LunarWing/IronClaw siblings. Provides a REST API for text extraction from images using Tesseract.
+Lightweight OCR and vision analysis sidecar service for LunarWing. Provides a REST API for text extraction (Tesseract) and vision-language understanding (Qwen3-VL) with smart routing.
 
 ## Quick Start
 
@@ -238,8 +238,8 @@ See `systemd/ocr-sidecar.service` for a systemd unit file template.
 
 External:
   ic-ocr (bash) ──→ POST /ocr
-  Siblings (http tool) ──→ POST /vision/analyze
-  WASM tool (Phase 4) ──→ POST /vision/analyze
+  LunarWing (http tool) ──→ POST /vision/analyze
+  WASM tool (Phase 4)   ──→ POST /vision/analyze
 ```
 
 ## Phase 3 Features
@@ -258,7 +258,7 @@ All `/ocr` and `/vision/analyze` endpoints are rate-limited per IP (default: 10 
 
 ## Phase 4: WASM Tool Integration
 
-The `vision-analyze-tool` WASM component provides native IronClaw integration.
+The `vision-analyze-tool` WASM component provides native LunarWing integration.
 
 ### Installation
 
@@ -267,11 +267,11 @@ The `vision-analyze-tool` WASM component provides native IronClaw integration.
 cd ic/tools-src/vision-analyze
 cargo build --target wasm32-wasi --release
 
-# Register with IronClaw
-ironclaw tool install target/wasm32-wasi/release/vision_analyze_tool.wasm
+# Register with LunarWing
+lunarwing tool install target/wasm32-wasi/release/vision_analyze_tool.wasm
 ```
 
-### Usage from IronClaw
+### Usage from LunarWing
 
 ```
 @vision_analyze image="./screenshot.png" mode="auto"
@@ -297,4 +297,4 @@ ironclaw tool install target/wasm32-wasi/release/vision_analyze_tool.wasm
 
 ## License
 
-Same as LunarWing/IronClaw
+AGPLv3 — same as LunarWing

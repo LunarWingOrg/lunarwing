@@ -163,7 +163,4 @@ The original functional smoke tests—now grouped under a dedicated section.
   Run it with:
   GATEWAY_URL=http://localhost:9098 GATEWAY_AUTH_TOKEN=yourtoken ./ic/scripts/release-test.sh
 
-
-
-
 Treat this checklist as a living artifact—after each release, review what worked and where gaps appeared, then refine accordingly.

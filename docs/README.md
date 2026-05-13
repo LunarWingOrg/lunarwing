@@ -24,7 +24,7 @@ How-to guides, build instructions, and setup walkthroughs.
 
 | File | Description |
 |------|-------------|
-| [`BRANCH_GUIDE.md`](guides/BRANCH_GUIDE.md) | Branching strategy and conventions |
+| [`BRANCH_GUIDE.md`](guides/BRANCH_GUIDE.md) | Branching strategy and agent branch conventions |
 | [`COMMIT_GUIDE.md`](guides/COMMIT_GUIDE.md) | Commit message format and guidelines |
 | [`MIGRATE_IRONCLAW_TO_LUNARWING.md`](guides/MIGRATE_IRONCLAW_TO_LUNARWING.md) | Migrating an existing IronClaw PostgreSQL instance to LunarWing |
 | [`codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md`](guides/codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md) | Connecting to LunarWing via Codex |
@@ -35,6 +35,10 @@ How-to guides, build instructions, and setup walkthroughs.
 | [`darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
 | [`ironclaw_weechat_wss/weechat_relay/INSTALL.md`](guides/ironclaw_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
 | [`nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md`](guides/nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md) | Nanocode setup for TensorZero |
+| [`MIGRATE_IRONCLAW_TO_MT.md`](guides/MIGRATE_IRONCLAW_TO_MT.md) | PostgreSQL migration to multi-tenant |
+| [`MIGRATE_IRONCLAW_LIBSQL_TO_MT.md`](guides/MIGRATE_IRONCLAW_LIBSQL_TO_MT.md) | libSQL cross-backend migration to multi-tenant |
+| [`TESTING_GUIDE.md`](guides/TESTING_GUIDE.md) | Pre-release test checklist and automated release testing |
+| [`ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
 
 ---
 
@@ -47,6 +51,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant setup harness guide |
 | [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multitenancy setup harness guide |
 | [`docs/MULTITENANCY-PRODUCTION.md`](ops/docs/MULTITENANCY-PRODUCTION.md) | Production multitenancy configuration |
+| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (Codex, Nanocode, Built-in, Sandbox) |
 
 ---
 
@@ -57,6 +62,47 @@ Protocol specs, contract definitions, and API references.
 | File | Description |
 |------|-------------|
 | [`custom_bridges/XMPP.md`](reference/custom_bridges/XMPP.md) | XMPP bridge protocol and configuration |
+
+---
+
+### 💡 [`proposals/`](proposals/)
+
+Feature proposals, design documents, and project planning.
+
+| File | Description |
+|------|-------------|
+| [`MULTICA_SUPPORT.md`](proposals/MULTICA_SUPPORT.md) | Multica/Lunartica integration proposal |
+| [`LOREBOOKS.md`](proposals/LOREBOOKS.md) | Lorebooks feature proposal |
+| [`GITHUB_ACCS.md`](proposals/GITHUB_ACCS.md) | GitHub accounts proposal |
+| [`GITWASM/README.md`](proposals/GITWASM/README.md) | Git WASM tool proposal |
+| [`VisionProject/README.md`](proposals/VisionProject/README.md) | Vision service project overview |
+| [`VisionProject/KAGEHO_SUMMARY.md`](proposals/VisionProject/KAGEHO_SUMMARY.md) | OCR/Vision integration discussion summary |
+| [`VisionProject/KAGEHO_BUILD_PLAN.md`](proposals/VisionProject/KAGEHO_BUILD_PLAN.md) | Kageho vision build plan |
+| [`VisionProject/KAGEHO_LOG.md`](proposals/VisionProject/KAGEHO_LOG.md) | Kageho vision implementation log |
+| [`VisionProject/VISION-SERVICE.md`](proposals/VisionProject/VISION-SERVICE.md) | Vision service design spec |
+| [`VisionProject/LunarWingVisionServicev1.1.md`](proposals/VisionProject/LunarWingVisionServicev1.1.md) | Vision service v1.1 spec |
+
+---
+
+### 🐛 [`bugs/`](bugs/)
+
+Bug reports, analyses, and proposed fixes.
+
+| File | Description |
+|------|-------------|
+| [`BUG-daemon-stops-polling-xmpp-bridge.md`](bugs/BUG-daemon-stops-polling-xmpp-bridge.md) | Daemon stops polling XMPP bridge |
+| [`BUG-subagent-worker-hang.md`](bugs/BUG-subagent-worker-hang.md) | Subagent worker hang issue |
+| [`BUG-unbounded-mpsc-recv-in-spawned-tasks.md`](bugs/BUG-unbounded-mpsc-recv-in-spawned-tasks.md) | Unbounded mpsc recv in spawned tasks |
+| [`LIST-OF-BUGS-BY-NOKO.md`](bugs/LIST-OF-BUGS-BY-NOKO.md) | Bug list compiled by Noko |
+| [`PROPOSED-FIX-BY-BAUD-FOR-BUG-worker-compose-test.md`](bugs/PROPOSED-FIX-BY-BAUD-FOR-BUG-worker-compose-test.md) | Baud's fix for worker compose test |
+| [`PROPOSED-FIX-BY-NOKO-FOR-BUG-subagent-worker-hang.md`](bugs/PROPOSED-FIX-BY-NOKO-FOR-BUG-subagent-worker-hang.md) | Noko's fix for subagent worker hang |
+| [`WEECHAT-NO-SECRET-ACCESS.md`](bugs/WEECHAT-NO-SECRET-ACCESS.md) | WeeChat secret access issue |
+
+---
+
+### 📝 [`DOCS_AUDIT.md`](DOCS_AUDIT.md)
+
+Full documentation audit (medium and low priority items) identifying stale IronClaw references, missing index entries, and naming inconsistencies.
 
 ---
 
@@ -113,6 +159,9 @@ The following files are **not** in this directory and should remain where they a
 - **`README.md`** — repo root entry point
 - **`CLAUDE.md` / `AGENTS.md` / `CODEX.md`** — AI agent context files (kept at their respective locations)
 - **`ic/`** — all documentation within the `ic/` tree stays in place (includes workspace templates, crate docs, skill definitions, etc.)
+- **`projects/`** — satellite service documentation stays with its source (e.g., `projects/ocr-sidecar/README.md`)
+- **`lunarcode4lunarwing/`** — nanocode worker docs stay with the container source
+- **`codex4ironclaw/`** — codex worker docs stay with the container source
 - **`.claude/`** — Claude command and rule files
 
 ---
