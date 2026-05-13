@@ -51,6 +51,17 @@ struct ToolInput {
     step: Option<i32>,
     total: Option<i32>,
     messages: Option<Vec<MessageInput>>,
+    skill_id: Option<String>,
+    skill_name: Option<String>,
+    skill_description: Option<String>,
+    skill_content: Option<String>,
+    skill_files: Option<Vec<SkillFileInput>>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct SkillFileInput {
+    path: Option<String>,
+    content: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -133,7 +144,7 @@ impl tool::Guest for MulticaBridgeTool {
     "action": {
       "type": "string",
       "description": "Operation to perform",
-      "enum": ["register", "heartbeat", "claim_task", "start_task", "complete_task", "fail_task", "report_progress", "list_issues", "get_issue", "update_issue", "post_comment", "recover_orphans", "report_messages"]
+      "enum": ["register", "heartbeat", "claim_task", "start_task", "complete_task", "fail_task", "report_progress", "list_issues", "get_issue", "update_issue", "post_comment", "recover_orphans", "report_messages", "list_skills", "get_skill", "export_skill"]
     },
     "task_id": { "type": "string", "description": "Task UUID (for start_task, complete_task, fail_task, report_progress, report_messages)" },
     "issue_id": { "type": "string", "description": "Issue ID — UUID or identifier like MUL-123 (for get_issue, update_issue, post_comment)" },
