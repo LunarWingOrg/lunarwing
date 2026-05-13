@@ -248,8 +248,8 @@ lunarwing reflex status            # Compiler loop status
 - [x] Phase 4: Background Compiler Loop
 - [x] Phase 5: Configuration
 - [x] Phase 6: Agent Loop Integration
-- [ ] Phase 7: CLI Commands
-- [ ] Phase 8: Pattern Cache Refresh
+- [x] Phase 7: CLI Commands
+- [x] Phase 8: Pattern Cache Refresh
 - [x] Phase 9: Unit Tests
 - [ ] Phase 9: Integration Tests
-- [ ] Phase 10: Documentation Updates (FEATURE_PARITY.md)
+- [x] Phase 10: Documentation Updates (FEATURE_PARITY.md)

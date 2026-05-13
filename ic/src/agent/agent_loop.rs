@@ -656,9 +656,9 @@ impl Agent {
             None
         };
 
-        // Spawn reflex compiler if enabled
-        let _reflex_handle = if self.config.reflex.enabled {
-            if let (Some(store), Some(builder)) = (self.store(), self.deps.builder.clone()) {
+        // Spawn reflex compiler and cache refresh if enabled
+        let (_reflex_compiler_handle, _reflex_cache_handle) = if self.config.reflex.enabled {
+            let compiler_handle = if let (Some(store), Some(builder)) = (self.store(), self.deps.builder.clone()) {
                 tracing::info!(
                     "Reflex compiler enabled: checking every {}s, min {} matches",
                     self.config.reflex.check_interval.as_secs(),
@@ -674,9 +674,26 @@ impl Agent {
             } else {
                 tracing::warn!("Reflex compiler enabled but store or builder not available");
                 None
-            }
+            };
+
+            let cache_handle = if let Some(store) = self.store() {
+                tracing::debug!(
+                    "Reflex cache refresh enabled: refreshing every {}s",
+                    self.config.reflex.check_interval.as_secs()
+                );
+                Some(crate::agent::reflex::spawn_reflex_cache_refresh(
+                    Arc::clone(&self.reflex_router),
+                    Arc::clone(store),
+                    self.owner_id().to_string(),
+                    self.config.reflex.check_interval,
+                ))
+            } else {
+                None
+            };
+
+            (compiler_handle, cache_handle)
         } else {
-            None
+            (None, None)
         };
 
         // Spawn routine engine if enabled

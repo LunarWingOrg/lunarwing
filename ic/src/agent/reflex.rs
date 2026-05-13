@@ -219,9 +219,29 @@ pub fn spawn_reflex_compiler(
     })
 }
 
+/// Spawn a background task that periodically refreshes the reflex router cache.
+pub fn spawn_reflex_cache_refresh(
+    router: Arc<ReflexRouter>,
+    store: Arc<dyn Database>,
+    user_id: String,
+    interval: Duration,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        // Skip immediate first tick
+        ticker.tick().await;
+
+        loop {
+            ticker.tick().await;
+            router.refresh(store.clone(), &user_id).await;
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::{Database, ReflexStore};
 
     #[test]
     fn test_normalize_pattern_basic() {
@@ -244,5 +264,121 @@ mod tests {
     fn test_normalize_pattern_empty() {
         assert_eq!(normalize_pattern(""), "");
         assert_eq!(normalize_pattern("!!!"), "");
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_exact_match() {
+        let router = ReflexRouter::new();
+        router.register("hello world", "tool_hello").await;
+
+        assert_eq!(router.try_route("Hello World").await, Some("tool_hello".to_string()));
+        assert_eq!(router.try_route("hello world").await, Some("tool_hello".to_string()));
+        assert_eq!(router.try_route("Hello, World!!!").await, Some("tool_hello".to_string()));
+        assert_eq!(router.try_route("goodbye world").await, None);
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_refresh() {
+        use crate::db::libsql::LibSqlBackend;
+
+        let backend = LibSqlBackend::new_memory().await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        let router = ReflexRouter::new();
+
+        // Initially empty
+        assert_eq!(router.try_route("test pattern").await, None);
+
+        // Insert a pattern directly into DB
+        backend
+            .upsert_reflex_pattern("test-user", "test pattern", "test pattern", "tool_test")
+            .await
+            .unwrap();
+
+        // Refresh cache from DB
+        router.refresh(Arc::new(backend), "test-user").await;
+
+        // Now it should match
+        assert_eq!(
+            router.try_route("test pattern").await,
+            Some("tool_test".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reflex_store_libsql_crud() {
+        use crate::db::libsql::LibSqlBackend;
+
+        let backend = LibSqlBackend::new_memory().await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        // Initially empty
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert!(patterns.is_empty());
+
+        // Upsert a pattern
+        backend
+            .upsert_reflex_pattern("test-user", "summarize logs", "Summarize my logs", "tool_summarize")
+            .await
+            .unwrap();
+
+        // List should return it
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns.len(), 1);
+        assert_eq!(patterns[0].normalized_pattern, "summarize logs");
+        assert_eq!(patterns[0].tool_name, "tool_summarize");
+        assert_eq!(patterns[0].match_count, 1);
+        assert_eq!(patterns[0].status, "active");
+
+        // Get by pattern
+        let found = backend
+            .get_reflex_pattern("test-user", "summarize logs")
+            .await
+            .unwrap();
+        assert!(found.is_some());
+        let (tool_name, status) = found.unwrap();
+        assert_eq!(tool_name, "tool_summarize");
+        assert_eq!(status, "active");
+
+        // Bump match count
+        backend
+            .bump_reflex_pattern_match("test-user", "summarize logs")
+            .await
+            .unwrap();
+
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns[0].match_count, 2);
+
+        // Disable
+        backend.disable_reflex_pattern(patterns[0].id).await.unwrap();
+
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns[0].status, "disabled");
+    }
+
+    #[tokio::test]
+    async fn test_reflex_store_find_recurring() {
+        use crate::db::libsql::LibSqlBackend;
+        use crate::context::JobContext;
+        use crate::db::JobStore;
+
+        let backend = LibSqlBackend::new_memory().await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        // Create some completed jobs with the same description
+        for _ in 0..5 {
+            let mut ctx = JobContext::with_user("test-user", "test-job", "Summarize my logs");
+            ctx.state = crate::context::JobState::Completed;
+            backend.save_job(&ctx).await.unwrap();
+        }
+
+        // Should find the recurring pattern
+        let patterns = backend.find_recurring_job_patterns(3, 10).await.unwrap();
+        assert_eq!(patterns.len(), 1);
+        assert_eq!(patterns[0], "Summarize my logs");
+
+        // With higher threshold, should not find
+        let patterns = backend.find_recurring_job_patterns(10, 10).await.unwrap();
+        assert!(patterns.is_empty());
     }
 }

@@ -171,6 +171,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | `nodes` | ✅ | ❌ | P3 | Device management, remove/clear flows |
 | `plugins` | ✅ | ❌ | P3 | Plugin management |
 | `hooks` | ✅ | ✅ | P2 | `hooks list` (bundled + plugin discovery, `--verbose`, `--json`) |
+| `reflex` | ✅ | 🚧 | P2 | list/show/delete/status |
 | `cron` | ✅ | 🚧 | P2 | list/create/edit/enable/disable/delete/history; TODO: `cron run`, model/thinking fields |
 | `webhooks` | ✅ | ❌ | P3 | Webhook config |
 | `message send` | ✅ | ❌ | P2 | Send to channels |
@@ -218,6 +219,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | `/subagents spawn` command | ✅ | ❌ | Spawn from chat |
 | Auth profiles | ✅ | ❌ | Multiple auth strategies |
 | Generic API key rotation | ✅ | ❌ | Rotate keys across providers |
+| Reflex compiler | ✅ | 🚧 | Detect recurring prompts, compile to WASM micro-skills for fast-path execution |
 | Stuck loop detection | ✅ | ❌ | Exponential backoff on stuck agent loops |
 | llms.txt discovery | ✅ | ❌ | Auto-discover site metadata |
 | Multiple images per tool call | ✅ | ❌ | Single tool call, multiple images |
