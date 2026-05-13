@@ -43,11 +43,14 @@ LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
 # python3 + pip   : health server + installable Python packages
 # git             : nanocode needs git for project context
 # ripgrep         : nanocode grep tool dependency
-# curl            : readiness checks in entrypoint
-# build-essential : C/C++ toolchain for native extensions
+# curl/wget       : readiness checks, downloads
+# build-essential : C/C++ toolchain (gcc, g++, make)
+# cmake/ninja     : build systems for native projects
+# clang           : alternative C/C++ compiler
 # nodejs + npm    : JavaScript runtime and package manager
-# gh              : GitHub CLI for PRs, issues, commits
 # openssh-client  : SSH for git auth and remote access
+# jq              : JSON processing
+# neovim          : terminal editor
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       python3 \
@@ -56,13 +59,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
       ripgrep \
       curl \
+      wget \
       ca-certificates \
       build-essential \
+      cmake \
+      ninja-build \
+      clang \
       pkg-config \
       libssl-dev \
       nodejs \
       npm \
       openssh-client \
+      jq \
+      neovim \
     && rm -rf /var/lib/apt/lists/*
 
 # ── GitHub CLI ─────────────────────────────────────────────────────────────────
@@ -73,6 +82,22 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
+
+# ── Rust toolchain (rustup + cargo + rustc) ────────────────────────────────────
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --default-toolchain 1.92.0 \
+    && chmod -R a+r /usr/local/rustup /usr/local/cargo
+
+# ── Go toolchain ───────────────────────────────────────────────────────────────
+ENV GOROOT=/usr/local/go \
+    GOPATH=/home/nanocode/go \
+    PATH=/usr/local/go/bin:/home/nanocode/go/bin:$PATH
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -fsSL "https://go.dev/dl/go1.24.3.linux-${ARCH}.tar.gz" \
+      | tar -C /usr/local -xz
 
 # ── non-root user ──────────────────────────────────────────────────────────────
 RUN groupadd -r nanocode && useradd -r -g nanocode -m -d /home/nanocode nanocode

@@ -1014,6 +1014,7 @@ start_tenant_nanocode() {
     workspace_dir="$(tenant_lw_root "$name")/nanocode-workspace"
     mkdir -p "$workspace_dir"
     chown "$name:$name" "$workspace_dir"
+    chmod 777 "$workspace_dir"
 
     $CONTAINER_RT run -d \
       --name "$container_name" \
