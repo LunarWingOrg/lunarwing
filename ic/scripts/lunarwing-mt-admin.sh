@@ -79,9 +79,14 @@ Commands:
 
   build-tenant <name>             Build binaries for one tenant (OOM-safe flock)
     --with-wasm                    Also build WASM extensions
+    --with-nanocode                Also build the nanocode worker Docker image
 
   build-all                        Build each tenant sequentially
     --with-wasm                    Also build WASM extensions
+    --with-nanocode                Also build the nanocode worker Docker image
+
+  build-nanocode-worker            Build the nanocode worker Docker image
+    --no-cache                     Force a full rebuild without Docker cache
 
   install-wasm <name>             Install built WASM tools/channels into tenant state dir
   install-wasm-all                Install WASM for all tenants
@@ -445,6 +450,7 @@ clone_tenant_repo() {
 build_tenant() {
   local name="$1"
   local with_wasm="${2:-false}"
+  local with_nanocode="${3:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -474,10 +480,15 @@ build_tenant() {
 
     say "build complete for $name"
   ) 200>"$BUILD_LOCK"
+
+  if [[ "$with_nanocode" == "true" ]]; then
+    build_nanocode_worker "false"
+  fi
 }
 
 build_all() {
   local with_wasm="${1:-false}"
+  local with_nanocode="${2:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -486,11 +497,54 @@ build_all() {
     return 0
   fi
 
+  # Build nanocode worker image once (shared across tenants)
+  if [[ "$with_nanocode" == "true" ]]; then
+    say ""
+    say "=== Building nanocode worker image ==="
+    build_nanocode_worker "false"
+  fi
+
   while IFS= read -r name; do
     say ""
     say "=== Building tenant: $name ==="
-    build_tenant "$name" "$with_wasm"
+    build_tenant "$name" "$with_wasm" "false"
   done <<< "$names"
+}
+
+# ── Nanocode worker Docker image build ────────────────────────────────────────
+
+build_nanocode_worker() {
+  local no_cache="${1:-false}"
+  local nanocode_dir="${LUNARWING_ROOT}/lunarcode4lunarwing"
+  local nanocode_src="${LUNARWING_ROOT}/nanocode-config/nanocode"
+
+  [[ -d "$nanocode_dir" ]] || die "nanocode worker dir not found at $nanocode_dir"
+
+  ensure_container_runtime
+
+  # Ensure nanocode source is available in the build context
+  if [[ ! -d "$nanocode_dir/nanocode" ]]; then
+    if [[ -d "$nanocode_src" ]]; then
+      say "symlinking nanocode source into build context ..."
+      ln -s "$nanocode_src" "$nanocode_dir/nanocode"
+    else
+      die "nanocode source not found at $nanocode_src; cannot build worker image"
+    fi
+  fi
+
+  say "building nanocode worker Docker image ..."
+  local cache_flag=""
+  [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
+
+  if [[ "$CONTAINER_RT" == "podman" ]]; then
+    podman build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+      || die "nanocode worker image build failed"
+  else
+    docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+      || die "nanocode worker image build failed"
+  fi
+
+  say "nanocode worker image built: lunarwing-worker-nanocode:latest"
 }
 
 # ── WASM install ─────────────────────────────────────────────────────────────
@@ -1363,7 +1417,7 @@ add_tenant() {
   say "  orchestrator: $(ports_get "$name" orchestrator)"
   say ""
   say "Next steps:"
-  say "  sudo $0 build-tenant $name --with-wasm"
+  say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
   say "  sudo $0 start-tenant $name"
 }
 
@@ -1603,6 +1657,15 @@ doctor() {
   _check "port registry exists" test -f "$PORTS_REGISTRY"
   _check "source repo exists" test -d "$SOURCE_REPO/ic"
   _check "proxy script exists" test -f "$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  _check "nanocode worker dir exists" test -d "$LUNARWING_ROOT/lunarcode4lunarwing"
+  _check "nanocode worker Dockerfile exists" test -f "$LUNARWING_ROOT/lunarcode4lunarwing/Dockerfile"
+
+  # Check if nanocode worker image is built
+  if command -v docker >/dev/null 2>&1; then
+    _check "nanocode worker image exists" docker image inspect lunarwing-worker-nanocode:latest
+  elif command -v podman >/dev/null 2>&1; then
+    _check "nanocode worker image exists" podman image inspect lunarwing-worker-nanocode:latest
+  fi
 
   say ""
   say "passed: $pass, failed: $fail"
@@ -1696,11 +1759,12 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false"
+      local name="" with_wasm="false" with_nanocode="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm) with_wasm="true"; shift ;;
-          -*)          die "unknown flag: $1" ;;
+          --with-wasm)     with_wasm="true"; shift ;;
+          --with-nanocode) with_nanocode="true"; shift ;;
+          -*)              die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
             else die "unexpected argument: $1"
@@ -1708,15 +1772,35 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false"
-      [[ "${1:-}" == "--with-wasm" ]] && with_wasm="true"
-      build_all "$with_wasm"
+      local with_wasm="false" with_nanocode="false"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --with-wasm)     with_wasm="true"; shift ;;
+          --with-nanocode) with_nanocode="true"; shift ;;
+          -*)              die "unknown flag: $1" ;;
+          *)               die "unexpected argument: $1" ;;
+        esac
+      done
+      build_all "$with_wasm" "$with_nanocode"
+      ;;
+
+    build-nanocode-worker)
+      require_root
+      local no_cache="false"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --no-cache) no_cache="true"; shift ;;
+          -*)         die "unknown flag: $1" ;;
+          *)          die "unexpected argument: $1" ;;
+        esac
+      done
+      build_nanocode_worker "$no_cache"
       ;;
 
     install-wasm)
