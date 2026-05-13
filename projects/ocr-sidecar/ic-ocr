@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OCR_PORT=${OCR_PORT:-8088}
+OCR_ENDPOINT=${OCR_ENDPOINT:-http://127.0.0.1:$OCR_PORT}
+JSON_OUTPUT=false
+MODE=""
+PROMPT=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        --mode)
+            MODE="$2"
+            shift 2
+            ;;
+        --prompt)
+            PROMPT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: ic-ocr [--json] [--mode text|describe|auto] [--prompt \"question\"] <image-file>"
+            echo ""
+            echo "Options:"
+            echo "  --json                Output full JSON response"
+            echo "  --mode MODE           Analysis mode: text, describe, auto (default: auto for /vision/analyze)"
+            echo "  --prompt PROMPT       Custom question for vision analysis"
+            echo ""
+            echo "Environment:"
+            echo "  OCR_PORT              Sidecar port (default: 8088)"
+            echo "  OCR_ENDPOINT          Full URL (default: http://127.0.0.1:\$OCR_PORT)"
+            echo "  LUNARWING_AUTH_TOKEN  Bearer token for authentication"
+            exit 0
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: ic-ocr [--json] [--mode text|describe|auto] [--prompt \"question\"] <image-file>" >&2
+    exit 1
+fi
+
+IMAGE_FILE="$1"
+
+if [[ ! -f "$IMAGE_FILE" ]]; then
+    echo "Error: File not found: $IMAGE_FILE" >&2
+    exit 1
+fi
+
+B64=$(base64 -w 0 "$IMAGE_FILE")
+
+AUTH_HEADER=""
+if [[ -n "${LUNARWING_AUTH_TOKEN:-}" ]]; then
+    AUTH_HEADER="Authorization: Bearer $LUNARWING_AUTH_TOKEN"
+fi
+
+# Determine endpoint and payload
+if [[ -n "$MODE" || -n "$PROMPT" ]]; then
+    # Use /vision/analyze endpoint
+    ENDPOINT="$OCR_ENDPOINT/vision/analyze"
+    
+    if [[ -n "$PROMPT" ]]; then
+        PAYLOAD=$(jq -n \
+            --arg image "$B64" \
+            --arg mode "${MODE:-auto}" \
+            --arg prompt "$PROMPT" \
+            '{image: $image, mode: $mode, prompt: $prompt}')
+    else
+        PAYLOAD=$(jq -n \
+            --arg image "$B64" \
+            --arg mode "${MODE:-auto}" \
+            '{image: $image, mode: $mode}')
+    fi
+else
+    # Use /ocr endpoint (backward compatible)
+    ENDPOINT="$OCR_ENDPOINT/ocr"
+    PAYLOAD=$(jq -n \
+        --arg image "$B64" \
+        '{image: $image}')
+fi
+
+if [[ "$JSON_OUTPUT" == true ]]; then
+    if [[ -n "$AUTH_HEADER" ]]; then
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "$AUTH_HEADER" \
+            -d "$PAYLOAD" \
+            "$ENDPOINT"
+    else
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$ENDPOINT"
+    fi
+else
+    if [[ -n "$AUTH_HEADER" ]]; then
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "$AUTH_HEADER" \
+            -d "$PAYLOAD" \
+            "$ENDPOINT" | jq -r '.text // .ocr.full_text // .vision.description'
+    else
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$ENDPOINT" | jq -r '.text // .ocr.full_text // .vision.description'
+    fi
+fi
