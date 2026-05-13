@@ -191,7 +191,7 @@ impl tool::Guest for MulticaBridgeTool {
     }
 
     fn description() -> String {
-        "Interact with a Multica/Lunartica task management server. Use the 'action' parameter to select an operation. Available actions: register (register as runtime), heartbeat (keep alive), claim_task (claim next pending task), start_task (mark started), complete_task (mark done), fail_task (mark failed), report_progress (report step progress), list_issues (list workspace issues), get_issue (get issue details), update_issue (update issue fields), post_comment (comment on issue), recover_orphans (recover crashed tasks), report_messages (report agent messages).".to_string()
+        "Interact with a Multica/Lunartica task management server. Use the 'action' parameter to select an operation. Available actions: register (register as runtime), heartbeat (keep alive), claim_task (claim next pending task), start_task (mark started), complete_task (mark done), fail_task (mark failed), report_progress (report step progress), list_issues (list workspace issues), get_issue (get issue details), update_issue (update issue fields), post_comment (comment on issue), recover_orphans (recover crashed tasks), report_messages (report agent messages), list_skills (list board skills), get_skill (get skill details), export_skill (publish local skill to board).".to_string()
     }
 }
 
@@ -222,6 +222,9 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         "post_comment" => action_post_comment(base, &input),
         "recover_orphans" => action_recover_orphans(base, &config),
         "report_messages" => action_report_messages(base, &input),
+        "list_skills" => action_list_skills(base),
+        "get_skill" => action_get_skill(base, &input),
+        "export_skill" => action_export_skill(base, &input),
         other => Err(format!("unknown action: '{other}'")),
     }
 }
@@ -449,5 +452,58 @@ fn action_report_messages(base: &str, input: &ToolInput) -> Result<String, Strin
     let url = api_url(base, &format!("/api/daemon/tasks/{task_id}/messages"));
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "report_messages")?;
+    Ok(resp_body)
+}
+
+// ── Skill actions ─────────────────────────────────────────────
+
+fn action_list_skills(base: &str) -> Result<String, String> {
+    let url = api_url(base, "/api/skills");
+    let (status, resp_body) = http_get(&url)?;
+    require_ok(status, &resp_body, "list_skills")?;
+    Ok(resp_body)
+}
+
+fn action_get_skill(base: &str, input: &ToolInput) -> Result<String, String> {
+    let skill_id = require_field(&input.skill_id, "skill_id")?;
+    let url = api_url(base, &format!("/api/skills/{skill_id}"));
+    let (status, resp_body) = http_get(&url)?;
+    require_ok(status, &resp_body, "get_skill")?;
+    Ok(resp_body)
+}
+
+fn action_export_skill(base: &str, input: &ToolInput) -> Result<String, String> {
+    let name = require_field(&input.skill_name, "skill_name")?;
+    let content = input.skill_content.as_deref().unwrap_or("");
+    let description = input.skill_description.as_deref().unwrap_or("");
+
+    let mut body = serde_json::json!({
+        "name": name,
+        "description": description,
+        "content": content
+    });
+
+    if let Some(files) = &input.skill_files {
+        let file_entries: Vec<serde_json::Value> = files
+            .iter()
+            .filter_map(|f| {
+                let path = f.path.as_deref()?;
+                let file_content = f.content.as_deref().unwrap_or("");
+                Some(serde_json::json!({ "path": path, "content": file_content }))
+            })
+            .collect();
+        if !file_entries.is_empty() {
+            body["files"] = serde_json::Value::Array(file_entries);
+        }
+    }
+
+    let url = api_url(base, "/api/skills");
+    let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
+    require_ok(status, &resp_body, "export_skill")?;
+
+    near::agent::host::log(
+        near::agent::host::LogLevel::Info,
+        &format!("Exported skill '{name}' to Multica board"),
+    );
     Ok(resp_body)
 }
