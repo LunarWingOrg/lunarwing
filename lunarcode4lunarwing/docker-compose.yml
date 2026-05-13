@@ -13,6 +13,14 @@ x-worker-base: &worker-base
     - ./workspace:/workspace:z
     - ./logs:/var/log/lunarwing:z
     - ./results:/app/results:z
+    # Git / SSH credential mounts (optional — set SSH_DIR and/or GITCONFIG_FILE in .env)
+    # Example: SSH_DIR=~/.ssh  GITCONFIG_FILE=~/.gitconfig
+    - ${SSH_DIR:-./.ssh-placeholder}:/home/nanocode/.host-ssh:ro
+    - ${GITCONFIG_FILE:-./.gitconfig-placeholder}:/home/nanocode/.host-gitconfig:ro
+  env_file:
+    # Optional extra env file for custom secrets (create .env.secrets or override)
+    - path: ${EXTRA_ENV_FILE:-.env.secrets}
+      required: false
   environment: &worker-env
     # LLM / TensorZero
     TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-dummy}
@@ -29,6 +37,13 @@ x-worker-base: &worker-base
     NANOCODE_ROOT: /app/nanocode/packages/opencode
     # File permissions
     FILE_UMASK: ${FILE_UMASK:-0002}
+    # Git / GitHub credentials
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    GH_TOKEN: ${GH_TOKEN:-}
+    GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-}
+    GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-}
+    GIT_COMMITTER_NAME: ${GIT_COMMITTER_NAME:-}
+    GIT_COMMITTER_EMAIL: ${GIT_COMMITTER_EMAIL:-}
 
 services:
   lunarwing-worker:

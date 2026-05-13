@@ -23,6 +23,53 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace}"
 
 umask "$FILE_UMASK"
 
+# ── git / SSH credential setup ────────────────────────────────────────────────
+# Configure git identity from env vars if provided
+if [ -n "${GIT_AUTHOR_NAME:-}" ] && ! git config --global user.name >/dev/null 2>&1; then
+  git config --global user.name "$GIT_AUTHOR_NAME"
+  log "Git user.name set to: $GIT_AUTHOR_NAME"
+fi
+if [ -n "${GIT_AUTHOR_EMAIL:-}" ] && ! git config --global user.email >/dev/null 2>&1; then
+  git config --global user.email "$GIT_AUTHOR_EMAIL"
+  log "Git user.email set to: $GIT_AUTHOR_EMAIL"
+fi
+
+# Configure GITHUB_TOKEN for gh CLI and git HTTPS auth
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  # gh CLI uses GITHUB_TOKEN or GH_TOKEN directly from env
+  # Configure git credential helper for HTTPS GitHub auth
+  git config --global credential.https://github.com.helper \
+    '!f() { echo "protocol=https"; echo "host=github.com"; echo "username=x-access-token"; echo "password=${GITHUB_TOKEN}"; }; f'
+  log "GitHub HTTPS credential helper configured"
+elif [ -n "${GH_TOKEN:-}" ]; then
+  git config --global credential.https://github.com.helper \
+    '!f() { echo "protocol=https"; echo "host=github.com"; echo "username=x-access-token"; echo "password=${GH_TOKEN}"; }; f'
+  log "GitHub HTTPS credential helper configured (via GH_TOKEN)"
+fi
+
+# Copy host SSH keys into writable ~/.ssh if mounted (read-only mount needs copy)
+if [ -d /home/nanocode/.host-ssh ] && [ "$(ls -A /home/nanocode/.host-ssh 2>/dev/null)" ]; then
+  mkdir -p /home/nanocode/.ssh
+  cp -a /home/nanocode/.host-ssh/* /home/nanocode/.ssh/ 2>/dev/null || true
+  chmod 700 /home/nanocode/.ssh 2>/dev/null || true
+  chmod 600 /home/nanocode/.ssh/id_* 2>/dev/null || true
+  chmod 644 /home/nanocode/.ssh/*.pub 2>/dev/null || true
+  chmod 644 /home/nanocode/.ssh/known_hosts 2>/dev/null || true
+  log "SSH keys copied from host mount"
+  # Add default SSH config for non-interactive use if not already present
+  if [ ! -f /home/nanocode/.ssh/config ]; then
+    printf 'Host *\n  StrictHostKeyChecking accept-new\n  UserKnownHostsFile /home/nanocode/.ssh/known_hosts\n' \
+      > /home/nanocode/.ssh/config
+    chmod 600 /home/nanocode/.ssh/config
+  fi
+fi
+
+# Copy host .gitconfig if mounted
+if [ -f /home/nanocode/.host-gitconfig ] && [ -s /home/nanocode/.host-gitconfig ]; then
+  cp /home/nanocode/.host-gitconfig /home/nanocode/.gitconfig 2>/dev/null || true
+  log "Host .gitconfig copied into container"
+fi
+
 # ── parse CLI args (override env vars) ────────────────────────────────────────
 while [ $# -gt 0 ]; do
   case "$1" in
