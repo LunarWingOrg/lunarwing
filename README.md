@@ -8,15 +8,15 @@
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
 
-LunarWing is a hard fork of the Ironclaw project originally developed by NearAI. The fork has grown far beyond the original project's capabilities, despite their best efforts. 
+The LunarWing project began in Febuary 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
 
-LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes actually useful tools, bridges, and channels such as XMPP/OMEMO, Gotify, scheduled routines with fallbacks, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Upstream compatibility is not a goal whatsoever. The main project has been tainted from the beginning and a lot of the cruft from it is still being carved out. 
+LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes useful tools, bridges, and channels such as XMPP/OMEMO, Gotify, scheduled routines with fallbacks, systemd deployment, OpenRC, and open-protocol channels. Proprietary service centered channels (Slack, Discord, Telegram) are intentionally unsupported within the monorepo.
 
-The LunarWing project maintains the AGPLv3 license on the core project and all extensions, tools, and channels.
+The LunarWing project strictly maintains the AGPLv3 license on the core project and all extensions, tools, and channels. We will use the same license across our other repositories if legally possible.
 
 ## Why "LunarWing"?
 
-**Lunar** -- We are firm believers in Lunarpunk. We actually believe in freedom. Unlike every single other agentic AI project that exists, LunarWing stands out as being the ONLY one that protects your freedom. 
+**Lunar** -- We are firm believers in Lunarpunk.
 
 **Wing** -- Wings are extensions of the body which allow flight. We chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`. We are not required to remain on the ground.
 
@@ -34,27 +34,29 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Gotify** -- WASM tool for agent-initiated push notifications
 * **Vision Service / OCR Sidecar** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, caching, rate limiting, and metrics (`projects/ocr-sidecar/`)
 * **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the Vision Service sidecar (`ic/tools-src/vision-analyze/`)
+* **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (seperate repo)
 
 ### Worker Containers
 * **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
-* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge and persistent storage (`lunarcode4lunarwing/`)
+* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
-* **Debloated sandbox Worker** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
+* **Re worked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
-### Infrastructure & Operations (100% Unique to THIS project only)
+### Infrastructure & Operations
 * Specialized secret management wrapper scripts for both PostgreSQL and libSQL
 * Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
-* Production multi-tenant deployment via `ic/scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
+* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
 * TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
+* Support for embedded memory search models
 
 ### Development & Testing
 * Automated test suite with trace-replay E2E testing (no real LLM required)
-* Worker test harness for all 4 worker types with Docker Compose isolation (`tests/`)
-* REPLv2 server and client with better output formatting and subagent support
-* Support for external agentic coding tools developed independently from upstream
-* Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support
+* Worker test harness for all 4+ worker types with Docker Compose isolation (`tests/`)
+* REPLv2 server and client with better output formatting and subagent support, backout and approval support included
+* Support for external agentic coding tools via external worker mode
+* Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support as well as a production-grade developer testing suite
 
 ### Philosophy
 
@@ -62,13 +64,15 @@ LunarWing developers care about your freedom as a user. We do not support propri
 
 The LunarWing core development team is not affiliated with NearAI.
 
-Our core team uses a self-hosted Vikunja kanban board to track tasks.
+Our core team uses a self-hosted Vikunja kanban board to track tasks. Additionally, we use our own LunarWing agents to keep track of project progress.
 
-#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponserships/grants.
+#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponserships/grants. This will be updated in the future if it changes.
 
 ## Instance Setup
 
 LunarWing supports a preseeded instance layout for fresh installs. This means that your agents can have any identity and any pre-seeded memories before you even interact with them for the first time if you wish. 
+
+## Examples: 
 
 ### PostgreSQL
 
@@ -126,7 +130,7 @@ Preferred env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still 
 
 ```
 llm_backend = "openai_compatible"
-openai_compatible_base_url = "http://192.168.1.157:3002"
+openai_compatible_base_url = "http://127.0.0.1:3002"
 selected_model = "tensorzero::function_name::lunarwing"
 agent.name = "lunarwing"
 ```
