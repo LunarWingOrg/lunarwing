@@ -16,9 +16,9 @@ use crate::agent::routine::{Routine, RoutineRun, RunStatus};
 use crate::config::DatabaseConfig;
 use crate::context::{ActionRecord, JobContext, JobState};
 use crate::db::{
-    ApiTokenRecord, ConversationStore, Database, IdentityStore, JobStore, RoutineStore,
-    SandboxStore, SettingsStore, ToolFailureStore, UserIdentityRecord, UserRecord, UserStore,
-    WorkspaceStore,
+    ApiTokenRecord, ConversationStore, Database, IdentityStore, JobStore, ReflexPatternRecord,
+    ReflexStore, RoutineStore, SandboxStore, SettingsStore, ToolFailureStore, UserIdentityRecord,
+    UserRecord, UserStore, WorkspaceStore,
 };
 use crate::error::{DatabaseError, WorkspaceError};
 use crate::history::{
@@ -1193,5 +1193,128 @@ impl IdentityStore for PgBackend {
 
         tx.commit().await?;
         Ok(())
+    }
+}
+
+// ==================== ReflexStore ====================
+
+#[async_trait]
+impl ReflexStore for PgBackend {
+    async fn find_recurring_job_patterns(
+        &self,
+        min_count: i32,
+        limit: i32,
+    ) -> Result<Vec<String>, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let rows = conn
+            .query(
+                "SELECT description FROM agent_jobs \
+                 WHERE status = 'completed' AND success = true \
+                 GROUP BY description \
+                 HAVING COUNT(*) >= $1 \
+                 ORDER BY COUNT(*) DESC \
+                 LIMIT $2",
+                &[&min_count, &limit],
+            )
+            .await?;
+        Ok(rows.iter().map(|r| r.get::<_, String>("description")).collect())
+    }
+
+    async fn upsert_reflex_pattern(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+        original_pattern: &str,
+        tool_name: &str,
+    ) -> Result<(), DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        conn.execute(
+            "INSERT INTO reflex_patterns \
+             (id, user_id, normalized_pattern, original_pattern, tool_name, match_count, last_matched_at, created_at, updated_at, status, compilation_attempts) \
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, 1, NOW(), NOW(), NOW(), 'active', 0) \
+             ON CONFLICT (user_id, normalized_pattern) \
+             DO UPDATE SET \
+                 match_count = reflex_patterns.match_count + 1, \
+                 last_matched_at = NOW(), \
+                 updated_at = NOW()",
+            &[&user_id, &normalized_pattern, &original_pattern, &tool_name],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn get_reflex_pattern(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+    ) -> Result<Option<(String, String)>, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let row = conn
+            .query_opt(
+                "SELECT tool_name, status FROM reflex_patterns \
+                 WHERE user_id = $1 AND normalized_pattern = $2",
+                &[&user_id, &normalized_pattern],
+            )
+            .await?;
+        Ok(row.map(|r| (r.get::<_, String>("tool_name"), r.get::<_, String>("status"))))
+    }
+
+    async fn list_reflex_patterns(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<ReflexPatternRecord>, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let rows = conn
+            .query(
+                "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
+                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts \
+                 FROM reflex_patterns WHERE user_id = $1 ORDER BY match_count DESC",
+                &[&user_id],
+            )
+            .await?;
+        Ok(rows.iter().map(row_to_reflex_pattern).collect())
+    }
+
+    async fn disable_reflex_pattern(&self, id: Uuid) -> Result<bool, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE reflex_patterns SET status = 'disabled', updated_at = NOW() WHERE id = $1",
+                &[&id],
+            )
+            .await?;
+        Ok(rows_affected > 0)
+    }
+
+    async fn bump_reflex_pattern_match(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+    ) -> Result<(), DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        conn.execute(
+            "UPDATE reflex_patterns \
+             SET match_count = match_count + 1, last_matched_at = NOW(), updated_at = NOW() \
+             WHERE user_id = $1 AND normalized_pattern = $2",
+            &[&user_id, &normalized_pattern],
+        )
+        .await?;
+        Ok(())
+    }
+}
+
+fn row_to_reflex_pattern(row: &tokio_postgres::Row) -> ReflexPatternRecord {
+    ReflexPatternRecord {
+        id: row.get("id"),
+        user_id: row.get("user_id"),
+        normalized_pattern: row.get("normalized_pattern"),
+        original_pattern: row.get("original_pattern"),
+        tool_name: row.get("tool_name"),
+        match_count: row.get::<_, i32>("match_count"),
+        last_matched_at: row.get("last_matched_at"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        status: row.get("status"),
+        compilation_attempts: row.get::<_, i32>("compilation_attempts"),
     }
 }
