@@ -8,3 +8,5 @@
 | `1.0.6-Lunartica` | Not yet merged | Lunartica/Multica bridge WASM tool for task management integration |
 | `1.0.6-LunarVoice` | Not yet started | Voice capabilities (TBD) |
 | `1.0.6-MUCFixes` | Not yet started | XMPP MUC (multi-user chat) fixes |
+
+* Pending Cleanup round 3
