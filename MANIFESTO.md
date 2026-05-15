@@ -2,21 +2,23 @@
 
 #### Inspired by: 
 
-* https://dark.fi/manifesto.html
 * Manifesto for a Democratic Civilization Part 3 by Abdullah Öcalan
 * Agorism in the 21st Century, Volumes I and II
 * https://www.gnu.org/philosophy/philosophy.html
+* https://dark.fi/manifesto.html
 * Thus Spoke Zarathustra by Friedrich Nietzsche
 * Proofs, Arguments, and Zero-Knowledge by Justin Thaler.
 
-##### LunarWing is NOT a corporate startup with VC Seed Funding. We DO NOT sell access to LLMs and we are NOT NearAI or affiliated with NearAI. We have ACTUAL programming experience, unlike them. We can ACTUALLY utilize asynchronous Rust libraries, unlike them. See README.md for more information as to why this hard fork has been created as well as a partial list of the brand new features which do not exist in any form in Ironclaw, and likely never will, since it is clearly not a serious project. (At some point a full list of additional features which are not included in the upstream repo will be added)
+##### LunarWing is NOT a corporate startup with VC Seed Funding. We DO NOT sell access to LLMs and we are NOT NearAI or affiliated with NearAI. See README.md for more information.
 
 ##### LunarWing supports autonomous political formations.
 
 ##### LunarWing supports the Free Software Foundation.
 
-##### LunarWing supports freedom, user choice, locally hosted LLM set ups, various TEE environments, and less secure options of using LLMs. It is entirely up to the user how much trust you have in your model backend providers. In the end, we prioritize for security in this department. Additionally, the way the system is architected, secrets are never exposed to any LLM which you choose to use.
+##### LunarWing supports freedom, user choice, locally hosted LLM set ups, various TEE environments, and even less secure options of using LLMs. It is entirely up to the user how much trust he or she has in their third party model backend providers. In the end, we prioritize for security in this department. Additionally, the way the system is architected, secrets are never exposed to any LLM which you choose to use. When a WASM tool or WASM channel utilizes secrets, they should not be exposed in plaintext. The core concept is, any LLM regardless of where it's hosted, does not have the ability to read secrets.
 
-While we do support user choice, we do not necessarily want to pander to randoms online to support x, y, or z tool out of the box besides the ones which are core to the LunarWing project. This certainly means that no, we won't officially support proprietary communication channels, even if the code exists in the repo. Users can use it, but it will certainly not be updated or supported in the future. The team may, at its own discretion, even choose to entirely remove any or all of these channel source code components in the repo which disagrees with our philosophy. You have been warned. The LunarWing team uses secure, private, self-hostable communication methods such as IRC with end to end encryption on the plugin level (See: Enjin), DarkIRC and XMPP MUC chats with OMEMO encryption. We do use various locally developed MCP servers as well for our agents. We utilize our own notification servers and do not use Google services either, so these will also not be supported or given any love.
+While we do support user choice, we do not necessarily want to pander to those who ask us to support x, y, or z kind of agent communication channel out of the box besides the ones which are core to the LunarWing project. This certainly means that no, we won't officially support proprietary communication channels, even if the code currently exists in the repo. Users can use it, but it will certainly not be updated or supported in the future. The team may, at its own discretion, even choose to entirely remove any or all of these channel source code components in the repo which disagrees with our philosophy (This process has already started). This is our main hardline stance. You have been warned. The LunarWing team uses secure, private, self-hostable communication methods such as IRC with end to end encryption on the plugin level (See: Enjin), DarkIRC, and XMPP MUC/1:1 chat with built in OMEMO encryption via a bridge layer. We do use various locally developed MCP servers as well for our agents. We utilize our own notification servers (Gotify) and do not use Google services either, so these will also not be supported or given any love. In the future, we would be open to exploring new communication channels to maintain in this repo, as long as they maintain free and open standards.
 
-LunarWing is also not a democratic organization into itself. We are a small group with very opinionated backgrounds in cybersecurity and technology. Our own opinions and philosophy will have an impact on this project going forward. Our opinions, experience, and philosophy affect the overall direction and focus of the project.
+We won't force users to NOT use proprietary channels maintained by third party companies. We simply won't support it in our official repo. Others are free to build and maintain such tools and there are working examples already.
+
+We are a small group with very opinionated backgrounds in technology. Our own opinions and philosophy will have an impact on this project going forward. Our opinions, experience, and philosophy affect the overall direction and focus of the project.
