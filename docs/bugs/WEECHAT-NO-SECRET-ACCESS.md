@@ -2,7 +2,7 @@ Answers from the code
                                                                                                                                                                                                    
   Q: Is the IRC-facing agent the same process or a separate daemon?                                                                                                                                
 
-  It's the same process. A single LunarWing/IronClaw daemon runs multiple channels simultaneously. The ChannelsConfig (ic/src/config/channels.rs:14) holds CLI, HTTP, gateway, XMPP, and WASM
+  It's the same process. A single LunarWing daemon runs multiple channels simultaneously. The ChannelsConfig (ic/src/config/channels.rs:14) holds CLI, HTTP, gateway, XMPP, and WASM
   channels all at once. WASM channels (like WeeChat) are loaded from a directory (~/.lunarwing/channels/ by default, or WASM_CHANNELS_DIR), and the ChannelManager merges all their message streams
    into one. There is no separate daemon for IRC — the WeeChat WASM channel is loaded into the same process that also runs the CLI/REPL.
  
