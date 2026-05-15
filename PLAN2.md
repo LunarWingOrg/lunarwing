@@ -1,4 +1,4 @@
-# plan 2 for experimental-v1.0.6-cleanup
+# cleanup
 
 ## Remove cruft
 
@@ -7,10 +7,9 @@
 * Telegram
 * Slack
 * Discord
-* WhatsApp
+* WhatsApp (Removed)
 * Feishu
-* Longlee
-
+  
 ### dont need these:
 
 * gmail
@@ -18,8 +17,8 @@
 
 ### Remove unused dir:
 
-* customic
+* customic (done)
 
 ##### Notes:
 
-1. can keep github but its not a great extension tbh. can eventually replace with my custom git tool that should be an added feature in 1.0.6 or 1.0.7
+1. can keep github for now but its not a great extension tbh. can eventually replace with my custom git tool that should be an added feature in 1.0.8+
