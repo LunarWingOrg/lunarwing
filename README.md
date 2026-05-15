@@ -281,7 +281,6 @@ LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 
 ## Further Reading
 
-- Development guide: see [ic/CLAUDE.md](ic/CLAUDE.md)
 - Architecture docs: see [docs/](docs/)
 - Vision service: see [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
 - Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
