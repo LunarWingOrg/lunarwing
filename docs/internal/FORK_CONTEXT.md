@@ -44,13 +44,13 @@ Do not break these without explicit approval:
 - Routine manual runs.
 - Gateway status/config endpoints.
 - Systemd deployment units.
-- IronClaw watchdog service/timer.
+- Lunarwing's watchdog service/timer.
 
 ## Runtime Shape
 
 Expected runtime pieces may include:
 
-- Main IronClaw daemon service.
+- Main Lunarwing daemon service.
 - Separate XMPP bridge service.
 - WASM channels, especially XMPP.
 - WASM tools, especially Gotify.
@@ -75,12 +75,14 @@ bridge/client path, not in the main daemon.
 
 Never commit secrets.
 
-Secrets may exist in:
+By design, Lunarwing uses the encrypted database to store secrets. However, this is simply not the case for some legacy components and certain services and bridges, unfortunately
 
-- `/home/cmc/.ironclaw/.env`
-- systemd service environment.
-- local database rows.
-- local WASM tool/channel auth state.
+Therefore, some secrets may exist in:
+
+- `/home/user/.ironclaw/.env` (old path)
+- `/home/user/lunarwing/env/*`
+- systemd service environment - (in older versions only)
+- local database rows. (only secret names)
 
 Agents may inspect whether required keys exist, but must not print secret
 values in logs, diffs, or final answers.
@@ -103,7 +105,7 @@ repair or mutation.
 ## Database and Routine State
 
 Scheduled routines can become blocked if old rows in `routine_runs` remain in
-`status='running'`. Most routines use `max_concurrent=1`, so one stale running
+`status='running'`. Most older routines use `max_concurrent=1`, so one stale running
 row can block future scheduled runs.
 
 Known failure mode:
@@ -118,18 +120,19 @@ Operational cleanup should be explicit and careful:
 - Stop the service before mutating routine state.
 - Back up the database first.
 - Mark stale routine runs failed or cancelled.
+- Service state. User groups state. Etc
 - Restart and verify that `running` routine counts are clear.
 
 ## Gotify Notes
 
-Gotify is currently treated as a WASM tool, not an IronClaw channel.
+Gotify is currently treated as a WASM TOOL, and NOT a channel.
 
 Do not set a routine's notification channel to `gotify` unless a separate
 Gotify channel implementation is registered. A routine that needs Gotify should
 call the `gotify` tool inside its prompt and return the same message as backup
 output.
 
-See `docs/GOTIFY_ROUTINE_PROMPT.md` for the current working prompt pattern.
+See `docs/GOTIFY_ROUTINE_PROMPT.md` for the current working prompt pattern. (Verify this is correct)
 
 ## XMPP and OMEMO Notes
 
