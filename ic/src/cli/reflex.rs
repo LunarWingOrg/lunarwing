@@ -43,6 +43,21 @@ pub enum ReflexCommand {
 
     /// Show reflex compiler status
     Status,
+
+    /// Prune (auto-disable) reflex patterns that haven't matched recently
+    Prune {
+        /// Patterns not matched in this many days are considered stale
+        #[arg(long, default_value = "30")]
+        stale_days: i32,
+
+        /// Show what would be evicted without modifying the database
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output as JSON (for scripting)
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Run a reflex CLI command against the database.
@@ -56,6 +71,11 @@ pub async fn run_reflex_command(
         ReflexCommand::Show { id } => show(&db, user_id, &id).await,
         ReflexCommand::Delete { id, yes } => delete(&db, user_id, &id, yes).await,
         ReflexCommand::Status => status(&db, user_id).await,
+        ReflexCommand::Prune {
+            stale_days,
+            dry_run,
+            json,
+        } => prune(&db, stale_days, dry_run, json).await,
     }
 }
 
@@ -211,6 +231,92 @@ async fn delete(
     Ok(())
 }
 
+// ── Prune ────────────────────────────────────
+
+async fn prune(
+    db: &Arc<dyn Database>,
+    stale_days: i32,
+    dry_run: bool,
+    json: bool,
+) -> anyhow::Result<()> {
+    if stale_days < 1 {
+        anyhow::bail!("--stale-days must be at least 1");
+    }
+
+    let evicted = db
+        .prune_stale_reflex_patterns(stale_days, dry_run)
+        .await?;
+
+    if json {
+        let items: Vec<serde_json::Value> = evicted
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "id": p.id.to_string(),
+                    "normalized_pattern": p.normalized_pattern,
+                    "tool_name": p.tool_name,
+                    "match_count": p.match_count,
+                    "last_matched_at": p.last_matched_at,
+                    "created_at": p.created_at,
+                })
+            })
+            .collect();
+        let envelope = serde_json::json!({
+            "dry_run": dry_run,
+            "stale_days": stale_days,
+            "evicted_count": evicted.len(),
+            "patterns": items,
+        });
+        println!("{}", serde_json::to_string_pretty(&envelope)?);
+        return Ok(());
+    }
+
+    let action = if dry_run { "Would evict" } else { "Evicted" };
+    if evicted.is_empty() {
+        println!(
+            "No stale reflex patterns (threshold: {} days). Nothing to {}.",
+            stale_days,
+            if dry_run { "preview" } else { "prune" }
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} stale reflex pattern(s) (threshold: {} days):",
+        action,
+        evicted.len(),
+        stale_days
+    );
+    println!();
+    println!(
+        "{:<36}  {:<30}  {:>6}  {:<22}",
+        "ID", "Pattern", "Matches", "Last Matched"
+    );
+    println!("{}", "-".repeat(100));
+    for p in &evicted {
+        let last_matched = p
+            .last_matched_at
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| "Never".to_string());
+        let pattern_preview = if p.normalized_pattern.len() > 28 {
+            format!("{}...", &p.normalized_pattern[..25])
+        } else {
+            p.normalized_pattern.clone()
+        };
+        println!(
+            "{:<36}  {:<30}  {:>6}  {:<22}",
+            p.id, pattern_preview, p.match_count, last_matched
+        );
+    }
+
+    if dry_run {
+        println!();
+        println!("Dry run — no changes made. Re-run without --dry-run to evict.");
+    }
+
+    Ok(())
+}
+
 // ── Status ──────────────────────────────────────────────────
 
 async fn status(db: &Arc<dyn Database>, user_id: &str) -> anyhow::Result<()> {
@@ -218,12 +324,14 @@ async fn status(db: &Arc<dyn Database>, user_id: &str) -> anyhow::Result<()> {
 
     let active_count = patterns.iter().filter(|p| p.status == "active").count();
     let disabled_count = patterns.iter().filter(|p| p.status == "disabled").count();
+    let evicted_count = patterns.iter().filter(|p| p.status == "evicted").count();
     let total_matches: i32 = patterns.iter().map(|p| p.match_count).sum();
 
     println!("Reflex Compiler Status");
     println!("======================");
     println!("Active Patterns:   {}", active_count);
     println!("Disabled Patterns: {}", disabled_count);
+    println!("Evicted Patterns:  {}", evicted_count);
     println!("Total Patterns:    {}", patterns.len());
     println!("Total Matches:     {}", total_matches);
 

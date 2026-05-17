@@ -1301,6 +1301,55 @@ impl ReflexStore for PgBackend {
         .await?;
         Ok(())
     }
+
+    async fn prune_stale_reflex_patterns(
+        &self,
+        stale_after_days: i32,
+        dry_run: bool,
+    ) -> Result<Vec<ReflexPatternRecord>, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let cutoff = Utc::now() - chrono::Duration::days(stale_after_days as i64);
+
+        let rows = conn
+            .query(
+                "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
+                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts \
+                 FROM reflex_patterns \
+                 WHERE status = 'active' \
+                   AND COALESCE(last_matched_at, created_at) < $1 \
+                 ORDER BY COALESCE(last_matched_at, created_at) ASC",
+                &[&cutoff],
+            )
+            .await?;
+
+        let mut stale: Vec<ReflexPatternRecord> =
+            rows.iter().map(row_to_reflex_pattern).collect();
+
+        if !dry_run && !stale.is_empty() {
+            let ids: Vec<String> = stale.iter().map(|r| r.id.to_string()).collect();
+            conn.execute(
+                "UPDATE reflex_patterns \
+                 SET status = 'evicted', updated_at = NOW() \
+                 WHERE id = ANY($1)",
+                &[&ids.as_slice()],
+            )
+            .await?;
+            // Refresh rows to reflect updated status
+            let rows = conn
+                .query(
+                    "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
+                     match_count, last_matched_at, created_at, updated_at, status, compilation_attempts \
+                     FROM reflex_patterns \
+                     WHERE id = ANY($1) \
+                     ORDER BY COALESCE(last_matched_at, created_at) ASC",
+                    &[&ids.as_slice()],
+                )
+                .await?;
+            stale = rows.iter().map(row_to_reflex_pattern).collect();
+        }
+
+        Ok(stale)
+    }
 }
 
 fn row_to_reflex_pattern(row: &tokio_postgres::Row) -> ReflexPatternRecord {

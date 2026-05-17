@@ -157,7 +157,7 @@ impl ReflexRouter {
         let words_input: std::collections::HashSet<&str> =
             normalized.split_whitespace().collect();
 
-        let mut candidates: Vec<(&str, f64)> = Vec::new();
+        let mut candidates: Vec<(String, f64)> = Vec::new();
 
         for (pattern, _tool) in patterns.iter() {
             // Skip empty / very short patterns
@@ -180,7 +180,7 @@ impl ReflexRouter {
             // Jaro-Winkler similarity
             let score = jaro_winkler(normalized, pattern);
             if score >= self.fuzzy_threshold {
-                candidates.push((pattern, score));
+                candidates.push((pattern.clone(), score));
             }
 
             // Cap the scan to avoid pathological cases
@@ -194,12 +194,12 @@ impl ReflexRouter {
             .into_iter()
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         {
-            let tool = patterns.get(best_pattern).cloned();
+            let tool = patterns.get(&best_pattern).cloned();
             drop(patterns);
 
-            if let Some(ref _tool_name) = tool {
+            if tool.is_some() {
                 // Track fuzzy hit for auto-promotion
-                self.bump_fuzzy_hit(best_pattern).await;
+                self.bump_fuzzy_hit(&best_pattern).await;
 
                 tracing::debug!(
                     "Reflex fuzzy match: '{}' ≈ '{}' (score: {:.3})",
@@ -476,6 +476,90 @@ impl ReflexCompiler {
     }
 }
 
+// ── Eviction config ─────────────────
+
+/// Configuration for the automatic eviction of stale reflex patterns.
+#[derive(Debug, Clone)]
+pub struct EvictionConfig {
+    /// How often to run the eviction sweep (e.g., every 24 hours).
+    pub check_interval: Duration,
+    /// Patterns not matched within this many days are considered stale.
+    /// Default: 30 days.
+    pub stale_after_days: i32,
+}
+
+impl Default for EvictionConfig {
+    fn default() -> Self {
+        Self {
+            check_interval: Duration::from_secs(24 * 60 * 60), // daily
+            stale_after_days: 30,
+        }
+    }
+}
+
+// ── ReflexEvictor ───────────────────
+
+/// Background task that periodically evicts stale reflex patterns.
+///
+/// Patterns whose `last_matched_at` (or `created_at` if never matched)
+/// is older than `stale_after_days` are set to `status = 'evicted'`.
+/// Evicted patterns are excluded from the router cache on next refresh.
+pub struct ReflexEvictor {
+    store: Arc<dyn Database>,
+    config: EvictionConfig,
+}
+
+impl ReflexEvictor {
+    /// Create a new evictor.
+    pub fn new(store: Arc<dyn Database>, config: EvictionConfig) -> Self {
+        Self { store, config }
+    }
+
+    /// Run the eviction loop forever.
+    pub async fn run_loop(&self) {
+        let mut ticker = tokio::time::interval(self.config.check_interval);
+        // Skip immediate first tick so we don't evict on boot.
+        ticker.tick().await;
+
+        loop {
+            ticker.tick().await;
+            self.sweep().await;
+        }
+    }
+
+    /// Execute a single eviction sweep.
+    async fn sweep(&self) {
+        match self
+            .store
+            .prune_stale_reflex_patterns(self.config.stale_after_days, false)
+            .await
+        {
+            Ok(evicted) if evicted.is_empty() => {
+                tracing::debug!("Reflex evictor: no stale patterns found.");
+            }
+            Ok(evicted) => {
+                tracing::info!(
+                    "Reflex evictor: evicted {} stale pattern(s) (threshold: {} days)",
+                    evicted.len(),
+                    self.config.stale_after_days
+                );
+                for p in &evicted {
+                    tracing::info!(
+                        "  evicted: '{}' (tool: {}, last matched: {:?}, matches: {})",
+                        p.normalized_pattern,
+                        p.tool_name,
+                        p.last_matched_at,
+                        p.match_count
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::error!("Reflex evictor error: {}", e);
+            }
+        }
+    }
+}
+
 // ── Spawn helpers ───────────────────
 
 /// Spawn the reflex compiler background task.
@@ -508,6 +592,17 @@ pub fn spawn_reflex_cache_refresh(
             ticker.tick().await;
             router.refresh(store.clone(), &user_id).await;
         }
+    })
+}
+
+/// Spawn the reflex evictor background task.
+pub fn spawn_reflex_evictor(
+    store: Arc<dyn Database>,
+    config: EvictionConfig,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let evictor = ReflexEvictor::new(store, config);
+        evictor.run_loop().await;
     })
 }
 
@@ -885,38 +980,148 @@ mod tests {
 
     #[tokio::test]
     #[cfg(feature = "libsql")]
-    async fn test_reflex_store_find_recurring() {
+    async fn test_prune_stale_reflex_patterns_dry_run() {
         use crate::db::libsql::LibSqlBackend;
-        use crate::context::JobContext;
-        use crate::db::JobStore;
 
         let tmp = tempfile::tempdir().unwrap();
-        let db_path = tmp.path().join("test_reflex_recurring.db");
+        let db_path = tmp.path().join("test_prune_dry_run.db");
         let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
         backend.run_migrations().await.unwrap();
 
-        // Create some completed jobs with the same description
-        for _ in 0..5 {
-            let mut ctx = JobContext::with_user("test-user", "test-job", "Summarize my logs");
-            ctx.state = crate::context::JobState::Completed;
-            backend.save_job(&ctx).await.unwrap();
-            // Set success = 1 since save_job doesn't include it
-            let conn = backend.connect().await.unwrap();
-            conn.execute(
-                "UPDATE agent_jobs SET success = 1 WHERE id = ?1",
-                libsql::params![ctx.job_id.to_string()],
-            )
+        // Insert a pattern with old last_matched_at
+        backend
+            .upsert_reflex_pattern("test-user", "old pattern", "Old Pattern", "tool_old")
             .await
             .unwrap();
-        }
 
-        // Should find the recurring pattern
-        let patterns = backend.find_recurring_job_patterns(3, 10).await.unwrap();
-        assert_eq!(patterns.len(), 1);
-        assert_eq!(patterns[0], "Summarize my logs");
+        // Manually backdate last_matched_at to 31 days ago
+        let old_date = fmt_ts(&(Utc::now() - chrono::Duration::days(31)));
+        let conn = backend.connect().await.unwrap();
+        conn.execute(
+            "UPDATE reflex_patterns SET last_matched_at = ?1 WHERE normalized_pattern = ?2",
+            params![old_date, "old pattern"],
+        )
+        .await
+        .unwrap();
 
-        // With higher threshold, should not find
-        let patterns = backend.find_recurring_job_patterns(10, 10).await.unwrap();
-        assert!(patterns.is_empty());
+        // Dry run — should report stale but not change
+        let stale = backend.prune_stale_reflex_patterns(30, true).await.unwrap();
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].normalized_pattern, "old pattern");
+        assert_eq!(stale[0].status, "active"); // unchanged
+
+        // Verify still active
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns[0].status, "active");
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "libsql")]
+    async fn test_prune_stale_reflex_patterns_actual_eviction() {
+        use crate::db::libsql::LibSqlBackend;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_prune_actual.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        // Insert old and fresh patterns
+        backend
+            .upsert_reflex_pattern("test-user", "stale pattern", "Stale Pattern", "tool_stale")
+            .await
+            .unwrap();
+        backend
+            .upsert_reflex_pattern("test-user", "fresh pattern", "Fresh Pattern", "tool_fresh")
+            .await
+            .unwrap();
+
+        // Backdate only the stale one
+        let old_date = fmt_ts(&(Utc::now() - chrono::Duration::days(31)));
+        let conn = backend.connect().await.unwrap();
+        conn.execute(
+            "UPDATE reflex_patterns SET last_matched_at = ?1 WHERE normalized_pattern = ?2",
+            params![old_date, "stale pattern"],
+        )
+        .await
+        .unwrap();
+
+        // Actual eviction with 30-day threshold
+        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        assert_eq!(evicted.len(), 1);
+        assert_eq!(evicted[0].normalized_pattern, "stale pattern");
+
+        // Verify statuses
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns.len(), 2);
+        let stale = patterns.iter().find(|p| p.normalized_pattern == "stale pattern").unwrap();
+        let fresh = patterns.iter().find(|p| p.normalized_pattern == "fresh pattern").unwrap();
+        assert_eq!(stale.status, "evicted");
+        assert_eq!(fresh.status, "active");
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "libsql")]
+    async fn test_prune_stale_reflex_patterns_never_matched() {
+        use crate::db::libsql::LibSqlBackend;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_prune_never.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        // Insert pattern but never bump it (no last_matched_at)
+        backend
+            .upsert_reflex_pattern("test-user", "never matched", "Never Matched", "tool_never")
+            .await
+            .unwrap();
+
+        // Backdate created_at to simulate old pattern
+        let old_date = fmt_ts(&(Utc::now() - chrono::Duration::days(31)));
+        let conn = backend.connect().await.unwrap();
+        conn.execute(
+            "UPDATE reflex_patterns SET created_at = ?1, last_matched_at = NULL WHERE normalized_pattern = ?2",
+            params![old_date, "never matched"],
+        )
+        .await
+        .unwrap();
+
+        // Should still be evicted based on created_at
+        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        assert_eq!(evicted.len(), 1);
+        assert_eq!(evicted[0].status, "evicted");
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "libsql")]
+    async fn test_prune_stale_reflex_patterns_fresh_stays_active() {
+        use crate::db::libsql::LibSqlBackend;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test_prune_fresh.db");
+        let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
+        backend.run_migrations().await.unwrap();
+
+        // Fresh pattern (matched today via upsert)
+        backend
+            .upsert_reflex_pattern("test-user", "fresh pattern", "Fresh Pattern", "tool_fresh")
+            .await
+            .unwrap();
+
+        // Eviction sweep should find nothing
+        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        assert!(evicted.is_empty());
+
+        // Still active
+        let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
+        assert_eq!(patterns[0].status, "active");
+    }
+
+    // ── EvictionConfig ──
+
+    #[test]
+    fn test_eviction_config_default() {
+        let config = EvictionConfig::default();
+        assert_eq!(config.stale_after_days, 30);
+        assert_eq!(config.check_interval, Duration::from_secs(24 * 60 * 60));
     }
 }

@@ -724,6 +724,23 @@ pub trait ReflexStore: Send + Sync {
         user_id: &str,
         normalized_pattern: &str,
     ) -> Result<(), DatabaseError>;
+
+    /// Prune (auto-disable) reflex patterns that haven't been matched
+    /// in the last `stale_after_days` days.
+    ///
+    /// Patterns with no `last_matched_at` use their `created_at` instead
+    /// (newly created patterns that have never matched are subject to
+    /// the same staleness window).
+    ///
+    /// When `dry_run` is true, returns the list of patterns that would
+    /// be evicted without mutating the database.
+    ///
+    /// Returns the records that were (or would be) evicted.
+    async fn prune_stale_reflex_patterns(
+        &self,
+        stale_after_days: i32,
+        dry_run: bool,
+    ) -> Result<Vec<ReflexPatternRecord>, DatabaseError>;
 }
 
 /// A persisted reflex pattern record.

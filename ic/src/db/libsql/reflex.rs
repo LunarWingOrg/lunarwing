@@ -172,4 +172,69 @@ impl ReflexStore for LibSqlBackend {
         .map_err(|e| DatabaseError::Query(e.to_string()))?;
         Ok(())
     }
+
+    async fn prune_stale_reflex_patterns(
+        &self,
+        stale_after_days: i32,
+        dry_run: bool,
+    ) -> Result<Vec<ReflexPatternRecord>, DatabaseError> {
+        let conn = self.connect().await?;
+        let now = Utc::now();
+        let cutoff = fmt_ts(&(now - chrono::Duration::days(stale_after_days as i64)));
+
+        // Identify stale active patterns.
+        // A pattern is stale if:
+        //   - status = 'active'
+        //   - COALESCE(last_matched_at, created_at) < cutoff
+        let mut rows = conn
+            .query(
+                r#"
+                SELECT id, user_id, normalized_pattern, original_pattern, tool_name,
+                       match_count, last_matched_at, created_at, updated_at, status, compilation_attempts
+                FROM reflex_patterns
+                WHERE status = 'active'
+                  AND COALESCE(last_matched_at, created_at) < ?1
+                ORDER BY COALESCE(last_matched_at, created_at) ASC
+                "#,
+                params![cutoff],
+            )
+            .await
+            .map_err(|e| DatabaseError::Query(e.to_string()))?;
+
+        let mut stale = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| DatabaseError::Query(e.to_string()))?
+        {
+            stale.push(ReflexPatternRecord {
+                id: get_text(&row, 0).parse().unwrap_or_default(),
+                user_id: get_text(&row, 1),
+                normalized_pattern: get_text(&row, 2),
+                original_pattern: get_text(&row, 3),
+                tool_name: get_text(&row, 4),
+                match_count: get_i64(&row, 5) as i32,
+                last_matched_at: get_opt_ts(&row, 6),
+                created_at: get_ts(&row, 7),
+                updated_at: get_ts(&row, 8),
+                status: get_text(&row, 9),
+                compilation_attempts: get_i64(&row, 10) as i32,
+            });
+        }
+
+        if !dry_run && !stale.is_empty() {
+            let updated_at = fmt_ts(&now);
+            // Disable all stale patterns in one pass
+            for record in &stale {
+                conn.execute(
+                    "UPDATE reflex_patterns SET status = 'evicted', updated_at = ?2 WHERE id = ?1",
+                    params![record.id.to_string(), updated_at.clone()],
+                )
+                .await
+                .map_err(|e| DatabaseError::Query(e.to_string()))?;
+            }
+        }
+
+        Ok(stale)
+    }
 }
