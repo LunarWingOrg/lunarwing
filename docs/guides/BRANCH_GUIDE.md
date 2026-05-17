@@ -1,6 +1,8 @@
 # Branch Guide
 
-# This guide is completely out of date. Needs a TOTAL REWRITE
+## This guide is completely out of date. Needs a TOTAL REWRITE
+
+### examples and actual branches are out of date...
 
 ## Branch Structure
 
