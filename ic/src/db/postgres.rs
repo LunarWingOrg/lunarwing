@@ -1267,7 +1267,8 @@ impl ReflexStore for PgBackend {
         let rows = conn
             .query(
                 "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
-                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts \
+                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts, \
+                 embedding, embedding_model \
                  FROM reflex_patterns WHERE user_id = $1 ORDER BY match_count DESC",
                 &[&user_id],
             )
@@ -1313,7 +1314,8 @@ impl ReflexStore for PgBackend {
         let rows = conn
             .query(
                 "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
-                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts \
+                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts, \
+                 embedding, embedding_model \
                  FROM reflex_patterns \
                  WHERE status = 'active' \
                    AND COALESCE(last_matched_at, created_at) < $1 \
@@ -1350,9 +1352,61 @@ impl ReflexStore for PgBackend {
 
         Ok(stale)
     }
+
+    async fn update_reflex_pattern_embedding(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+        embedding: &[f32],
+        model: &str,
+    ) -> Result<(), DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let embedding_vec = pgvector::Vector::from(embedding.to_vec());
+        conn.execute(
+            "UPDATE reflex_patterns SET embedding = $3, embedding_model = $4, updated_at = NOW() \
+             WHERE user_id = $1 AND normalized_pattern = $2",
+            &[&user_id, &normalized_pattern, &embedding_vec, &model],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn semantic_search_reflex_patterns(
+        &self,
+        user_id: &str,
+        query_embedding: &[f32],
+        limit: i32,
+    ) -> Result<Vec<(ReflexPatternRecord, f64)>, DatabaseError> {
+        let conn = self.store.pool().get().await?;
+        let embedding_vec = pgvector::Vector::from(query_embedding.to_vec());
+        let rows = conn
+            .query(
+                "SELECT id, user_id, normalized_pattern, original_pattern, tool_name, \
+                 match_count, last_matched_at, created_at, updated_at, status, compilation_attempts, \
+                 embedding, embedding_model, \
+                 1 - (embedding <=> $2::vector) AS similarity \
+                 FROM reflex_patterns \
+                 WHERE user_id = $1 AND status = 'active' AND embedding IS NOT NULL \
+                 ORDER BY embedding <=> $2::vector \
+                 LIMIT $3",
+                &[&user_id, &embedding_vec, &(limit as i64)],
+            )
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let similarity: f64 = r.get("similarity");
+                (row_to_reflex_pattern(r), similarity)
+            })
+            .collect())
+    }
 }
 
 fn row_to_reflex_pattern(row: &tokio_postgres::Row) -> ReflexPatternRecord {
+    let embedding: Option<pgvector::Vector> = row
+        .try_get("embedding")
+        .ok()
+        .flatten();
     ReflexPatternRecord {
         id: row.get("id"),
         user_id: row.get("user_id"),
@@ -1365,5 +1419,7 @@ fn row_to_reflex_pattern(row: &tokio_postgres::Row) -> ReflexPatternRecord {
         updated_at: row.get("updated_at"),
         status: row.get("status"),
         compilation_attempts: row.get::<_, i32>("compilation_attempts"),
+        embedding: embedding.map(|v| v.to_vec()),
+        embedding_model: row.try_get("embedding_model").ok().flatten(),
     }
 }

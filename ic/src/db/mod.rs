@@ -741,6 +741,24 @@ pub trait ReflexStore: Send + Sync {
         stale_after_days: i32,
         dry_run: bool,
     ) -> Result<Vec<ReflexPatternRecord>, DatabaseError>;
+
+    /// Persist an embedding vector for a reflex pattern.
+    async fn update_reflex_pattern_embedding(
+        &self,
+        user_id: &str,
+        normalized_pattern: &str,
+        embedding: &[f32],
+        model: &str,
+    ) -> Result<(), DatabaseError>;
+
+    /// Find the most similar reflex patterns using vector similarity.
+    /// Returns `(record, similarity_score)` pairs ordered by descending similarity.
+    async fn semantic_search_reflex_patterns(
+        &self,
+        user_id: &str,
+        query_embedding: &[f32],
+        limit: i32,
+    ) -> Result<Vec<(ReflexPatternRecord, f64)>, DatabaseError>;
 }
 
 /// A persisted reflex pattern record.
@@ -757,6 +775,8 @@ pub struct ReflexPatternRecord {
     pub updated_at: DateTime<Utc>,
     pub status: String,
     pub compilation_attempts: i32,
+    pub embedding: Option<Vec<f32>>,
+    pub embedding_model: Option<String>,
 }
 
 #[async_trait]

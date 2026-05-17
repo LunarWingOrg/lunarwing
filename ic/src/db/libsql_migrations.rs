@@ -913,6 +913,14 @@ CREATE INDEX IF NOT EXISTS idx_reflex_patterns_match ON reflex_patterns(user_id,
 CREATE INDEX IF NOT EXISTS idx_reflex_patterns_tool ON reflex_patterns(tool_name);
 "#,
     ),
+    (
+        20,
+        "reflex_embeddings",
+        r#"
+ALTER TABLE reflex_patterns ADD COLUMN embedding BLOB;
+ALTER TABLE reflex_patterns ADD COLUMN embedding_model TEXT;
+"#,
+    ),
 ];
 
 /// Migrations whose ADD COLUMN should be skipped when the column already
@@ -920,6 +928,7 @@ CREATE INDEX IF NOT EXISTS idx_reflex_patterns_tool ON reflex_patterns(tool_name
 /// Each entry is `(version, table_name, column_name)`.
 const IDEMPOTENT_ADD_COLUMN_MIGRATIONS: &[(i64, &str, &str)] = &[
     (15, "conversations", "source_channel"),
+    (20, "reflex_patterns", "embedding"),
     (18, "routines", "retry_max_retries"),
 ];
 

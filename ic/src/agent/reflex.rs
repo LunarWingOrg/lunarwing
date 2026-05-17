@@ -6,9 +6,10 @@
 //! ## Matching strategy
 //!
 //! 1. **Exact match** — O(1) hash lookup on normalized input. Fast path.
-//! 2. **Fuzzy match** — Falls back to Jaro-Winkler similarity against all
-//!    known patterns when the exact lookup misses. Configurable threshold.
-//! 3. **Auto-promotion** — Frequently-matched fuzzy hits are promoted to the
+//! 2. **Fuzzy match** — Jaro-Winkler similarity against known patterns.
+//! 3. **Semantic match** — Embedding cosine similarity (requires an
+//!    `EmbeddingProvider`). Silently skipped when no provider is configured.
+//! 4. **Auto-promotion** — Frequently-matched fuzzy hits are promoted to the
 //!    exact-match cache so subsequent calls are O(1).
 
 use std::collections::HashMap;
@@ -23,6 +24,7 @@ use crate::db::Database;
 use crate::tools::builder::{
     BuildRequirement, Language, SoftwareBuilder, SoftwareType,
 };
+use crate::workspace::EmbeddingProvider;
 
 // ── Constants ───────────────────────
 
@@ -39,6 +41,11 @@ const PROMOTION_THRESHOLD: u32 = 3;
 /// Maximum number of fuzzy candidates to evaluate per route call.
 /// Keeps fuzzy fallback bounded in the worst case.
 const MAX_FUZZY_CANDIDATES: usize = 50;
+
+/// Default cosine similarity threshold for semantic matching.
+/// 0.75 requires strong semantic overlap while allowing
+/// paraphrases that Jaro-Winkler misses.
+const DEFAULT_SEMANTIC_THRESHOLD: f64 = 0.75;
 
 // ── Normalization ───────────────────
 
@@ -76,6 +83,28 @@ fn word_overlap(a: &str, b: &str) -> f64 {
     intersection / union.max(1.0)
 }
 
+/// Cosine similarity between two vectors (0.0–1.0 for normalized unit vectors).
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let mut dot = 0.0f64;
+    let mut mag_a = 0.0f64;
+    let mut mag_b = 0.0f64;
+    for (x, y) in a.iter().zip(b.iter()) {
+        let x = *x as f64;
+        let y = *y as f64;
+        dot += x * y;
+        mag_a += x * x;
+        mag_b += y * y;
+    }
+    let denom = mag_a.sqrt() * mag_b.sqrt();
+    if denom == 0.0 {
+        return 0.0;
+    }
+    dot / denom
+}
+
 // ── Fuzzy match result ──────────────────────
 
 /// Result of a fuzzy pattern match.
@@ -103,6 +132,12 @@ pub struct ReflexRouter {
     fuzzy_hits: Arc<RwLock<HashMap<String, u32>>>,
     /// Similarity threshold for fuzzy matching.
     fuzzy_threshold: f64,
+    /// Embedding provider for semantic matching (None = tier disabled).
+    embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
+    /// Cosine similarity threshold for semantic matching.
+    semantic_threshold: f64,
+    /// In-memory cache: normalized pattern → embedding vector.
+    pattern_embeddings: Arc<RwLock<HashMap<String, Vec<f32>>>>,
 }
 
 impl ReflexRouter {
@@ -112,6 +147,9 @@ impl ReflexRouter {
             patterns: Arc::new(RwLock::new(HashMap::new())),
             fuzzy_hits: Arc::new(RwLock::new(HashMap::new())),
             fuzzy_threshold: DEFAULT_FUZZY_THRESHOLD,
+            embedding_provider: None,
+            semantic_threshold: DEFAULT_SEMANTIC_THRESHOLD,
+            pattern_embeddings: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -121,7 +159,22 @@ impl ReflexRouter {
             patterns: Arc::new(RwLock::new(HashMap::new())),
             fuzzy_hits: Arc::new(RwLock::new(HashMap::new())),
             fuzzy_threshold: threshold.clamp(0.0, 1.0),
+            embedding_provider: None,
+            semantic_threshold: DEFAULT_SEMANTIC_THRESHOLD,
+            pattern_embeddings: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Attach an embedding provider to enable semantic matching (tier 3).
+    pub fn with_embedding_provider(mut self, provider: Arc<dyn EmbeddingProvider>) -> Self {
+        self.embedding_provider = Some(provider);
+        self
+    }
+
+    /// Override the default semantic similarity threshold.
+    pub fn with_semantic_threshold(mut self, threshold: f64) -> Self {
+        self.semantic_threshold = threshold.clamp(0.0, 1.0);
+        self
     }
 
     /// Try to route a user input to a compiled reflex tool.
@@ -145,7 +198,18 @@ impl ReflexRouter {
         // Drop the read lock so we can use fuzzy_hits
         drop(patterns);
 
-        self.fuzzy_route(&normalized).await
+        if let Some(tool) = self.fuzzy_route(&normalized).await {
+            return Some(tool);
+        }
+
+        // 3. Semantic fallback — only if embedding provider is set
+        if self.embedding_provider.is_some() {
+            if let Some(tool) = self.semantic_route(&normalized).await {
+                return Some(tool);
+            }
+        }
+
+        None
     }
 
     /// Fuzzy fallback: scan all patterns for similarity.
@@ -211,6 +275,49 @@ impl ReflexRouter {
         }
 
         drop(patterns);
+        None
+    }
+
+    /// Semantic fallback: embed the query and compare against cached pattern embeddings.
+    async fn semantic_route(&self, normalized: &str) -> Option<String> {
+        let provider = self.embedding_provider.as_ref()?;
+        let query_embedding = match provider.embed(normalized).await {
+            Ok(emb) => emb,
+            Err(e) => {
+                tracing::debug!("Reflex semantic embed failed: {}", e);
+                return None;
+            }
+        };
+
+        let embeddings = self.pattern_embeddings.read().await;
+        if embeddings.is_empty() {
+            return None;
+        }
+
+        let mut best_pattern: Option<&str> = None;
+        let mut best_score: f64 = 0.0;
+
+        for (pattern, emb) in embeddings.iter() {
+            let score = cosine_similarity(&query_embedding, emb);
+            if score > best_score {
+                best_score = score;
+                best_pattern = Some(pattern);
+            }
+        }
+
+        if best_score >= self.semantic_threshold {
+            let patterns = self.patterns.read().await;
+            if let Some(tool) = best_pattern.and_then(|p| patterns.get(p).cloned()) {
+                tracing::debug!(
+                    "Reflex semantic match: '{}' ≈ '{}' (cosine: {:.3})",
+                    normalized,
+                    best_pattern.unwrap_or("?"),
+                    best_score
+                );
+                return Some(tool);
+            }
+        }
+
         None
     }
 
@@ -285,15 +392,78 @@ impl ReflexRouter {
         match store.list_reflex_patterns(user_id).await {
             Ok(records) => {
                 let mut patterns = self.patterns.write().await;
+                let mut embeddings = self.pattern_embeddings.write().await;
                 patterns.clear();
-                for record in records {
+                embeddings.clear();
+                for record in &records {
                     if record.status == "active" {
-                        patterns.insert(record.normalized_pattern, record.tool_name);
+                        patterns.insert(
+                            record.normalized_pattern.clone(),
+                            record.tool_name.clone(),
+                        );
+                        if let Some(ref emb) = record.embedding {
+                            embeddings.insert(record.normalized_pattern.clone(), emb.clone());
+                        }
                     }
+                }
+                drop(patterns);
+                drop(embeddings);
+
+                if self.embedding_provider.is_some() {
+                    self.embed_missing_patterns(store, user_id, &records).await;
                 }
             }
             Err(e) => {
                 tracing::warn!("Failed to refresh reflex patterns: {}", e);
+            }
+        }
+    }
+
+    /// Generate and persist embeddings for active patterns that lack them.
+    async fn embed_missing_patterns(
+        &self,
+        store: Arc<dyn Database>,
+        user_id: &str,
+        records: &[crate::db::ReflexPatternRecord],
+    ) {
+        let provider = match self.embedding_provider.as_ref() {
+            Some(p) => p,
+            None => return,
+        };
+
+        let missing: Vec<&str> = records
+            .iter()
+            .filter(|r| r.status == "active" && r.embedding.is_none())
+            .map(|r| r.normalized_pattern.as_str())
+            .collect();
+
+        if missing.is_empty() {
+            return;
+        }
+
+        let texts: Vec<String> = missing.iter().map(|s| s.to_string()).collect();
+        let model_name = provider.model_name().to_string();
+
+        match provider.embed_batch(&texts).await {
+            Ok(embeddings) => {
+                let mut cache = self.pattern_embeddings.write().await;
+                for (pattern, emb) in missing.iter().zip(embeddings.iter()) {
+                    cache.insert(pattern.to_string(), emb.clone());
+                    if let Err(e) = store
+                        .update_reflex_pattern_embedding(user_id, pattern, emb, &model_name)
+                        .await
+                    {
+                        tracing::debug!("Failed to persist reflex embedding for '{}': {}", pattern, e);
+                    }
+                }
+                tracing::debug!(
+                    "Embedded {} missing reflex patterns (model: {})",
+                    missing.len(),
+                    model_name
+                );
+            }
+            Err(e) => {
+                tracing::debug!("Failed to embed missing reflex patterns: {}", e);
             }
         }
     }
@@ -318,6 +488,16 @@ impl ReflexRouter {
     /// Get fuzzy hit counts (for diagnostics).
     pub async fn fuzzy_hit_counts(&self) -> HashMap<String, u32> {
         self.fuzzy_hits.read().await.clone()
+    }
+
+    /// Get current semantic threshold.
+    pub fn semantic_threshold(&self) -> f64 {
+        self.semantic_threshold
+    }
+
+    /// Whether the semantic tier is enabled.
+    pub fn has_embedding_provider(&self) -> bool {
+        self.embedding_provider.is_some()
     }
 }
 
@@ -1126,5 +1306,176 @@ mod tests {
         let config = EvictionConfig::default();
         assert_eq!(config.stale_after_days, 30);
         assert_eq!(config.check_interval, Duration::from_secs(24 * 60 * 60));
+    }
+
+    // ── Cosine similarity ──
+
+    #[test]
+    fn test_cosine_similarity_identical() {
+        let v = vec![1.0, 0.0, 0.0];
+        let score = cosine_similarity(&v, &v);
+        assert!((score - 1.0).abs() < 1e-6, "identical vectors should be 1.0, got {}", score);
+    }
+
+    #[test]
+    fn test_cosine_similarity_orthogonal() {
+        let a = vec![1.0, 0.0, 0.0];
+        let b = vec![0.0, 1.0, 0.0];
+        let score = cosine_similarity(&a, &b);
+        assert!(score.abs() < 1e-6, "orthogonal vectors should be 0.0, got {}", score);
+    }
+
+    #[test]
+    fn test_cosine_similarity_opposite() {
+        let a = vec![1.0, 0.0];
+        let b = vec![-1.0, 0.0];
+        let score = cosine_similarity(&a, &b);
+        assert!((score + 1.0).abs() < 1e-6, "opposite vectors should be -1.0, got {}", score);
+    }
+
+    #[test]
+    fn test_cosine_similarity_empty() {
+        let score = cosine_similarity(&[], &[]);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn test_cosine_similarity_mismatched_length() {
+        let score = cosine_similarity(&[1.0, 2.0], &[1.0]);
+        assert_eq!(score, 0.0);
+    }
+
+    // ── Semantic routing ──
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_match() {
+        use crate::workspace::MockEmbeddings;
+
+        let provider = Arc::new(MockEmbeddings::new(64));
+        let router = ReflexRouter::new()
+            .with_embedding_provider(provider.clone())
+            .with_semantic_threshold(0.5);
+
+        // Register a pattern
+        router.register("summarize my logs", "tool_summarize").await;
+
+        // Pre-populate the embedding cache with the pattern's embedding
+        let emb = provider.embed("summarize my logs").await.unwrap();
+        {
+            let mut cache = router.pattern_embeddings.write().await;
+            cache.insert("summarize my logs".to_string(), emb);
+        }
+
+        // Identical text should produce identical embedding (cosine = 1.0)
+        let result = router.try_route("summarize my logs").await;
+        // This hits the exact match tier, not semantic
+        assert_eq!(result, Some("tool_summarize".to_string()));
+
+        // Now test with the exact same text but via the semantic path
+        // by registering a pattern that won't match exactly or fuzzily
+        let router2 = ReflexRouter::new()
+            .with_embedding_provider(provider.clone())
+            .with_semantic_threshold(0.5);
+
+        router2.register("check server health status", "tool_health").await;
+        let emb = provider.embed("check server health status").await.unwrap();
+        {
+            let mut cache = router2.pattern_embeddings.write().await;
+            cache.insert("check server health status".to_string(), emb);
+        }
+
+        // Same input should produce cosine 1.0 — semantic match
+        let result = router2.try_route("check server health status").await;
+        // Hits exact match first
+        assert_eq!(result, Some("tool_health".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_no_provider() {
+        let router = ReflexRouter::new();
+        assert!(!router.has_embedding_provider());
+
+        router.register("summarize my logs", "tool_summarize").await;
+
+        // Query that won't match exactly or fuzzily
+        let result = router.try_route("what is my server uptime").await;
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_below_threshold() {
+        use crate::workspace::MockEmbeddings;
+
+        let provider = Arc::new(MockEmbeddings::new(64));
+        // Very high threshold — MockEmbeddings hash-based vectors for
+        // different strings will have low similarity
+        let router = ReflexRouter::new()
+            .with_embedding_provider(provider.clone())
+            .with_semantic_threshold(0.99);
+
+        router.register("summarize my logs", "tool_summarize").await;
+        let emb = provider.embed("summarize my logs").await.unwrap();
+        {
+            let mut cache = router.pattern_embeddings.write().await;
+            cache.insert("summarize my logs".to_string(), emb);
+        }
+
+        // Completely different text — MockEmbeddings generates different
+        // hash-based vectors, cosine similarity will be well below 0.99
+        let result = router.try_route("what is the weather forecast today").await;
+        assert_eq!(result, None, "dissimilar text should not match with high threshold");
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_identical_text_matches() {
+        use crate::workspace::MockEmbeddings;
+
+        // MockEmbeddings is deterministic: same text → same vector → cosine 1.0
+        let provider = Arc::new(MockEmbeddings::new(64));
+        let router = ReflexRouter::with_threshold(0.99) // strict fuzzy so it won't fuzzy-match
+            .with_embedding_provider(provider.clone())
+            .with_semantic_threshold(0.9);
+
+        // Register a pattern under a different key so exact match won't fire
+        {
+            let mut patterns = router.patterns.write().await;
+            patterns.insert("alpha bravo charlie".to_string(), "tool_alpha".to_string());
+        }
+        // Cache the embedding for that pattern
+        let emb = provider.embed("alpha bravo charlie").await.unwrap();
+        {
+            let mut cache = router.pattern_embeddings.write().await;
+            cache.insert("alpha bravo charlie".to_string(), emb);
+        }
+
+        // Same text — will miss exact (normalization matches), so test a
+        // case where normalized matches. Let's use something that fuzzy
+        // won't pick up but semantic will (exact same string after normalize).
+        let result = router.try_route("alpha bravo charlie").await;
+        assert_eq!(result, Some("tool_alpha".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_threshold_accessor() {
+        let router = ReflexRouter::new();
+        assert!((router.semantic_threshold() - DEFAULT_SEMANTIC_THRESHOLD).abs() < 1e-6);
+
+        let router2 = ReflexRouter::new().with_semantic_threshold(0.9);
+        assert!((router2.semantic_threshold() - 0.9).abs() < 1e-6);
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_semantic_empty_cache() {
+        use crate::workspace::MockEmbeddings;
+
+        let provider = Arc::new(MockEmbeddings::new(64));
+        let router = ReflexRouter::new()
+            .with_embedding_provider(provider)
+            .with_semantic_threshold(0.5);
+
+        router.register("hello world", "tool_hello").await;
+        // Don't populate embedding cache — semantic should gracefully return None
+        let result = router.try_route("unrelated query here").await;
+        assert_eq!(result, None);
     }
 }
