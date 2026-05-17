@@ -20,6 +20,7 @@ Feature branches are created from `staging` and named with the release version p
 1.0.6-LunarVision       # Vision service feature
 1.0.6-EmbeddedMemoryUpdate  # Embedding config changes
 1.0.6-CleanupRound2     # Cleanup and removal work
+1.0.6-Lunartica         # Lunartica integration
 ```
 
 When a feature is complete, it is merged into `staging` via pull request or direct merge.
@@ -34,6 +35,7 @@ staging-baud-2
 staging-ruffles-1
 staging-kageho-1
 staging-kageho-2
+staging-reflex-compiler  # Reflex compiler changes
 ```
 
 Agent branches are reviewed and merged into `staging` or the appropriate feature branch.
