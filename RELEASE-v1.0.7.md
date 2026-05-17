@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.0.7
 
-**Release Date:** Pending
+**Release Date:** 2026-05-17
 
 ## Overview
 
