@@ -1,5 +1,7 @@
 # Branch Guide
 
+# This guide is completely out of date. Needs a TOTAL REWRITE
+
 ## Branch Structure
 
 | Branch | Purpose |
