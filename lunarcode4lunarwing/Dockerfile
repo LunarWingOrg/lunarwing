@@ -56,6 +56,7 @@ LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       python3 \
+      python3-dev \
       python3-pip \
       python3-venv \
       git \
@@ -84,6 +85,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libzstd-dev \
       protobuf-compiler \
       libprotobuf-dev \
+      musl-tools \
+      libcurl4-openssl-dev \
+      libxml2-dev \
       nodejs \
       npm \
       openssh-client \

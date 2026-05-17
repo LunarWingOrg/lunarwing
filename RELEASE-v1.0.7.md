@@ -18,7 +18,7 @@ Added `ic/scripts/migrate-ports-v3.sh` — a standalone script to upgrade `/etc/
 
 ### Nanocode Worker: Rust Development Toolchain
 
-The nanocode worker Dockerfile (`lunarcode4lunarwing/Dockerfile`) now includes a full C/C++/Rust development toolchain in the runtime image:
+#### The nanocode worker Dockerfile (`lunarcode4lunarwing/Dockerfile`) now includes a full C/C++/Rust development toolchain in the runtime image:
 
 - `gcc`, `g++`, `libc-dev`, `binutils` — core C/C++ compilation and linking
 - `cmake`, `ninja-build` — build systems for native projects
@@ -27,6 +27,13 @@ The nanocode worker Dockerfile (`lunarcode4lunarwing/Dockerfile`) now includes a
 - `libssl-dev`, `zlib1g-dev`, `libsqlite3-dev`, `libpq-dev` — common Rust crate dependencies
 - `libffi-dev`, `libz-dev`, `liblzma-dev`, `libzstd-dev` — compression and FFI libraries
 - `protobuf-compiler`, `libprotobuf-dev` — Protocol Buffers compilation
+
+##### Additionally, the following packages were also added:
+
+- `musl-tools`
+- `libcurl4-openssl-dev`
+- `libxml2-dev`
+- `python3-dev`
 
 This allows nanocode to compile Rust projects from source inside the container without hitting linker or missing-header errors.
 
