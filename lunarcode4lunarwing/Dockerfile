@@ -44,9 +44,11 @@ LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
 # git             : nanocode needs git for project context
 # ripgrep         : nanocode grep tool dependency
 # curl/wget       : readiness checks, downloads
-# build-essential : C/C++ toolchain (gcc, g++, make)
+# build-essential : C/C++ toolchain (gcc, g++, make, ld)
 # cmake/ninja     : build systems for native projects
-# clang           : alternative C/C++ compiler
+# clang/lld       : alternative C/C++ compiler and linker
+# pkg-config      : library discovery for -sys crates
+# lib*-dev        : common Rust crate dependencies (OpenSSL, zlib, SQLite, etc.)
 # nodejs + npm    : JavaScript runtime and package manager
 # openssh-client  : SSH for git auth and remote access
 # jq              : JSON processing
@@ -62,11 +64,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       wget \
       ca-certificates \
       build-essential \
+      gcc \
+      g++ \
+      libc-dev \
+      binutils \
       cmake \
       ninja-build \
       clang \
+      lld \
+      llvm \
       pkg-config \
       libssl-dev \
+      zlib1g-dev \
+      libsqlite3-dev \
+      libpq-dev \
+      libffi-dev \
+      libz-dev \
+      liblzma-dev \
+      libzstd-dev \
+      protobuf-compiler \
+      libprotobuf-dev \
       nodejs \
       npm \
       openssh-client \
