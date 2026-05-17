@@ -4,9 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream.
+**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream. License: AGPLv3 (the `license` field in Cargo.toml still says MIT/Apache-2.0 from upstream — the actual LICENSE file is AGPLv3).
 
 This is a self-hostable, privacy-first AI agent. The fork prioritizes true freedom, XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Ironclaw compatibility is NOT a goal moving forward.
+
+## Branching Strategy
+
+`staging` is the integration branch. All feature branches merge here first; releases are tagged from staging.
+
+- **Feature branches**: `1.0.6-<FeatureName>` (e.g., `1.0.6-LunarVision`, `1.0.6-EmbeddedMemoryUpdate`)
+- **Agent branches**: `staging-<agentname>-<n>` (e.g., `staging-ruffles-1`, `staging-kageho-2`)
+- **Experimental**: `experimental-*` for features not yet targeting a release
+
+See `docs/guides/BRANCH_GUIDE.md` for full details and `FEATURE_BRANCHES_1.0.6.md` for active v1.0.6 branches.
 
 ### Binary Rename (ironclaw → lunarwing)
 
@@ -36,6 +46,15 @@ The binary, Cargo package, and all four internal crates have been renamed from `
 - GCP resource names in `ic/deploy/cloud-sql-proxy.service`
 - `ic/CHANGELOG.md` historical entries
 - Shell completion scripts: `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh`
+
+## Code Style
+
+- Prefer `crate::` for cross-module imports; `super::` is fine in tests and intra-module refs
+- No `.unwrap()` or `.expect()` in production code (tests are fine)
+- Use `thiserror` for error types; map errors with context: `.map_err(|e| SomeError::Variant { reason: e.to_string() })?`
+- Multi-line prompts go in `.md` files loaded via `include_str!()`, not inline Rust strings
+- New code should import from `lunarwing_safety` directly (not `crate::safety::*`). When touching a file that still uses the old path, migrate its imports.
+- All I/O is async with tokio. `Arc<T>` for shared state, `RwLock` for concurrent access.
 
 ## Build & Test
 
@@ -190,6 +209,16 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 
 Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`, `Observer`, `SuccessEvaluator`, `NetworkPolicyDecider`.
 
+### Shared Agentic Loop
+
+All three execution paths (chat, job, container) use `run_agentic_loop()` in `src/agent/agentic_loop.rs` with a `LoopDelegate` trait:
+
+- **`ChatDelegate`** (`dispatcher.rs`) — conversational turns, tool approval, skill injection
+- **`JobDelegate`** (`src/worker/job.rs`) — background scheduler jobs, planning support
+- **`ContainerDelegate`** (`src/worker/container.rs`) — Docker container worker, HTTP event streaming
+
+The loop cycles: check signals → pre-LLM hook → LLM call → handle text/tool response → post-iteration hook → repeat until `LoopOutcome` returned. Tools flagged `requires_approval` pause the loop and emit an `approval_needed` SSE event to the web gateway.
+
 ## Vision Service (OCR Sidecar)
 
 The OCR sidecar (`projects/ocr-sidecar/`) is a standalone Rust service providing image analysis capabilities via REST API. It runs as a separate container or process on port 8088.
@@ -318,28 +347,15 @@ The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral mu
 
 ## Test Harness (`lunarwing-xmpp-test-env.sh`)
 
-`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack integration test harness. It is cross-platform (Linux and macOS):
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack integration test harness. Cross-platform (Linux and macOS):
 
-- **Single-tenant** (`up`/`down`): always uses direct PID-file process management — works on all platforms
-- **Multi-tenant** (`mt-up`/`mt-down`): auto-detects init system via `_mt_detect_init()` and uses the appropriate path:
-  - **macOS**: `launchd` — generates `.plist` files in `$TEST_ROOT/launchd/`, installs to `~/Library/LaunchAgents/`
-  - **Linux systemd**: user units in `~/.config/systemd/user/`
-  - **Linux OpenRC**: system-level init scripts via `rc-service`
-  - **Fallback**: direct process management
+- **Single-tenant** (`up`/`down`): direct PID-file process management — works on all platforms
+- **Multi-tenant** (`mt-up`/`mt-down`): auto-detects init system (launchd/systemd/OpenRC/fallback)
+- **`doctor`**: reports service status for whichever init system is present
 
-**Key cross-platform notes:**
-- `sed -i` portability: use `_sed_i()` helper (wraps `sed -i ''` on macOS, `sed -i` on Linux) — never call `sed -i` directly
-- `LAUNCHD_DIR` (`$TEST_ROOT/launchd/`) mirrors `SYSTEMD_DIR` for plist artifacts
-- `render-launchd` / `mt-render-launchd` generate validated plist files (all env vars from env files are embedded inline, since launchd has no `EnvironmentFile=` equivalent)
-- `CLI_ENABLED=false` is always injected into launchd plists (prevents blocking stdin in daemon mode)
-- Launchd plist labels are tenant-scoped (`com.lunarwing.test.mt-a.daemon`, `com.lunarwing.test.mt-b.daemon`) derived from the test root basename — both tenants coexist in `~/Library/LaunchAgents/` without conflict. Single-tenant plists use the bare label (`com.lunarwing.test.daemon`)
-- WASM builds on macOS require `wasm32-wasip1` and `wasm32-wasip2` targets plus `cargo-component` and `wasm-tools`. Homebrew's `rustc` lacks WASM targets — the rustup toolchain bin dir must precede `/opt/homebrew/bin` in `PATH`
+Key cross-platform rule: never call `sed -i` directly — use the `_sed_i()` helper. WASM builds on macOS require `wasm32-wasip1` and `wasm32-wasip2` targets via rustup (Homebrew's rustc lacks them).
 
-**`doctor` command** reports service status for whichever init system is present:
-- macOS: launchd agent load status
-- Linux systemd: `systemctl --user status`
-- Linux OpenRC: `rc-service status`, default runlevel registration, watchdog installation (script, conf.d, cron.hourly/fcrontab)
-- None detected: reports PID-file-only mode
+Full cross-platform details: `ic/testing/lunarwing-xmpp/README.md`, `docs/ops/HARNESS-SINGLE-TENANT.md`, `docs/ops/MULTITENANCY-HARNESS.md`.
 
 ## Harness Environment Defaults
 
