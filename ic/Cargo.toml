@@ -27,7 +27,7 @@ edition = "2024"
 rust-version = "1.92"
 description = "Secure, privacy-first AI agent with XMPP/OMEMO, Gotify, and open-protocol channels"
 authors = ["LunarWing Team"]
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-or-later"
 homepage = "https://github.com/LunarWingOrg/lunarwing"
 repository = "https://github.com/LunarWingOrg/lunarwing"
 
