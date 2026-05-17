@@ -397,7 +397,10 @@ impl ReflexCompiler {
     }
 
     /// Scan for recurring patterns and compile them.
-    async fn compile_patterns(&self) {
+    ///
+    /// Public so integration tests can trigger a single sweep without waiting
+    /// for the background ticker.
+    pub async fn compile_patterns(&self) {
         match self
             .store
             .find_recurring_job_patterns(self.min_match_count as i32, self.max_patterns_per_run as i32)
