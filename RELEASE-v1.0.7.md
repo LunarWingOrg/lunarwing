@@ -89,10 +89,11 @@ Documented the DNS resolution failure during Docker builds (rustup/npm cannot re
 | Feature | Target |
 |---------|--------|
 | Lunartica/Multica bridge WASM tool | v1.0.8+ |
-| Reflex compiler (smart rules engine) | v1.0.8+ |
+| Reflex compiler (smart rules engine which will drastically reduce the need to call LLMs to run certain tools which are frequently used) | v1.0.8+ |
 | LunarVoice (audio input/output) | v1.0.8+ |
 | XMPP MUC OMEMO fixes | v1.0.8 |
 | Character Lorebooks / profile enhancements | v1.0.9+ |
+| Updated CI/CD Development Pipeline for LunarWing | v1.0.8 |
 | Server-side WebSocket keepalive | v1.0.8 |
 | Proprietary Channel removal (Discord, Slack, Telegram sources) | v1.0.8+ |
 
