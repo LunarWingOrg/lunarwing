@@ -222,7 +222,7 @@ async fn e2e_compile_then_route_exact() {
     let router = ReflexRouter::new();
     router.refresh(Arc::clone(&store), "default").await;
 
-    let routed = router.route("summarize my logs").await;
+    let routed = router.try_route("summarize my logs").await;
     assert_eq!(
         routed.as_deref(),
         Some(tool_name.as_str()),
@@ -243,7 +243,7 @@ async fn e2e_compile_then_route_fuzzy() {
     router.refresh(Arc::clone(&store), "default").await;
 
     // Slightly paraphrased input — should fuzzy-match.
-    let routed = router.route("check server health status").await;
+    let routed = router.try_route("check server health status").await;
     assert!(
         routed.is_some(),
         "'check server health status' should fuzzy-match the compiled pattern"
@@ -335,7 +335,7 @@ async fn e2e_evicted_pattern_excluded_from_router() {
     let router = ReflexRouter::new();
     router.refresh(Arc::clone(&store), "default").await;
     assert!(
-        router.route("old routine task").await.is_some(),
+        router.try_route("old routine task").await.is_some(),
         "pattern should route before eviction"
     );
 
@@ -367,7 +367,7 @@ async fn e2e_evicted_pattern_excluded_from_router() {
     // Refresh router — evicted pattern must be gone.
     router.refresh(Arc::clone(&store), "default").await;
     assert!(
-        router.route("old routine task").await.is_none(),
+        router.try_route("old routine task").await.is_none(),
         "evicted pattern should not route after cache refresh"
     );
 }
@@ -395,7 +395,7 @@ async fn e2e_multiple_patterns_compile_and_route() {
     );
     for desc in &descs {
         assert!(
-            router.route(desc).await.is_some(),
+            router.try_route(desc).await.is_some(),
             "pattern '{desc}' should route after bulk compile"
         );
     }
