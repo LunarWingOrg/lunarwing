@@ -16,6 +16,7 @@ use crate::agent::context_monitor::ContextMonitor;
 use crate::agent::heartbeat::spawn_heartbeat;
 use crate::agent::routine_engine::{RoutineEngine, spawn_cron_ticker};
 use crate::agent::self_repair::{DefaultSelfRepair, RepairResult, SelfRepair};
+use crate::agent::session::ThreadState;
 use crate::agent::session_manager::SessionManager;
 use crate::agent::submission::{Submission, SubmissionParser, SubmissionResult};
 use crate::agent::{HeartbeatConfig as AgentHeartbeatConfig, Router, Scheduler, SchedulerDeps};
@@ -881,6 +882,32 @@ impl Agent {
                         user = %message.user_id,
                         "handle_message timed out — skipping message"
                     );
+
+                    // The timed-out handle_message may have called start_turn(),
+                    // setting ThreadState::Processing. The future was dropped
+                    // before complete_turn/fail_turn could run, so the thread
+                    // is stuck in Processing forever. Reset it here.
+                    let (session, thread_id) = self
+                        .session_manager
+                        .resolve_thread(
+                            &message.user_id,
+                            &message.channel,
+                            message.conversation_scope(),
+                        )
+                        .await;
+                    {
+                        let mut sess = session.lock().await;
+                        if let Some(thread) = sess.threads.get_mut(&thread_id) {
+                            if thread.state == ThreadState::Processing {
+                                thread.fail_turn("handle_message timed out");
+                                tracing::warn!(
+                                    thread_id = %thread_id,
+                                    "Reset stuck thread from Processing to Idle after timeout"
+                                );
+                            }
+                        }
+                    }
+
                     let _ = self
                         .channels
                         .respond(

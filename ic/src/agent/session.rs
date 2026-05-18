@@ -1625,4 +1625,35 @@ mod tests {
         let merged = thread.drain_pending_messages().unwrap();
         assert_eq!(merged, "failed batch\nnew msg");
     }
+
+    /// Regression: handle_message timeout left thread stuck in Processing.
+    /// Messages queued during Processing must be drainable after fail_turn
+    /// resets the thread to Idle.
+    #[test]
+    fn test_timeout_resets_stuck_processing_thread() {
+        let mut thread = Thread::new(Uuid::new_v4());
+
+        // Simulate start_turn followed by an external timeout (no complete/fail)
+        thread.start_turn("user message");
+        assert_eq!(thread.state, ThreadState::Processing);
+
+        // Messages arriving during Processing get queued
+        assert!(thread.queue_message("followup 1".into()));
+        assert!(thread.queue_message("followup 2".into()));
+        assert_eq!(thread.pending_messages.len(), 2);
+
+        // The timeout handler calls fail_turn to recover
+        thread.fail_turn("handle_message timed out");
+        assert_eq!(thread.state, ThreadState::Idle);
+
+        // Queued messages survive and can be drained on next turn
+        let merged = thread.drain_pending_messages().unwrap();
+        assert_eq!(merged, "followup 1\nfollowup 2");
+
+        // New turns can proceed normally
+        thread.start_turn("retry message");
+        assert_eq!(thread.state, ThreadState::Processing);
+        thread.complete_turn("success");
+        assert_eq!(thread.state, ThreadState::Idle);
+    }
 }
