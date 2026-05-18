@@ -929,6 +929,7 @@ ALTER TABLE reflex_patterns ADD COLUMN embedding_model TEXT;
 const IDEMPOTENT_ADD_COLUMN_MIGRATIONS: &[(i64, &str, &str)] = &[
     (15, "conversations", "source_channel"),
     (20, "reflex_patterns", "embedding"),
+    (20, "reflex_patterns", "embedding_model"),
     (18, "routines", "retry_max_retries"),
 ];
 

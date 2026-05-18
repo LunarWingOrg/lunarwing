@@ -329,15 +329,22 @@ impl ReflexRouter {
         *count += 1;
 
         if *count >= PROMOTION_THRESHOLD {
-            // Promote: this pattern now gets an exact-match entry
-            // for whatever variant triggered it. We don't need to
-            // do anything special — the exact cache still works.
+            // Promote: insert this pattern into the exact-match cache
+            // so subsequent calls are O(1) instead of fuzzy.
+            // We need the tool_name from the patterns map.
+            let patterns = self.patterns.read().await;
+            if let Some(tool_name) = patterns.get(pattern).cloned() {
+                drop(patterns);
+                let mut patterns = self.patterns.write().await;
+                patterns.insert(pattern.to_string(), tool_name);
+            }
+
             tracing::info!(
                 "Reflex pattern '{}' promoted to fast path ({} fuzzy hits)",
                 pattern,
                 *count
             );
-            // Reset counter so we don't keep logging
+            // Reset counter so subsequent fuzzy hits don't keep logging
             *count = 0;
         }
     }
@@ -382,9 +389,52 @@ impl ReflexRouter {
             }
         }
 
-        candidates
+        if let Some(best) = candidates
             .into_iter()
             .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+        {
+            return Some(best);
+        }
+
+        // 3. Semantic fallback
+        if let Some(provider) = self.embedding_provider.as_ref() {
+            let query_embedding = match provider.embed(&normalized).await {
+                Ok(emb) => emb,
+                Err(e) => {
+                    tracing::debug!("Reflex semantic embed failed (details): {}", e);
+                    return None;
+                }
+            };
+
+            let embeddings = self.pattern_embeddings.read().await;
+            if embeddings.is_empty() {
+                return None;
+            }
+
+            let mut best_pattern: Option<String> = None;
+            let mut best_score: f64 = 0.0;
+
+            for (pattern, emb) in embeddings.iter() {
+                let score = cosine_similarity(&query_embedding, emb);
+                if score > best_score {
+                    best_score = score;
+                    best_pattern = Some(pattern.clone());
+                }
+            }
+
+            if best_score >= self.semantic_threshold {
+                let patterns = self.patterns.read().await;
+                if let Some(tool) = best_pattern.as_ref().and_then(|p| patterns.get(p).cloned()) {
+                    return Some(FuzzyMatch {
+                        tool_name: tool,
+                        matched_pattern: best_pattern.unwrap_or_default(),
+                        score: best_score,
+                    });
+                }
+            }
+        }
+
+        None
     }
 
     /// Refresh the pattern cache from the database.
