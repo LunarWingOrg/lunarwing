@@ -4,6 +4,7 @@
 //! processing, undo/redo, approval, auth, persistence) from the core loop.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -178,6 +179,7 @@ impl Agent {
         session: Arc<Mutex<Session>>,
         thread_id: Uuid,
         content: &str,
+        suppressed: &AtomicBool,
     ) -> Result<SubmissionResult, Error> {
         tracing::debug!(
             message_id = %message.id,
@@ -450,15 +452,17 @@ impl Agent {
             "User message persisted, starting agentic loop"
         );
 
-        // Send thinking status
-        let _ = self
-            .channels
-            .send_status(
-                &message.channel,
-                StatusUpdate::Thinking("Processing...".into()),
-                &message.metadata,
-            )
-            .await;
+        // Send thinking status (skip if response delivery was suppressed by timeout)
+        if !suppressed.load(Ordering::SeqCst) {
+            let _ = self
+                .channels
+                .send_status(
+                    &message.channel,
+                    StatusUpdate::Thinking("Processing...".into()),
+                    &message.metadata,
+                )
+                .await;
+        }
 
         // Run the agentic tool execution loop
         let result = self
@@ -473,14 +477,16 @@ impl Agent {
             .ok_or_else(|| Error::from(crate::error::JobError::NotFound { id: thread_id }))?;
 
         if thread.state == ThreadState::Interrupted {
-            let _ = self
-                .channels
-                .send_status(
-                    &message.channel,
-                    StatusUpdate::Status("Interrupted".into()),
-                    &message.metadata,
-                )
-                .await;
+            if !suppressed.load(Ordering::SeqCst) {
+                let _ = self
+                    .channels
+                    .send_status(
+                        &message.channel,
+                        StatusUpdate::Status("Interrupted".into()),
+                        &message.metadata,
+                    )
+                    .await;
+            }
             return Ok(SubmissionResult::Interrupted);
         }
 
@@ -512,20 +518,27 @@ impl Agent {
                     }
                 };
 
+                // State transitions and DB persistence always happen,
+                // even when response delivery is suppressed by a timeout.
                 thread.complete_turn(&response);
                 let (turn_number, tool_calls) = thread
                     .turns
                     .last()
                     .map(|t| (t.turn_number, t.tool_calls.clone()))
                     .unwrap_or_default();
-                let _ = self
-                    .channels
-                    .send_status(
-                        &message.channel,
-                        StatusUpdate::Status("Done".into()),
-                        &message.metadata,
-                    )
-                    .await;
+
+                let is_suppressed = suppressed.load(Ordering::SeqCst);
+
+                if !is_suppressed {
+                    let _ = self
+                        .channels
+                        .send_status(
+                            &message.channel,
+                            StatusUpdate::Status("Done".into()),
+                            &message.metadata,
+                        )
+                        .await;
+                }
 
                 // Persist tool calls then assistant response (user message already persisted at turn start)
                 self.persist_tool_calls(
@@ -544,43 +557,45 @@ impl Agent {
                 )
                 .await;
 
-                // Send suggestions after response (best-effort, rendered by web gateway)
-                if !suggestions.is_empty() {
-                    let _ = self
-                        .channels
-                        .send_status(
-                            &message.channel,
-                            StatusUpdate::Suggestions { suggestions },
-                            &message.metadata,
-                        )
-                        .await;
-                }
+                if !is_suppressed {
+                    // Send suggestions after response (best-effort, rendered by web gateway)
+                    if !suggestions.is_empty() {
+                        let _ = self
+                            .channels
+                            .send_status(
+                                &message.channel,
+                                StatusUpdate::Suggestions { suggestions },
+                                &message.metadata,
+                            )
+                            .await;
+                    }
 
-                // Emit per-turn cost summary
-                {
-                    let usage = self.cost_guard().model_usage().await;
-                    let (total_in, total_out, total_cost) =
-                        usage
-                            .values()
-                            .fold((0u64, 0u64, rust_decimal::Decimal::ZERO), |acc, m| {
-                                (
-                                    acc.0 + m.input_tokens,
-                                    acc.1 + m.output_tokens,
-                                    acc.2 + m.cost,
-                                )
-                            });
-                    let _ = self
-                        .channels
-                        .send_status(
-                            &message.channel,
-                            StatusUpdate::TurnCost {
-                                input_tokens: total_in,
-                                output_tokens: total_out,
-                                cost_usd: format!("${:.4}", total_cost),
-                            },
-                            &message.metadata,
-                        )
-                        .await;
+                    // Emit per-turn cost summary
+                    {
+                        let usage = self.cost_guard().model_usage().await;
+                        let (total_in, total_out, total_cost) =
+                            usage
+                                .values()
+                                .fold((0u64, 0u64, rust_decimal::Decimal::ZERO), |acc, m| {
+                                    (
+                                        acc.0 + m.input_tokens,
+                                        acc.1 + m.output_tokens,
+                                        acc.2 + m.cost,
+                                    )
+                                });
+                        let _ = self
+                            .channels
+                            .send_status(
+                                &message.channel,
+                                StatusUpdate::TurnCost {
+                                    input_tokens: total_in,
+                                    output_tokens: total_out,
+                                    cost_usd: format!("${:.4}", total_cost),
+                                },
+                                &message.metadata,
+                            )
+                            .await;
+                    }
                 }
 
                 Ok(SubmissionResult::response(response))
@@ -593,20 +608,22 @@ impl Agent {
                 let parameters = pending.display_parameters.clone();
                 let allow_always = pending.allow_always;
                 thread.await_approval(*pending);
-                let _ = self
-                    .channels
-                    .send_status(
-                        &message.channel,
-                        StatusUpdate::ApprovalNeeded {
-                            request_id: request_id.to_string(),
-                            tool_name: tool_name.clone(),
-                            description: description.clone(),
-                            parameters: parameters.clone(),
-                            allow_always,
-                        },
-                        &message.metadata,
-                    )
-                    .await;
+                if !suppressed.load(Ordering::SeqCst) {
+                    let _ = self
+                        .channels
+                        .send_status(
+                            &message.channel,
+                            StatusUpdate::ApprovalNeeded {
+                                request_id: request_id.to_string(),
+                                tool_name: tool_name.clone(),
+                                description: description.clone(),
+                                parameters: parameters.clone(),
+                                allow_always,
+                            },
+                            &message.metadata,
+                        )
+                        .await;
+                }
                 Ok(SubmissionResult::NeedApproval {
                     request_id,
                     tool_name,

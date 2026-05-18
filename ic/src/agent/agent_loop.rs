@@ -8,6 +8,7 @@
 //! - `thread_ops` - Thread/session operations (user input, undo, approval, persistence)
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::StreamExt;
 use uuid::Uuid;
@@ -873,16 +874,19 @@ impl Agent {
             // naturally (calling complete_turn/fail_turn) even if the soft
             // timeout fires. This prevents the thread from getting stuck in
             // Processing state forever.
+            let suppressed = Arc::new(AtomicBool::new(false));
             let agent = Arc::clone(&self);
             let msg = message.clone();
+            let suppressed_task = Arc::clone(&suppressed);
             let handle = tokio::spawn(async move {
-                agent.handle_message(&msg).await
+                agent.handle_message(&msg, &suppressed_task).await
             });
 
             let soft_timeout = self.config.handle_message_timeout;
             match tokio::time::timeout(soft_timeout, handle).await {
                 // ── Soft timeout: task keeps running, user gets immediate feedback ──
                 Err(_elapsed) => {
+                    suppressed.store(true, Ordering::SeqCst);
                     tracing::error!(
                         timeout_secs = soft_timeout.as_secs(),
                         channel = %message.channel,
@@ -1127,7 +1131,11 @@ impl Agent {
         }
     }
 
-    async fn handle_message(&self, message: &IncomingMessage) -> Result<Option<String>, Error> {
+    async fn handle_message(
+        &self,
+        message: &IncomingMessage,
+        suppressed: &AtomicBool,
+    ) -> Result<Option<String>, Error> {
         // Log sensitive details at debug level for troubleshooting
         tracing::debug!(
             message_id = %message.id,
@@ -1346,7 +1354,7 @@ impl Agent {
         let result = match submission {
             Submission::UserInput { content } => {
                 let mut result = self
-                    .process_user_input(message, session.clone(), thread_id, &content)
+                    .process_user_input(message, session.clone(), thread_id, &content, suppressed)
                     .await;
 
                 // Drain any messages queued during processing.
@@ -1382,6 +1390,18 @@ impl Agent {
                         "Drain loop: processing merged queued messages"
                     );
 
+                    // If response delivery was suppressed (soft timeout fired),
+                    // skip sending and stop draining — the user already received
+                    // a timeout message. The turn still completed via
+                    // complete_turn/fail_turn so state is clean.
+                    if suppressed.load(Ordering::SeqCst) {
+                        tracing::debug!(
+                            thread_id = %thread_id,
+                            "Drain loop: response suppressed after soft timeout"
+                        );
+                        break;
+                    }
+
                     // Send the completed turn's response before starting the next.
                     //
                     // Known limitations:
@@ -1413,7 +1433,7 @@ impl Agent {
                     let mut queued_msg = message.clone();
                     queued_msg.attachments.clear();
                     result = self
-                        .process_user_input(&queued_msg, session.clone(), thread_id, &next_content)
+                        .process_user_input(&queued_msg, session.clone(), thread_id, &next_content, suppressed)
                         .await;
 
                     // If processing failed, re-queue the drained content so it
