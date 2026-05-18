@@ -378,7 +378,7 @@ impl Agent {
     }
 
     /// Run the agent main loop.
-    pub async fn run(self) -> Result<(), Error> {
+    pub async fn run(self: Arc<Self>) -> Result<(), Error> {
         // Proactive bootstrap: persist the static greeting to DB *before*
         // starting channels so the first web client sees it via history.
         let bootstrap_thread_id = if self
@@ -869,24 +869,78 @@ impl Agent {
             // Store successfully extracted document text in workspace for indexing
             self.store_extracted_documents(&message).await;
 
-            match tokio::time::timeout(
-                self.config.handle_message_timeout,
-                self.handle_message(&message),
-            )
-            .await
-            {
+            // Spawn handle_message as a background task so it can complete
+            // naturally (calling complete_turn/fail_turn) even if the soft
+            // timeout fires. This prevents the thread from getting stuck in
+            // Processing state forever.
+            let agent = Arc::clone(&self);
+            let msg = message.clone();
+            let handle = tokio::spawn(async move {
+                agent.handle_message(&msg).await
+            });
+
+            let soft_timeout = self.config.handle_message_timeout;
+            match tokio::time::timeout(soft_timeout, handle).await {
+                // ── Soft timeout: task keeps running, user gets immediate feedback ──
                 Err(_elapsed) => {
                     tracing::error!(
-                        timeout_secs = self.config.handle_message_timeout.as_secs(),
+                        timeout_secs = soft_timeout.as_secs(),
                         channel = %message.channel,
                         user = %message.user_id,
-                        "handle_message timed out — skipping message"
+                        "handle_message soft timeout — response suppressed, task continues"
                     );
 
-                    // The timed-out handle_message may have called start_turn(),
-                    // setting ThreadState::Processing. The future was dropped
-                    // before complete_turn/fail_turn could run, so the thread
-                    // is stuck in Processing forever. Reset it here.
+                    let _ = self
+                        .channels
+                        .respond(
+                            &message,
+                            OutgoingResponse::text(
+                                "Sorry, your request timed out. Please try again.".to_string(),
+                            ),
+                        )
+                        .await;
+
+                    // Hard-kill timer: if the task hasn't finished after another
+                    // full timeout period, abort it and force-reset thread state.
+                    let hard_agent = Arc::clone(&self);
+                    let hard_user = message.user_id.clone();
+                    let hard_channel = message.channel.clone();
+                    let hard_scope = message.conversation_scope().map(String::from);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(soft_timeout).await;
+
+                        let (session, thread_id) = hard_agent
+                            .session_manager
+                            .resolve_thread(
+                                &hard_user,
+                                &hard_channel,
+                                hard_scope.as_deref(),
+                            )
+                            .await;
+                        let mut sess = session.lock().await;
+                        if let Some(thread) = sess.threads.get_mut(&thread_id) {
+                            if thread.state == ThreadState::Processing {
+                                thread.fail_turn("handle_message hard timeout");
+                                tracing::warn!(
+                                    thread_id = %thread_id,
+                                    "Hard timeout: reset stuck thread from Processing to Idle"
+                                );
+                            }
+                        }
+                    });
+
+                    continue;
+                }
+                // ── Task panicked ──
+                Ok(Err(join_error)) => {
+                    tracing::error!(
+                        channel = %message.channel,
+                        user = %message.user_id,
+                        error = %join_error,
+                        "handle_message task panicked"
+                    );
+
+                    // Safety net: reset thread state after panic
                     let (session, thread_id) = self
                         .session_manager
                         .resolve_thread(
@@ -899,10 +953,10 @@ impl Agent {
                         let mut sess = session.lock().await;
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
                             if thread.state == ThreadState::Processing {
-                                thread.fail_turn("handle_message timed out");
+                                thread.fail_turn("handle_message panicked");
                                 tracing::warn!(
                                     thread_id = %thread_id,
-                                    "Reset stuck thread from Processing to Idle after timeout"
+                                    "Reset stuck thread after panic"
                                 );
                             }
                         }
@@ -913,13 +967,13 @@ impl Agent {
                         .respond(
                             &message,
                             OutgoingResponse::text(
-                                "Sorry, your request timed out. Please try again.".to_string(),
+                                "Sorry, something went wrong. Please try again.".to_string(),
                             ),
                         )
                         .await;
-                    continue;
                 }
-                Ok(Ok(Some(response))) if !response.is_empty() => {
+                // ── Normal completion ──
+                Ok(Ok(Ok(Some(response)))) if !response.is_empty() => {
                     // Hook: BeforeOutbound — allow hooks to modify or suppress outbound
                     let event = crate::hooks::HookEvent::Outbound {
                         user_id: message.user_id.clone(),
@@ -961,8 +1015,7 @@ impl Agent {
                         }
                     }
                 }
-                Ok(Ok(Some(empty))) => {
-                    // Empty response, nothing to send (e.g. approval handled via send_status)
+                Ok(Ok(Ok(Some(empty)))) => {
                     tracing::debug!(
                         channel = %message.channel,
                         user = %message.user_id,
@@ -970,12 +1023,11 @@ impl Agent {
                         "Suppressed empty response (not sent to channel)"
                     );
                 }
-                Ok(Ok(None)) => {
-                    // Shutdown signal received (/quit, /exit, /shutdown)
+                Ok(Ok(Ok(None))) => {
                     tracing::info!("Shutdown command received, exiting...");
                     break;
                 }
-                Ok(Err(e)) => {
+                Ok(Ok(Err(e))) => {
                     tracing::error!("Error handling message: {}", e);
                     if let Err(send_err) = self
                         .channels

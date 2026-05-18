@@ -1199,7 +1199,7 @@ async fn async_main() -> anyhow::Result<()> {
         });
     }
 
-    agent.run().await?;
+    Arc::new(agent).run().await?;
 
     // ── Shutdown ────────────────────────────────────────────────────────
 
