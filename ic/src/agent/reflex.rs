@@ -261,9 +261,11 @@ impl ReflexRouter {
             let tool = patterns.get(&best_pattern).cloned();
             drop(patterns);
 
-            if tool.is_some() {
-                // Track fuzzy hit for auto-promotion
-                self.bump_fuzzy_hit(&best_pattern).await;
+            if let Some(tool_name) = tool.as_ref() {
+                // Track fuzzy hit for auto-promotion.
+                // We pass the user's normalized input so that specific variant
+                // can be promoted to the exact-match fast path.
+                self.bump_fuzzy_hit(normalized, tool_name).await;
 
                 tracing::debug!(
                     "Reflex fuzzy match: '{}' ≈ '{}' (score: {:.3})",
@@ -321,30 +323,27 @@ impl ReflexRouter {
         None
     }
 
-    /// Bump the fuzzy hit counter for a pattern and promote if
-    /// the promotion threshold is reached.
-    async fn bump_fuzzy_hit(&self, pattern: &str) {
+    /// Bump the fuzzy hit counter for a specific input variant and promote
+    /// to the exact-match cache if the promotion threshold is reached.
+    async fn bump_fuzzy_hit(&self, normalized_input: &str, tool_name: &str) {
         let mut hits = self.fuzzy_hits.write().await;
-        let count = hits.entry(pattern.to_string()).or_insert(0);
+        let count = hits.entry(normalized_input.to_string()).or_insert(0);
         *count += 1;
 
         if *count >= PROMOTION_THRESHOLD {
-            // Promote: insert this pattern into the exact-match cache
+            // Promote: insert this specific input variant into the exact-match cache
             // so subsequent calls are O(1) instead of fuzzy.
-            // We need the tool_name from the patterns map.
-            let patterns = self.patterns.read().await;
-            if let Some(tool_name) = patterns.get(pattern).cloned() {
-                drop(patterns);
-                let mut patterns = self.patterns.write().await;
-                patterns.insert(pattern.to_string(), tool_name);
-            }
+            let mut patterns = self.patterns.write().await;
+            patterns.insert(normalized_input.to_string(), tool_name.to_string());
+            drop(patterns);
 
             tracing::info!(
-                "Reflex pattern '{}' promoted to fast path ({} fuzzy hits)",
-                pattern,
+                "Reflex variant '{}' promoted to fast path for tool '{}' ({} fuzzy hits)",
+                normalized_input,
+                tool_name,
                 *count
             );
-            // Reset counter so subsequent fuzzy hits don't keep logging
+            // Reset counter so we don't spam the log if it stays in exact cache
             *count = 0;
         }
     }
@@ -1007,22 +1006,56 @@ mod tests {
 
     #[tokio::test]
     async fn test_reflex_router_fuzzy_promotion() {
-        // Patterns that match fuzzily PROMOTION_THRESHOLD times
-        // should be tracked (the router logs promotion).
+        // A specific user input variant that matches fuzzily
+        // PROMOTION_THRESHOLD times should be promoted to the exact-match cache.
         let router = ReflexRouter::new();
         router.register("summarize logs", "tool_summarize").await;
 
-        // Hit it fuzzily several times
-        for i in 0..PROMOTION_THRESHOLD + 2 {
-            let result = router.try_route(&format!("summarize the logs please attempt {}", i)).await;
+        let variant = "summarize the logs please";
+
+        // Hit it fuzzily PROMOTION_THRESHOLD times with the exact same input
+        let threshold = PROMOTION_THRESHOLD;
+        for i in 0..threshold {
+            let result = router.try_route(variant).await;
             assert_eq!(result, Some("tool_summarize".to_string()),
                 "fuzzy match should work on attempt {}", i);
         }
 
-        // Check hit counts
+        // The variant should now be promoted to the exact-match cache.
+        // A fresh route call should hit exact match, not fuzzy.
+        // (We can verify indirectly by checking count was reset to 0.)
         let hits = router.fuzzy_hit_counts().await;
-        let count = hits.get("summarize logs").copied().unwrap_or(0);
-        assert!(count >= 0, "fuzzy hits should be tracked (count: {})", count);
+        let count = hits.get(variant).copied().unwrap_or(99);
+        assert_eq!(count, 0, "fuzzy hit count should reset to 0 after promotion");
+
+        // Routing still works (now via exact match)
+        let result = router.try_route(variant).await;
+        assert_eq!(result, Some("tool_summarize".to_string()),
+            "promoted variant should still route after promotion");
+    }
+
+    #[tokio::test]
+    async fn test_reflex_router_fuzzy_promotion_is_input_specific() {
+        // Different user inputs should NOT share the same promotion counter.
+        let router = ReflexRouter::new();
+        router.register("fetch logs", "tool_fetch").await;
+
+        // Two different inputs, both fuzzy-match the same pattern
+        let variant_a = "fetch the logs please";
+        let variant_b = "get my logs today";
+
+        // Each one hits fewer than the threshold individually
+        for _ in 0..PROMOTION_THRESHOLD - 1 {
+            router.try_route(variant_a).await;
+            router.try_route(variant_b).await;
+        }
+
+        // Neither should be promoted (only threshold-1 hits each)
+        let hits = router.fuzzy_hit_counts().await;
+        assert_eq!(hits.get(variant_a).copied(), Some(PROMOTION_THRESHOLD - 1),
+            "variant_a should not be promoted yet");
+        assert_eq!(hits.get(variant_b).copied(), Some(PROMOTION_THRESHOLD - 1),
+            "variant_b should not be promoted yet");
     }
 
     // ── FuzzyMatch details ──
