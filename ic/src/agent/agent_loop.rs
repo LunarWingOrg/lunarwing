@@ -893,6 +893,21 @@ impl Agent {
                         user = %message.user_id,
                         "handle_message soft timeout — response suppressed, task continues"
                     );
+                    // Log thread state at soft timeout for debugging follow-up-message issues
+                    {
+                        let (session, thread_id) = self.session_manager
+                            .resolve_thread(&message.user_id, &message.channel, message.conversation_scope().as_deref())
+                            .await;
+                        let sess = session.lock().await;
+                        if let Some(thread) = sess.threads.get(&thread_id) {
+                            tracing::warn!(
+                                %thread_id,
+                                state = ?thread.state,
+                                pending_messages = thread.pending_messages.len(),
+                                "SOFT TIMEOUT: thread state snapshot"
+                            );
+                        }
+                    }
 
                     let _ = self
                         .channels
@@ -923,11 +938,21 @@ impl Agent {
                             .await;
                         let mut sess = session.lock().await;
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
+                            let pre_state = thread.state.clone();
                             if thread.state == ThreadState::Processing {
                                 thread.fail_turn("handle_message hard timeout");
                                 tracing::warn!(
                                     thread_id = %thread_id,
-                                    "Hard timeout: reset stuck thread from Processing to Idle"
+                                    ?pre_state,
+                                    new_state = ?thread.state,
+                                    "HARD TIMEOUT: reset stuck thread from Processing to Idle"
+                                );
+                            } else {
+                                tracing::debug!(
+                                    thread_id = %thread_id,
+                                    ?pre_state,
+                                    pending_messages = thread.pending_messages.len(),
+                                    "HARD TIMEOUT: thread not in Processing, no action taken"
                                 );
                             }
                         }
