@@ -181,7 +181,7 @@ impl Agent {
         content: &str,
         suppressed: &AtomicBool,
     ) -> Result<SubmissionResult, Error> {
-        tracing::debug!(
+        tracing::info!(
             message_id = %message.id,
             thread_id = %thread_id,
             content_len = content.len(),
@@ -200,10 +200,16 @@ impl Agent {
                     crate::agent::agent_loop::truncate_for_preview(&a.description, 80);
                 (a.tool_name.clone(), desc_preview)
             });
+            tracing::info!(
+                %thread_id,
+                state = ?thread.state,
+                pending_messages = thread.pending_messages.len(),
+                "process_user_input: initial thread state"
+            );
             (thread.state, approval_context)
         };
 
-        tracing::debug!(
+        tracing::info!(
             message_id = %message.id,
             thread_id = %thread_id,
             thread_state = ?thread_state,
@@ -266,6 +272,13 @@ impl Agent {
                         // Return `Ok` (not `Response`) so the drain loop in
                         // agent_loop.rs breaks — `Ok` signals a control
                         // acknowledgment, not a completed LLM turn.
+                        tracing::warn!(
+                            %thread_id,
+                            message_id = %message.id,
+                            channel = %message.channel,
+                            pending_count = thread.pending_message_count(),
+                            "MESSAGE QUEUED: thread still in Processing state"
+                        );
                         return Ok(SubmissionResult::Ok {
                             message: Some(
                                 "Message queued — will be processed after the current turn.".into(),
@@ -989,6 +1002,14 @@ impl Agent {
                 return Ok(SubmissionResult::ok_with_message(""));
             }
 
+            tracing::info!(
+                %thread_id,
+                approved,
+                always,
+                state = ?thread.state,
+                "process_approval: entering with AwaitingApproval"
+            );
+
             thread.take_pending_approval()
         };
 
@@ -1556,6 +1577,11 @@ impl Agent {
             }
         } else {
             // Rejected - complete the turn with a rejection message and persist
+            tracing::info!(
+                %thread_id,
+                tool_name = %pending.tool_name,
+                "process_approval: rejection branch entered"
+            );
             let rejection = format!(
                 "Tool '{}' was rejected. The agent will not execute this tool.\n\n\
                  You can continue the conversation or try a different approach.",
@@ -1564,8 +1590,18 @@ impl Agent {
             {
                 let mut sess = session.lock().await;
                 if let Some(thread) = sess.threads.get_mut(&thread_id) {
+                    let pre_state = thread.state.clone();
                     thread.clear_pending_approval();
+                    let after_clear = thread.state.clone();
                     thread.complete_turn(&rejection);
+                    let after_complete = thread.state.clone();
+                    tracing::info!(
+                        %thread_id,
+                        ?pre_state,
+                        ?after_clear,
+                        ?after_complete,
+                        "process_approval: rejection state transitions"
+                    );
                     // User message already persisted at turn start; save rejection response
                     self.persist_assistant_response(
                         thread_id,
@@ -1574,6 +1610,25 @@ impl Agent {
                         &rejection,
                     )
                     .await;
+                } else {
+                    tracing::error!(
+                        %thread_id,
+                        "process_approval: rejection branch — thread missing when applying state!"
+                    );
+                }
+            }
+
+            // Defensive paranoia: re-read final state for the log so we can correlate
+            // with later "Message queued" errors if the user reports them.
+            {
+                let sess = session.lock().await;
+                if let Some(thread) = sess.threads.get(&thread_id) {
+                    tracing::info!(
+                        %thread_id,
+                        final_state = ?thread.state,
+                        pending_messages_len = thread.pending_message_count(),
+                        "process_approval: rejection final state before respond"
+                    );
                 }
             }
 

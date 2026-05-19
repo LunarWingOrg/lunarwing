@@ -299,6 +299,11 @@ impl Thread {
         self.pending_messages.pop_front()
     }
 
+    /// Get the count of pending (queued) messages. Helper for logging/diagnostics.
+    pub fn pending_message_count(&self) -> usize {
+        self.pending_messages.len()
+    }
+
     /// Drain all pending messages from the queue.
     /// Multiple messages are joined with newlines so the LLM receives
     /// full context from rapid consecutive inputs (#259).
@@ -326,12 +331,19 @@ impl Thread {
 
     /// Start a new turn with user input.
     pub fn start_turn(&mut self, user_input: impl Into<String>) -> &mut Turn {
+        let prev_state = self.state.clone();
         let turn_number = self.turns.len();
         let turn = Turn::new(turn_number, user_input);
         self.turns.push(turn);
         self.state = ThreadState::Processing;
         self.updated_at = Utc::now();
         // turn_number was len() before push, so it's a valid index after push
+        tracing::info!(
+            prev_state = ?prev_state,
+            turn_number,
+            pending_messages = self.pending_messages.len(),
+            "start_turn: state transition"
+        );
         &mut self.turns[turn_number]
     }
 
