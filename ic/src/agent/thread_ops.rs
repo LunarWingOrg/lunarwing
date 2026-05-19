@@ -181,7 +181,7 @@ impl Agent {
         content: &str,
         suppressed: &AtomicBool,
     ) -> Result<SubmissionResult, Error> {
-        tracing::info!(
+        tracing::debug!(
             message_id = %message.id,
             thread_id = %thread_id,
             content_len = content.len(),
@@ -200,7 +200,7 @@ impl Agent {
                     crate::agent::agent_loop::truncate_for_preview(&a.description, 80);
                 (a.tool_name.clone(), desc_preview)
             });
-            tracing::info!(
+            tracing::debug!(
                 %thread_id,
                 state = ?thread.state,
                 pending_messages = thread.pending_messages.len(),
@@ -209,7 +209,7 @@ impl Agent {
             (thread.state, approval_context)
         };
 
-        tracing::info!(
+        tracing::debug!(
             message_id = %message.id,
             thread_id = %thread_id,
             thread_state = ?thread_state,
@@ -1002,7 +1002,7 @@ impl Agent {
                 return Ok(SubmissionResult::ok_with_message(""));
             }
 
-            tracing::info!(
+            tracing::debug!(
                 %thread_id,
                 approved,
                 always,
@@ -1577,7 +1577,7 @@ impl Agent {
             }
         } else {
             // Rejected - complete the turn with a rejection message and persist
-            tracing::info!(
+            tracing::debug!(
                 %thread_id,
                 tool_name = %pending.tool_name,
                 "process_approval: rejection branch entered"
@@ -1595,7 +1595,7 @@ impl Agent {
                     let after_clear = thread.state.clone();
                     thread.complete_turn(&rejection);
                     let after_complete = thread.state.clone();
-                    tracing::info!(
+                    tracing::debug!(
                         %thread_id,
                         ?pre_state,
                         ?after_clear,
@@ -1623,7 +1623,7 @@ impl Agent {
             {
                 let sess = session.lock().await;
                 if let Some(thread) = sess.threads.get(&thread_id) {
-                    tracing::info!(
+                    tracing::debug!(
                         %thread_id,
                         final_state = ?thread.state,
                         pending_messages_len = thread.pending_message_count(),

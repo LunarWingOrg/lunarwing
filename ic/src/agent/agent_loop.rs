@@ -948,7 +948,7 @@ impl Agent {
                                     "HARD TIMEOUT: reset stuck thread from Processing to Idle"
                                 );
                             } else {
-                                tracing::info!(
+                                tracing::debug!(
                                     thread_id = %thread_id,
                                     ?pre_state,
                                     pending_messages = thread.pending_messages.len(),

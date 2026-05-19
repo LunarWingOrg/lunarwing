@@ -338,7 +338,7 @@ impl Thread {
         self.state = ThreadState::Processing;
         self.updated_at = Utc::now();
         // turn_number was len() before push, so it's a valid index after push
-        tracing::info!(
+        tracing::debug!(
             prev_state = ?prev_state,
             turn_number,
             pending_messages = self.pending_messages.len(),
