@@ -37,6 +37,32 @@ pub struct AgentConfig {
     pub self_repair_op_timeout: Duration,
     /// Max time for session pruning.
     pub session_prune_timeout: Duration,
+    /// Reflex compiler configuration.
+    pub reflex: ReflexConfig,
+}
+
+/// Configuration for the reflex compiler.
+#[derive(Debug, Clone)]
+pub struct ReflexConfig {
+    /// Whether the reflex compiler is enabled.
+    pub enabled: bool,
+    /// How often to check for recurring patterns (default: 30 minutes).
+    pub check_interval: Duration,
+    /// Minimum number of times a pattern must appear before compilation (default: 3).
+    pub min_match_count: u32,
+    /// Maximum patterns to compile per check cycle (default: 5).
+    pub max_patterns_per_run: usize,
+}
+
+impl Default for ReflexConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            check_interval: Duration::from_secs(1800),
+            min_match_count: 3,
+            max_patterns_per_run: 5,
+        }
+    }
 }
 
 impl AgentConfig {
@@ -62,6 +88,7 @@ impl AgentConfig {
             handle_message_timeout: Duration::from_secs(300),
             self_repair_op_timeout: Duration::from_secs(60),
             session_prune_timeout: Duration::from_secs(30),
+            reflex: ReflexConfig::default(),
         }
     }
 
@@ -133,6 +160,15 @@ impl AgentConfig {
                 "AGENT_SESSION_PRUNE_TIMEOUT_SECS",
                 settings.agent.session_prune_timeout_secs,
             )?),
+            reflex: ReflexConfig {
+                enabled: parse_bool_env("REFLEX_COMPILER_ENABLED", false)?,
+                check_interval: Duration::from_secs(parse_optional_env(
+                    "REFLEX_COMPILER_INTERVAL_SECS",
+                    1800u64,
+                )?),
+                min_match_count: parse_optional_env("REFLEX_MIN_MATCH_COUNT", 3u32)?,
+                max_patterns_per_run: parse_optional_env("REFLEX_MAX_PATTERNS_PER_RUN", 5usize)?,
+            },
         })
     }
 }

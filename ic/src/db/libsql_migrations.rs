@@ -889,6 +889,38 @@ ALTER TABLE routines ADD COLUMN retry_backoff_multiplier REAL NOT NULL DEFAULT 2
 ALTER TABLE routines ADD COLUMN retry_max_delay_secs INTEGER NOT NULL DEFAULT 3600;
 "#,
     ),
+    (
+        19,
+        "reflex_patterns",
+        r#"
+CREATE TABLE IF NOT EXISTS reflex_patterns (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    normalized_pattern TEXT NOT NULL,
+    original_pattern TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    match_count INTEGER NOT NULL DEFAULT 1,
+    last_matched_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    status TEXT NOT NULL DEFAULT 'active',
+    compilation_attempts INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, normalized_pattern)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reflex_patterns_user ON reflex_patterns(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_reflex_patterns_match ON reflex_patterns(user_id, match_count DESC);
+CREATE INDEX IF NOT EXISTS idx_reflex_patterns_tool ON reflex_patterns(tool_name);
+"#,
+    ),
+    (
+        20,
+        "reflex_embeddings",
+        r#"
+ALTER TABLE reflex_patterns ADD COLUMN embedding BLOB;
+ALTER TABLE reflex_patterns ADD COLUMN embedding_model TEXT;
+"#,
+    ),
 ];
 
 /// Migrations whose ADD COLUMN should be skipped when the column already
@@ -896,6 +928,8 @@ ALTER TABLE routines ADD COLUMN retry_max_delay_secs INTEGER NOT NULL DEFAULT 36
 /// Each entry is `(version, table_name, column_name)`.
 const IDEMPOTENT_ADD_COLUMN_MIGRATIONS: &[(i64, &str, &str)] = &[
     (15, "conversations", "source_channel"),
+    (20, "reflex_patterns", "embedding"),
+    (20, "reflex_patterns", "embedding_model"),
     (18, "routines", "retry_max_retries"),
 ];
 

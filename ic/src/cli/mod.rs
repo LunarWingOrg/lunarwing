@@ -32,6 +32,7 @@ mod pairing;
 mod registry;
 #[cfg(unix)]
 mod repl;
+mod reflex;
 mod routines;
 mod service;
 mod skills;
@@ -55,6 +56,7 @@ pub use pairing::{PairingCommand, run_pairing_command, run_pairing_command_with_
 pub use registry::{RegistryCommand, run_registry_command};
 #[cfg(unix)]
 pub use repl::ReplCommand;
+pub use reflex::{ReflexCommand, run_reflex_command};
 pub use routines::{RoutinesCommand, run_routines_command};
 pub use service::{ServiceCommand, run_service_command};
 pub use skills::{SkillsCommand, run_skills_command};
@@ -174,6 +176,14 @@ pub enum Command {
         long_about = "List configured messaging channels.\nExamples:\n  lunarwing channels list\n  lunarwing channels list --verbose\n  lunarwing channels list --json"
     )]
     Channels(ChannelsCommand),
+
+    /// Manage reflex patterns (compiled recurring prompts)
+    #[command(
+        subcommand,
+        about = "Manage reflex patterns",
+        long_about = "List, show, delete, and check status of reflex patterns.\nExamples:\n  lunarwing reflex list\n  lunarwing reflex status\n  lunarwing reflex delete <id>"
+    )]
+    Reflex(ReflexCommand),
 
     /// Manage routines (scheduled, event-driven, webhook, manual)
     #[command(

@@ -196,6 +196,8 @@ pub struct Agent {
     /// Engine v2 mission manager slot (set after engine init).
     pub(crate) mission_manager_slot:
         Arc<tokio::sync::RwLock<Option<Arc<lunarwing_engine::MissionManager>>>>,
+    /// Reflex router for fast-path pattern matching.
+    pub(super) reflex_router: Arc<crate::agent::reflex::ReflexRouter>,
 }
 
 impl Agent {
@@ -265,6 +267,7 @@ impl Agent {
             routine_config,
             routine_engine_slot: Arc::new(tokio::sync::RwLock::new(None)),
             mission_manager_slot: Arc::new(tokio::sync::RwLock::new(None)),
+            reflex_router: Arc::new(crate::agent::reflex::ReflexRouter::new()),
         }
     }
 
@@ -653,6 +656,46 @@ impl Agent {
             }
         } else {
             None
+        };
+
+        // Spawn reflex compiler and cache refresh if enabled
+        let (_reflex_compiler_handle, _reflex_cache_handle) = if self.config.reflex.enabled {
+            let compiler_handle = if let (Some(store), Some(builder)) = (self.store(), self.deps.builder.clone()) {
+                tracing::info!(
+                    "Reflex compiler enabled: checking every {}s, min {} matches",
+                    self.config.reflex.check_interval.as_secs(),
+                    self.config.reflex.min_match_count
+                );
+                Some(crate::agent::reflex::spawn_reflex_compiler(
+                    builder,
+                    Arc::clone(store),
+                    self.config.reflex.check_interval,
+                    self.config.reflex.min_match_count,
+                    self.config.reflex.max_patterns_per_run,
+                ))
+            } else {
+                tracing::warn!("Reflex compiler enabled but store or builder not available");
+                None
+            };
+
+            let cache_handle = if let Some(store) = self.store() {
+                tracing::debug!(
+                    "Reflex cache refresh enabled: refreshing every {}s",
+                    self.config.reflex.check_interval.as_secs()
+                );
+                Some(crate::agent::reflex::spawn_reflex_cache_refresh(
+                    Arc::clone(&self.reflex_router),
+                    Arc::clone(store),
+                    self.owner_id().to_string(),
+                    self.config.reflex.check_interval,
+                ))
+            } else {
+                None
+            };
+
+            (compiler_handle, cache_handle)
+        } else {
+            (None, None)
         };
 
         // Spawn routine engine if enabled

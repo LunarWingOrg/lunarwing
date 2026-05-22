@@ -136,6 +136,21 @@ async fn async_main() -> anyhow::Result<()> {
             )
             .await;
         }
+        Some(Command::Reflex(reflex_cmd)) => {
+            init_cli_tracing();
+            let config = lunarwing::config::Config::from_env_with_toml(cli.config.as_deref())
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            let db: Arc<dyn lunarwing::db::Database> = lunarwing::db::connect_from_config(&config.database)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            let user_id = std::env::var("LUNARWING_OWNER_ID")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| "default".to_string());
+            return lunarwing::cli::run_reflex_command(reflex_cmd.clone(), db, &user_id).await;
+        }
         Some(Command::Routines(routines_cmd)) => {
             init_cli_tracing();
             return lunarwing::cli::run_routines_cli(routines_cmd, cli.config.as_deref()).await;

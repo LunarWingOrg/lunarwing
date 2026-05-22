@@ -116,6 +116,9 @@ lunarwing_safety = { path = "crates/lunarwing_safety", version = "1.0.0" }
 regex = "1"
 aho-corasick = "1"
 
+# Fuzzy string matching for the reflex router
+strsim = "0.11"
+
 # YAML parsing for SKILL.md frontmatter
 serde_yml = "0.0.12"
 
