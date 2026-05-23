@@ -26,11 +26,13 @@ ___
 7. [ ] Log OMEMO MUC bug in bugs documentation (discovered 2026-05-12: posting in MUC room triggers ~20 OMEMO fallback spam notices in private chat even when OMEMO disabled for 1:1 JID). There is other bug where processing loop gets stuck sometimes that happens super rarely (only once ever). Log this too.
 8. [ ] Ensure all ^previous 1.0.7 checklist items were completed
 9. [ ] first iteration of reflex compiler added to staging
-10. [ ] Character Lorebooks and profile enhancements. Profile onboarding already added in previous release but adding this to testing suite would be appreciated.
-11. [ ] Enhance automated testing scripts. number 11 is related to this.
-12. [ ] need a full extensive test using my testing_guide and other testing scripts
-13. [ ] Complete tests of everything that was changed since 1.0.6
-14. [ ] Write up release notes for v1.0.7 explaining all changes since v1.0.6
-15. [ ] Create a new branch to correspond with release
-16. [ ] Create GH release tag and add release notes to it like other releases already have
+10. [ ] test reflex compiler over period of time
+11. [ ] test new codex container
+12. [ ] Character Lorebooks and profile enhancements. Profile onboarding already added in previous release but adding this to testing suite would be appreciated.
+13. [ ] Enhance automated testing scripts. number 11 is related to this.
+14. [ ] need a full extensive test using my testing_guide and other testing scripts
+15. [ ] Complete tests of everything that was changed since 1.0.6
+16. [ ] Write up release notes for v1.0.7 explaining all changes since v1.0.6
+17. [ ] Create a new branch to correspond with release
+18. [ ] Create GH release tag and add release notes to it like other releases already have
 
