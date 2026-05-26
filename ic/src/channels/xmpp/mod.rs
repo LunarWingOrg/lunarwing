@@ -3161,6 +3161,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn broadcast_with_attachments_enqueues_attachment() {
+        let channel = XmppChannel::new(test_config())
+            .await
+            .expect("channel initializes");
+
+        let metadata = serde_json::json!({ "xmpp_target": "alice@example.com" });
+        channel
+            .broadcast_with_attachments(
+                "alice@example.com",
+                "here is a file".to_string(),
+                &metadata,
+                vec![OutboundAttachment {
+                    filename: "photo.png".to_string(),
+                    mime_type: "image/png".to_string(),
+                    data: vec![1, 2, 3, 4],
+                }],
+            )
+            .await
+            .expect("broadcast_with_attachments queues outbound message");
+
+        let outbound = recv_outbound(&channel).await;
+        assert_eq!(outbound.to, "alice@example.com");
+        assert!(!outbound.groupchat);
+        assert_eq!(outbound.body, "here is a file");
+        assert_eq!(outbound.attachments.len(), 1);
+        assert_eq!(outbound.attachments[0].filename, "photo.png");
+        assert_eq!(outbound.attachments[0].mime_type, "image/png");
+        assert_eq!(outbound.attachments[0].data, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn stanza_is_encrypted_detects_payload() {
+        let to: xmpp_parsers::jid::Jid = "alice@example.com".parse().expect("jid parses");
+
+        // A plaintext chat message carries no <encrypted> payload.
+        let plaintext = xmpp_parsers::message::Message::chat(to.clone())
+            .with_body(xmpp_parsers::message::Lang::from(""), "hello".to_string());
+        assert!(!stanza_is_encrypted(&plaintext));
+
+        // A message carrying an <encrypted> element is treated as encrypted, so
+        // the OOB URL must not be added in cleartext.
+        let mut encrypted = xmpp_parsers::message::Message::chat(to);
+        encrypted.payloads.push(
+            "<encrypted xmlns='eu.siacs.conversations.axolotl'/>"
+                .parse::<Element>()
+                .expect("encrypted element parses"),
+        );
+        assert!(stanza_is_encrypted(&encrypted));
+    }
+
+    #[tokio::test]
     async fn queue_outbound_enforces_hourly_message_limit() {
         let mut config = test_config();
         config.max_messages_per_hour = 1;
