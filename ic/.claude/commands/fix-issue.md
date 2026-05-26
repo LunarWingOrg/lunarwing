@@ -62,7 +62,7 @@ Enter planning mode to design the implementation. The plan MUST cover:
    - Happy path (expected input produces expected output)
    - Error paths (invalid input, missing data, permission denied)
    - Edge cases (empty collections, boundary values, concurrent access)
-5. **IronClaw-specific concerns**:
+5. **LunarWing-specific concerns**:
    - If the change touches persistence, both database backends must be updated (`postgres.rs` and `libsql_backend.rs`)
    - New `Database` trait methods need implementations in both backends
    - No `.unwrap()` or `.expect()` in production code
@@ -80,7 +80,7 @@ After the plan is approved:
 
 1. Implement each change from the plan.
 2. Write all planned tests.
-3. Run IronClaw's full quality gate:
+3. Run LunarWing's full quality gate:
    - `cargo fmt`
    - `cargo clippy --all --benches --tests --examples --all-features` (zero warnings)
    - `cargo test --lib` (all tests pass)

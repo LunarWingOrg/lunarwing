@@ -106,7 +106,7 @@ The agent reads auth config from the tool's capabilities file and provides the a
 
 Both are first-class in the extension system (`lunarwing tool install` handles both), but they have different strengths.
 
-**WASM Tools (IronClaw native)**
+**WASM Tools (LunarWing native)**
 
 - Sandboxed: fuel metering, memory limits, no access except what's allowlisted
 - Credentials injected by host runtime, tool code never sees the actual token
@@ -120,7 +120,7 @@ Both are first-class in the extension system (`lunarwing tool install` handles b
 - Growing ecosystem of pre-built servers (GitHub, Notion, Postgres, etc.)
 - Any language (TypeScript/Python most common)
 - Can do websockets, streaming, background polling
-- Cost: external process with full system access (no sandbox), manages own credentials, IronClaw can't prevent leaks
+- Cost: external process with full system access (no sandbox), manages own credentials, LunarWing can't prevent leaks
 
 **Decision guide:**
 

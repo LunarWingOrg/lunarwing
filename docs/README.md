@@ -12,9 +12,11 @@ System design and technical architecture documents.
 
 | File | Description |
 |------|-------------|
-| [`DESIGN.md`](architecture/DESIGN.md) | Overall system design and architecture |
 | [`ENGINE-V2.md`](architecture/ENGINE-V2.md) | V2 engine architecture: threads, capabilities, CodeAct, gates, learning missions |
 | [`SEMANTIC-MEMORY-SEARCH.md`](architecture/SEMANTIC-MEMORY-SEARCH.md) | Semantic memory search: embeddings, hybrid FTS+vector, RRF fusion, configuration |
+| [`ATOMICBOOL_DEEPER_PROPAGATION.md`](architecture/ATOMICBOOL_DEEPER_PROPAGATION.md) | AtomicBool cancellation propagation design |
+| [`HANDLE_MESSAGE_FIX.md`](architecture/HANDLE_MESSAGE_FIX.md) | Message handler timeout fix |
+| [`RESPONSE_SUPPRESSION_IMPLEMENTATION.md`](architecture/RESPONSE_SUPPRESSION_IMPLEMENTATION.md) | Response suppression implementation |
 
 ---
 
@@ -25,7 +27,9 @@ How-to guides, build instructions, and setup walkthroughs.
 | File | Description |
 |------|-------------|
 | [`BRANCH_GUIDE.md`](guides/BRANCH_GUIDE.md) | Branching strategy and agent branch conventions |
-| [`COMMIT_GUIDE.md`](guides/COMMIT_GUIDE.md) | Commit message format and guidelines |
+| [`EMBEDDINGS_SETUP.md`](guides/EMBEDDINGS_SETUP.md) | Embedding provider configuration (OpenAI-compatible, Ollama, NEAR AI) |
+| [`VISION_OCR_SIDECAR.md`](guides/VISION_OCR_SIDECAR.md) | Vision/OCR sidecar service overview |
+| [`REFLEX_COMPILER_TESTING.md`](guides/REFLEX_COMPILER_TESTING.md) | Reflex compiler testing guide |
 | [`MIGRATE_IRONCLAW_TO_LUNARWING.md`](guides/MIGRATE_IRONCLAW_TO_LUNARWING.md) | Migrating an existing IronClaw PostgreSQL instance to LunarWing |
 | [`codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md`](guides/codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md) | Connecting to LunarWing via Codex |
 | [`codex4ironclaw/INTEGRATION.md`](guides/codex4ironclaw/INTEGRATION.md) | Codex integration guide |
@@ -52,6 +56,15 @@ Deployment, operations, multitenancy, and production guides.
 | [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multitenancy setup harness guide |
 | [`docs/MULTITENANCY-PRODUCTION.md`](ops/docs/MULTITENANCY-PRODUCTION.md) | Production multitenancy configuration |
 | [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (Codex, Nanocode, Built-in, Sandbox) |
+| [`GOALS_1.0.6.md`](ops/GOALS_1.0.6.md) | v1.0.6 release goals |
+| [`GOALS_1.0.7.md`](ops/GOALS_1.0.7.md) | v1.0.7 release goals |
+| [`GOALS_1.0.8.md`](ops/GOALS_1.0.8.md) | v1.0.8 release goals |
+| [`GOALS_FOR_NEXT_RELEASES.md`](ops/GOALS_FOR_NEXT_RELEASES.md) | Future release roadmap |
+| [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Technical debt and cleanup checklist |
+| [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode multi-tenant setup |
+| [`REBUILD-NANOCODE-WORKER.md`](ops/REBUILD-NANOCODE-WORKER.md) | Nanocode worker rebuild guide |
+| [`RELEASE_CADENCE.md`](ops/RELEASE_CADENCE.md) | Release cadence policy |
+| [`KNOWN_ISSUES_TO_ADDRESS.md`](ops/KNOWN_ISSUES_TO_ADDRESS.md) | Known issues tracker |
 
 ---
 
@@ -81,6 +94,19 @@ Feature proposals, design documents, and project planning.
 | [`VisionProject/KAGEHO_LOG.md`](proposals/VisionProject/KAGEHO_LOG.md) | Kageho vision implementation log |
 | [`VisionProject/VISION-SERVICE.md`](proposals/VisionProject/VISION-SERVICE.md) | Vision service design spec |
 | [`VisionProject/LunarWingVisionServicev1.1.md`](proposals/VisionProject/LunarWingVisionServicev1.1.md) | Vision service v1.1 spec |
+| [`reflex-compiler.md`](proposals/reflex-compiler.md) | Reflex compiler design proposal |
+| [`NANOCODE_WORKER_SECRETS.md`](proposals/NANOCODE_WORKER_SECRETS.md) | Nanocode worker secrets integration |
+
+---
+
+### 📦 [`releases/`](releases/)
+
+Release notes and changelogs.
+
+| File | Description |
+|------|-------------|
+| [`RELEASE-v1.0.7.md`](releases/RELEASE-v1.0.7.md) | v1.0.7 release notes (2026-05-17) |
+| [`CHANGELOG-AGENTS.md`](releases/CHANGELOG-AGENTS.md) | AGENTS.md change history |
 
 ---
 
@@ -116,36 +142,25 @@ Internal notes, drafts, historical context, and vendored documentation. These ar
 | File | Description |
 |------|-------------|
 | [`BRANCHES.md`](internal/BRANCHES.md) | Branch tracking notes |
-| [`CHANGE_BINARY_NAME.md`](internal/CHANGE_BINARY_NAME.md) | Binary rename plan |
 | [`FORK_CONTEXT.md`](internal/FORK_CONTEXT.md) | Fork history and context |
 | [`GRANT_PROPOSAL_FRAMEWORK.md`](internal/GRANT_PROPOSAL_FRAMEWORK.md) | Grant proposal template |
-| [`HOUSE.md`](internal/HOUSE.md) | Housekeeping notes |
-| [`NEXT.md`](internal/NEXT.md) | Next steps / TODO |
 | [`REPLv2_Client_and_Server.md`](internal/REPLv2_Client_and_Server.md) | REPL v2 design notes |
-| [`SEEDING.md`](internal/SEEDING.md) | Workspace seeding notes |
-| [`VALUE_PROPOSITION.md`](internal/VALUE_PROPOSITION.md) | Project value proposition |
 | [`codex4ironclaw/DEPRECATED.md`](internal/codex4ironclaw/DEPRECATED.md) | Deprecated Codex features |
 | [`codex4ironclaw/PASSING_SECRETS.md`](internal/codex4ironclaw/PASSING_SECRETS.md) | Secrets passing reference |
 | [`codex4ironclaw/kageho_other_ideas/draft2.md`](internal/codex4ironclaw/kageho_other_ideas/draft2.md) | Kageho ideas draft |
-| [`codex4ironclaw/whatajsonshouldlooklike.md`](internal/codex4ironclaw/whatajsonshouldlooklike.md) | JSON schema sketch |
-| [`codex4ironclaw/whatajsonshouldlookliken.md`](internal/codex4ironclaw/whatajsonshouldlookliken.md) | JSON schema sketch (alt) |
 | [`custom_channels/DarkIRC.md`](internal/custom_channels/DarkIRC.md) | DarkIRC channel notes |
 | [`custom_channels/Weechat.md`](internal/custom_channels/Weechat.md) | WeeChat channel notes |
 | [`custom_external_scripts/Secret_Manager.md`](internal/custom_external_scripts/Secret_Manager.md) | Secret manager scripts |
 | [`custom_external_scripts/enjin.md`](internal/custom_external_scripts/enjin.md) | Enjin integration notes |
 | [`custom_healthcheck_and_timers/healthcheck.md`](internal/custom_healthcheck_and_timers/healthcheck.md) | Health check scripts |
-| [`custom_scheduler_enhancements/tba.md`](internal/custom_scheduler_enhancements/tba.md) | Scheduler enhancement notes |
-| [`custom_tensorzero_http_proxy/v2.md`](internal/custom_tensorzero_http_proxy/v2.md) | TensorZero proxy v2 notes |
 | [`custom_tools/Gotify.md`](internal/custom_tools/Gotify.md) | Gotify tool reference |
 | [`custom_tools/codex4ironclaw.md`](internal/custom_tools/codex4ironclaw.md) | Codex tool reference |
 | [`custom_tools/git-md.md`](internal/custom_tools/git-md.md) | Git-md tool reference |
 | [`darkirc_channel_for_ironclaw/CONTRIBUTING.md`](internal/darkirc_channel_for_ironclaw/CONTRIBUTING.md) | DarkIRC contributing guide |
 | [`docs/APPROACH_TO_DOCS.md`](internal/docs/APPROACH_TO_DOCS.md) | Documentation strategy |
 | [`docs/EXAMPLES.md`](internal/docs/EXAMPLES.md) | Usage examples |
-| [`docs/KAGEHO.md`](internal/docs/KAGEHO.md) | Kageho notes |
 | [`ic-infrastructure-health-check/...`](internal/ic-infrastructure-health-check/) | Health check analysis draft |
 | [`nanocode-config/`](internal/nanocode-config/) | Nanocode/nanocode.nvim vendored docs |
-| [`replv2git/KEEP.md`](internal/replv2git/KEEP.md) | REPL v2 git notes |
 | [`tensorzero-proxy-configurations/TEST.md`](internal/tensorzero-proxy-configurations/TEST.md) | TensorZero proxy test notes |
 
 </details>

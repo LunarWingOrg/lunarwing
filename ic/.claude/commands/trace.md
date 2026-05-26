@@ -1,15 +1,15 @@
 ---
-description: Trace a data flow or bug through the IronClaw codebase end-to-end
+description: Trace a data flow or bug through the LunarWing codebase end-to-end
 allowed-tools: Read, Glob, Grep, Bash(cargo test:*)
 argument-hint: <symptom or feature name>
 model: sonnet
 ---
 
-Trace the flow of `$ARGUMENTS` through the IronClaw codebase. Your job is to map every file and function involved, identify where data transforms or could break, and report the full chain.
+Trace the flow of `$ARGUMENTS` through the LunarWing codebase. Your job is to map every file and function involved, identify where data transforms or could break, and report the full chain.
 
 ## Architecture Reference
 
-IronClaw has three main data flow paths. Identify which one(s) are relevant and trace through them:
+LunarWing has three main data flow paths. Identify which one(s) are relevant and trace through them:
 
 ### Message Flow (user input to LLM response)
 ```

@@ -144,7 +144,8 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   testing/lunarwing-xmpp/   # Full-stack test harness docs
   systemd/                  # Systemd units, OpenRC init scripts (.openrc, .confd), launchd plists
   scripts/                  # Operational + build scripts
-codex4ironclaw/             # Persistent Codex Worker container — see codex4ironclaw/CLAUDE.md
+codex4lunarwing/             # OpenAI Codex worker container — see codex4lunarwing/CLAUDE.md
+codex4ironclaw/             # Codex worker container (deprecated) — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
 lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
 ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
@@ -275,6 +276,7 @@ create_job(title: "...", description: "...", mode: "nanocode")
 | Worker | Container | Docs |
 |--------|-----------|------|
 | `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
+| `codex` | `codex4lunarwing/` | `codex4lunarwing/CLAUDE.md` |
 
 ## Protected Runtime Behavior
 

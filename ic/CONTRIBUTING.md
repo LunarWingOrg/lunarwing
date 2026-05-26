@@ -53,7 +53,7 @@ Select the appropriate track in the PR template based on what your changes touch
 
 ## Database Changes
 
-IronClaw uses dual-backend persistence (PostgreSQL + libSQL). All new persistence features must support both backends. See `src/db/CLAUDE.md`.
+LunarWing uses dual-backend persistence (PostgreSQL + libSQL). All new persistence features must support both backends. See `src/db/CLAUDE.md`.
 
 ## Adding Dependencies
 

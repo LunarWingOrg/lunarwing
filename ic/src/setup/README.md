@@ -1,6 +1,6 @@
 # Setup / Onboarding Specification
 
-This document is the authoritative specification for IronClaw's onboarding
+This document is the authoritative specification for LunarWing's onboarding
 wizard. Any code change to `src/setup/` **must** keep this document in sync.
 If a future contributor or coding agent modifies setup behavior, update this
 file first, then adjust the code to match.
