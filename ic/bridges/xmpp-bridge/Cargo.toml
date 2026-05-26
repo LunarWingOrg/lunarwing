@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 anyhow = "1"
 axum = "0.8"
+base64 = "0.22"
 futures = "0.3"
 lunarwing = { path = "../.." }
 openclaw-xmpp-bridge-contract = { path = "../../openclaw-ports/xmpp/bridge" }

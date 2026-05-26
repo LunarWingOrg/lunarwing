@@ -74,6 +74,19 @@ pub struct SendRequest {
     pub target: String,
     pub content: String,
     pub metadata_json: String,
+    /// Files to upload via XEP-0363 and deliver as out-of-band URLs.
+    #[serde(default)]
+    pub attachments: Vec<BridgeAttachment>,
+}
+
+/// A file attachment forwarded from the WASM channel to the bridge for
+/// XEP-0363 HTTP upload. Bytes are base64-encoded for JSON transport.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BridgeAttachment {
+    pub filename: String,
+    pub mime_type: String,
+    /// Base64-encoded (standard alphabet) file bytes.
+    pub data_base64: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

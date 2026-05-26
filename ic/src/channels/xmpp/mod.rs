@@ -18,9 +18,11 @@ use secrecy::ExposeSecret;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 use xmpp_parsers::data_forms::{DataForm, DataFormType, Field, FieldType};
-use xmpp_parsers::disco::{DiscoInfoQuery, DiscoInfoResult};
+use xmpp_parsers::disco::{DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, DiscoItemsResult};
 use xmpp_parsers::eme::ExplicitMessageEncryption;
+use xmpp_parsers::http_upload::{SlotRequest, SlotResult};
 use xmpp_parsers::iq::Iq;
+use xmpp_parsers::oob::Oob;
 use xmpp_parsers::legacy_omemo::{Bundle, Device, DeviceList, Encrypted};
 use xmpp_parsers::message::MessageType;
 use xmpp_parsers::muc::Muc;
@@ -73,6 +75,18 @@ pub struct OutboundRateLimitDiagnostics {
     pub messages_in_current_window: usize,
 }
 
+/// A file attachment to be uploaded via XEP-0363 (HTTP File Upload) and sent
+/// as an out-of-band URL alongside the outbound message.
+#[derive(Debug, Clone)]
+pub struct OutboundAttachment {
+    /// Original filename (e.g., "screenshot.png").
+    pub filename: String,
+    /// MIME type (e.g., "image/png").
+    pub mime_type: String,
+    /// Raw file bytes.
+    pub data: Vec<u8>,
+}
+
 /// An outbound stanza queued from `respond()`/`broadcast()` into the client task.
 #[derive(Debug)]
 struct OutboundMessage {
@@ -80,6 +94,8 @@ struct OutboundMessage {
     body: String,
     groupchat: bool,
     preferred_device_id: Option<u32>,
+    /// Files to upload (XEP-0363) and deliver as OOB URLs after the text body.
+    attachments: Vec<OutboundAttachment>,
 }
 
 #[derive(Debug)]
@@ -153,6 +169,9 @@ pub struct XmppChannel {
     outbound_rate_limiter: tokio::sync::Mutex<OutboundRateLimiter>,
     /// Receiver half taken by `start()` on the first call.
     outbound_rx: Arc<tokio::sync::Mutex<Option<mpsc::Receiver<OutboundMessage>>>>,
+    /// Cached JID of the discovered XEP-0363 HTTP upload service (per-server,
+    /// stable for the connection lifetime). `None` until first discovery.
+    http_upload_service: Arc<RwLock<Option<String>>>,
 }
 
 impl XmppChannel {
@@ -182,6 +201,7 @@ impl XmppChannel {
             outbound_tx,
             outbound_rate_limiter,
             outbound_rx: Arc::new(tokio::sync::Mutex::new(Some(outbound_rx))),
+            http_upload_service: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -192,10 +212,29 @@ impl XmppChannel {
         groupchat: bool,
         preferred_device_id: Option<u32>,
     ) -> Result<(), ChannelError> {
+        self.queue_outbound_with_attachments(
+            target_jid,
+            body,
+            groupchat,
+            preferred_device_id,
+            Vec::new(),
+        )
+        .await
+    }
+
+    async fn queue_outbound_with_attachments(
+        &self,
+        target_jid: String,
+        body: String,
+        groupchat: bool,
+        preferred_device_id: Option<u32>,
+        attachments: Vec<OutboundAttachment>,
+    ) -> Result<(), ChannelError> {
         tracing::debug!(
             to = %target_jid,
             len = body.len(),
             groupchat,
+            attachments = attachments.len(),
             "XMPP queuing outbound message"
         );
 
@@ -221,12 +260,43 @@ impl XmppChannel {
                 body,
                 groupchat,
                 preferred_device_id,
+                attachments,
             })
             .await
             .map_err(|_| ChannelError::SendFailed {
                 name: "xmpp".into(),
                 reason: "outbound channel closed (client task exited)".into(),
             })
+    }
+
+    /// Send a proactive message with file attachments to a target JID.
+    ///
+    /// Each attachment is uploaded via XEP-0363 (HTTP File Upload) by the client
+    /// task and delivered as an out-of-band URL. Mirrors [`Channel::broadcast`]'s
+    /// groupchat-vs-DM resolution. Used by the standalone XMPP bridge, which holds
+    /// a concrete `XmppChannel` rather than a `dyn Channel`.
+    pub async fn broadcast_with_attachments(
+        &self,
+        user_id: &str,
+        content: String,
+        metadata: &serde_json::Value,
+        attachments: Vec<OutboundAttachment>,
+    ) -> Result<(), ChannelError> {
+        let groupchat = metadata
+            .get("xmpp_room")
+            .and_then(|value| value.as_str())
+            .is_some_and(|room| room == user_id)
+            || metadata.get("xmpp_type").and_then(|value| value.as_str()) == Some("groupchat")
+            || self.known_room_target(user_id).await;
+
+        self.queue_outbound_with_attachments(
+            user_id.to_string(),
+            content,
+            groupchat,
+            xmpp_sender_device_id_from_metadata(metadata),
+            attachments,
+        )
+        .await
     }
 
     async fn known_room_target(&self, target_jid: &str) -> bool {
@@ -691,6 +761,7 @@ async fn handle_pairing_request(
                 ),
                 groupchat: false,
                 preferred_device_id: None,
+                attachments: Vec::new(),
             })
             .map_err(|e| ChannelError::SendFailed {
                 name: "xmpp".into(),
@@ -738,6 +809,7 @@ impl Channel for XmppChannel {
         let muc_participants = Arc::clone(&self.muc_participants);
         let encrypted_room_states = Arc::clone(&self.encrypted_room_states);
         let outbound_tx = self.outbound_tx.clone();
+        let http_upload_service = Arc::clone(&self.http_upload_service);
         let pairing_store = PairingStore::new();
 
         tokio::spawn(async move {
@@ -840,12 +912,76 @@ impl Channel for XmppChannel {
                         match outbound {
                             Some(msg) => match msg.to.parse::<xmpp_parsers::jid::Jid>() {
                                 Ok(to_jid) => {
-                                    let stanza = if msg.groupchat {
-                                        if room_requires_encryption(&config, bare_jid(&msg.to)) {
-                                            match build_outbound_groupchat_stanza(
+                                    // Upload any attachments via XEP-0363, then assemble
+                                    // the bodies to send: the text first (if present),
+                                    // followed by one out-of-band URL per uploaded file.
+                                    let mut sends: Vec<(String, bool)> = Vec::new();
+                                    if msg.attachments.is_empty() || !msg.body.is_empty() {
+                                        sends.push((msg.body.clone(), false));
+                                    }
+                                    for attachment in &msg.attachments {
+                                        match upload_file_via_http_slot(
+                                            &mut client,
+                                            &config,
+                                            &http_upload_service,
+                                            attachment,
+                                            &tx,
+                                            &reply_targets,
+                                            &omemo,
+                                            &muc_participants,
+                                            &encrypted_room_states,
+                                            &pairing_store,
+                                            &outbound_tx,
+                                        )
+                                        .await
+                                        {
+                                            Ok(get_url) => sends.push((get_url, true)),
+                                            Err(err) => {
+                                                tracing::warn!(
+                                                    file = %attachment.filename,
+                                                    error = %err,
+                                                    "XMPP XEP-0363 upload failed; skipping attachment"
+                                                );
+                                            }
+                                        }
+                                    }
+
+                                    for (body, is_file_url) in sends {
+                                        let mut stanza = if msg.groupchat {
+                                            if room_requires_encryption(&config, bare_jid(&msg.to)) {
+                                                match build_outbound_groupchat_stanza(
+                                                    &mut client,
+                                                    to_jid.clone(),
+                                                    body.clone(),
+                                                    &tx,
+                                                    &config,
+                                                    &reply_targets,
+                                                    &omemo,
+                                                    &muc_participants,
+                                                    &encrypted_room_states,
+                                                    &pairing_store,
+                                                    &outbound_tx,
+                                                )
+                                                .await
+                                                {
+                                                    Ok(Some(stanza)) => stanza,
+                                                    Ok(None) => continue,
+                                                    Err(err) => {
+                                                        omemo.record_error(err.to_string()).await;
+                                                        tracing::warn!("XMPP encrypted room send preparation failed: {err}");
+                                                        continue;
+                                                    }
+                                                }
+                                            } else {
+                                                xmpp_parsers::message::Message::groupchat(to_jid.clone())
+                                                    .with_body(xmpp_parsers::message::Lang::from(""), body.clone())
+                                            }
+                                        } else {
+                                            match build_outbound_dm_stanza(
                                                 &mut client,
-                                                to_jid,
-                                                msg.body,
+                                                to_jid.clone(),
+                                                body.clone(),
+                                                msg.preferred_device_id,
                                                 &tx,
                                                 &config,
                                                 &reply_targets,
@@ -861,44 +997,33 @@ impl Channel for XmppChannel {
                                                 Ok(None) => continue,
                                                 Err(err) => {
                                                     omemo.record_error(err.to_string()).await;
-                                                    tracing::warn!("XMPP encrypted room send preparation failed: {err}");
+                                                    tracing::warn!("XMPP OMEMO send preparation failed: {err}");
                                                     continue;
                                                 }
                                             }
-                                        } else {
-                                            xmpp_parsers::message::Message::groupchat(to_jid)
-                                                .with_body(xmpp_parsers::message::Lang::from(""), msg.body)
+                                        };
+
+                                        // For file URLs sent in cleartext, attach an
+                                        // XEP-0066 OOB payload so clients render the file
+                                        // inline. Skip for OMEMO-encrypted stanzas: the URL
+                                        // lives in the encrypted body and a cleartext OOB
+                                        // child would leak it to the server.
+                                        if is_file_url && !stanza_is_encrypted(&stanza) {
+                                            stanza.payloads.push(
+                                                Oob {
+                                                    url: body.clone(),
+                                                    desc: None,
+                                                }
+                                                .into(),
+                                            );
                                         }
-                                    } else {
-                                        match build_outbound_dm_stanza(
-                                            &mut client,
-                                            to_jid,
-                                            msg.body,
-                                            msg.preferred_device_id,
-                                            &tx,
-                                            &config,
-                                            &reply_targets,
-                                            &omemo,
-                                            &muc_participants,
-                                            &encrypted_room_states,
-                                            &pairing_store,
-                                            &outbound_tx,
-                                        )
-                                        .await
+
+                                        if let Err(e) = client
+                                            .send_stanza(tokio_xmpp::Stanza::Message(stanza))
+                                            .await
                                         {
-                                            Ok(Some(stanza)) => stanza,
-                                            Ok(None) => continue,
-                                            Err(err) => {
-                                                omemo.record_error(err.to_string()).await;
-                                                tracing::warn!("XMPP OMEMO send preparation failed: {err}");
-                                                continue;
-                                            }
+                                            tracing::warn!("XMPP send error: {e:?}");
                                         }
-                                    };
-                                    if let Err(e) =
-                                        client.send_stanza(tokio_xmpp::Stanza::Message(stanza)).await
-                                    {
-                                        tracing::warn!("XMPP send error: {e:?}");
                                     }
                                 }
                                 Err(e) => {
@@ -2187,6 +2312,309 @@ fn latest_pubsub_items_request(node: &str) -> Items {
 
 fn latest_pubsub_payload(items: Items) -> Option<Element> {
     items.items.into_iter().rev().find_map(|item| item.payload)
+}
+
+/// Maximum time to wait for a single XEP-0363 HTTP PUT upload to complete.
+/// Bounds how long the client task can block on a slow upload.
+const HTTP_UPLOAD_PUT_TIMEOUT_SECS: u64 = 120;
+
+/// Returns true if the message carries an OMEMO `<encrypted>` payload, i.e. the
+/// body is end-to-end encrypted and a cleartext OOB child must not be added.
+fn stanza_is_encrypted(message: &xmpp_parsers::message::Message) -> bool {
+    message
+        .payloads
+        .iter()
+        .any(|payload| payload.name() == "encrypted")
+}
+
+/// Query disco#info on an entity and return its parsed result.
+#[allow(clippy::too_many_arguments)]
+async fn disco_info_result(
+    client: &mut tokio_xmpp::Client,
+    jid: xmpp_parsers::jid::Jid,
+    tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
+    config: &XmppConfig,
+    reply_targets: &Arc<RwLock<LruCache<Uuid, String>>>,
+    omemo: &Arc<OmemoManager>,
+    muc_participants: &Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    encrypted_room_states: &Arc<RwLock<HashMap<String, EncryptedRoomState>>>,
+    pairing_store: &PairingStore,
+    outbound_tx: &mpsc::Sender<OutboundMessage>,
+) -> Result<DiscoInfoResult, ChannelError> {
+    let payload = send_iq_request(
+        client,
+        Some(jid),
+        tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into()),
+        tx,
+        config,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await?
+    .ok_or_else(|| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: "empty disco#info response".into(),
+    })?;
+    DiscoInfoResult::try_from(payload).map_err(|e| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: format!("failed to parse disco#info payload: {e}"),
+    })
+}
+
+/// Resolve (and cache) the XEP-0363 HTTP upload service JID for the connected
+/// server. Checks the server domain first, then disco#items components.
+#[allow(clippy::too_many_arguments)]
+async fn discover_http_upload_service(
+    client: &mut tokio_xmpp::Client,
+    config: &XmppConfig,
+    cache: &Arc<RwLock<Option<String>>>,
+    tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
+    reply_targets: &Arc<RwLock<LruCache<Uuid, String>>>,
+    omemo: &Arc<OmemoManager>,
+    muc_participants: &Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    encrypted_room_states: &Arc<RwLock<HashMap<String, EncryptedRoomState>>>,
+    pairing_store: &PairingStore,
+    outbound_tx: &mpsc::Sender<OutboundMessage>,
+) -> Result<String, ChannelError> {
+    if let Some(service) = cache.read().await.clone() {
+        return Ok(service);
+    }
+
+    let domain = bare_jid(&config.jid)
+        .split('@')
+        .nth(1)
+        .filter(|domain| !domain.is_empty())
+        .ok_or_else(|| ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("cannot derive server domain from JID '{}'", config.jid),
+        })?
+        .to_string();
+    let domain_jid: xmpp_parsers::jid::Jid =
+        domain.parse().map_err(|e| ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("invalid server domain JID '{domain}': {e}"),
+        })?;
+
+    let has_upload_feature =
+        |info: &DiscoInfoResult| info.features.iter().any(|f| f.var == ns::HTTP_UPLOAD);
+
+    // 1. The server domain itself may host the upload service.
+    if let Ok(info) = disco_info_result(
+        client,
+        domain_jid.clone(),
+        tx,
+        config,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await
+        && has_upload_feature(&info)
+    {
+        cache.write().await.replace(domain.clone());
+        return Ok(domain);
+    }
+
+    // 2. Otherwise enumerate components and probe each one.
+    let items_payload = send_iq_request(
+        client,
+        Some(domain_jid),
+        tokio_xmpp::IqRequest::Get(
+            DiscoItemsQuery {
+                node: None,
+                rsm: None,
+            }
+            .into(),
+        ),
+        tx,
+        config,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await?
+    .ok_or_else(|| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: "empty disco#items response".into(),
+    })?;
+    let items = DiscoItemsResult::try_from(items_payload).map_err(|e| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: format!("failed to parse disco#items payload: {e}"),
+    })?;
+
+    for item in items.items {
+        let item_jid = item.jid.clone();
+        if let Ok(info) = disco_info_result(
+            client,
+            item_jid.clone(),
+            tx,
+            config,
+            reply_targets,
+            omemo,
+            muc_participants,
+            encrypted_room_states,
+            pairing_store,
+            outbound_tx,
+        )
+        .await
+            && has_upload_feature(&info)
+        {
+            let service = item_jid.to_string();
+            cache.write().await.replace(service.clone());
+            return Ok(service);
+        }
+    }
+
+    Err(ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: "server does not advertise an XEP-0363 HTTP upload service".into(),
+    })
+}
+
+/// Request an upload slot (PUT/GET URLs) from the upload service.
+#[allow(clippy::too_many_arguments)]
+async fn request_upload_slot(
+    client: &mut tokio_xmpp::Client,
+    service_jid: xmpp_parsers::jid::Jid,
+    filename: String,
+    size: u64,
+    content_type: String,
+    tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
+    config: &XmppConfig,
+    reply_targets: &Arc<RwLock<LruCache<Uuid, String>>>,
+    omemo: &Arc<OmemoManager>,
+    muc_participants: &Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    encrypted_room_states: &Arc<RwLock<HashMap<String, EncryptedRoomState>>>,
+    pairing_store: &PairingStore,
+    outbound_tx: &mpsc::Sender<OutboundMessage>,
+) -> Result<SlotResult, ChannelError> {
+    let request = SlotRequest {
+        filename,
+        size,
+        content_type: Some(content_type),
+    };
+    let payload = send_iq_request(
+        client,
+        Some(service_jid),
+        tokio_xmpp::IqRequest::Get(request.into()),
+        tx,
+        config,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await?
+    .ok_or_else(|| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: "empty HTTP upload slot response".into(),
+    })?;
+    SlotResult::try_from(payload).map_err(|e| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: format!("failed to parse HTTP upload slot: {e}"),
+    })
+}
+
+/// PUT the file bytes to the slot's upload URL, applying any required headers.
+async fn http_put_file(
+    slot: &SlotResult,
+    content_type: &str,
+    data: &[u8],
+) -> Result<(), ChannelError> {
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(HTTP_UPLOAD_PUT_TIMEOUT_SECS))
+        .build()
+        .map_err(|e| ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("failed to build HTTP upload client: {e}"),
+        })?;
+
+    let mut request = http
+        .put(&slot.put.url)
+        .header(reqwest::header::CONTENT_TYPE, content_type)
+        .body(data.to_vec());
+    for header in &slot.put.headers {
+        request = request.header(header.name.as_str(), header.value.clone());
+    }
+
+    let response = request.send().await.map_err(|e| ChannelError::SendFailed {
+        name: "xmpp".into(),
+        reason: format!("HTTP upload PUT failed: {e}"),
+    })?;
+    if !response.status().is_success() {
+        return Err(ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("HTTP upload PUT returned status {}", response.status()),
+        });
+    }
+    Ok(())
+}
+
+/// Upload one attachment via XEP-0363 and return the public GET URL.
+#[allow(clippy::too_many_arguments)]
+async fn upload_file_via_http_slot(
+    client: &mut tokio_xmpp::Client,
+    config: &XmppConfig,
+    cache: &Arc<RwLock<Option<String>>>,
+    attachment: &OutboundAttachment,
+    tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
+    reply_targets: &Arc<RwLock<LruCache<Uuid, String>>>,
+    omemo: &Arc<OmemoManager>,
+    muc_participants: &Arc<RwLock<HashMap<String, HashSet<String>>>>,
+    encrypted_room_states: &Arc<RwLock<HashMap<String, EncryptedRoomState>>>,
+    pairing_store: &PairingStore,
+    outbound_tx: &mpsc::Sender<OutboundMessage>,
+) -> Result<String, ChannelError> {
+    let service = discover_http_upload_service(
+        client,
+        config,
+        cache,
+        tx,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await?;
+    let service_jid: xmpp_parsers::jid::Jid =
+        service.parse().map_err(|e| ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("invalid HTTP upload service JID '{service}': {e}"),
+        })?;
+
+    let slot = request_upload_slot(
+        client,
+        service_jid,
+        attachment.filename.clone(),
+        attachment.data.len() as u64,
+        attachment.mime_type.clone(),
+        tx,
+        config,
+        reply_targets,
+        omemo,
+        muc_participants,
+        encrypted_room_states,
+        pairing_store,
+        outbound_tx,
+    )
+    .await?;
+
+    http_put_file(&slot, &attachment.mime_type, &attachment.data).await?;
+    Ok(slot.get.url)
 }
 
 async fn send_iq_request(

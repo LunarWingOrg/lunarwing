@@ -52,4 +52,4 @@ pub use signal::SignalChannel;
 pub use unix_socket_repl::UnixSocketReplChannel;
 pub use web::GatewayChannel;
 pub use webhook_server::{WebhookServer, WebhookServerConfig};
-pub use xmpp::XmppChannel;
+pub use xmpp::{OutboundAttachment, XmppChannel};
