@@ -8,9 +8,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use base64::Engine;
 use futures::StreamExt;
 use lunarwing::bootstrap::lunarwing_base_dir;
-use lunarwing::channels::{Channel, IncomingMessage, OutgoingResponse, XmppChannel};
+use lunarwing::channels::{
+    Channel, IncomingMessage, OutboundAttachment, OutgoingResponse, XmppChannel,
+};
 use lunarwing::config::XmppConfig;
 use openclaw_xmpp_bridge_contract::{
     BridgeMessage, BridgeStatusResponse, ConfigureRequest, ConfigureResponse, MessagesQuery,
@@ -448,13 +451,37 @@ async fn send_handler(
     }
     .ok_or_else(|| BridgeError::conflict("xmpp-bridge is not configured yet"))?;
 
-    let mut response = OutgoingResponse::text(request.content);
-    response.metadata = metadata;
-
-    channel
-        .broadcast(&request.target, response)
-        .await
-        .map_err(|e| BridgeError::bad_gateway(&format!("failed to send XMPP message: {}", e)))?;
+    if request.attachments.is_empty() {
+        let mut response = OutgoingResponse::text(request.content);
+        response.metadata = metadata;
+        channel
+            .broadcast(&request.target, response)
+            .await
+            .map_err(|e| BridgeError::bad_gateway(&format!("failed to send XMPP message: {}", e)))?;
+    } else {
+        let mut attachments = Vec::with_capacity(request.attachments.len());
+        for attachment in request.attachments {
+            let data = base64::engine::general_purpose::STANDARD
+                .decode(attachment.data_base64.as_bytes())
+                .map_err(|e| {
+                    BridgeError::bad_request(&format!(
+                        "invalid base64 for attachment '{}': {}",
+                        attachment.filename, e
+                    ))
+                })?;
+            attachments.push(OutboundAttachment {
+                filename: attachment.filename,
+                mime_type: attachment.mime_type,
+                data,
+            });
+        }
+        channel
+            .broadcast_with_attachments(&request.target, request.content, &metadata, attachments)
+            .await
+            .map_err(|e| {
+                BridgeError::bad_gateway(&format!("failed to send XMPP message: {}", e))
+            })?;
+    }
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }

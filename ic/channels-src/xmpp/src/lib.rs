@@ -9,11 +9,12 @@ wit_bindgen::generate!({
     path: "../../wit/channel.wit",
 });
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use exports::near::agent::channel::{
-    AgentResponse, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse, PollConfig,
-    StatusType, StatusUpdate,
+    AgentResponse, Attachment, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse,
+    PollConfig, StatusType, StatusUpdate,
 };
 use near::agent::channel_host::{self, EmittedMessage};
 
@@ -77,6 +78,15 @@ struct SendRequest {
     target: String,
     content: String,
     metadata_json: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    attachments: Vec<SendAttachment>,
+}
+
+#[derive(Debug, Serialize)]
+struct SendAttachment {
+    filename: String,
+    mime_type: String,
+    data_base64: String,
 }
 
 struct XmppChannel;
@@ -192,17 +202,19 @@ impl Guest for XmppChannel {
 
     fn on_respond(response: AgentResponse) -> Result<(), String> {
         let config = load_runtime_config()?;
-        send_message_via_bridge(&config, response.metadata_json, response.content)
+        let attachments = convert_attachments(&response.attachments);
+        send_message_via_bridge(&config, response.metadata_json, response.content, attachments)
     }
 
     fn on_broadcast(user_id: String, response: AgentResponse) -> Result<(), String> {
         let config = load_runtime_config()?;
+        let attachments = convert_attachments(&response.attachments);
         let metadata_json = if response.metadata_json.trim().is_empty() {
             serde_json::json!({ "xmpp_target": user_id }).to_string()
         } else {
             response.metadata_json
         };
-        send_message_via_bridge(&config, metadata_json, response.content)
+        send_message_via_bridge(&config, metadata_json, response.content, attachments)
     }
 
     fn on_status(update: StatusUpdate) {
@@ -217,7 +229,9 @@ impl Guest for XmppChannel {
         let Ok(config) = load_runtime_config() else {
             return;
         };
-        if let Err(err) = send_message_via_bridge(&config, update.metadata_json.clone(), message) {
+        if let Err(err) =
+            send_message_via_bridge(&config, update.metadata_json.clone(), message, Vec::new())
+        {
             channel_host::log(
                 channel_host::LogLevel::Debug,
                 &format!("Failed to send XMPP status update: {}", err),
@@ -292,6 +306,7 @@ fn send_message_via_bridge(
     config: &RuntimeConfig,
     metadata_json: String,
     content: String,
+    attachments: Vec<SendAttachment>,
 ) -> Result<(), String> {
     ensure_bridge_configured(config)?;
     let target = target_from_metadata_json(&metadata_json)
@@ -301,10 +316,23 @@ fn send_message_via_bridge(
         target,
         content,
         metadata_json: normalize_metadata_json(&metadata_json),
+        attachments,
     };
     let payload = serde_json::to_vec(&request)
         .map_err(|e| format!("failed to serialize XMPP bridge send request: {}", e))?;
     request_json("POST", &url, Some(payload)).map(|_| ())
+}
+
+/// Convert host-provided WIT attachments into base64-encoded bridge attachments.
+fn convert_attachments(attachments: &[Attachment]) -> Vec<SendAttachment> {
+    attachments
+        .iter()
+        .map(|attachment| SendAttachment {
+            filename: attachment.filename.clone(),
+            mime_type: attachment.mime_type.clone(),
+            data_base64: base64::engine::general_purpose::STANDARD.encode(&attachment.data),
+        })
+        .collect()
 }
 
 fn request_json(method: &str, url: &str, body: Option<Vec<u8>>) -> Result<Vec<u8>, String> {
