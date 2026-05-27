@@ -132,3 +132,35 @@ pub struct BridgeStatusResponse {
 const fn default_true() -> bool {
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_request_without_attachments_deserializes() {
+        // Older clients omit the attachments field entirely.
+        let json = r#"{"target":"a@b","content":"hi","metadata_json":"{}"}"#;
+        let request: SendRequest = serde_json::from_str(json).expect("deserializes");
+        assert_eq!(request.target, "a@b");
+        assert!(request.attachments.is_empty());
+    }
+
+    #[test]
+    fn send_request_with_attachments_round_trips() {
+        let request = SendRequest {
+            target: "a@b".to_string(),
+            content: "hi".to_string(),
+            metadata_json: "{}".to_string(),
+            attachments: vec![BridgeAttachment {
+                filename: "f.png".to_string(),
+                mime_type: "image/png".to_string(),
+                data_base64: "AQID".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&request).expect("serializes");
+        let decoded: SendRequest = serde_json::from_str(&json).expect("deserializes");
+        assert_eq!(decoded, request);
+        assert_eq!(decoded.attachments[0].data_base64, "AQID");
+    }
+}

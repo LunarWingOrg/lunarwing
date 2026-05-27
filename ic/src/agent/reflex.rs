@@ -1247,7 +1247,9 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "libsql")]
     async fn test_prune_stale_reflex_patterns_dry_run() {
-        use crate::db::libsql::LibSqlBackend;
+        use crate::db::libsql::{LibSqlBackend, fmt_ts};
+        use chrono::Utc;
+        use libsql::params;
 
         let tmp = tempfile::tempdir().unwrap();
         let db_path = tmp.path().join("test_prune_dry_run.db");
@@ -1284,7 +1286,9 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "libsql")]
     async fn test_prune_stale_reflex_patterns_actual_eviction() {
-        use crate::db::libsql::LibSqlBackend;
+        use crate::db::libsql::{LibSqlBackend, fmt_ts};
+        use chrono::Utc;
+        use libsql::params;
 
         let tmp = tempfile::tempdir().unwrap();
         let db_path = tmp.path().join("test_prune_actual.db");
@@ -1328,7 +1332,9 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "libsql")]
     async fn test_prune_stale_reflex_patterns_never_matched() {
-        use crate::db::libsql::LibSqlBackend;
+        use crate::db::libsql::{LibSqlBackend, fmt_ts};
+        use chrono::Utc;
+        use libsql::params;
 
         let tmp = tempfile::tempdir().unwrap();
         let db_path = tmp.path().join("test_prune_never.db");
