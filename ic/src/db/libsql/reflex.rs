@@ -250,13 +250,17 @@ impl ReflexStore for LibSqlBackend {
 
         if !dry_run && !stale.is_empty() {
             let updated_at = fmt_ts(&now);
-            for record in &stale {
+            for record in &mut stale {
                 conn.execute(
                     "UPDATE reflex_patterns SET status = 'evicted', updated_at = ?2 WHERE id = ?1",
                     params![record.id.to_string(), updated_at.clone()],
                 )
                 .await
                 .map_err(|e| DatabaseError::Query(e.to_string()))?;
+                // Reflect the eviction in the returned records so callers see the
+                // post-update status (matches the PostgreSQL backend, which re-queries).
+                record.status = "evicted".to_string();
+                record.updated_at = now;
             }
         }
 
