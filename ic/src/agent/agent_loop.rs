@@ -660,23 +660,24 @@ impl Agent {
 
         // Spawn reflex compiler and cache refresh if enabled
         let (_reflex_compiler_handle, _reflex_cache_handle) = if self.config.reflex.enabled {
-            let compiler_handle = if let (Some(store), Some(builder)) = (self.store(), self.deps.builder.clone()) {
-                tracing::info!(
-                    "Reflex compiler enabled: checking every {}s, min {} matches",
-                    self.config.reflex.check_interval.as_secs(),
-                    self.config.reflex.min_match_count
-                );
-                Some(crate::agent::reflex::spawn_reflex_compiler(
-                    builder,
-                    Arc::clone(store),
-                    self.config.reflex.check_interval,
-                    self.config.reflex.min_match_count,
-                    self.config.reflex.max_patterns_per_run,
-                ))
-            } else {
-                tracing::warn!("Reflex compiler enabled but store or builder not available");
-                None
-            };
+            let compiler_handle =
+                if let (Some(store), Some(builder)) = (self.store(), self.deps.builder.clone()) {
+                    tracing::info!(
+                        "Reflex compiler enabled: checking every {}s, min {} matches",
+                        self.config.reflex.check_interval.as_secs(),
+                        self.config.reflex.min_match_count
+                    );
+                    Some(crate::agent::reflex::spawn_reflex_compiler(
+                        builder,
+                        Arc::clone(store),
+                        self.config.reflex.check_interval,
+                        self.config.reflex.min_match_count,
+                        self.config.reflex.max_patterns_per_run,
+                    ))
+                } else {
+                    tracing::warn!("Reflex compiler enabled but store or builder not available");
+                    None
+                };
 
             let cache_handle = if let Some(store) = self.store() {
                 tracing::debug!(
@@ -921,9 +922,8 @@ impl Agent {
             let agent = Arc::clone(&self);
             let msg = message.clone();
             let suppressed_task = Arc::clone(&suppressed);
-            let handle = tokio::spawn(async move {
-                agent.handle_message(&msg, &suppressed_task).await
-            });
+            let handle =
+                tokio::spawn(async move { agent.handle_message(&msg, &suppressed_task).await });
 
             let soft_timeout = self.config.handle_message_timeout;
             match tokio::time::timeout(soft_timeout, handle).await {
@@ -938,8 +938,13 @@ impl Agent {
                     );
                     // Log thread state at soft timeout for debugging follow-up-message issues
                     {
-                        let (session, thread_id) = self.session_manager
-                            .resolve_thread(&message.user_id, &message.channel, message.conversation_scope().as_deref())
+                        let (session, thread_id) = self
+                            .session_manager
+                            .resolve_thread(
+                                &message.user_id,
+                                &message.channel,
+                                message.conversation_scope().as_deref(),
+                            )
                             .await;
                         let sess = session.lock().await;
                         if let Some(thread) = sess.threads.get(&thread_id) {
@@ -973,11 +978,7 @@ impl Agent {
 
                         let (session, thread_id) = hard_agent
                             .session_manager
-                            .resolve_thread(
-                                &hard_user,
-                                &hard_channel,
-                                hard_scope.as_deref(),
-                            )
+                            .resolve_thread(&hard_user, &hard_channel, hard_scope.as_deref())
                             .await;
                         let mut sess = session.lock().await;
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
@@ -1501,7 +1502,13 @@ impl Agent {
                     let mut queued_msg = message.clone();
                     queued_msg.attachments.clear();
                     result = self
-                        .process_user_input(&queued_msg, session.clone(), thread_id, &next_content, suppressed)
+                        .process_user_input(
+                            &queued_msg,
+                            session.clone(),
+                            thread_id,
+                            &next_content,
+                            suppressed,
+                        )
                         .await;
 
                     // If processing failed, re-queue the drained content so it

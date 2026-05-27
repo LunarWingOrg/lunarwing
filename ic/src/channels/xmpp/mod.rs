@@ -22,12 +22,12 @@ use xmpp_parsers::disco::{DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, Disc
 use xmpp_parsers::eme::ExplicitMessageEncryption;
 use xmpp_parsers::http_upload::{SlotRequest, SlotResult};
 use xmpp_parsers::iq::Iq;
-use xmpp_parsers::oob::Oob;
 use xmpp_parsers::legacy_omemo::{Bundle, Device, DeviceList, Encrypted};
 use xmpp_parsers::message::MessageType;
 use xmpp_parsers::muc::Muc;
 use xmpp_parsers::muc::muc::History;
 use xmpp_parsers::muc::user::{Affiliation as MucAffiliation, MucUser, Status as MucStatus};
+use xmpp_parsers::oob::Oob;
 use xmpp_parsers::presence::{Presence, Type as PresenceType};
 use xmpp_parsers::pubsub::pubsub::{Item as PubSubItem, Items, PubSub, Publish, PublishOptions};
 use xmpp_parsers::pubsub::{NodeName, PubSubPayload};
@@ -2447,10 +2447,11 @@ async fn discover_http_upload_service(
         name: "xmpp".into(),
         reason: "empty disco#items response".into(),
     })?;
-    let items = DiscoItemsResult::try_from(items_payload).map_err(|e| ChannelError::SendFailed {
-        name: "xmpp".into(),
-        reason: format!("failed to parse disco#items payload: {e}"),
-    })?;
+    let items =
+        DiscoItemsResult::try_from(items_payload).map_err(|e| ChannelError::SendFailed {
+            name: "xmpp".into(),
+            reason: format!("failed to parse disco#items payload: {e}"),
+        })?;
 
     for item in items.items {
         let item_jid = item.jid.clone();

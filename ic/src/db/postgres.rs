@@ -1217,7 +1217,10 @@ impl ReflexStore for PgBackend {
                 &[&min_count, &limit],
             )
             .await?;
-        Ok(rows.iter().map(|r| r.get::<_, String>("description")).collect())
+        Ok(rows
+            .iter()
+            .map(|r| r.get::<_, String>("description"))
+            .collect())
     }
 
     async fn upsert_reflex_pattern(
@@ -1256,7 +1259,12 @@ impl ReflexStore for PgBackend {
                 &[&user_id, &normalized_pattern],
             )
             .await?;
-        Ok(row.map(|r| (r.get::<_, String>("tool_name"), r.get::<_, String>("status"))))
+        Ok(row.map(|r| {
+            (
+                r.get::<_, String>("tool_name"),
+                r.get::<_, String>("status"),
+            )
+        }))
     }
 
     async fn list_reflex_patterns(
@@ -1324,8 +1332,7 @@ impl ReflexStore for PgBackend {
             )
             .await?;
 
-        let mut stale: Vec<ReflexPatternRecord> =
-            rows.iter().map(row_to_reflex_pattern).collect();
+        let mut stale: Vec<ReflexPatternRecord> = rows.iter().map(row_to_reflex_pattern).collect();
 
         if !dry_run && !stale.is_empty() {
             let ids: Vec<String> = stale.iter().map(|r| r.id.to_string()).collect();
@@ -1403,10 +1410,7 @@ impl ReflexStore for PgBackend {
 }
 
 fn row_to_reflex_pattern(row: &tokio_postgres::Row) -> ReflexPatternRecord {
-    let embedding: Option<pgvector::Vector> = row
-        .try_get("embedding")
-        .ok()
-        .flatten();
+    let embedding: Option<pgvector::Vector> = row.try_get("embedding").ok().flatten();
     ReflexPatternRecord {
         id: row.get("id"),
         user_id: row.get("user_id"),

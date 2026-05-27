@@ -125,14 +125,18 @@ impl Agent {
                 JobContext::with_user(&message.user_id, "reflex", "Reflex fast-path execution")
                     .with_requester_id(&message.sender_id);
             job_ctx.user_timezone = user_tz.name().to_string();
-            
+
             let params = serde_json::json!({"input": message.content});
             match self.execute_chat_tool(&tool_name, &params, &job_ctx).await {
                 Ok(output) => {
                     return Ok(AgenticLoopResult::Response(output));
                 }
                 Err(e) => {
-                    tracing::warn!("Reflex tool '{}' failed, falling back to LLM: {}", tool_name, e);
+                    tracing::warn!(
+                        "Reflex tool '{}' failed, falling back to LLM: {}",
+                        tool_name,
+                        e
+                    );
                 }
             }
         }

@@ -98,10 +98,8 @@ pub struct ExternalWorkerManager {
 
 impl ExternalWorkerManager {
     pub fn new(configs: Vec<ExternalWorkerConfig>) -> Self {
-        let workers: HashMap<String, ExternalWorkerConfig> = configs
-            .into_iter()
-            .map(|c| (c.name.clone(), c))
-            .collect();
+        let workers: HashMap<String, ExternalWorkerConfig> =
+            configs.into_iter().map(|c| (c.name.clone(), c)).collect();
 
         if !workers.is_empty() {
             tracing::info!(
@@ -181,7 +179,10 @@ impl ExternalWorkerManager {
             worker_name: worker_name_owned.clone(),
             cancel_tx: Some(cancel_tx),
         }));
-        active_handles.write().await.insert(job_id, Arc::clone(&handle));
+        active_handles
+            .write()
+            .await
+            .insert(job_id, Arc::clone(&handle));
 
         if wait {
             let result = run_external_task(
@@ -298,10 +299,7 @@ async fn run_external_task(
 
     // tungstenite needs specific headers for the handshake
     let host = uri.host().unwrap_or("localhost");
-    let port_suffix = uri
-        .port_u16()
-        .map(|p| format!(":{p}"))
-        .unwrap_or_default();
+    let port_suffix = uri.port_u16().map(|p| format!(":{p}")).unwrap_or_default();
     req_builder = req_builder
         .header("Host", format!("{host}{port_suffix}"))
         .header("Connection", "Upgrade")
@@ -312,26 +310,29 @@ async fn run_external_task(
         )
         .header("Sec-WebSocket-Version", "13");
 
-    let ws_request = req_builder.body(()).map_err(|e| {
-        OrchestratorError::ExternalWorkerConnectionFailed {
-            worker_name: worker_name.to_string(),
-            reason: format!("failed to build request: {e}"),
-        }
-    })?;
+    let ws_request =
+        req_builder
+            .body(())
+            .map_err(|e| OrchestratorError::ExternalWorkerConnectionFailed {
+                worker_name: worker_name.to_string(),
+                reason: format!("failed to build request: {e}"),
+            })?;
 
     // Connect with timeout
     let connect_timeout = Duration::from_secs(15);
-    let (ws_stream, _response) =
-        tokio::time::timeout(connect_timeout, tokio_tungstenite::connect_async(ws_request))
-            .await
-            .map_err(|_| OrchestratorError::ExternalWorkerConnectionFailed {
-                worker_name: worker_name.to_string(),
-                reason: "connection timed out (15s)".to_string(),
-            })?
-            .map_err(|e| OrchestratorError::ExternalWorkerConnectionFailed {
-                worker_name: worker_name.to_string(),
-                reason: e.to_string(),
-            })?;
+    let (ws_stream, _response) = tokio::time::timeout(
+        connect_timeout,
+        tokio_tungstenite::connect_async(ws_request),
+    )
+    .await
+    .map_err(|_| OrchestratorError::ExternalWorkerConnectionFailed {
+        worker_name: worker_name.to_string(),
+        reason: "connection timed out (15s)".to_string(),
+    })?
+    .map_err(|e| OrchestratorError::ExternalWorkerConnectionFailed {
+        worker_name: worker_name.to_string(),
+        reason: e.to_string(),
+    })?;
 
     let (mut write, mut read) = ws_stream.split();
 
@@ -352,12 +353,13 @@ async fn run_external_task(
             reason: format!("WebSocket error: {e}"),
         })?;
 
-    let ready_text = ready_msg.to_text().map_err(|e| {
-        OrchestratorError::ExternalWorkerProtocolError {
-            worker_name: worker_name.to_string(),
-            reason: format!("ready message not text: {e}"),
-        }
-    })?;
+    let ready_text =
+        ready_msg
+            .to_text()
+            .map_err(|e| OrchestratorError::ExternalWorkerProtocolError {
+                worker_name: worker_name.to_string(),
+                reason: format!("ready message not text: {e}"),
+            })?;
 
     let ready_env: Envelope = serde_json::from_str(ready_text).map_err(|e| {
         OrchestratorError::ExternalWorkerProtocolError {
@@ -416,12 +418,13 @@ async fn run_external_task(
             .into(),
     );
 
-    write.send(msg).await.map_err(|e| {
-        OrchestratorError::ExternalWorkerProtocolError {
+    write
+        .send(msg)
+        .await
+        .map_err(|e| OrchestratorError::ExternalWorkerProtocolError {
             worker_name: worker_name.to_string(),
             reason: format!("failed to send task_request: {e}"),
-        }
-    })?;
+        })?;
 
     // Read messages until task_result or timeout
     let task_timeout = Duration::from_millis(timeout_ms);
@@ -570,10 +573,7 @@ async fn run_external_task(
     } else {
         format!(
             "Failed: {}",
-            task_result
-                .error
-                .as_deref()
-                .unwrap_or("unknown error")
+            task_result.error.as_deref().unwrap_or("unknown error")
         )
     };
     persist_event(store, job_id, "result", &final_msg).await;

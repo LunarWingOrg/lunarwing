@@ -107,7 +107,6 @@ impl AnthropicOAuthProvider {
         }
     }
 
-
     async fn send_request<R: for<'de> Deserialize<'de>>(
         &self,
         body: &AnthropicRequest,

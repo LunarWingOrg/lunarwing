@@ -34,8 +34,10 @@ use lunarwing::agent::reflex::{ReflexCompiler, ReflexRouter};
 use lunarwing::db::libsql::LibSqlBackend;
 use lunarwing::db::{Database, ReflexStore};
 use lunarwing::error::ToolError;
+use lunarwing::tools::builder::{
+    BuildLog, BuildPhase, BuildRequirement, BuildResult, SoftwareBuilder,
+};
 use lunarwing::tools::{Language, SoftwareType};
-use lunarwing::tools::builder::{BuildLog, BuildPhase, BuildRequirement, BuildResult, SoftwareBuilder};
 
 // ---------------------------------------------------------------------------
 // Mock builders
@@ -186,7 +188,13 @@ fn make_compiler(
     min_match: u32,
     max_per_run: usize,
 ) -> ReflexCompiler {
-    ReflexCompiler::new(builder, store, Duration::from_secs(3600), min_match, max_per_run)
+    ReflexCompiler::new(
+        builder,
+        store,
+        Duration::from_secs(3600),
+        min_match,
+        max_per_run,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -199,12 +207,7 @@ async fn e2e_compile_then_route_exact() {
     let (backend, store) = fresh_backend().await;
     seed_completed_jobs(&backend, "summarize my logs", 5).await;
 
-    let compiler = make_compiler(
-        Arc::new(MockSoftwareBuilder),
-        Arc::clone(&store),
-        3,
-        10,
-    );
+    let compiler = make_compiler(Arc::new(MockSoftwareBuilder), Arc::clone(&store), 3, 10);
     compiler.compile_patterns().await;
 
     let (tool_name, status) = store
@@ -264,7 +267,10 @@ async fn e2e_below_threshold_not_compiled() {
         .await
         .expect("get_reflex_pattern");
 
-    assert!(pattern.is_none(), "pattern below threshold should not be compiled");
+    assert!(
+        pattern.is_none(),
+        "pattern below threshold should not be compiled"
+    );
 }
 
 /// A failed build should NOT leave an active pattern in the DB.
@@ -281,7 +287,10 @@ async fn e2e_failed_build_not_persisted() {
         .await
         .expect("get_reflex_pattern");
 
-    assert!(pattern.is_none(), "failed build should not persist an active pattern");
+    assert!(
+        pattern.is_none(),
+        "failed build should not persist an active pattern"
+    );
 }
 
 /// Compiling the same pattern twice must not produce duplicates or change the
@@ -406,7 +415,13 @@ async fn e2e_multiple_patterns_compile_and_route() {
 async fn e2e_max_patterns_per_run_respected() {
     let (backend, store) = fresh_backend().await;
 
-    let descs = ["alpha job", "beta job", "gamma job", "delta job", "epsilon job"];
+    let descs = [
+        "alpha job",
+        "beta job",
+        "gamma job",
+        "delta job",
+        "epsilon job",
+    ];
     for desc in &descs {
         seed_completed_jobs(&backend, desc, 5).await;
     }

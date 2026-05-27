@@ -21,8 +21,8 @@ use crate::channels::web::types::SseEvent;
 use crate::context::{ContextManager, JobContext, JobState};
 use crate::db::Database;
 use crate::history::SandboxJobRecord;
-use crate::orchestrator::auth::CredentialGrant;
 use crate::orchestrator::ExternalWorkerManager;
+use crate::orchestrator::auth::CredentialGrant;
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -1140,14 +1140,9 @@ impl Tool for CreateJobTool {
         if mode_str != "worker" {
             if let Some(ref ewm) = self.external_worker_manager {
                 if ewm.get_worker(mode_str).is_some() {
-                    let wait = params
-                        .get("wait")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true);
+                    let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
                     let task = format!("{}\n\n{}", title, description);
-                    return self
-                        .execute_external(&task, mode_str, wait, ctx)
-                        .await;
+                    return self.execute_external(&task, mode_str, wait, ctx).await;
                 }
             }
             return Err(ToolError::InvalidParameters(format!(
@@ -1170,10 +1165,7 @@ impl Tool for CreateJobTool {
         if self.sandbox_enabled() {
             let mode = JobMode::Worker;
 
-            let wait = params
-                .get("wait")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
+            let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let explicit_dir = params
                 .get("project_dir")

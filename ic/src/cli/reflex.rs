@@ -144,12 +144,7 @@ async fn list(
         };
         println!(
             "{:<36}  {:<30}  {:<20}  {:<8}  {:>6}  {:<22}",
-            p.id,
-            pattern_preview,
-            tool_preview,
-            p.status,
-            p.match_count,
-            last_matched,
+            p.id, pattern_preview, tool_preview, p.status, p.match_count, last_matched,
         );
     }
 
@@ -182,28 +177,16 @@ async fn show(db: &Arc<dyn Database>, user_id: &str, id: &str) -> anyhow::Result
             .map(|dt| dt.to_rfc3339())
             .unwrap_or_else(|| "Never".to_string())
     );
-    println!(
-        "Created:             {}",
-        pattern.created_at.to_rfc3339()
-    );
-    println!(
-        "Updated:             {}",
-        pattern.updated_at.to_rfc3339()
-    );
+    println!("Created:             {}", pattern.created_at.to_rfc3339());
+    println!("Updated:             {}", pattern.updated_at.to_rfc3339());
 
     Ok(())
 }
 
 // ── Delete ──────────────────────────────────────────────────
 
-async fn delete(
-    db: &Arc<dyn Database>,
-    user_id: &str,
-    id: &str,
-    yes: bool,
-) -> anyhow::Result<()> {
-    let uuid = Uuid::parse_str(id)
-        .map_err(|_| anyhow::anyhow!("Invalid UUID: '{}'", id))?;
+async fn delete(db: &Arc<dyn Database>, user_id: &str, id: &str, yes: bool) -> anyhow::Result<()> {
+    let uuid = Uuid::parse_str(id).map_err(|_| anyhow::anyhow!("Invalid UUID: '{}'", id))?;
 
     // Verify the pattern exists and belongs to this user
     let patterns = db.list_reflex_patterns(user_id).await?;
@@ -226,7 +209,10 @@ async fn delete(
     }
 
     db.disable_reflex_pattern(uuid).await?;
-    println!("Deleted reflex pattern '{}' ({})", pattern.normalized_pattern, id);
+    println!(
+        "Deleted reflex pattern '{}' ({})",
+        pattern.normalized_pattern, id
+    );
 
     Ok(())
 }
@@ -243,9 +229,7 @@ async fn prune(
         anyhow::bail!("--stale-days must be at least 1");
     }
 
-    let evicted = db
-        .prune_stale_reflex_patterns(stale_days, dry_run)
-        .await?;
+    let evicted = db.prune_stale_reflex_patterns(stale_days, dry_run).await?;
 
     if json {
         let items: Vec<serde_json::Value> = evicted
@@ -336,10 +320,7 @@ async fn status(db: &Arc<dyn Database>, user_id: &str) -> anyhow::Result<()> {
     println!("Total Matches:     {}", total_matches);
 
     if !patterns.is_empty() {
-        let top_pattern = patterns
-            .iter()
-            .max_by_key(|p| p.match_count)
-            .unwrap();
+        let top_pattern = patterns.iter().max_by_key(|p| p.match_count).unwrap();
         println!(
             "Top Pattern:       '{}' ({} matches)",
             top_pattern.normalized_pattern, top_pattern.match_count

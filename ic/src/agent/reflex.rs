@@ -21,9 +21,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::db::Database;
-use crate::tools::builder::{
-    BuildRequirement, Language, SoftwareBuilder, SoftwareType,
-};
+use crate::tools::builder::{BuildRequirement, Language, SoftwareBuilder, SoftwareType};
 use crate::workspace::EmbeddingProvider;
 
 // ── Constants ───────────────────────
@@ -218,8 +216,7 @@ impl ReflexRouter {
 
         // Pre-filter: only consider patterns that share at least
         // one word with the input (avoids scanning everything).
-        let words_input: std::collections::HashSet<&str> =
-            normalized.split_whitespace().collect();
+        let words_input: std::collections::HashSet<&str> = normalized.split_whitespace().collect();
 
         let mut candidates: Vec<(String, f64)> = Vec::new();
 
@@ -269,7 +266,9 @@ impl ReflexRouter {
 
                 tracing::debug!(
                     "Reflex fuzzy match: '{}' ≈ '{}' (score: {:.3})",
-                    normalized, best_pattern, score
+                    normalized,
+                    best_pattern,
+                    score
                 );
             }
 
@@ -388,10 +387,11 @@ impl ReflexRouter {
             }
         }
 
-        if let Some(best) = candidates
-            .into_iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
-        {
+        if let Some(best) = candidates.into_iter().max_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
             return Some(best);
         }
 
@@ -446,10 +446,8 @@ impl ReflexRouter {
                 embeddings.clear();
                 for record in &records {
                     if record.status == "active" {
-                        patterns.insert(
-                            record.normalized_pattern.clone(),
-                            record.tool_name.clone(),
-                        );
+                        patterns
+                            .insert(record.normalized_pattern.clone(), record.tool_name.clone());
                         if let Some(ref emb) = record.embedding {
                             embeddings.insert(record.normalized_pattern.clone(), emb.clone());
                         }
@@ -502,7 +500,11 @@ impl ReflexRouter {
                         .update_reflex_pattern_embedding(user_id, pattern, emb, &model_name)
                         .await
                     {
-                        tracing::debug!("Failed to persist reflex embedding for '{}': {}", pattern, e);
+                        tracing::debug!(
+                            "Failed to persist reflex embedding for '{}': {}",
+                            pattern,
+                            e
+                        );
                     }
                 }
                 tracing::debug!(
@@ -632,7 +634,10 @@ impl ReflexCompiler {
     pub async fn compile_patterns(&self) {
         match self
             .store
-            .find_recurring_job_patterns(self.min_match_count as i32, self.max_patterns_per_run as i32)
+            .find_recurring_job_patterns(
+                self.min_match_count as i32,
+                self.max_patterns_per_run as i32,
+            )
             .await
         {
             Ok(patterns) => {
@@ -803,7 +808,13 @@ pub fn spawn_reflex_compiler(
     max_patterns_per_run: usize,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let compiler = ReflexCompiler::new(builder, store, check_interval, min_match_count, max_patterns_per_run);
+        let compiler = ReflexCompiler::new(
+            builder,
+            store,
+            check_interval,
+            min_match_count,
+            max_patterns_per_run,
+        );
         compiler.run_loop().await;
     })
 }
@@ -850,7 +861,10 @@ mod tests {
     #[test]
     fn test_normalize_pattern_basic() {
         assert_eq!(normalize_pattern("Hello World"), "hello world");
-        assert_eq!(normalize_pattern("  Multiple   Spaces  "), "multiple spaces");
+        assert_eq!(
+            normalize_pattern("  Multiple   Spaces  "),
+            "multiple spaces"
+        );
     }
 
     #[test]
@@ -875,20 +889,32 @@ mod tests {
     #[test]
     fn test_word_overlap_identical() {
         let score = word_overlap("summarize my logs", "summarize my logs");
-        assert!((score - 1.0).abs() < 1e-6, "identical should score 1.0, got {}", score);
+        assert!(
+            (score - 1.0).abs() < 1e-6,
+            "identical should score 1.0, got {}",
+            score
+        );
     }
 
     #[test]
     fn test_word_overlap_half() {
         let score = word_overlap("summarize my logs", "summarize the logs");
         // intersection = {summarize, logs} = 2, union = {summarize, my, logs, the} = 4
-        assert!((score - 0.5).abs() < 1e-6, "2/4 should score 0.5, got {}", score);
+        assert!(
+            (score - 0.5).abs() < 1e-6,
+            "2/4 should score 0.5, got {}",
+            score
+        );
     }
 
     #[test]
     fn test_word_overlap_disjoint() {
         let score = word_overlap("hello world", "goodbye moon");
-        assert!((score - 0.0).abs() < 1e-6, "disjoint should score 0.0, got {}", score);
+        assert!(
+            (score - 0.0).abs() < 1e-6,
+            "disjoint should score 0.0, got {}",
+            score
+        );
     }
 
     #[test]
@@ -903,13 +929,21 @@ mod tests {
     fn test_jaro_winkler_similar() {
         // "summarize my logs" vs "summarize all my logs"
         let score = jaro_winkler("summarize my logs", "summarize all my logs");
-        assert!(score > 0.8, "similar phrases should score high, got {}", score);
+        assert!(
+            score > 0.8,
+            "similar phrases should score high, got {}",
+            score
+        );
     }
 
     #[test]
     fn test_jaro_winkler_different() {
         let score = jaro_winkler("summarize my logs", "hello world");
-        assert!(score < 0.6, "different phrases should score low, got {}", score);
+        assert!(
+            score < 0.6,
+            "different phrases should score low, got {}",
+            score
+        );
     }
 
     // ── ReflexRouter: exact match ──
@@ -919,9 +953,18 @@ mod tests {
         let router = ReflexRouter::new();
         router.register("hello world", "tool_hello").await;
 
-        assert_eq!(router.try_route("Hello World").await, Some("tool_hello".to_string()));
-        assert_eq!(router.try_route("hello world").await, Some("tool_hello".to_string()));
-        assert_eq!(router.try_route("Hello, World!!!").await, Some("tool_hello".to_string()));
+        assert_eq!(
+            router.try_route("Hello World").await,
+            Some("tool_hello".to_string())
+        );
+        assert_eq!(
+            router.try_route("hello world").await,
+            Some("tool_hello".to_string())
+        );
+        assert_eq!(
+            router.try_route("Hello, World!!!").await,
+            Some("tool_hello".to_string())
+        );
         assert_eq!(router.try_route("goodbye world").await, None);
     }
 
@@ -954,7 +997,9 @@ mod tests {
     #[tokio::test]
     async fn test_reflex_router_fuzzy_match_word_order() {
         let router = ReflexRouter::new();
-        router.register("find errors in the logs", "tool_find_errors").await;
+        router
+            .register("find errors in the logs", "tool_find_errors")
+            .await;
 
         // Word re-ordering
         let result = router.try_route("find logs with errors").await;
@@ -967,7 +1012,9 @@ mod tests {
         router.register("check disk space", "tool_disk").await;
 
         // Extra words
-        let result = router.try_route("please check the disk space on the server").await;
+        let result = router
+            .try_route("please check the disk space on the server")
+            .await;
         assert_eq!(result, Some("tool_disk".to_string()));
     }
 
@@ -989,8 +1036,11 @@ mod tests {
 
         // Should pick the better match ("logs" vs "errors")
         let result = router.try_route("summarize all the logs today").await;
-        assert_eq!(result, Some("tool_summarize".to_string()),
-            "should match 'summarize my logs' over 'summarize my errors'");
+        assert_eq!(
+            result,
+            Some("tool_summarize".to_string()),
+            "should match 'summarize my logs' over 'summarize my errors'"
+        );
     }
 
     #[tokio::test]
@@ -1017,8 +1067,12 @@ mod tests {
         let threshold = PROMOTION_THRESHOLD;
         for i in 0..threshold {
             let result = router.try_route(variant).await;
-            assert_eq!(result, Some("tool_summarize".to_string()),
-                "fuzzy match should work on attempt {}", i);
+            assert_eq!(
+                result,
+                Some("tool_summarize".to_string()),
+                "fuzzy match should work on attempt {}",
+                i
+            );
         }
 
         // The variant should now be promoted to the exact-match cache.
@@ -1026,12 +1080,18 @@ mod tests {
         // (We can verify indirectly by checking count was reset to 0.)
         let hits = router.fuzzy_hit_counts().await;
         let count = hits.get(variant).copied().unwrap_or(99);
-        assert_eq!(count, 0, "fuzzy hit count should reset to 0 after promotion");
+        assert_eq!(
+            count, 0,
+            "fuzzy hit count should reset to 0 after promotion"
+        );
 
         // Routing still works (now via exact match)
         let result = router.try_route(variant).await;
-        assert_eq!(result, Some("tool_summarize".to_string()),
-            "promoted variant should still route after promotion");
+        assert_eq!(
+            result,
+            Some("tool_summarize".to_string()),
+            "promoted variant should still route after promotion"
+        );
     }
 
     #[tokio::test]
@@ -1052,10 +1112,16 @@ mod tests {
 
         // Neither should be promoted (only threshold-1 hits each)
         let hits = router.fuzzy_hit_counts().await;
-        assert_eq!(hits.get(variant_a).copied(), Some(PROMOTION_THRESHOLD - 1),
-            "variant_a should not be promoted yet");
-        assert_eq!(hits.get(variant_b).copied(), Some(PROMOTION_THRESHOLD - 1),
-            "variant_b should not be promoted yet");
+        assert_eq!(
+            hits.get(variant_a).copied(),
+            Some(PROMOTION_THRESHOLD - 1),
+            "variant_a should not be promoted yet"
+        );
+        assert_eq!(
+            hits.get(variant_b).copied(),
+            Some(PROMOTION_THRESHOLD - 1),
+            "variant_b should not be promoted yet"
+        );
     }
 
     // ── FuzzyMatch details ──
@@ -1083,8 +1149,16 @@ mod tests {
         let details = details.unwrap();
         assert_eq!(details.tool_name, "tool_summarize");
         assert_eq!(details.matched_pattern, "summarize my logs");
-        assert!(details.score >= 0.8, "score should be high, got {}", details.score);
-        assert!(details.score < 1.0, "fuzzy should not be exact, got {}", details.score);
+        assert!(
+            details.score >= 0.8,
+            "score should be high, got {}",
+            details.score
+        );
+        assert!(
+            details.score < 1.0,
+            "fuzzy should not be exact, got {}",
+            details.score
+        );
     }
 
     #[tokio::test]
@@ -1104,8 +1178,14 @@ mod tests {
         router.register("hello world", "tool_hello").await;
 
         // Very strict — should NOT match small variations
-        assert_eq!(router.try_route("hello world").await, Some("tool_hello".to_string()));
-        assert_eq!(router.try_route("hello world!").await, Some("tool_hello".to_string()));
+        assert_eq!(
+            router.try_route("hello world").await,
+            Some("tool_hello".to_string())
+        );
+        assert_eq!(
+            router.try_route("hello world!").await,
+            Some("tool_hello".to_string())
+        );
         // Anything beyond normalization changes should fail
     }
 
@@ -1122,12 +1202,18 @@ mod tests {
     #[tokio::test]
     async fn test_reflex_router_threshold_clamped() {
         let router = ReflexRouter::with_threshold(2.0);
-        assert!((router.fuzzy_threshold() - 1.0).abs() < 1e-6,
-            "threshold should be clamped to 1.0, got {}", router.fuzzy_threshold());
+        assert!(
+            (router.fuzzy_threshold() - 1.0).abs() < 1e-6,
+            "threshold should be clamped to 1.0, got {}",
+            router.fuzzy_threshold()
+        );
 
         let router = ReflexRouter::with_threshold(-1.0);
-        assert!((router.fuzzy_threshold() - 0.0).abs() < 1e-6,
-            "threshold should be clamped to 0.0, got {}", router.fuzzy_threshold());
+        assert!(
+            (router.fuzzy_threshold() - 0.0).abs() < 1e-6,
+            "threshold should be clamped to 0.0, got {}",
+            router.fuzzy_threshold()
+        );
     }
 
     // ── Pattern count ──
@@ -1206,7 +1292,12 @@ mod tests {
 
         // Upsert a pattern
         backend
-            .upsert_reflex_pattern("test-user", "summarize logs", "Summarize my logs", "tool_summarize")
+            .upsert_reflex_pattern(
+                "test-user",
+                "summarize logs",
+                "Summarize my logs",
+                "tool_summarize",
+            )
             .await
             .unwrap();
 
@@ -1238,7 +1329,10 @@ mod tests {
         assert_eq!(patterns[0].match_count, 2);
 
         // Disable
-        backend.disable_reflex_pattern(patterns[0].id).await.unwrap();
+        backend
+            .disable_reflex_pattern(patterns[0].id)
+            .await
+            .unwrap();
 
         let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
         assert_eq!(patterns[0].status, "disabled");
@@ -1316,15 +1410,24 @@ mod tests {
         .unwrap();
 
         // Actual eviction with 30-day threshold
-        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        let evicted = backend
+            .prune_stale_reflex_patterns(30, false)
+            .await
+            .unwrap();
         assert_eq!(evicted.len(), 1);
         assert_eq!(evicted[0].normalized_pattern, "stale pattern");
 
         // Verify statuses
         let patterns = backend.list_reflex_patterns("test-user").await.unwrap();
         assert_eq!(patterns.len(), 2);
-        let stale = patterns.iter().find(|p| p.normalized_pattern == "stale pattern").unwrap();
-        let fresh = patterns.iter().find(|p| p.normalized_pattern == "fresh pattern").unwrap();
+        let stale = patterns
+            .iter()
+            .find(|p| p.normalized_pattern == "stale pattern")
+            .unwrap();
+        let fresh = patterns
+            .iter()
+            .find(|p| p.normalized_pattern == "fresh pattern")
+            .unwrap();
         assert_eq!(stale.status, "evicted");
         assert_eq!(fresh.status, "active");
     }
@@ -1358,7 +1461,10 @@ mod tests {
         .unwrap();
 
         // Should still be evicted based on created_at
-        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        let evicted = backend
+            .prune_stale_reflex_patterns(30, false)
+            .await
+            .unwrap();
         assert_eq!(evicted.len(), 1);
         assert_eq!(evicted[0].status, "evicted");
     }
@@ -1380,7 +1486,10 @@ mod tests {
             .unwrap();
 
         // Eviction sweep should find nothing
-        let evicted = backend.prune_stale_reflex_patterns(30, false).await.unwrap();
+        let evicted = backend
+            .prune_stale_reflex_patterns(30, false)
+            .await
+            .unwrap();
         assert!(evicted.is_empty());
 
         // Still active
@@ -1403,7 +1512,11 @@ mod tests {
     fn test_cosine_similarity_identical() {
         let v = vec![1.0, 0.0, 0.0];
         let score = cosine_similarity(&v, &v);
-        assert!((score - 1.0).abs() < 1e-6, "identical vectors should be 1.0, got {}", score);
+        assert!(
+            (score - 1.0).abs() < 1e-6,
+            "identical vectors should be 1.0, got {}",
+            score
+        );
     }
 
     #[test]
@@ -1411,7 +1524,11 @@ mod tests {
         let a = vec![1.0, 0.0, 0.0];
         let b = vec![0.0, 1.0, 0.0];
         let score = cosine_similarity(&a, &b);
-        assert!(score.abs() < 1e-6, "orthogonal vectors should be 0.0, got {}", score);
+        assert!(
+            score.abs() < 1e-6,
+            "orthogonal vectors should be 0.0, got {}",
+            score
+        );
     }
 
     #[test]
@@ -1419,7 +1536,11 @@ mod tests {
         let a = vec![1.0, 0.0];
         let b = vec![-1.0, 0.0];
         let score = cosine_similarity(&a, &b);
-        assert!((score + 1.0).abs() < 1e-6, "opposite vectors should be -1.0, got {}", score);
+        assert!(
+            (score + 1.0).abs() < 1e-6,
+            "opposite vectors should be -1.0, got {}",
+            score
+        );
     }
 
     #[test]
@@ -1466,7 +1587,9 @@ mod tests {
             .with_embedding_provider(provider.clone())
             .with_semantic_threshold(0.5);
 
-        router2.register("check server health status", "tool_health").await;
+        router2
+            .register("check server health status", "tool_health")
+            .await;
         let emb = provider.embed("check server health status").await.unwrap();
         {
             let mut cache = router2.pattern_embeddings.write().await;
@@ -1512,7 +1635,10 @@ mod tests {
         // Completely different text — MockEmbeddings generates different
         // hash-based vectors, cosine similarity will be well below 0.99
         let result = router.try_route("what is the weather forecast today").await;
-        assert_eq!(result, None, "dissimilar text should not match with high threshold");
+        assert_eq!(
+            result, None,
+            "dissimilar text should not match with high threshold"
+        );
     }
 
     #[tokio::test]

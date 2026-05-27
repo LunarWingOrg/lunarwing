@@ -29,10 +29,10 @@ pub mod memory;
 mod models;
 pub mod oauth_defaults;
 mod pairing;
+mod reflex;
 mod registry;
 #[cfg(unix)]
 mod repl;
-mod reflex;
 mod routines;
 mod service;
 mod skills;
@@ -53,10 +53,10 @@ pub use memory::MemoryCommand;
 pub use memory::run_memory_command_with_db;
 pub use models::{ModelsCommand, run_models_command};
 pub use pairing::{PairingCommand, run_pairing_command, run_pairing_command_with_store};
+pub use reflex::{ReflexCommand, run_reflex_command};
 pub use registry::{RegistryCommand, run_registry_command};
 #[cfg(unix)]
 pub use repl::ReplCommand;
-pub use reflex::{ReflexCommand, run_reflex_command};
 pub use routines::{RoutinesCommand, run_routines_command};
 pub use service::{ServiceCommand, run_service_command};
 pub use skills::{SkillsCommand, run_skills_command};

@@ -141,9 +141,10 @@ async fn async_main() -> anyhow::Result<()> {
             let config = lunarwing::config::Config::from_env_with_toml(cli.config.as_deref())
                 .await
                 .map_err(|e| anyhow::anyhow!("{e:#}"))?;
-            let db: Arc<dyn lunarwing::db::Database> = lunarwing::db::connect_from_config(&config.database)
-                .await
-                .map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            let db: Arc<dyn lunarwing::db::Database> =
+                lunarwing::db::connect_from_config(&config.database)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:#}"))?;
             let user_id = std::env::var("LUNARWING_OWNER_ID")
                 .ok()
                 .map(|value| value.trim().to_string())

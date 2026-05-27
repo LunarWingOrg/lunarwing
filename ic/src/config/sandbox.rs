@@ -193,9 +193,7 @@ pub struct ExternalWorkerConfig {
 }
 
 impl ExternalWorkerConfig {
-    pub fn resolve_from_settings(
-        settings: &crate::settings::Settings,
-    ) -> Vec<Self> {
+    pub fn resolve_from_settings(settings: &crate::settings::Settings) -> Vec<Self> {
         settings
             .sandbox
             .external_workers

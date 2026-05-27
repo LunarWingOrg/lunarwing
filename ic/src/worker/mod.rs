@@ -114,4 +114,3 @@ pub async fn run_worker(
         .await
         .map_err(|e| anyhow::anyhow!("Worker failed: {}", e))
 }
-
