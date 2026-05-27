@@ -30,6 +30,10 @@ authors = ["LunarWing Team"]
 license = "AGPL-3.0-or-later"
 homepage = "https://github.com/LunarWingOrg/lunarwing"
 repository = "https://github.com/LunarWingOrg/lunarwing"
+readme = "README.md"
+keywords = ["ai-agent", "xmpp", "omemo", "privacy", "self-hosted"]
+categories = ["command-line-utilities", "network-programming"]
+publish = false
 
 [package.metadata.wix]
 upgrade-guid = "D0156E61-BA37-451E-8AB9-1A2ECCCFA48F"
