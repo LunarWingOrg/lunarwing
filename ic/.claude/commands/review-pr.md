@@ -49,9 +49,9 @@ If the PR touches more than 20 files, still read all of them, but process in thi
 
 Go through the changes with each of these lenses. For every finding, note the file, line range, severity, and a concrete description.
 
-### IronClaw-specific checks
+### LunarWing-specific checks
 
-In addition to the general lenses below, check IronClaw conventions (see CLAUDE.md):
+In addition to the general lenses below, check LunarWing conventions (see CLAUDE.md):
 - No `.unwrap()` or `.expect()` in production code (tests are fine)
 - Use `crate::` imports, not `super::`
 - Error types use `thiserror` in `error.rs`

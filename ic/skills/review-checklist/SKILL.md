@@ -18,7 +18,7 @@ activation:
 
 # Pre-Merge Review Checklist
 
-Before merging, verify these items. They represent the most common issues caught by automated code reviewers (Copilot, Gemini) on IronClaw PRs.
+Before merging, verify these items. They represent the most common issues caught by automated code reviewers (Copilot, Gemini) on LunarWing PRs.
 
 ## Database Operations
 - [ ] Multi-step DB operations are wrapped in transactions (INSERT+INSERT, UPDATE+DELETE, read-modify-write)

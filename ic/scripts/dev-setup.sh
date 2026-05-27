@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Developer setup script for IronClaw.
+# Developer setup script for LunarWing.
 #
 # Gets a fresh checkout ready for development without requiring
 # Docker, PostgreSQL, or any external services.
@@ -16,7 +16,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-echo "=== IronClaw Developer Setup ==="
+echo "=== LunarWing Developer Setup ==="
 echo ""
 
 # 1. Check rustup

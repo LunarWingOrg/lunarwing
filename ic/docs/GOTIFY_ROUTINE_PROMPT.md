@@ -1,11 +1,11 @@
 # Gotify Morning Routine Prompt
 
-Use this prompt for an IronClaw scheduled routine that sends a morning status
+Use this prompt for a LunarWing scheduled routine that sends a morning status
 report through the `gotify` tool and returns the same text as backup output.
 
 ## Important Setup Note
 
-`gotify` is installed as a WASM tool, not as an IronClaw channel. Do not set the
+`gotify` is installed as a WASM tool, not as a LunarWing channel. Do not set the
 routine notification channel to `gotify` unless a separate Gotify channel has
 been registered.
 
@@ -14,7 +14,7 @@ The routine should call the `gotify` tool from inside the prompt.
 ## Routine Prompt
 
 ```text
-You are running as a scheduled IronClaw routine.
+You are running as a scheduled LunarWing routine.
 
 Goal:
 Send a morning status report to Gotify, and also return the same report as your final routine output.
@@ -68,7 +68,7 @@ Step 3: Send MESSAGE through the Gotify tool.
 Call the `gotify` tool with MESSAGE as the notification body/message.
 
 Use a clear title if the tool supports one:
-IronClaw Morning Status
+LunarWing Morning Status
 
 If the tool supports priority, use:
 5 if Status is ATTENTION REQUIRED

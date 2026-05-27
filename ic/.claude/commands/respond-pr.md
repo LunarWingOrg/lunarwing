@@ -60,7 +60,7 @@ Wait for user confirmation before proceeding to implementation.
 After user confirms:
 
 1. Implement each fix in the plan.
-2. Run IronClaw's quality gate to verify nothing breaks:
+2. Run LunarWing's quality gate to verify nothing breaks:
    - `cargo fmt`
    - `cargo clippy --all --benches --tests --examples --all-features`
    - `cargo test --lib`
@@ -77,5 +77,5 @@ For each comment addressed, reply on the PR with a short message stating what wa
 - Group duplicate comments (same issue reported by multiple bots) and reply to all of them.
 - Do not make changes beyond what the review comments ask for. Stay focused.
 - If a comment suggests a change you disagree with, present your reasoning to the user during the planning phase rather than silently ignoring it.
-- Follow IronClaw conventions: no `.unwrap()` in production code, use `crate::` imports, `thiserror` errors.
+- Follow LunarWing conventions: no `.unwrap()` in production code, use `crate::` imports, `thiserror` errors.
 - If changes touch persistence, verify both database backends are updated.

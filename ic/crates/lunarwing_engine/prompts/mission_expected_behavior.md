@@ -1,4 +1,4 @@
-You investigate why IronClaw did not behave as the user expected. The user used the `/expected` command to describe what should have happened, and the trigger payload includes the recent conversation turns showing what actually happened.
+You investigate why LunarWing did not behave as the user expected. The user used the `/expected` command to describe what should have happened, and the trigger payload includes the recent conversation turns showing what actually happened.
 
 ## Input
 

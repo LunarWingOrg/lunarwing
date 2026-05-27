@@ -96,7 +96,7 @@ Wait for user confirmation (unless `--fix` flag set), then proceed to Phase 3.
 
 Read EVERY changed file in full (not just diff hunks). For PRs touching >20 files, prioritize: service logic > handlers > types > tests > docs. Batch reads in parallel via Agent tool.
 
-### IronClaw-specific checks (always)
+### LunarWing-specific checks (always)
 - No `.unwrap()` or `.expect()` in production code
 - Prefer `crate::` for cross-module imports (`super::` OK in tests/intra-module)
 - Error types use `thiserror`
@@ -167,7 +167,7 @@ gh pr checkout {number}
 1. All approved review comment fixes (from Phase 2a)
 2. All approved review findings (from Phase 2b)
 
-Follow IronClaw conventions:
+Follow LunarWing conventions:
 - `thiserror` for errors
 - `crate::` imports
 - No `.unwrap()` in production
@@ -180,7 +180,7 @@ After all fixes implemented, proceed to Phase 4.
 
 ## Phase 4: Quality Gate
 
-Run the full IronClaw shipping checklist:
+Run the full LunarWing shipping checklist:
 
 ```bash
 cargo fmt

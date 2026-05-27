@@ -7,7 +7,7 @@ paths:
 
 **Keep tool-specific logic out of the main agent codebase.** The main agent provides generic infrastructure; tools are self-contained units that declare requirements through `<name>.capabilities.json` sidecar files (in dev mode: `tools-src/<name>/<name>-tool.capabilities.json`).
 
-Tools can be WASM (sandboxed, credential-injected, single binary) or MCP servers (ecosystem, any language, no sandbox). Both are first-class via `ironclaw tool install`.
+Tools can be WASM (sandboxed, credential-injected, single binary) or MCP servers (ecosystem, any language, no sandbox). Both are first-class via `lunarwing tool install`.
 
 See `src/tools/README.md` for full architecture, adding new tools, auth JSON examples, and WASM vs MCP decision guide.
 

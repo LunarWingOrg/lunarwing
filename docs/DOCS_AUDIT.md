@@ -2,7 +2,12 @@
 
 **Date:** 2026-05-12
 **Branch:** staging
+**Last updated:** 2026-05-26 (branch `staging-documentation-reorg-may-26`)
 **Context:** These items were identified during a full docs audit. They are stale but not immediately harmful — they cause confusion but don't directly break workflows or production deployments.
+
+**Completed items:** M1, M4, M5, M6, M7, M8, M9, M14, M17, M19 + L1, L2, L3, L4, L8, L14 (all addressed in `staging-documentation-reorg-may-26`).
+
+**Remaining:** M2, M3, M10, M11, M12, M13, M15, M16, M18, M20, M21, M22, L5-L7, L9-L13.
 
 ---
 

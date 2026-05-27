@@ -46,7 +46,7 @@ Start with these deeper docs as needed:
 - Webhook ingress for tools: `src/webhooks/`
 - Observability: `src/observability/`
 - Extension registry catalog: `src/registry/`
-- OpenClaw port staging work: `openclaw-ports/`. For OpenClaw port tasks, keep edits inside `openclaw-ports/` unless the user explicitly approves touching core IronClaw files.
+- OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
 
 ## Build, Test, and Lint Commands
 

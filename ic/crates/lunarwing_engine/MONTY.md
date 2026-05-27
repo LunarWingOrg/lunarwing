@@ -11,7 +11,7 @@ Monty is the embedded Python interpreter used for Tier 1 (CodeAct) execution. It
 2. **Check for new features**: `cd ~/.cargo/git/checkouts/monty-*/*/` and `git log --oneline` since last pin
 3. **Update the preamble**: If a previously-unsupported feature now works, remove it from the "Runtime environment" section in `prompts/codeact_preamble.md`
 4. **Update this file**: Record the new pin and what changed
-5. **Run tests**: `cargo test -p ironclaw_engine`
+5. **Run tests**: `cargo test -p lunarwing_engine`
 6. **Watch traces**: After deploying, check traces for new `NotImplementedError` patterns (self-improvement mission catches these)
 
 ## Current Limitations (as of pin `7a0d4b7`)
@@ -49,7 +49,7 @@ Available built-in modules:
 `abs`, `all`, `any`, `bin`, `chr`, `divmod`, `enumerate`, `filter`, `getattr`, `hash`, `hex`, `id`, `isinstance`, `len`, `map`, `min`, `max`, `next`, `oct`, `ord`, `pow`, `print`, `repr`, `reversed`, `round`, `sorted`, `sum`, `type`, `zip`
 
 ### Host-provided functions (always available)
-These are injected by the IronClaw executor, not by Monty:
+These are injected by the LunarWing executor, not by Monty:
 - `FINAL(answer)` / `FINAL_VAR(name)` — terminate with result
 - `llm_query(prompt, context)` — recursive LLM sub-call
 - `llm_query_batched(prompts)` — parallel sub-calls

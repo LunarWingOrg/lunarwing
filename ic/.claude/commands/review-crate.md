@@ -1,5 +1,5 @@
 ---
-description: Deep audit of the IronClaw crate for vulnerabilities, bugs, unfinished work, inconsistencies, and oversights
+description: Deep audit of the LunarWing crate for vulnerabilities, bugs, unfinished work, inconsistencies, and oversights
 disable-model-invocation: true
 allowed-tools: Bash(cargo fmt:*), Bash(cargo clippy:*), Bash(cargo test:*), Bash(cargo audit:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(wc:*), Read, Grep, Glob, Task
 argument-hint: "[path/to/crate]"
@@ -93,7 +93,7 @@ Search for `.unwrap()`, `.expect(`, `panic!`, `unreachable!` in non-test code. F
 - Is there a code path that reaches this with None/Err?
 - Should it be replaced with proper error handling (`?`, `.ok()`, `.unwrap_or_default()`)?
 
-IronClaw convention: `.unwrap()` and `.expect()` are banned in production code. Any occurrence outside `#[cfg(test)]` blocks is a **High severity** finding.
+LunarWing convention: `.unwrap()` and `.expect()` are banned in production code. Any occurrence outside `#[cfg(test)]` blocks is a **High severity** finding.
 
 ### 5c. SQL and injection vectors
 
@@ -102,7 +102,7 @@ Search for string formatting used in SQL queries, shell commands, or HTML:
 - String interpolation in query construction vs parameterized queries
 - User input flowing into file paths (`Path::new`, `std::fs::`)
 
-IronClaw has two database backends (PostgreSQL and libSQL). Check both for injection vectors.
+LunarWing has two database backends (PostgreSQL and libSQL). Check both for injection vectors.
 
 ### 5d. Cryptographic issues
 
@@ -125,7 +125,7 @@ If the crate uses crypto:
 - Are errors swallowed silently? (`let _ = ...`, `.ok()` discarding errors that matter)
 - Do error types carry enough context to debug in production?
 - Are there error type mismatches? (returning generic `anyhow::Error` where a typed error would prevent confusion)
-- Is `thiserror` used consistently for error types (IronClaw convention)?
+- Is `thiserror` used consistently for error types (LunarWing convention)?
 
 ## Step 6: Check for inconsistencies
 
@@ -156,7 +156,7 @@ Look for:
 
 ### 6e. Import style
 
-IronClaw convention: use `crate::` imports, not `super::`. Flag any `super::` imports in non-test code.
+LunarWing convention: use `crate::` imports, not `super::`. Flag any `super::` imports in non-test code.
 
 ## Step 7: Inspect for change oversights
 
@@ -172,7 +172,7 @@ IronClaw convention: use `crate::` imports, not `super::`. Flag any `super::` im
 - Are there `impl` blocks that look incomplete?
 - Are `Default` implementations sensible?
 
-IronClaw key traits: `Database` (~60 methods), `Channel`, `Tool`, `LlmProvider`, `SuccessEvaluator`, `EmbeddingProvider`. If any new methods were added to `Database`, verify both `postgres.rs` and `libsql_backend.rs` implement them.
+LunarWing key traits: `Database` (~60 methods), `Channel`, `Tool`, `LlmProvider`, `SuccessEvaluator`, `EmbeddingProvider`. If any new methods were added to `Database`, verify both `postgres.rs` and `libsql_backend.rs` implement them.
 
 ### 7c. Test coverage gaps
 

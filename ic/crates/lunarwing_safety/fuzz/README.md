@@ -1,6 +1,6 @@
-# ironclaw_safety Fuzz Targets
+# lunarwing_safety Fuzz Targets
 
-Fuzz testing for the `ironclaw_safety` crate using [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) (libFuzzer).
+Fuzz testing for the `lunarwing_safety` crate using [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) (libFuzzer).
 
 ## Targets
 
@@ -22,7 +22,7 @@ rustup install nightly
 ## Running
 
 ```bash
-cd crates/ironclaw_safety
+cd crates/lunarwing_safety
 
 # Run a specific target (runs until stopped or crash found)
 cargo +nightly fuzz run fuzz_safety_sanitizer

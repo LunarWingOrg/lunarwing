@@ -1,9 +1,9 @@
 ---
-name: ironclaw-workflow-orchestrator
-description: "Install and operate a full GitHub issue-to-merge workflow in IronClaw using event-driven and cron routines. Use when setting up or tuning autonomous project orchestration: issue intake, planning, maintainer feedback handling, branch/PR execution, CI/comment follow-up, batched staging review every 8 hours, and memory updates from merge outcomes."
+name: lunarwing-workflow-orchestrator
+description: "Install and operate a full GitHub issue-to-merge workflow in LunarWing using event-driven and cron routines. Use when setting up or tuning autonomous project orchestration: issue intake, planning, maintainer feedback handling, branch/PR execution, CI/comment follow-up, batched staging review every 8 hours, and memory updates from merge outcomes."
 ---
 
-# IronClaw Workflow Orchestrator
+# LunarWing Workflow Orchestrator
 
 ## Overview
 Use this skill to install and maintain a complete project workflow as routines, not core code changes. It maps GitHub webhook events plus scheduled checks into plan/update/implement/review/merge loops with explicit staging-batch analysis.
