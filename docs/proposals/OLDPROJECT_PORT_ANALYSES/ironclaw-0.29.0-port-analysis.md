@@ -1,7 +1,7 @@
 # Port IronClaw 0.29.0 Changes to LunarWing
 
-**Date:** 2026-05-27
-**Status:** Analysis complete
+**Date:** 2026-05-27 (audited 2026-05-28)
+**Status:** Analysis complete. Advisory audit run 2026-05-28 via `cargo deny check advisories` — see [Audit Findings](#audit-findings-2026-05-28). P0-A's named simple-bump path turned out to be empty in the current lockfile; the wasmtime exposure (P0-B) accounts for 12 of 19 current advisories.
 
 ## Context
 
@@ -70,7 +70,7 @@ These exist today and are the reason several 0.29.0 items are either easy to por
 ## P0 — Security (Port / Audit First)
 
 ### P0-A: Targeted Dependency Advisory Bumps
-**Commits:** `4fea8b354` (#3719), `a91426c50` (#4028) | **Complexity:** S–M | **Dependencies:** None
+**Commits:** `4fea8b354` (#3719), `a91426c50` (#4028) | **Complexity:** S–M | **Dependencies:** None | **Status (2026-05-28):** No actionable simple bumps in the current lockfile — see [Audit Findings](#audit-findings-2026-05-28).
 
 **Why:** 0.29.0 cleared several RUSTSEC advisories. LunarWing's lockfile predates these and is
 likely exposed to the same ones (it carries the legacy rustls 0.21 chain plus 0.22/0.23, and old
@@ -97,7 +97,7 @@ Specific bumps from 0.29.0 and their relevance:
 ---
 
 ### P0-B: Wasmtime 28 → 44 (Large, Separate Workstream)
-**Commit:** `a91426c50` (the 0.29.0 piece: `43 → 44`) | **Complexity:** L | **Dependencies:** None — but big
+**Commit:** `a91426c50` (the 0.29.0 piece: `43 → 44`) | **Complexity:** L | **Dependencies:** None — but big | **Status (2026-05-28):** 12 current advisories confirmed (11 on `wasmtime`, 1 on `wasmtime-wasi`) — see [Audit Findings](#audit-findings-2026-05-28).
 
 **Why this is called out:** The 0.29.0 change itself is small (wasmtime `43.0.2 → 44.0.2`,
 `wasmparser 0.245.1 → 0.246.2`). But auditing it surfaced a much larger pre-existing gap:
@@ -127,6 +127,39 @@ advisories independently.
 
 **LunarWing files (upgrade scope, for the future task):** `ic/Cargo.toml`, WASM host runtime under
 `ic/src/tools/wasm/` and the channel WASM host, `ic/wit/*.wit`, `ic/scripts/build-wasm-extensions.sh`.
+
+---
+
+## Audit Findings (2026-05-28)
+
+`cargo deny check advisories` against LunarWing 1.0.7 surfaces **19 current advisories**. The doc's P0-A "S–M, bump 2–3 crates" scope turns out to have **zero straightforwardly-bumpable crates**: every real exposure is gated on a structural upstream change or is the P0-B wasmtime work.
+
+### The doc's named P0-A items
+
+| Named advisory / crate | Status in LunarWing |
+|------------------------|---------------------|
+| `rustls-webpki` RUSTSEC-2026-0104 | **Present** as one of three advisories on `rustls-webpki 0.102.8` (also RUSTSEC-2026-0098, RUSTSEC-2026-0099). Pinned via `libsql 0.6.0 → hyper-rustls 0.25 → rustls 0.22 → rustls-webpki 0.102.8` — same chain as the already-ignored RUSTSEC-2026-0049. Cannot be bumped without upgrading libsql to 0.9. |
+| `fast-uri` (≥ 3.1.1) | **Not present in the lockfile.** No action needed. |
+| `tokio-tar` RUSTSEC-2025-0111 | **Already ignored** in `deny.toml` ("sandbox containers only"). No action needed. |
+
+### All 19 current advisories by package
+
+| Package | Count | RUSTSEC IDs | Reverse-dep chain | Blocker |
+|---------|-------|-------------|--------------------|---------|
+| `wasmtime` 28.0.1 | 11 | 2026-0085, -0086, -0087, -0088, -0089, -0091, -0092, -0093, -0094, -0095, -0096 | Direct dep of `lunarwing` | **P0-B work** — need ≥ 36.0.7 (LTS line) or ≥ 44.0.2. API-breaking; not a lockfile-only bump. |
+| `wasmtime-wasi` 28.0.1 | 1 | 2026-0149 (path_open(TRUNCATE) bypasses `FilePerms::WRITE`) | Direct dep | **P0-B work** (same upgrade). |
+| `rustls-webpki` 0.102.8 | 3 | 2026-0098, -0099, -0104 | `libsql 0.6.0 → hyper-rustls 0.25 → rustls 0.22 → rustls-webpki 0.102.8` | Stuck on **libsql 0.6 → 0.9** (same chain as the already-ignored RUSTSEC-2026-0049). |
+| `hickory-proto` 0.25.2 | 2 | 2026-0118 (NSEC3 DoS), 2026-0119 (CPU exhaustion) | `tokio-xmpp 5.0.0 → hickory-resolver 0.25 → hickory-proto 0.25` | `tokio-xmpp 5.0.0` is the latest crates.io release and locks `hickory-resolver ^0.25`. `cargo update --precise 0.26.1` was rejected by the resolver. Waiting on **upstream tokio-xmpp release**. |
+| `failure` 0.1.8 | 2 | 2019-0036 (type-confusion unsound), 2020-0036 (officially unmaintained) | `vendor/libsignal-protocol` (in-tree vendored crate) | `failure` is deprecated upstream — no newer version exists. Real fix = **port `vendor/libsignal-protocol` off `failure` to `thiserror`/`anyhow`**. |
+
+### Bottom line
+
+- **P0-A scope is empty.** No simple bumps to apply. The original "bump 2–3 crates" recommendation does not match the current lockfile.
+- **P0-B (wasmtime 28 → 36 LTS or → 44) is the only path to clear the largest single exposure** — 12 of 19 advisories live in the wasmtime stack.
+- **Three additional structural blockers** — libsql 0.6 → 0.9 (3 webpki advisories), upstream tokio-xmpp release (2 hickory advisories), vendored libsignal off `failure` (2 advisories) — each is its own workstream.
+- **No `deny.toml` or `Cargo.lock` changes were made** in this audit; `cargo deny check advisories` still fails as recorded above. Decisions on whether to add new entries to the `deny.toml` ignore list (e.g., to mirror the existing RUSTSEC-2026-0049 pattern for the new webpki advisories) are deferred.
+
+**Reproducibility:** `cd ic && cargo deny check advisories` (cargo-deny `0.19.8` was installed during the audit; `deny.toml` carries the project's existing ignore list of 7 pre-existing tracked advisories).
 
 ---
 
@@ -287,12 +320,12 @@ upgrade in P0-B).
 ## Recommended Implementation Order
 
 ```
-1. P0-A  Targeted advisory bumps (cargo deny → rustls-webpki, fast-uri, ...)   [S-M]  security, no divergence risk
+1. P0-A  Targeted advisory bumps                                                [S-M]  AUDITED 2026-05-28 — no actionable bumps (see Audit Findings)
 2. P1-A  LUNARWING_DISABLE_CODEACT kill-switch                                  [M]    safety; best philosophy fit
 3. P2-A  Logs download endpoint + button                                       [S]    clean operability win
 4. P2-B  Embeddings SSRF hardening (via NetworkPolicyDecider)                   [M]    real hardening; verify policy coverage first
 --- larger / optional, schedule separately ---
-5. P0-B  Wasmtime 28 → 44 sandbox upgrade                                       [L]    biggest security gap; own staged workstream
+5. P0-B  Wasmtime 28 → 44 sandbox upgrade                                       [L]    biggest security gap (12/19 advisories — see Audit Findings); own staged workstream
 6. P2-C  lunarwing_embeddings crate extraction                                 [M-L]  optional cleanup; bundle with P2-B if done
 7. P2-D  WIT websocket-send-text                                               [M]    evaluate only if WeeChat-WSS needs it
 ```
