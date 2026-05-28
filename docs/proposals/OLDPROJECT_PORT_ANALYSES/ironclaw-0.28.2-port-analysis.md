@@ -1,7 +1,7 @@
 # Port IronClaw 0.28.2 Changes to LunarWing
 
-**Date:** 2026-05-15
-**Status:** Analysis complete
+**Date:** 2026-05-15 (updated 2026-05-28)
+**Status:** Analysis complete. P1-F + P1-G implemented 2026-05-28 with pattern-fix expansion — see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion) below.
 
 ## Context
 
@@ -72,7 +72,7 @@ Today this is harmless because LunarWing's `effective_permission()` returns a fl
 ## P1 — Core Architecture
 
 ### P1-F: `auth_gate_from_extension_result` Should Carry `resume_output`
-**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None
+**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None | **Status:** Implemented 2026-05-28 (see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion))
 
 **Why:** LunarWing's `auth_gate_from_extension_result()` at `src/bridge/effect_adapter.rs:140-171` passes `None` for `resume_output` on the `tool_activate`/`tool_auth` → `awaiting_authorization` path. The `tool_install` → `NeedsAuth` path at line 709 already passes `Some(output_value)` correctly.
 
@@ -89,7 +89,7 @@ Today this causes unnecessary re-execution but no security issue. When LunarWing
 ---
 
 ### P1-G: Lease Refund Guard for `resume_output`
-**Commit:** `34eeeaf0` (the `#3559` lease accounting fix) | **Complexity:** S | **Dependencies:** P1-F
+**Commit:** `34eeeaf0` (the `#3559` lease accounting fix) | **Complexity:** S | **Dependencies:** P1-F | **Status:** Implemented 2026-05-28 — expanded to 5 sites across 3 executors (see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion))
 
 **Why:** LunarWing's `interrupted_call_needs_refund()` at `crates/lunarwing_engine/src/executor/structured.rs:393-395` unconditionally returns `true` for all `GatePaused` errors. When `resume_output` is present, the action already executed successfully — the gate is a post-execution Authentication gate. Refunding the lease use nets a successful side-effecting action to zero lease consumption, breaking `max_uses` budget enforcement.
 
@@ -166,12 +166,39 @@ IronClaw switched the `nearai` registry entry's `default_model` from `claude-son
 
 ---
 
+## Implementation Note (2026-05-28): P1-F + P1-G Pattern-Fix Expansion
+
+Both items were implemented per the docs above, but the project's `review-discipline.md` rule ("Fix the pattern, not just the instance") expanded the change from the 2 sites the doc named to **5 sites across 4 files**. The same `refund-on-GatePaused-without-checking-resume_output` bug existed in all three LunarWing executors (Tier 0 structured, Tier 1 CodeAct, and the Python orchestrator with both an inline arm and a JSON-based predicate); fixing only `structured.rs` would have left the same latent bypass reachable through the other execution paths.
+
+| File | Site | Kind | Change |
+|------|------|------|--------|
+| `crates/lunarwing_engine/src/executor/structured.rs:393` | `interrupted_call_needs_refund` | `Result`-based predicate | Now matches `Err(GatePaused { resume_output: None, .. })`. (P1-G as documented.) |
+| `crates/lunarwing_engine/src/executor/scripting.rs:1282` | Tier 1 CodeAct GatePaused arm | Inline refund | Destructured `resume_output`; refund guarded on `is_none()`. |
+| `crates/lunarwing_engine/src/executor/orchestrator.rs:932` | `__execute_action__` single-action arm | Inline refund | `resume_output` was already destructured; refund guarded on `is_none()`. |
+| `crates/lunarwing_engine/src/executor/orchestrator.rs:1409` | `interrupted_result_needs_refund` | JSON-based predicate | Now also requires `resume_output` is null/absent (covers the parallel-action refund sites at lines 1245 / 1291). JSON results already carry the field at construction sites 718 / 960 / 1387, so no producer changes were needed. |
+| `src/bridge/effect_adapter.rs:167` | `auth_gate_from_extension_result` | Gate output | Now passes `Some(output_value.clone())` instead of `None`. (P1-F as documented.) |
+
+**Regression tests added (4):**
+
+- `executor::structured::tests::post_execution_gate_does_not_refund_lease_use` — fails before the fix. Grants `max_uses: Some(2)`, returns `GatePaused { resume_output: Some(_) }` from `MockEffects`, asserts `uses_remaining == Some(1)` (consumed, not refunded).
+- `executor::structured::tests::pre_execution_gate_refunds_lease_use` — control (`resume_output: None`); asserts `uses_remaining == Some(2)` (refunded).
+- `executor::orchestrator::tests::interrupted_result_needs_refund_skips_post_execution_gate` — JSON predicate, four cases: pre-gate with `null` output, pre-gate with field absent, post-gate with output present, non-gate result.
+- `bridge::effect_adapter::tests::auth_gate_carries_resume_output_for_resume_without_reexecution` — asserts the awaiting-auth gate carries the action's output in `resume_output`.
+
+The two inline refund sites without their own regression tests (`scripting.rs:1282` and `orchestrator.rs:932`) are covered by structural symmetry to the `structured.rs` regression — the guard pattern is byte-identical — and by the predicate-level test for the orchestrator JSON path.
+
+**Cross-reference:** Both P1-F and P1-G were "not exploitable today" in LunarWing because the inline gate-retry / provenance-aware auto-approve paths from IronClaw don't exist here yet. Implementing them now closes the latent vector before [0.28.1 P1-C (mission auto-resume + inline retry)](./ironclaw-0.28.1-port-analysis.md#p1-c-mission-auto-resume-after-gate-resolution) lands.
+
+**Verification:** engine + main lib compile · 4/4 new regression tests pass · main-crate bridge module tests (67/67) pass · zero clippy warnings on the four touched files · `cargo fmt --check` clean · dual-backend `cargo check` (`libsql` + `postgres`) clean · `scripts/pre-commit-safety.sh` clean.
+
+---
+
 ## Recommended Implementation Order
 
 ```
 1. P0-A  Ghost-seeded permission cleanup   [S]   proactive security; prevent latent bypass
-2. P1-F  auth_gate resume_output            [S]   one-line fix, prevents re-execution waste
-3. P1-G  Lease refund guard                 [S]   one-line fix, correct accounting
+2. P1-F  auth_gate resume_output            [S]   DONE 2026-05-28 (see Implementation Note)
+3. P1-G  Lease refund guard                 [S]   DONE 2026-05-28 (expanded to 5 sites)
 4. P1-H  Registry hidden field              [S]   small extension point
 5. P1-I  fetch_models_for facade            [M]   code quality, reduces wizard complexity
 6. P2-C  Bug-bash snapshot harness          [S-M] testing infrastructure

@@ -85,6 +85,8 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ### P1-C: Mission Auto-Resume After Gate Resolution
 **Commit:** `4696a0a5` | **Complexity:** L | **Dependencies:** Benefits from P1-B
 
+**Prerequisites (updated 2026-05-28):** The lease/output preconditions for safe inline gate retry — [0.28.2 P1-F](./ironclaw-0.28.2-port-analysis.md#p1-f-auth_gate_from_extension_result-should-carry-resume_output) (auth_gate carries `resume_output`) and [0.28.2 P1-G](./ironclaw-0.28.2-port-analysis.md#p1-g-lease-refund-guard-for-resume_output) (lease refund guard) — are now implemented, with a pattern-fix expansion covering all three LunarWing executors (structured, scripting, orchestrator). When P1-C lands, the double-invoke and lease-bypass bugs IronClaw caught in #3559 are pre-emptively closed.
+
 **Why:** LunarWing's `resume_mission()` (line 189 of `crates/lunarwing_engine/src/runtime/mission.rs`) does a naive status flip without fire-cooldown, cron recomputation, event dedup, or max-iteration protection. Routines that pause on an approval gate stay paused forever unless manually resumed.
 
 **What IronClaw added:**
