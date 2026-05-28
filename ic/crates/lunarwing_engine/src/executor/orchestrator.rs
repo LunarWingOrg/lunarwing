@@ -929,7 +929,12 @@ async fn handle_execute_action(
             resume_kind,
             resume_output,
         }) => {
-            let _ = leases.refund_use(lease.id).await;
+            // Pre-execution gate only: post-execution gates carry `resume_output`
+            // and must keep their lease use consumed (see
+            // `interrupted_call_needs_refund` in executor/structured.rs).
+            if resume_output.is_none() {
+                let _ = leases.refund_use(lease.id).await;
+            }
             let output = serde_json::json!({"status": "gate_paused", "gate_name": gate_name});
             emit_and_record(
                 thread,
@@ -1407,7 +1412,12 @@ async fn execute_single_action(
 }
 
 fn interrupted_result_needs_refund(result: &serde_json::Value) -> bool {
-    result.get("gate_paused").and_then(|v| v.as_bool()) == Some(true)
+    // Pre-execution gate only: post-execution gates carry a `resume_output`
+    // (the action already ran). Refunding then would let a successful
+    // side-effecting action net zero lease use and bypass `max_uses`.
+    let is_gate_paused = result.get("gate_paused").and_then(|v| v.as_bool()) == Some(true);
+    let has_resume_output = result.get("resume_output").is_some_and(|v| !v.is_null());
+    is_gate_paused && !has_resume_output
 }
 
 /// Handle `__check_signals__()`.
@@ -2472,5 +2482,30 @@ mod tests {
         let result = serde_json::json!({"outcome": "stopped"});
         let outcome = parse_outcome(&result);
         assert!(matches!(outcome, ThreadOutcome::Stopped));
+    }
+
+    /// P1-G regression for the orchestrator's JSON refund path: only
+    /// pre-execution gates (no carried `resume_output`) should refund.
+    /// Covers the parallel-action refund sites at lines ~1245/1291.
+    #[test]
+    fn interrupted_result_needs_refund_skips_post_execution_gate() {
+        // Pre-execution gate (action didn't run) → refund.
+        let pre = serde_json::json!({"gate_paused": true, "resume_output": null});
+        assert!(interrupted_result_needs_refund(&pre));
+
+        // Pre-execution gate with the field absent → refund (legacy shape).
+        let pre_absent = serde_json::json!({"gate_paused": true});
+        assert!(interrupted_result_needs_refund(&pre_absent));
+
+        // Post-execution gate (action already ran, output carried) → NO refund.
+        let post = serde_json::json!({
+            "gate_paused": true,
+            "resume_output": {"already": "executed"},
+        });
+        assert!(!interrupted_result_needs_refund(&post));
+
+        // Non-gate result → not a refund candidate.
+        let ok = serde_json::json!({"output": "result"});
+        assert!(!interrupted_result_needs_refund(&ok));
     }
 }

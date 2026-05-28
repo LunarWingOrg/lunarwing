@@ -1284,9 +1284,15 @@ async fn resolve_tool_future(
             action_name,
             call_id,
             resume_kind,
+            resume_output,
             ..
         })) => {
-            let _ = leases.refund_use(lease_id).await;
+            // Pre-execution gate only: post-execution gates carry `resume_output`
+            // and must keep their lease use consumed (see
+            // `interrupted_call_needs_refund` in executor/structured.rs).
+            if resume_output.is_none() {
+                let _ = leases.refund_use(lease_id).await;
+            }
             events.push(EventKind::ApprovalRequested {
                 action_name,
                 call_id,

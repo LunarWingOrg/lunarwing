@@ -164,7 +164,9 @@ impl EffectBridgeAdapter {
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string()),
                 },
-                None,
+                // Action already executed; carry its output for resume (pairs with
+                // the lease guard in executor/structured.rs).
+                Some(output_value.clone()),
             )),
             _ => None,
         }
@@ -1586,5 +1588,37 @@ mod tests {
     fn coerce_to_u64_from_null() {
         let v = serde_json::json!(null);
         assert_eq!(EffectBridgeAdapter::coerce_to_u64(&v), None);
+    }
+
+    /// P1-F regression: the awaiting_authorization gate must carry the tool's
+    /// already-computed output as `resume_output` so the caller can resume
+    /// without re-executing the action (pairs with the lease guard in
+    /// `crates/lunarwing_engine/src/executor/structured.rs`).
+    #[test]
+    fn auth_gate_carries_resume_output_for_resume_without_reexecution() {
+        let output = serde_json::json!({
+            "status": "awaiting_authorization",
+            "name": "github_token",
+            "instructions": "Authorize to continue.",
+            "auth_url": "https://example.com/oauth",
+            "data": {"already": "computed"},
+        });
+        let ctx = exec_ctx(lunarwing_engine::ThreadId::new(), Some("call_1"));
+        let err = EffectBridgeAdapter::auth_gate_from_extension_result(
+            "tool_activate",
+            serde_json::json!({"name": "github_token"}),
+            &ctx,
+            &output,
+        )
+        .expect("awaiting_authorization should produce a gate");
+
+        match err {
+            EngineError::GatePaused { resume_output, .. } => {
+                let ro = resume_output
+                    .expect("resume_output must carry the tool output for gate resumption");
+                assert_eq!(*ro, output);
+            }
+            other => panic!("expected GatePaused, got {other:?}"),
+        }
     }
 }

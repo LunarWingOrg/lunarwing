@@ -391,7 +391,16 @@ fn classify_exec_result(
 }
 
 fn interrupted_call_needs_refund(result: &Result<ActionResult, EngineError>) -> bool {
-    matches!(result, Err(EngineError::GatePaused { .. }))
+    // Refund only pre-execution gates. A post-execution gate carries
+    // `resume_output` (the action already ran); refunding then would let a
+    // successful side-effecting action net zero lease use and bypass `max_uses`.
+    matches!(
+        result,
+        Err(EngineError::GatePaused {
+            resume_output: None,
+            ..
+        })
+    )
 }
 
 #[cfg(test)]
@@ -1011,5 +1020,114 @@ mod tests {
         if let Some(EventKind::ActionExecuted { call_id, .. }) = result.events.first() {
             assert_eq!(call_id, mistral_id);
         }
+    }
+
+    // ── Lease accounting on GatePaused (P1-G regression) ─────
+
+    /// Post-execution gate (action already ran; `resume_output: Some`) MUST
+    /// NOT refund the lease use — refunding would let a successful
+    /// side-effecting action net zero use and bypass `max_uses`.
+    #[tokio::test]
+    async fn post_execution_gate_does_not_refund_lease_use() {
+        let thread = Thread::new(
+            "test",
+            ThreadType::Foreground,
+            ProjectId::new(),
+            "test-user",
+            ThreadConfig::default(),
+        );
+        let effects: Arc<dyn EffectExecutor> = Arc::new(MockEffects::new(
+            vec![test_action("http")],
+            vec![Err(EngineError::GatePaused {
+                gate_name: "authentication".into(),
+                action_name: "http".into(),
+                call_id: "call_post_exec".into(),
+                parameters: Box::new(serde_json::json!({"url": "https://api.example.com/data"})),
+                resume_kind: Box::new(crate::gate::ResumeKind::Authentication {
+                    credential_name: "github_token".into(),
+                    instructions: "Authorize to continue".into(),
+                    auth_url: None,
+                }),
+                resume_output: Some(Box::new(serde_json::json!({"already": "executed"}))),
+            })],
+        ));
+        let leases = Arc::new(LeaseManager::new());
+        let policy = Arc::new(PolicyEngine::new());
+        let ctx = make_exec_context(&thread);
+
+        let lease = leases
+            .grant(thread.id, "tools", GrantedActions::All, None, Some(2))
+            .await
+            .unwrap();
+
+        let calls = vec![ActionCall {
+            id: "call_post_exec".into(),
+            action_name: "http".into(),
+            parameters: serde_json::json!({"url": "https://api.example.com/data"}),
+        }];
+
+        execute_action_calls(&calls, &thread, &effects, &leases, &policy, &ctx, &[])
+            .await
+            .unwrap();
+
+        let after = leases.check(lease.id).await.unwrap();
+        assert_eq!(
+            after.uses_remaining,
+            Some(1),
+            "post-execution gate (resume_output: Some) must keep the lease use consumed"
+        );
+    }
+
+    /// Control: pre-execution gate (`resume_output: None`) MUST refund —
+    /// the action never ran, so the lease use should not be charged.
+    #[tokio::test]
+    async fn pre_execution_gate_refunds_lease_use() {
+        let thread = Thread::new(
+            "test",
+            ThreadType::Foreground,
+            ProjectId::new(),
+            "test-user",
+            ThreadConfig::default(),
+        );
+        let effects: Arc<dyn EffectExecutor> = Arc::new(MockEffects::new(
+            vec![test_action("http")],
+            vec![Err(EngineError::GatePaused {
+                gate_name: "authentication".into(),
+                action_name: "http".into(),
+                call_id: "call_pre_exec".into(),
+                parameters: Box::new(serde_json::json!({})),
+                resume_kind: Box::new(crate::gate::ResumeKind::Authentication {
+                    credential_name: "github_token".into(),
+                    instructions: "Authorize to continue".into(),
+                    auth_url: None,
+                }),
+                resume_output: None,
+            })],
+        ));
+        let leases = Arc::new(LeaseManager::new());
+        let policy = Arc::new(PolicyEngine::new());
+        let ctx = make_exec_context(&thread);
+
+        let lease = leases
+            .grant(thread.id, "tools", GrantedActions::All, None, Some(2))
+            .await
+            .unwrap();
+
+        let calls = vec![ActionCall {
+            id: "call_pre_exec".into(),
+            action_name: "http".into(),
+            parameters: serde_json::json!({}),
+        }];
+
+        execute_action_calls(&calls, &thread, &effects, &leases, &policy, &ctx, &[])
+            .await
+            .unwrap();
+
+        let after = leases.check(lease.id).await.unwrap();
+        assert_eq!(
+            after.uses_remaining,
+            Some(2),
+            "pre-execution gate (resume_output: None) must refund the lease use"
+        );
     }
 }
