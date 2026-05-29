@@ -1077,6 +1077,8 @@ mod tests {
             step_id: lunarwing_engine::StepId::new(),
             current_call_id: call_id.map(str::to_string),
             source_channel: None,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
         }
     }
 
@@ -1459,6 +1461,8 @@ mod tests {
             step_id: lunarwing_engine::StepId::new(),
             current_call_id: None,
             source_channel: None,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
         };
 
         let result = adapter.execute_action("http", params, &lease, &ctx).await;
@@ -1550,6 +1554,8 @@ mod tests {
             step_id: lunarwing_engine::StepId::new(),
             current_call_id: Some("call_123".to_string()),
             source_channel: None,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
         };
 
         let result = adapter

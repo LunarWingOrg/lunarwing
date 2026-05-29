@@ -2165,6 +2165,16 @@ async fn handle_with_engine_inner(
         if crate::llm::user_signals_execution_intent(content) {
             config.require_action_attempt = true;
         }
+        // Supervised mode: opt-in via env (set by --supervised CLI flag or
+        // explicit config). Forces every tool action through human approval
+        // regardless of the tool's normal tier.
+        if std::env::var("AGENT_SUPERVISED_MODE")
+            .ok()
+            .filter(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+            .is_some()
+        {
+            config.supervised_mode = true;
+        }
         config
     };
 

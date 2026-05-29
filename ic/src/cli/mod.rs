@@ -107,6 +107,16 @@ pub struct Cli {
     /// remain active: rate limits, hooks, authentication gates.
     #[arg(long, global = true)]
     pub auto_approve: bool,
+
+    /// Enable supervised mode — every tool action requires human approval
+    /// regardless of the tool's normal tier.
+    ///
+    /// Unlike auto_approve (which bypasses approval), supervised mode forces
+    /// ALL actions through the approval gate, including tools normally
+    /// allowed without user intervention. Approvals auto-expire after the
+    /// configured timeout (default: 300 seconds / 5 minutes).
+    #[arg(long, global = true)]
+    pub supervised: bool,
 }
 
 #[derive(Subcommand, Debug)]

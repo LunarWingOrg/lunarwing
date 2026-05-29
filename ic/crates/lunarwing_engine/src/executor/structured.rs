@@ -479,6 +479,8 @@ mod tests {
             step_id: StepId::new(),
             current_call_id: None,
             source_channel: None,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
         }
     }
 

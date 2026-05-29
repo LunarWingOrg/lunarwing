@@ -349,6 +349,12 @@ async fn async_main() -> anyhow::Result<()> {
     if cli.auto_approve {
         lunarwing::config::set_runtime_env("AGENT_AUTO_APPROVE_TOOLS", "true");
     }
+    if cli.supervised {
+        // Supervised mode is mutually exclusive with auto-approve in spirit
+        // (auto-approve bypasses, supervised forces gating), but we don't
+        // hard-error here — supervised wins, since it's strictly stricter.
+        lunarwing::config::set_runtime_env("AGENT_SUPERVISED_MODE", "true");
+    }
 
     // Load initial config from env + disk + optional TOML (before DB is available).
     // Credentials may be missing at this point — that's fine. LlmConfig::resolve()
