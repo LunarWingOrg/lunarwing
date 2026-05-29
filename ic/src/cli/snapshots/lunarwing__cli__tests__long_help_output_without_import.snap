@@ -16,6 +16,7 @@ Commands:
   tool        Manage WASM tools
   registry    Browse/install extensions
   channels    Manage channels
+  reflex      Manage reflex patterns
   routines    Manage routines
   mcp         Manage MCP servers
   memory      Manage workspace memory
@@ -53,6 +54,11 @@ Options:
           Auto-approve tool execution (shell, file writes, HTTP, etc.)
           
           Skips interactive approval prompts for standard tools. Other safeguards remain active: rate limits, hooks, authentication gates.
+
+      --supervised
+          Enable supervised mode — every tool action requires human approval regardless of the tool's normal tier.
+          
+          Unlike auto_approve (which bypasses approval), supervised mode forces ALL actions through the approval gate, including tools normally allowed without user intervention. Approvals auto-expire after the configured timeout (default: 300 seconds / 5 minutes).
 
   -h, --help
           Print help (see a summary with '-h')

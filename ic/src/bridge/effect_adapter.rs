@@ -1647,4 +1647,178 @@ mod tests {
             other => panic!("expected GatePaused, got {other:?}"),
         }
     }
+
+    // ── Human delay / supervised mode ───────────────────────────
+    //
+    // Phase 1 guarantee: when `supervised_mode` is enabled on the thread's
+    // execution context, EVERY tool action is gated through human approval,
+    // regardless of the tool's normal `ApprovalRequirement` tier — and even
+    // if the tool has been auto-approved.
+
+    /// `exec_ctx` variant with supervised mode enabled.
+    fn exec_ctx_supervised(
+        thread_id: lunarwing_engine::ThreadId,
+        call_id: Option<&str>,
+    ) -> lunarwing_engine::ThreadExecutionContext {
+        let mut ctx = exec_ctx(thread_id, call_id);
+        ctx.supervised_mode = true;
+        ctx
+    }
+
+    /// A tool that normally never requires approval (`ApprovalRequirement::Never`).
+    /// Used to prove supervised mode gates it anyway.
+    struct NeverApprovalTool;
+
+    #[async_trait]
+    impl Tool for NeverApprovalTool {
+        fn name(&self) -> &str {
+            "never_approval"
+        }
+
+        fn description(&self) -> &str {
+            "Test tool that never requires approval"
+        }
+
+        fn parameters_schema(&self) -> serde_json::Value {
+            serde_json::json!({ "type": "object", "properties": {} })
+        }
+
+        async fn execute(
+            &self,
+            params: serde_json::Value,
+            _ctx: &JobContext,
+        ) -> Result<ToolOutput, ToolError> {
+            Ok(ToolOutput::success(
+                serde_json::json!({ "echo": params }),
+                std::time::Duration::from_millis(1),
+            ))
+        }
+
+        fn requires_approval(&self, _params: &serde_json::Value) -> ApprovalRequirement {
+            ApprovalRequirement::Never
+        }
+    }
+
+    /// Supervised mode pauses an `UnlessAutoApproved` tool even after it has
+    /// been auto-approved (supervised overrides auto-approve).
+    #[tokio::test]
+    async fn supervised_mode_overrides_auto_approve() {
+        use lunarwing_safety::SafetyConfig;
+
+        let tools = Arc::new(ToolRegistry::new());
+        tools.register(Arc::new(ApprovalTestTool)).await;
+
+        let adapter = EffectBridgeAdapter::new(
+            tools,
+            Arc::new(SafetyLayer::new(&SafetyConfig {
+                max_output_length: 10_000,
+                injection_check_enabled: false,
+            })),
+            Arc::new(HookRegistry::default()),
+        );
+
+        // Auto-approve the tool — in a NON-supervised context this would
+        // bypass approval entirely.
+        adapter.auto_approve_tool("approval_test").await;
+
+        let thread_id = lunarwing_engine::ThreadId::new();
+        let result = adapter
+            .execute_action(
+                "approval_test",
+                serde_json::json!({ "value": "x" }),
+                &lease(),
+                &exec_ctx_supervised(thread_id, Some("call_sup_1")),
+            )
+            .await;
+
+        match result {
+            Err(EngineError::GatePaused {
+                call_id, gate_name, ..
+            }) => {
+                assert_eq!(call_id, "call_sup_1");
+                assert_eq!(gate_name, "approval");
+            }
+            other => panic!("expected GatePaused under supervised mode, got {other:?}"),
+        }
+    }
+
+    /// Supervised mode pauses a tool whose normal tier is
+    /// `ApprovalRequirement::Never` — proving EVERY action is gated.
+    #[tokio::test]
+    async fn supervised_mode_gates_never_approval_tool() {
+        use lunarwing_safety::SafetyConfig;
+
+        let tools = Arc::new(ToolRegistry::new());
+        tools.register(Arc::new(NeverApprovalTool)).await;
+
+        let adapter = EffectBridgeAdapter::new(
+            tools,
+            Arc::new(SafetyLayer::new(&SafetyConfig {
+                max_output_length: 10_000,
+                injection_check_enabled: false,
+            })),
+            Arc::new(HookRegistry::default()),
+        );
+
+        let thread_id = lunarwing_engine::ThreadId::new();
+
+        // Without supervised mode, a Never-approval tool executes cleanly.
+        let unsupervised = adapter
+            .execute_action(
+                "never_approval",
+                serde_json::json!({}),
+                &lease(),
+                &exec_ctx(thread_id, Some("call_ns_1")),
+            )
+            .await
+            .expect("Never-approval tool should execute without supervision");
+        assert!(!unsupervised.is_error);
+
+        // With supervised mode, the same tool is gated.
+        let supervised = adapter
+            .execute_action(
+                "never_approval",
+                serde_json::json!({}),
+                &lease(),
+                &exec_ctx_supervised(thread_id, Some("call_ns_2")),
+            )
+            .await;
+        assert!(
+            matches!(supervised, Err(EngineError::GatePaused { .. })),
+            "expected GatePaused under supervised mode, got {supervised:?}"
+        );
+    }
+
+    /// Sanity check: supervised mode disabled preserves existing behavior
+    /// (an UnlessAutoApproved tool that has been auto-approved executes).
+    #[tokio::test]
+    async fn supervised_mode_disabled_preserves_auto_approve() {
+        use lunarwing_safety::SafetyConfig;
+
+        let tools = Arc::new(ToolRegistry::new());
+        tools.register(Arc::new(ApprovalTestTool)).await;
+
+        let adapter = EffectBridgeAdapter::new(
+            tools,
+            Arc::new(SafetyLayer::new(&SafetyConfig {
+                max_output_length: 10_000,
+                injection_check_enabled: false,
+            })),
+            Arc::new(HookRegistry::default()),
+        );
+
+        adapter.auto_approve_tool("approval_test").await;
+
+        let thread_id = lunarwing_engine::ThreadId::new();
+        let result = adapter
+            .execute_action(
+                "approval_test",
+                serde_json::json!({ "value": "x" }),
+                &lease(),
+                &exec_ctx(thread_id, Some("call_nosup_1")),
+            )
+            .await
+            .expect("auto-approved tool should execute when supervision is off");
+        assert!(!result.is_error);
+    }
 }

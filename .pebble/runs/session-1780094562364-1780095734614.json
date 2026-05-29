@@ -1,0 +1,344 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780095734614,
+  "duration_ms": 149766,
+  "initial_message_count": 70,
+  "final_message_count": 86,
+  "user_input": {
+    "chars": 695,
+    "sha256": "30de5c9f4936d924a1ee6d64b7393460975c1d5c71994920aecd8cb666672428",
+    "preview": "thread 'cli::tests::test_long_help_output_without_import' (321583) panicked at /home/sun/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.47.2/src/runtime.rs:719:13:\nsnapshot assertion for 'long_help_output_without_import' failed in line 476\n\n\nfailures:\n    agent::reflex::tests::test_reflex_router_fuzzy_match_extra_words\n    agent::reflex::tests::test_reflex_router_fuzzy_promotion_is_input_specific\n    channels::xmpp::omemo::store::tests::migration_preserves_legacy_device_id\n    cli::tests::test",
+    "truncated": true,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 71,
+      "request_estimated_tokens": 49806,
+      "duration_ms": 11525,
+      "result_event_count": 14,
+      "usage": {
+        "input_tokens": 87944,
+        "output_tokens": 810,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 73,
+      "request_estimated_tokens": 50538,
+      "duration_ms": 6898,
+      "result_event_count": 8,
+      "usage": {
+        "input_tokens": 89276,
+        "output_tokens": 465,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 3,
+      "request_message_count": 75,
+      "request_estimated_tokens": 51259,
+      "duration_ms": 16734,
+      "result_event_count": 29,
+      "usage": {
+        "input_tokens": 90482,
+        "output_tokens": 1076,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 4,
+      "request_message_count": 77,
+      "request_estimated_tokens": 52298,
+      "duration_ms": 6959,
+      "result_event_count": 9,
+      "usage": {
+        "input_tokens": 92139,
+        "output_tokens": 308,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 5,
+      "request_message_count": 79,
+      "request_estimated_tokens": 52716,
+      "duration_ms": 11062,
+      "result_event_count": 11,
+      "usage": {
+        "input_tokens": 92880,
+        "output_tokens": 608,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 6,
+      "request_message_count": 81,
+      "request_estimated_tokens": 53415,
+      "duration_ms": 4169,
+      "result_event_count": 5,
+      "usage": {
+        "input_tokens": 94066,
+        "output_tokens": 226,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 7,
+      "request_message_count": 83,
+      "request_estimated_tokens": 53818,
+      "duration_ms": 7818,
+      "result_event_count": 8,
+      "usage": {
+        "input_tokens": 94790,
+        "output_tokens": 482,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 8,
+      "request_message_count": 85,
+      "request_estimated_tokens": 54575,
+      "duration_ms": 17325,
+      "result_event_count": 34,
+      "usage": {
+        "input_tokens": 96263,
+        "output_tokens": 1258,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01PQPQNbcxUeoUkwnK4KdxNa",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01NyXAxAkjaqAzgSrigDNZR2",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 3,
+      "tool_use_id": "toolu_016jeqYo5xMsXD9aYCxR8qdC",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 4,
+      "tool_use_id": "toolu_01X3QGDrvdiuqGcLorXDgB9k",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 5,
+      "tool_use_id": "toolu_01DcNQ1aSsTVjHyDKZoDpixq",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 6,
+      "tool_use_id": "toolu_01JZ1NxJMaraKJbahTbQZWKh",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 7,
+      "tool_use_id": "toolu_01JqbhLngRAeYTF1JMQuNUiD",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01PQPQNbcxUeoUkwnK4KdxNa",
+      "tool_name": "bash",
+      "input": {
+        "chars": 660,
+        "sha256": "ecbf3cfb9a249fc313e807833edd64a8ba7f4397d3c0e7650083c2f8f27b6abe",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay\\necho \\\"=== was omemo/store touched by the branch? ===\\\"\\nmb=$(git merge-base HEAD origin/staging)\\ngit diff --name-only \\\"$mb\\\"..HEAD | grep -iE \\\"omemo|reflex|xmpp\\\" || echo \\\"NONE of omemo/reflex/xmpp changed on this branch\\\"\\necho\\necho \\\"=== do those 3 test files reference any Phase 1 struct/field? ===\\\"\\ngrep -rn \\\"supervised\\\\|GateContext\\\\|ThreadExecutionContext\\\" ic/src/agent/reflex.rs ic/src/channels/xmpp/omemo/store.rs 2>/dev/null ||",
+        "truncated": true,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1208,
+        "sha256": "f5754309f37115fb5a2029ac8ea0c8a0aadfe9f563ff62350eab7857f24a6306",
+        "preview": "{\n  \"stdout\": \"=== was omemo/store touched by the branch? ===\\nNONE of omemo/reflex/xmpp changed on this branch\\n\\n=== do those 3 test files reference any Phase 1 struct/field? ===\\nNO references to Phase 1 symbols in reflex.rs or omemo/store.rs\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation\": null,\n  \"noOutpu",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 91,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01NyXAxAkjaqAzgSrigDNZR2",
+      "tool_name": "bash",
+      "input": {
+        "chars": 624,
+        "sha256": "685e3a9878511bce8b7f0f83d5489f30a53eb2a0690c854b261fe907ab4c5f7a",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay\\necho \\\"############ SHORT HELP DIFF (committed .snap vs pending .snap.new) ############\\\"\\ndiff ic/src/cli/snapshots/lunarwing__cli__tests__help_output_without_import.snap \\\\\\n     ic/src/cli/snapshots/lunarwing__cli__tests__help_output_without_import.snap.new\\necho\\necho \\\"############ LONG HELP DIFF ############\\\"\\ndiff ic/src/cli/snapshots/lunarwing__cli__tests__long_help_output_without_import.snap \\\\\\n     ic/src/cli/snapshots/lunarwing__c",
+        "truncated": true,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1839,
+        "sha256": "0afc565db9878ab05de8de7fa046efe21c678066172cba4bcee79742d10c3a4c",
+        "preview": "{\n  \"stdout\": \"############ SHORT HELP DIFF (committed .snap vs pending .snap.new) ############\\n2a3\\n> assertion_line: 460\\n15a17\\n>   reflex      Manage reflex patterns\\n39a42\\n>       --supervised         Enable supervised mode — every tool action requires human approval regardless of the tool's normal tier\\n\\n############ LONG HELP DIFF ############\\n2a3\\n> assertion_line: 476\\n18a20\\n>   reflex      Manage reflex patterns\\n55a58,62\\n> \\n>       --supervised\\n>           Enable supervised mode — every t",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 31,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 3,
+      "tool_use_id": "toolu_016jeqYo5xMsXD9aYCxR8qdC",
+      "tool_name": "bash",
+      "input": {
+        "chars": 438,
+        "sha256": "ed32177745943e06ed3ffa7cb451bc93d425734f42ad6f22a99547d3a9fa7853",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay\\necho \\\"=== committed short .snap header (first 6 lines) ===\\\"; head -6 ic/src/cli/snapshots/lunarwing__cli__tests__help_output_without_import.snap\\necho \\\"=== pending short .snap.new header (first 6 lines) ===\\\"; head -6 ic/src/cli/snapshots/lunarwing__cli__tests__help_output_without_import.snap.new\",\"description\":\"Compare snapshot headers to reproduce committed format\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1379,
+        "sha256": "e5fca747c944c990b2af3569c17492632652c5169326bd31cc87bc8c22ef3476",
+        "preview": "{\n  \"stdout\": \"=== committed short .snap header (first 6 lines) ===\\n---\\nsource: src/cli/mod.rs\\nexpression: help\\n---\\nSecure personal AI assistant that protects your data and expands its capabilities\\n\\n=== pending short .snap.new header (first 6 lines) ===\\n---\\nsource: src/cli/mod.rs\\nassertion_line: 460\\nexpression: help\\n---\\nSecure personal AI assistant that protects your data and expands its capabilities\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"back",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 30,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 4,
+      "tool_use_id": "toolu_01X3QGDrvdiuqGcLorXDgB9k",
+      "tool_name": "bash",
+      "input": {
+        "chars": 217,
+        "sha256": "b2293c975b7d2e9f98458cd8ea0ca04bf805f150969f1d3c522c18cf42e6e39d",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay\\ncommand -v cargo-insta >/dev/null 2>&1 && echo \\\"cargo-insta: AVAILABLE\\\" || echo \\\"cargo-insta: NOT installed\\\"\",\"description\":\"Check for cargo-insta\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1004,
+        "sha256": "180e21e0b54522abe10354105beb02eb0e0da901214bbb93030bd6e670268613",
+        "preview": "{\n  \"stdout\": \"cargo-insta: NOT installed\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation\": null,\n  \"noOutputExpected\": false,\n  \"structuredContent\": null,\n  \"persistedOutputPath\": null,\n  \"persistedOutputSize\": null,\n  \"sandboxStatus\": {\n    \"enabled\": true,\n    \"requested\": {\n      \"enabled\": true,\n      \"nam",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 32,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 5,
+      "tool_use_id": "toolu_01DcNQ1aSsTVjHyDKZoDpixq",
+      "tool_name": "bash",
+      "input": {
+        "chars": 746,
+        "sha256": "5067dd7d8d1bb3ded468fa58481b21e5a7d6ac00d751ed0cc55e9ada03902e99",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay/ic/src/cli/snapshots\\nfor base in lunarwing__cli__tests__help_output_without_import lunarwing__cli__tests__long_help_output_without_import; do\\n  # strip the insta-only 'assertion_line:' header line, write over the committed snapshot\\n  grep -v '^assertion_line:' \\\"$base.snap.new\\\" > \\\"$base.snap\\\"\\n  rm -f \\\"$base.snap.new\\\"\\n  echo \\\"accepted: $base.snap\\\"\\ndone\\necho \\\"=== verify no .new files remain ===\\\"; ls *.snap.new 2>/dev/null || echo ",
+        "truncated": true,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1407,
+        "sha256": "59fab732acf4738a715c3deeaa3c1caad660bbd029dbd7ffbb60cbe5d102a992",
+        "preview": "{\n  \"stdout\": \"accepted: lunarwing__cli__tests__help_output_without_import.snap\\naccepted: lunarwing__cli__tests__long_help_output_without_import.snap\\n=== verify no .new files remain ===\\n(none)\\n=== confirm supervised + reflex now present in committed short snap ===\\n16:  reflex      Manage reflex patterns\\n41:      --supervised         Enable supervised mode — every tool action requires human approval regardless of the tool's normal tier\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 33,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 6,
+      "tool_use_id": "toolu_01JZ1NxJMaraKJbahTbQZWKh",
+      "tool_name": "bash",
+      "input": {
+        "chars": 262,
+        "sha256": "bb95f0c2703a460032477746e2b63f7bc6e31445957f14b098fa20503349f9fa",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay/ic\\ncargo test --lib cli::tests::test_help_output_without_import cli::tests::test_long_help_output_without_import 2>&1 | tail -25\",\"description\":\"Re-run the two CLI snapshot tests\",\"timeout\":600000}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1225,
+        "sha256": "5768aeb228d69348ca6be8047cbb661dae0c8fb4c88399495e93cb6d66e0479a",
+        "preview": "{\n  \"stdout\": \"error: rustup could not choose a version of cargo to run, because one wasn't specified explicitly, and no default is configured.\\nhelp: run 'rustup default stable' to download the latest stable release of Rust and set it as your default toolchain.\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation\":",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 38,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 7,
+      "tool_use_id": "toolu_01JqbhLngRAeYTF1JMQuNUiD",
+      "tool_name": "bash",
+      "input": {
+        "chars": 605,
+        "sha256": "d274d33d3cc900ab5cf8a6618ba5ad7534b9a529e79b7c95e140b779f462e1b0",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay/ic\\necho \\\"=== rustup show ===\\\"; rustup show 2>&1 | head -20\\necho \\\"=== installed toolchains ===\\\"; rustup toolchain list 2>&1\\necho \\\"=== rustup overrides ===\\\"; rustup override list 2>&1\\necho \\\"=== env hints ===\\\"; env | grep -iE \\\"RUSTUP|RUST_TOOLCHAIN|CARGO\\\" 2>/dev/null\\necho \\\"=== any toolchain file up the tree? ===\\\"; for d in . .. ../.. ../../..; do ls \\\"$d\\\"/rust-toolchain* 2>/dev/null; done\\necho \\\"=== toolchains dir on disk ===\\\";",
+        "truncated": true,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1989,
+        "sha256": "e16c5d55f4eeefe2afe0de2b5ebf7489020fe45955f34a91977d6483547a7b4a",
+        "preview": "{\n  \"stdout\": \"=== rustup show ===\\nDefault host: x86_64-unknown-linux-gnu\\nrustup home:  /home/sun/lw_new_workspace/lunarwing-human-delay/.sandbox-home/.rustup\\n\\ninstalled toolchains\\n--------------------\\n\\nactive toolchain\\n----------------\\nno active toolchain\\n=== installed toolchains ===\\nno installed toolchains\\n=== rustup overrides ===\\nno overrides\\n=== env hints ===\\nPATH=/home/sun/.opencode/bin:/usr/local/cuda-13.1/bin:/home/sun/.bun/bin:/home/sun/.emacs.d/bin:/home/sun/.bun/bin:/home/sun/.openc",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 119,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

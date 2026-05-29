@@ -86,6 +86,8 @@ mod tests {
             action_def,
             execution_mode: ExecutionMode::Interactive,
             auto_approved,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
         }
     }
 

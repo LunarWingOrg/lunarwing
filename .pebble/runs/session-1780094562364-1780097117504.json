@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780097117504,
+  "duration_ms": 23729,
+  "initial_message_count": 148,
+  "final_message_count": 152,
+  "user_input": {
+    "chars": 847,
+    "sha256": "b16512485c2154af0bbda6db3cff692d1cb5cfb4cc4f96e75a01142e860a01ba",
+    "preview": "54 | struct TaskProgressPayload {\n   |        ------------------- field in this struct\n...\n58 |     done: bool,\n   |     ^^^^\n   |\n   = note: `TaskProgressPayload` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis\n\nwarning: `lunarwing` (lib test) generated 2 warnings\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.86s\n     Running unittests src/lib.rs (target/debug/deps/lunarwing-f3c43ca5aea137a4)\n\nrunning 3 tests\ntest bridge::effect_",
+    "truncated": true,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 149,
+      "request_estimated_tokens": 137614,
+      "duration_ms": 12324,
+      "result_event_count": 15,
+      "usage": {
+        "input_tokens": 218836,
+        "output_tokens": 981,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 151,
+      "request_estimated_tokens": 138877,
+      "duration_ms": 11399,
+      "result_event_count": 22,
+      "usage": {
+        "input_tokens": 220967,
+        "output_tokens": 613,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01EhZtWmGvJe7TbAqAXZtdY1",
+      "tool_name": "TodoWrite",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01EhZtWmGvJe7TbAqAXZtdY1",
+      "tool_name": "TodoWrite",
+      "input": {
+        "chars": 1146,
+        "sha256": "8d5dc070288f043c6df0db86556863c4fbcb08de2e0182ff6440b1d1dc1f97a8",
+        "preview": "{\"todos\":[{\"activeForm\":\"Confirming Rust toolchain\",\"content\":\"Step 0: Rust toolchain available (user env)\",\"status\":\"completed\"},{\"activeForm\":\"Running cargo check\",\"content\":\"Step 1: cargo check compiles (warnings only, unrelated)\",\"status\":\"completed\"},{\"activeForm\":\"Running cargo test --lib\",\"content\":\"Step 2: cargo test --lib passes (fixed 2 GateContext helpers + 2 CLI snapshots; 3 unrelated reflex/OMEMO failures remain)\",\"status\":\"completed\"},{\"activeForm\":\"Triaging clippy warnings\",\"content\":\"Step 3:",
+        "truncated": true,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 2780,
+        "sha256": "b5c2038e401123003dffc0cfaf92a3358ce621f37cfb1b81b76c788f0da7dd92",
+        "preview": "{\n  \"oldTodos\": [\n    {\n      \"content\": \"Step 0: Rust toolchain available (user env)\",\n      \"activeForm\": \"Confirming Rust toolchain\",\n      \"status\": \"completed\"\n    },\n    {\n      \"content\": \"Step 1: cargo check compiles (warnings only, unrelated)\",\n      \"activeForm\": \"Running cargo check\",\n      \"status\": \"completed\"\n    },\n    {\n      \"content\": \"Step 2: cargo test --lib passes (fixed 2 GateContext helpers + 2 CLI snapshots; 3 unrelated reflex/OMEMO failures remain)\",\n      \"activeForm\": \"Running car",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 4,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}
