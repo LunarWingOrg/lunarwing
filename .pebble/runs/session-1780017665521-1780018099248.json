@@ -1,0 +1,34 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780018099248,
+  "duration_ms": 4314,
+  "initial_message_count": 40,
+  "final_message_count": 42,
+  "user_input": {
+    "chars": 2,
+    "sha256": "f45de51cdef30991551e41e882dd7b5404799648a0a00753f44fc966e6153fc1",
+    "preview": "ac",
+    "truncated": false,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 41,
+      "request_estimated_tokens": 26119,
+      "duration_ms": 4313,
+      "result_event_count": 18,
+      "usage": {
+        "input_tokens": 53914,
+        "output_tokens": 158,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [],
+  "tool_calls": [],
+  "compactions": [],
+  "errors": []
+}
