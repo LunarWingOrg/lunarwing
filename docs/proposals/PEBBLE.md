@@ -25,3 +25,7 @@ create_job(mode: "pebble", description: "fix the tests")
 
 - `pebble4lunarwing/CLAUDE.md` — Dev guide
 - `docs/ops/PEBBLE-WORKER.md` — Operational guide
+
+We left off with the Pebble external worker fully implemented and tested. The end-to-end smoke test passed — health endpoints, WebSocket handshake
+
+ping/pong, and a real task execution (echo hello world) all worked.
