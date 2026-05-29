@@ -148,6 +148,7 @@ codex4lunarwing/             # OpenAI Codex worker container — see codex4lunar
 codex4ironclaw/             # Codex worker container (deprecated) — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
 lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
+pebble4lunarwing/           # Pebble worker container — see pebble4lunarwing/CLAUDE.md
 ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
 tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
 replv2git/                  # REPLv2 related tooling
@@ -189,6 +190,7 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Vision service full docs | `projects/ocr-sidecar/DOCUMENTATION.md` |
 | WASM tools catalog | `ic/tools-src/TOOLS.md` |
 | Worker container images | `docs/ops/WORKER-CONTAINERS.md` |
+| Pebble worker ops guide | `docs/ops/PEBBLE-WORKER.md` |
 | Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
 | Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
 | Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
@@ -277,6 +279,7 @@ create_job(title: "...", description: "...", mode: "nanocode")
 |--------|-----------|------|
 | `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
 | `codex` | `codex4lunarwing/` | `codex4lunarwing/CLAUDE.md` |
+| `pebble` | `pebble4lunarwing/` | `pebble4lunarwing/CLAUDE.md` |
 
 ## Protected Runtime Behavior
 

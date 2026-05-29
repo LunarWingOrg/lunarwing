@@ -88,6 +88,9 @@ Commands:
   build-nanocode-worker            Build the nanocode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
+  build-pebble-worker             Build the pebble worker Docker image
+    --no-cache                     Force a full rebuild without Docker cache
+
   install-wasm <name>             Install built WASM tools/channels into tenant state dir
   install-wasm-all                Install WASM for all tenants
 
@@ -252,6 +255,28 @@ ports_migrate() {
     chmod 0644 "$tmp"
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v3"
+    current_version=3
+  fi
+
+  if [[ "$current_version" -lt 4 ]]; then
+    say "migrating port registry v3 -> v4 (reserved_2 -> pebble_wss) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .version = 4 |
+      .tenants |= with_entries(
+        .value.ports |= (
+          if .reserved_2 then
+            .pebble_wss = .reserved_2 | del(.reserved_2)
+          else
+            . + { pebble_wss: (.orchestrator + 2) }
+          end
+        )
+      )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v4"
   fi
 }
 
@@ -290,7 +315,7 @@ ports_allocate() {
         weechat:      ($base + 5),
         orchestrator: ($base + 6),
         nanocode_wss: ($base + 7),
-        reserved_2:   ($base + 8),
+        pebble_wss:   ($base + 8),
         reserved_3:   ($base + 9)
       }
     }
@@ -332,8 +357,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH,NANOCODE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH,NANOCODE,PEBBLE"
 }
 
 tenant_exists_in_registry() {
@@ -573,6 +598,29 @@ build_nanocode_worker() {
   say "nanocode worker image built: lunarwing-worker-nanocode:latest"
 }
 
+build_pebble_worker() {
+  local no_cache="${1:-false}"
+  local pebble_dir="${LUNARWING_ROOT}/pebble4lunarwing"
+
+  [[ -d "$pebble_dir" ]] || die "pebble worker dir not found at $pebble_dir"
+
+  ensure_container_runtime
+
+  say "building pebble worker Docker image ..."
+  local cache_flag=""
+  [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
+
+  if [[ "$CONTAINER_RT" == "podman" ]]; then
+    podman build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
+      || die "pebble worker image build failed"
+  else
+    docker build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
+      || die "pebble worker image build failed"
+  fi
+
+  say "pebble worker image built: lunarwing-worker-pebble:latest"
+}
+
 # ── WASM install ─────────────────────────────────────────────────────────────
 
 channel_crate_name() {
@@ -712,7 +760,7 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port nanocode_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
@@ -721,6 +769,7 @@ write_tenant_lunarwing_env() {
   proxy_port="$(ports_get "$name" proxy)"
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
+  pebble_wss_port="$(ports_get "$name" pebble_wss)"
 
   local state_dir run_dir repo_dir
   state_dir="$(tenant_state_dir "$name")"
@@ -791,6 +840,9 @@ ORCHESTRATOR_PORT=$orchestrator_port
 
 # Nanocode worker (WebSocket port for agent communication)
 NANOCODE_WSS_PORT=$nanocode_wss_port
+
+# Pebble worker (WebSocket port for agent communication)
+PEBBLE_WSS_PORT=$pebble_wss_port
 
 # Daemon mode
 CLI_ENABLED=false
@@ -895,7 +947,17 @@ patch_tenant_env() {
       printf '\n# Nanocode worker (WebSocket port for agent communication)\nNANOCODE_WSS_PORT=%s\n' "$nanocode_wss_port" >>"$env_path"
       say "added NANOCODE_WSS_PORT=$nanocode_wss_port to $env_path"
     fi
+  fi
 
+  local pebble_wss_port
+  pebble_wss_port="$(ports_get "$name" pebble_wss)"
+  if [[ -n "$pebble_wss_port" ]]; then
+    if grep -q '^PEBBLE_WSS_PORT=' "$env_path"; then
+      say "PEBBLE_WSS_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# Pebble worker (WebSocket port for agent communication)\nPEBBLE_WSS_PORT=%s\n' "$pebble_wss_port" >>"$env_path"
+      say "added PEBBLE_WSS_PORT=$pebble_wss_port to $env_path"
+    fi
   fi
 }
 
@@ -1044,6 +1106,88 @@ stop_tenant_nanocode() {
   if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
     $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
+  fi
+}
+
+# ── Pebble worker container ──────────────────────────────────────────────────
+
+start_tenant_pebble() {
+  local name="$1"
+  ensure_container_runtime
+
+  local wss_port container_name
+  wss_port="$(ports_get "$name" pebble_wss)"
+  container_name="lunarwing-pebble-$name"
+
+  if [[ -z "$wss_port" ]]; then
+    say "no pebble_wss port allocated for $name (skipping pebble worker)"
+    return 0
+  fi
+
+  if ! $CONTAINER_RT image inspect lunarwing-worker-pebble:latest &>/dev/null; then
+    say "pebble worker image not found; run 'build-pebble-worker' first (skipping)"
+    return 0
+  fi
+
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
+    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "pebble worker already running ($container_name, WSS port $wss_port)"
+      return 0
+    fi
+    say "starting existing pebble worker container $container_name"
+    $CONTAINER_RT start "$container_name" >/dev/null
+  else
+    say "creating pebble worker container $container_name on WSS port $wss_port"
+
+    local tenant_env_path
+    tenant_env_path="$(tenant_env_dir "$name")/lunarwing.env"
+
+    local pebble_env_path
+    pebble_env_path="$(tenant_env_dir "$name")/pebble.env"
+
+    local env_flags=()
+    if [[ -f "$tenant_env_path" ]]; then
+      local gateway_token
+      gateway_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$gateway_token" ]] && env_flags+=(-e "AGENT_AUTH_TOKEN=$gateway_token")
+    fi
+
+    if [[ -f "$pebble_env_path" ]]; then
+      env_flags+=(--env-file "$pebble_env_path")
+    fi
+
+    local workspace_dir
+    workspace_dir="$(tenant_lw_root "$name")/pebble-workspace"
+    mkdir -p "$workspace_dir"
+    chown "$name:$name" "$workspace_dir"
+    chmod 777 "$workspace_dir"
+
+    $CONTAINER_RT run -d \
+      --name "$container_name" \
+      -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
+      -e WS_PORT="$wss_port" \
+      -e HEALTH_PORT="0" \
+      -e PEBBLE_MODE=websocket \
+      -e WS_BIND_HOST=0.0.0.0 \
+      -e WS_PATH=/ws/agent \
+      "${env_flags[@]}" \
+      -p "127.0.0.1:${wss_port}:${wss_port}" \
+      -v "$workspace_dir:/workspace:z" \
+      --restart unless-stopped \
+      lunarwing-worker-pebble:latest >/dev/null
+  fi
+
+  say "pebble worker ready ($container_name, WSS port $wss_port)"
+}
+
+stop_tenant_pebble() {
+  local name="$1"
+  ensure_container_runtime
+
+  local container_name="lunarwing-pebble-$name"
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
+    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+    say "pebble worker stopped ($container_name)"
   fi
 }
 
@@ -1552,6 +1696,7 @@ add_tenant() {
   say "  weechat:      $(ports_get "$name" weechat)"
   say "  orchestrator: $(ports_get "$name" orchestrator)"
   say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -1617,6 +1762,7 @@ start_tenant() {
 
   start_tenant_postgres "$name"
   start_tenant_nanocode "$name"
+  start_tenant_pebble "$name"
 
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
@@ -1639,6 +1785,7 @@ stop_tenant() {
     stop_tenant_openrc "$name"
   fi
 
+  stop_tenant_pebble "$name"
   stop_tenant_nanocode "$name"
   stop_tenant_postgres "$name"
 }
@@ -1669,6 +1816,7 @@ status_tenant() {
   say "  weechat:      $(ports_get "$name" weechat)"
   say "  orchestrator: $(ports_get "$name" orchestrator)"
   say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
   say ""
 
   ensure_container_runtime
@@ -1686,6 +1834,15 @@ status_tenant() {
     say "Nanocode worker: stopped ($nanocode_container)"
   else
     say "Nanocode worker: not created"
+  fi
+
+  local pebble_container="lunarwing-pebble-$name"
+  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$pebble_container" 2>/dev/null | grep -q true; then
+    say "Pebble worker: running ($pebble_container, WSS port $(ports_get "$name" pebble_wss))"
+  elif $CONTAINER_RT inspect "$pebble_container" &>/dev/null; then
+    say "Pebble worker: stopped ($pebble_container)"
+  else
+    say "Pebble worker: not created"
   fi
 
   ensure_init_system
@@ -1718,13 +1875,13 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH" "NANOCODE"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------" "----" "--------"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH" "NANOCODE" "PEBBLE"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "----" "--------" "------"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
@@ -1733,7 +1890,8 @@ list_tenants() {
       "$(ports_get "$name" proxy)" \
       "$(ports_get "$name" weechat)" \
       "$(ports_get "$name" orchestrator)" \
-      "$(ports_get "$name" nanocode_wss)"
+      "$(ports_get "$name" nanocode_wss)" \
+      "$(ports_get "$name" pebble_wss)"
   done <<< "$names"
 }
 
@@ -1809,12 +1967,16 @@ doctor() {
   _check "proxy script exists" test -f "$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
   _check "nanocode worker dir exists" test -d "$LUNARWING_ROOT/lunarcode4lunarwing"
   _check "nanocode worker Dockerfile exists" test -f "$LUNARWING_ROOT/lunarcode4lunarwing/Dockerfile"
+  _check "pebble worker dir exists" test -d "$LUNARWING_ROOT/pebble4lunarwing"
+  _check "pebble worker Dockerfile exists" test -f "$LUNARWING_ROOT/pebble4lunarwing/Dockerfile"
 
-  # Check if nanocode worker image is built
+  # Check if worker images are built
   if command -v docker >/dev/null 2>&1; then
     _check "nanocode worker image exists" docker image inspect lunarwing-worker-nanocode:latest
+    _check "pebble worker image exists" docker image inspect lunarwing-worker-pebble:latest
   elif command -v podman >/dev/null 2>&1; then
     _check "nanocode worker image exists" podman image inspect lunarwing-worker-nanocode:latest
+    _check "pebble worker image exists" podman image inspect lunarwing-worker-pebble:latest
   fi
 
   say ""
@@ -1951,6 +2113,19 @@ main() {
         esac
       done
       build_nanocode_worker "$no_cache"
+      ;;
+
+    build-pebble-worker)
+      require_root
+      local no_cache="false"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --no-cache) no_cache="true"; shift ;;
+          -*)         die "unknown flag: $1" ;;
+          *)          die "unexpected argument: $1" ;;
+        esac
+      done
+      build_pebble_worker "$no_cache"
       ;;
 
     install-wasm)

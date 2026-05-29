@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780094506232,
+  "duration_ms": 23785,
+  "initial_message_count": 24,
+  "final_message_count": 30,
+  "user_input": {
+    "chars": 44,
+    "sha256": "439952af95565a05a7557e86d7e318be7193645574dfc059df77ea1db068c734",
+    "preview": "branch name is human-delay-mode-phase-1-baud",
+    "truncated": false,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 25,
+      "request_estimated_tokens": 8325,
+      "duration_ms": 6148,
+      "result_event_count": 7,
+      "usage": {
+        "input_tokens": 25532,
+        "output_tokens": 387,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 27,
+      "request_estimated_tokens": 8836,
+      "duration_ms": 3763,
+      "result_event_count": 6,
+      "usage": {
+        "input_tokens": 26476,
+        "output_tokens": 197,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 3,
+      "request_message_count": 29,
+      "request_estimated_tokens": 9473,
+      "duration_ms": 5463,
+      "result_event_count": 9,
+      "usage": {
+        "input_tokens": 27697,
+        "output_tokens": 357,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01YSHbwZ9DrtgfswFPPQ8wsX",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01WNVrsBdJdNBD6ULKSSzwYZ",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01YSHbwZ9DrtgfswFPPQ8wsX",
+      "tool_name": "bash",
+      "input": {
+        "chars": 499,
+        "sha256": "1b201ace3270ac916810972aaf14552bd152e559c1787c0039b762b99ad418e4",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing && echo \\\"=== local branch state ===\\\" && git rev-parse --verify human-delay-mode-phase-1-baud 2>&1 && git rev-parse --verify origin/human-delay-mode-phase-1-baud 2>&1 && echo \\\"=== ahead/behind vs origin ===\\\" && git rev-list --left-right --count human-delay-mode-phase-1-baud...origin/human-delay-mode-phase-1-baud 2>&1 && echo \\\"=== proposed dir free? ===\\\" && ls -d ../lunarwing-human-delay 2>&1\",\"description\":\"inspect branch and target dir\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1236,
+        "sha256": "3fd022d3a8bd1f47ebd6cc1b51bc9871701ea7b205163d9186021fa518ecd81a",
+        "preview": "{\n  \"stdout\": \"=== local branch state ===\\n446de9ea257215a3a43a8eb9a6427b0e33b7da8e\\n446de9ea257215a3a43a8eb9a6427b0e33b7da8e\\n=== ahead/behind vs origin ===\\n0\\t0\\n=== proposed dir free? ===\\nls: cannot access '../lunarwing-human-delay': No such file or directory\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 94,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01WNVrsBdJdNBD6ULKSSzwYZ",
+      "tool_name": "bash",
+      "input": {
+        "chars": 237,
+        "sha256": "8a05bf6d0a153b59da640fb3aee1a5afe3d87fbe2564c1f8fa0fd014ef90dc42",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing && git worktree add ../lunarwing-human-delay human-delay-mode-phase-1-baud 2>&1 && echo \\\"=== worktree list ===\\\" && git worktree list\",\"description\":\"add worktree for existing branch\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 2180,
+        "sha256": "d8ecf61ae3290b59db4e4f17ba516e95898afc3f255145b8ee43f827ec0b81ac",
+        "preview": "{\n  \"stdout\": \"Preparing worktree (checking out 'human-delay-mode-phase-1-baud')\\nUpdating files:  78% (8671/11038)\\rUpdating files:  79% (8721/11038)\\rUpdating files:  80% (8831/11038)\\rUpdating files:  81% (8941/11038)\\rUpdating files:  82% (9052/11038)\\rUpdating files:  83% (9162/11038)\\rUpdating files:  84% (9272/11038)\\rUpdating files:  85% (9383/11038)\\rUpdating files:  86% (9493/11038)\\rUpdating files:  87% (9604/11038)\\rUpdating files:  88% (9714/11038)\\rUpdating files:  89% (9824/11038)\\rUpdating f",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 1150,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}
