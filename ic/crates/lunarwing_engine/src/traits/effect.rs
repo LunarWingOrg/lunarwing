@@ -25,6 +25,12 @@ pub struct ThreadExecutionContext {
     /// The channel this thread's conversation originated from (e.g. "gateway", "repl").
     /// Used by mission_create to default `notify_channels` to the current channel.
     pub source_channel: Option<String>,
+    /// Human delay / supervision mode — when true, every action is gated
+    /// through human approval regardless of tool tier.
+    pub supervised_mode: bool,
+    /// Timeout in seconds for supervised approval prompts.
+    /// Default: 300 (5 minutes).
+    pub supervised_timeout_secs: u64,
 }
 
 /// Abstraction over capability action execution.

@@ -511,6 +511,26 @@ impl EffectBridgeAdapter {
         }
 
         if let Some((_, tool)) = self.tools.get_resolved(action_name).await {
+            // ── Human delay / supervision mode ──
+            // When supervised_mode is enabled on the thread, gate EVERY action
+            // through human approval, regardless of the tool's tier.
+            //
+            // Always-gated tools (ApprovalRequirement::Always) should not offer
+            // the "always approve" option in supervised mode either, so we set
+            // allow_always = false to be conservative.
+            if context.supervised_mode {
+                let requirement = tool.requires_approval(&parameters);
+                let allow_always = !matches!(requirement, ApprovalRequirement::Always);
+                return Err(Self::gate_paused(
+                    "approval",
+                    action_name,
+                    context.current_call_id.as_deref(),
+                    parameters,
+                    lunarwing_engine::ResumeKind::Approval { allow_always },
+                    None,
+                ));
+            }
+
             let requirement = tool.requires_approval(&parameters);
             match requirement {
                 ApprovalRequirement::Always => {

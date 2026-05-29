@@ -128,6 +128,14 @@ pub struct GateContext<'a> {
     pub execution_mode: ExecutionMode,
     /// Tools the session has auto-approved ("always" button).
     pub auto_approved: &'a HashSet<String>,
+    /// Human delay / supervision mode — when true, every action is gated
+    /// through human approval regardless of tool tier. Sourced from the
+    /// thread's [`ThreadConfig::supervised_mode`].
+    pub supervised_mode: bool,
+    /// Timeout in seconds for supervised approval prompts. Used to compute
+    /// `PendingGate::expires_at`. Sourced from the thread's
+    /// [`ThreadConfig::supervised_timeout_secs`]. Default: 300 (5 minutes).
+    pub supervised_timeout_secs: u64,
 }
 
 // ── Gate trait ───────────────────────────────────────────────

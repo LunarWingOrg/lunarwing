@@ -131,6 +131,18 @@ pub struct ThreadConfig {
     #[serde(default = "default_max_action_requirement_nudges")]
     pub max_action_requirement_nudges: u32,
 
+    // ── Human delay / supervision mode ──
+    /// When true, every tool action is gated through human approval,
+    /// regardless of the tool's `requires_approval()` tier.
+    /// Auto-expires after `supervised_timeout_secs` on no response.
+    #[serde(default)]
+    pub supervised_mode: bool,
+    /// Timeout in seconds for supervised mode approval prompts.
+    /// After this duration with no human response, the action is
+    /// auto-denied (fail-closed). Default: 300 (5 minutes).
+    #[serde(default = "default_supervised_timeout_secs")]
+    pub supervised_timeout_secs: u64,
+
     // ── Budget controls (Phase 4, from RLM cross-reference) ──
     /// Maximum cumulative input+output tokens before termination.
     pub max_tokens_total: Option<u64>,
@@ -164,6 +176,8 @@ impl Default for ThreadConfig {
             max_tool_intent_nudges: 2,
             require_action_attempt: false,
             max_action_requirement_nudges: 2,
+            supervised_mode: false,
+            supervised_timeout_secs: 300,
             max_tokens_total: None,
             max_consecutive_errors: None,
             max_budget_usd: None,
@@ -178,6 +192,10 @@ impl Default for ThreadConfig {
 
 fn default_max_action_requirement_nudges() -> u32 {
     2
+}
+
+fn default_supervised_timeout_secs() -> u64 {
+    300
 }
 
 // ── Thread ──────────────────────────────────────────────────

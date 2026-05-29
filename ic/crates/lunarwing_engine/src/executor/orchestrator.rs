@@ -658,6 +658,8 @@ async fn handle_execute_code_step(
         step_id: StepId::new(),
         current_call_id: None,
         source_channel: thread_source_channel(thread),
+        supervised_mode: thread.config.supervised_mode,
+        supervised_timeout_secs: thread.config.supervised_timeout_secs,
     };
 
     // Run user code in a nested Monty VM (same pattern as rlm_query)
@@ -776,6 +778,8 @@ async fn handle_execute_action(
         step_id: StepId::new(),
         current_call_id: Some(call_id.clone()),
         source_channel: thread_source_channel(thread),
+        supervised_mode: thread.config.supervised_mode,
+        supervised_timeout_secs: thread.config.supervised_timeout_secs,
     };
 
     // Helper: emit event only. The orchestrator owns transcript recording.
@@ -1235,6 +1239,8 @@ async fn handle_execute_actions_parallel(
             step_id,
             current_call_id: Some(pc.call_id.clone()),
             source_channel: None,
+            supervised_mode: thread.config.supervised_mode,
+            supervised_timeout_secs: thread.config.supervised_timeout_secs,
         };
         let ps = summarize_params(&pc.name, &pc.params);
         let (result_json, event, output) = execute_single_action(
@@ -1272,6 +1278,8 @@ async fn handle_execute_actions_parallel(
                 step_id,
                 current_call_id: Some(pc_call_id.clone()),
                 source_channel: None,
+                supervised_mode: thread.config.supervised_mode,
+                supervised_timeout_secs: thread.config.supervised_timeout_secs,
             };
             let ps = summarize_params(&pc_name, &pc_params);
 

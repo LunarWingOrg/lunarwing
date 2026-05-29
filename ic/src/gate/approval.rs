@@ -42,6 +42,27 @@ impl ExecutionGate for ApprovalGate {
             None => return GateDecision::Allow, // unknown tool — let execution handle it
         };
 
+        // ── Human delay / supervision mode ──
+        // When supervised_mode is enabled on the thread, gate EVERY action
+        // through human approval, regardless of the tool's tier. This is
+        // orthogonal to ExecutionMode and takes precedence over the per-tool
+        // ApprovalRequirement matching below.
+        //
+        // Always-gated tools (ApprovalRequirement::Always) should not offer
+        // the "always approve" option in supervised mode either, so we set
+        // allow_always = false to be conservative.
+        if ctx.supervised_mode {
+            let requirement = tool.requires_approval(ctx.parameters);
+            let allow_always = !matches!(requirement, ApprovalRequirement::Always);
+            return GateDecision::Pause {
+                reason: format!(
+                    "[Supervised mode] Tool '{}' requires human approval before execution.",
+                    ctx.action_name
+                ),
+                resume_kind: ResumeKind::Approval { allow_always },
+            };
+        }
+
         // Use original parameters for approval check (the adapter normalizes
         // params before execution, but the approval check should use the
         // parameters the LLM provided so destructive detection works).
