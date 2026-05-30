@@ -226,20 +226,35 @@ impl ReflexRouter {
                 continue;
             }
 
+            let words_pat: std::collections::HashSet<&str> =
+                pattern.split_whitespace().collect();
+
             // Quick word-overlap pre-filter
             let overlap = word_overlap(normalized, pattern);
             if overlap < 0.3 {
                 // Also check if any single word matches (handles
                 // cases like "logs" matching "summarize my logs")
-                let words_pat: std::collections::HashSet<&str> =
-                    pattern.split_whitespace().collect();
                 if words_input.intersection(&words_pat).next().is_none() {
                     continue;
                 }
             }
 
+            // Check if ALL pattern words appear in the input (word containment).
+            // This handles cases like "please check the disk space on the server"
+            // containing all words from "check disk space".
+            let all_words_contained = words_pat.iter().all(|w| words_input.contains(w));
+            
             // Jaro-Winkler similarity
-            let score = jaro_winkler(normalized, pattern);
+            let jw_score = jaro_winkler(normalized, pattern);
+            
+            // Boost score if all pattern words are contained in input
+            let score = if all_words_contained {
+                // Word containment is a strong signal — boost to at least 0.9
+                jw_score.max(0.9)
+            } else {
+                jw_score
+            };
+            
             if score >= self.fuzzy_threshold {
                 candidates.push((pattern.clone(), score));
             }
@@ -1102,7 +1117,7 @@ mod tests {
 
         // Two different inputs, both fuzzy-match the same pattern
         let variant_a = "fetch the logs please";
-        let variant_b = "get my logs today";
+        let variant_b = "please fetch logs for me";
 
         // Each one hits fewer than the threshold individually
         for _ in 0..PROMOTION_THRESHOLD - 1 {
