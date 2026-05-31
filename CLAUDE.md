@@ -12,11 +12,10 @@ This is a self-hostable, privacy-first AI agent. The fork prioritizes true freed
 
 `staging` is the integration branch. All feature branches merge here first; releases are tagged from staging.
 
-- **Feature branches**: `1.0.6-<FeatureName>` (e.g., `1.0.6-LunarVision`, `1.0.6-EmbeddedMemoryUpdate`)
+- **Feature branches**: `staging-<feature>` (e.g., `staging-reflex-compiler`, `staging-xmpp-xep0363-0526`)
 - **Agent branches**: `staging-<agentname>-<n>` (e.g., `staging-ruffles-1`, `staging-kageho-2`)
+- **Release branches**: `release/v<version>` (e.g., `release/v1.0.7`)
 - **Experimental**: `experimental-*` for features not yet targeting a release
-
-See `docs/guides/BRANCH_GUIDE.md` for full details and `FEATURE_BRANCHES_1.0.6.md` for active v1.0.6 branches.
 
 ### Binary Rename (ironclaw → lunarwing)
 
@@ -197,7 +196,6 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Documentation audit | `docs/DOCS_AUDIT.md` |
 | Docs organization | `docs/README.md` |
 | Testing guide | `docs/guides/TESTING_GUIDE.md` |
-| Branch guide | `docs/guides/BRANCH_GUIDE.md` |
 
 ## Architecture Overview
 

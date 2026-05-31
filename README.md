@@ -8,7 +8,7 @@
 
 <img width="512" height="512" alt="darklogo" src="https://github.com/user-attachments/assets/28e6abcb-16fe-43e5-8c44-6d2d734c64f3" />
 
-The LunarWing project began in Febuary 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
+The LunarWing project began in February 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
 
 LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes useful tools, bridges, and channels such as XMPP/OMEMO, Gotify, scheduled routines with fallbacks, systemd deployment, OpenRC, and open-protocol channels. Proprietary service centered channels (Slack, Discord, Telegram) are intentionally unsupported within the monorepo.
 
@@ -37,7 +37,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (seperate repo)
 
 ### Worker Containers
-* **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4ironclaw/`)
+* **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4lunarwing/`)
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
 * **Re worked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
@@ -284,5 +284,5 @@ LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 - Architecture docs: see [docs/](docs/)
 - Vision service: see [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
 - Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
-- Release notes: see [RELEASE-v1.0.6.md](RELEASE-v1.0.6.md)
+- Release notes: see [docs/releases/](docs/releases/)
 - REPLv2 server and client: see [docs/internal/REPLv2_Client_and_Server.md](docs/internal/REPLv2_Client_and_Server.md)

@@ -1,6 +1,6 @@
-# IronClaw ↔ OpenClaw Feature Parity Matrix
+# LunarWing ↔ OpenClaw Feature Parity Matrix
 
-This document tracks feature parity between IronClaw (Rust implementation) and OpenClaw (TypeScript reference implementation). Use this to coordinate work across developers.
+This document tracks feature parity between LunarWing (Rust implementation) and OpenClaw (TypeScript reference implementation). Use this to coordinate work across developers.
 
 **Legend:**
 
@@ -17,7 +17,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 1. Architecture
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Hub-and-spoke architecture | ✅ | ✅ | Web gateway as central hub |
 | WebSocket control plane | ✅ | ✅ | Gateway with WebSocket + SSE |
@@ -32,7 +32,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 2. Gateway System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Gateway control plane | ✅ | ✅ | Web gateway with 40+ API endpoints |
 | HTTP endpoints for Control UI | ✅ | ✅ | Web dashboard with chat, memory, jobs, logs, extensions |
@@ -62,12 +62,12 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 3. Messaging Channels
 
-| Channel | OpenClaw | IronClaw | Priority | Notes |
+| Channel | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | CLI/TUI | ✅ | ✅ | - | Ratatui-based TUI |
 | HTTP webhook | ✅ | ✅ | - | axum with secret validation |
 | REPL (simple) | ✅ | ✅ | - | For testing |
-| WASM channels | ❌ | ✅ | - | IronClaw innovation; host resolves owner scope vs sender identity |
+| WASM channels | ❌ | ✅ | - | LunarWing innovation; host resolves owner scope vs sender identity |
 | Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username, DM topics, setup-time owner auto-verification, owner-scoped persistence |
 | Discord | ✅ | ❌ | P2 | discord.js, thread parent binding inheritance |
 | Signal | ✅ | ✅ | P2 | signal-cli daemonPC, SSE listener HTTP/JSON-R, user/group allowlists, DM pairing |
@@ -88,7 +88,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ### Telegram-Specific Features (since Feb 2025)
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Forum topic creation | ✅ | ❌ | Create topics in forum groups |
 | channel_post support | ✅ | ❌ | Bot-to-bot communication |
@@ -100,7 +100,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ### Discord-Specific Features (since Feb 2025)
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Forwarded attachment downloads | ✅ | ❌ | Fetch media from forwarded messages |
 | Faster reaction state machine | ✅ | ❌ | Watchdog + debounce |
@@ -108,7 +108,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ### Slack-Specific Features (since Feb 2025)
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Streaming draft replies | ✅ | ❌ | Partial replies via draft message updates |
 | Configurable stream modes | ✅ | ❌ | Per-channel stream behavior |
@@ -117,21 +117,21 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ### Mattermost-Specific Features (since Mar 2026)
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Interactive buttons | ✅ | ❌ | Clickable message buttons with signed callback flow |
 | Interactive model picker | ✅ | ❌ | In-channel provider/model chooser |
 
 ### Feishu/Lark-Specific Features (since Mar 2026)
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Doc/table actions | ✅ | ❌ | `feishu_doc` supports tables, positional insert, color_text, image upload, and file upload |
 | Rich-text embedded media extraction | ✅ | ❌ | Pull video/media attachments from post messages |
 
 ### Channel Features
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | DM pairing codes | ✅ | ✅ | `ironclaw pairing list/approve`, host APIs |
 | Allowlist/blocklist | ✅ | 🚧 | `allow_from` + pairing store + hardened command/group allowlists |
@@ -151,7 +151,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 4. CLI Commands
 
-| Command | OpenClaw | IronClaw | Priority | Notes |
+| Command | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | `run` (agent) | ✅ | ✅ | - | Default command |
 | `tool install/list/remove` | ✅ | ✅ | - | WASM tools |
@@ -190,9 +190,9 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 5. Agent System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
-| Pi agent runtime | ✅ | ➖ | IronClaw uses custom runtime |
+| Pi agent runtime | ✅ | ➖ | LunarWing uses custom runtime |
 | RPC-based execution | ✅ | ✅ | Orchestrator/worker pattern |
 | Multi-provider failover | ✅ | ✅ | `FailoverProvider` tries providers sequentially on retryable errors |
 | Per-sender sessions | ✅ | ✅ | |
@@ -234,20 +234,16 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 6. Model & Provider Support
 
-| Provider | OpenClaw | IronClaw | Priority | Notes |
+| Provider | OpenClaw | LunarWing | Priority | Notes |
 |----------|----------|----------|----------|-------|
-| NEAR AI | ✅ | ✅ | - | Primary provider |
-| Anthropic (Claude) | ✅ | 🚧 | - | Via NEAR AI proxy; Opus 4.5, Sonnet 4, Sonnet 4.6, adaptive thinking default |
-| OpenAI | ✅ | 🚧 | - | Via NEAR AI proxy; GPT-5.4 + Codex OAuth |
-| AWS Bedrock | ✅ | ✅ | - | Native Converse API via aws-sdk-bedrockruntime (requires `--features bedrock`) |
-| Google Gemini | ✅ | ✅ | - | OAuth (PKCE + S256), function calling, thinkingConfig, generationConfig |
+| LUANRWING | ✅ | ✅ | - | Primary provider |
 | io.net | ✅ | ✅ | P3 | Via `ionet` adapter |
 | Mistral | ✅ | ✅ | P3 | Via `mistral` adapter |
 | Yandex AI Studio | ✅ | ✅ | P3 | Via `yandex` adapter |
 | Cloudflare Workers AI | ✅ | ✅ | P3 | Via `cloudflare` adapter |
 | NVIDIA API | ✅ | ✅ | P3 | Via `nvidia` adapter and `providers.json` |
 | OpenRouter | ✅ | ✅ | - | Via OpenAI-compatible provider (RigAdapter) |
-| Tinfoil | ❌ | ✅ | - | Private inference provider (IronClaw-only) |
+| Tinfoil | ❌ | ✅ | - | Private inference provider (LunarWing-only) |
 | OpenAI-compatible | ❌ | ✅ | - | Generic OpenAI-compatible endpoint (RigAdapter) |
 | GitHub Copilot | ✅ | ✅ | - | Dedicated provider with OAuth token exchange (`GithubCopilotProvider`) |
 | Ollama (local) | ✅ | ✅ | - | via `rig::providers::ollama` (full support) |
@@ -259,7 +255,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ### Model Features
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Auto-discovery | ✅ | ❌ | |
 | Failover chains | ✅ | ✅ | `FailoverProvider` with configurable `fallback_model` |
@@ -275,7 +271,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 7. Media Handling
 
-| Feature | OpenClaw | IronClaw | Priority | Notes |
+| Feature | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | Image processing (Sharp) | ✅ | ❌ | P2 | Resize, format convert |
 | Configurable image resize dims | ✅ | ❌ | P2 | Per-agent dimension config |
@@ -298,7 +294,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 8. Plugin & Extension System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Dynamic loading | ✅ | ✅ | WASM modules |
 | Manifest validation | ✅ | ✅ | WASM metadata |
@@ -323,7 +319,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 9. Configuration System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Primary config file | ✅ `~/.openclaw/openclaw.json` | ✅ `.env` | Different formats |
 | JSON5 support | ✅ | ❌ | Comments, trailing commas |
@@ -342,7 +338,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 10. Memory & Knowledge System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Vector memory | ✅ | ✅ | pgvector |
 | Session-based memory | ✅ | ✅ | |
@@ -353,7 +349,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | OpenAI embeddings | ✅ | ✅ | |
 | Gemini embeddings | ✅ | ❌ | |
 | Local embeddings | ✅ | ❌ | |
-| SQLite-vec backend | ✅ | ❌ | IronClaw uses PostgreSQL |
+| SQLite-vec backend | ✅ | ❌ | LunarWing uses PostgreSQL |
 | LanceDB backend | ✅ | ❌ | Configurable auto-capture max length |
 | QMD backend | ✅ | ❌ | |
 | Atomic reindexing | ✅ | ✅ | |
@@ -371,7 +367,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 11. Mobile Apps
 
-| Feature | OpenClaw | IronClaw | Priority | Notes |
+| Feature | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | iOS app (SwiftUI) | ✅ | 🚫 | - | Out of scope initially |
 | Android app (Kotlin) | ✅ | 🚫 | - | Out of scope initially |
@@ -392,7 +388,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 12. macOS App
 
-| Feature | OpenClaw | IronClaw | Priority | Notes |
+| Feature | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | SwiftUI native app | ✅ | 🚫 | - | Out of scope |
 | Menu bar presence | ✅ | 🚫 | - | Animated menubar icon |
@@ -413,7 +409,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 13. Web Interface
 
-| Feature | OpenClaw | IronClaw | Priority | Notes |
+| Feature | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | Control UI Dashboard | ✅ | ✅ | - | Web gateway with chat, memory, jobs, logs, extensions |
 | Channel status view | ✅ | 🚧 | P2 | Gateway status widget, full channel view pending |
@@ -433,7 +429,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 14. Automation
 
-| Feature | OpenClaw | IronClaw | Priority | Notes |
+| Feature | OpenClaw | LunarWing | Priority | Notes |
 |---------|----------|----------|----------|-------|
 | Cron jobs | ✅ | ✅ | - | Routines with cron trigger |
 | Per-job model fallback override | ✅ | ❌ | P2 | `payload.fallbacks` overrides agent-level fallbacks |
@@ -467,13 +463,13 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 15. Security Features
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Gateway token auth | ✅ | ✅ | Bearer token auth on web gateway |
 | Device pairing | ✅ | ❌ | |
 | Tailscale identity | ✅ | ❌ | |
 | Trusted-proxy auth | ✅ | ❌ | Header-based reverse proxy auth |
-| OAuth flows | ✅ | 🚧 | NEAR AI OAuth + Gemini OAuth (PKCE, S256) + hosted extension/MCP OAuth broker; external auth-proxy rollout still pending |
+| OAuth flows | ✅ | 🚧 | |
 | DM pairing verification | ✅ | ✅ | ironclaw pairing approve, host APIs |
 | Allowlist/blocklist | ✅ | 🚧 | allow_from + pairing store |
 | Per-group tool policies | ✅ | ❌ | |
@@ -485,7 +481,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 | Loopback-first | ✅ | 🚧 | HTTP binds 0.0.0.0 |
 | Docker sandbox | ✅ | ✅ | Orchestrator/worker containers |
 | Podman support | ✅ | ❌ | Alternative to Docker |
-| WASM sandbox | ❌ | ✅ | IronClaw innovation |
+| WASM sandbox | ❌ | ✅ | LunarWing innovation |
 | Sandbox env sanitization | ✅ | 🚧 | Shell tool scrubs env vars (secret detection); docker container env sanitization partial |
 | Tool policies | ✅ | ✅ | |
 | Elevated mode | ✅ | ❌ | |
@@ -507,7 +503,7 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## 16. Development & Build System
 
-| Feature | OpenClaw | IronClaw | Notes |
+| Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
 | Primary language | TypeScript | Rust | Different ecosystems |
 | Build tool | tsdown | cargo | |
@@ -606,16 +602,15 @@ This document tracks feature parity between IronClaw (Rust implementation) and O
 
 ## Deviations from OpenClaw
 
-IronClaw intentionally differs from OpenClaw in these ways:
+LunarWing intentionally differs from OpenClaw in these ways:
 
 1. **Rust vs TypeScript**: Native performance, memory safety, single binary distribution
 2. **WASM sandbox vs Docker**: Lighter weight, faster startup, capability-based security
 3. **PostgreSQL + libSQL vs SQLite**: Dual-backend (production PG + embedded libSQL for zero-dep local mode)
-4. **NEAR AI focus**: Primary provider with session-based auth
-5. **No mobile/desktop apps**: Focus on server-side and CLI initially
-6. **WASM channels**: Novel extension mechanism not in OpenClaw
-7. **Tinfoil private inference**: IronClaw-only provider for private/encrypted inference
-8. **GitHub WASM tool**: Native GitHub integration as WASM tool
-9. **Prompt-based skills**: Different approach than OpenClaw capability bundles (trust gating, attenuation)
+4. **No mobile/desktop apps**: Focus on server-side and CLI initially
+5. **WASM channels**: Novel extension mechanism not in OpenClaw
+6. **Tinfoil private inference**: LunarWing-only provider for private/encrypted inference
+7. **GitHub WASM tool**: Native GitHub integration as WASM tool
+8. **Prompt-based skills**: Different approach than OpenClaw capability bundles (trust gating, attenuation)
 
 These are intentional architectural choices, not gaps to be filled.

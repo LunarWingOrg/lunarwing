@@ -26,7 +26,6 @@ How-to guides, build instructions, and setup walkthroughs.
 
 | File | Description |
 |------|-------------|
-| [`BRANCH_GUIDE.md`](guides/BRANCH_GUIDE.md) | Branching strategy and agent branch conventions |
 | [`EMBEDDINGS_SETUP.md`](guides/EMBEDDINGS_SETUP.md) | Embedding provider configuration (OpenAI-compatible, Ollama, NEAR AI) |
 | [`VISION_OCR_SIDECAR.md`](guides/VISION_OCR_SIDECAR.md) | Vision/OCR sidecar service overview |
 | [`REFLEX_COMPILER_TESTING.md`](guides/REFLEX_COMPILER_TESTING.md) | Reflex compiler testing guide |
@@ -59,7 +58,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`GOALS_1.0.6.md`](ops/GOALS_1.0.6.md) | v1.0.6 release goals |
 | [`GOALS_1.0.7.md`](ops/GOALS_1.0.7.md) | v1.0.7 release goals |
 | [`GOALS_1.0.8.md`](ops/GOALS_1.0.8.md) | v1.0.8 release goals |
-| [`GOALS_FOR_NEXT_RELEASES.md`](ops/GOALS_FOR_NEXT_RELEASES.md) | Future release roadmap |
+| [`FUTURE_RELEASE_ITEMS.md`](ops/FUTURE_RELEASE_ITEMS.md) | Future release roadmap |
 | [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Technical debt and cleanup checklist |
 | [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode multi-tenant setup |
 | [`REBUILD-NANOCODE-WORKER.md`](ops/REBUILD-NANOCODE-WORKER.md) | Nanocode worker rebuild guide |
