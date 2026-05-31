@@ -1,10 +1,10 @@
 # Release Notes for LunarWing v1.0.8
 
-**Release Date:** Pending
+**Release Date:** 2026-05-31
 
 ## Overview
 
-LunarWing v1.0.8 is a feature release. It introduces the reflex compiler for LLM-free fast-path execution of recurring prompts, two new external worker containers (Pebble and Codex), supervised mode for human-gated tool execution, XEP-0363 HTTP file upload support for XMPP, response suppression with proper future cancellation, and a comprehensive documentation overhaul renaming IronClaw references to LunarWing throughout.
+LunarWing v1.0.8 is a major multi-feature release. It introduces the reflex compiler for LLM-free fast-path execution of recurring prompts, two new external worker containers (Pebble and a revamped Codex), experimental supervised mode for human-gated tool execution (disabled by default), XEP-0363 HTTP file upload support for XMPP, response suppression with proper future cancellation, and a comprehensive documentation overhaul renaming IronClaw references to LunarWing throughout. Some of the large features planned for this release have been postponed to 1.1.0 in accordance with our release cadence. Additionally, new development and planning of additional features which will drastically improve overall quality of life have begun.
 
 ## New Features
 
@@ -123,9 +123,7 @@ Comprehensive documentation reorg renaming IronClaw references to LunarWing acro
 
 ## Known Issues
 
-- **XMPP XEP-0363**: file upload is implemented but not yet fully tested end-to-end in a production environment
 - **Reflex compiler**: first iteration — semantic routing requires a configured embedding provider; long-term pattern stability needs extended testing
-- **OMEMO MUC fallback spam**: still present from v1.0.7 (posting in encrypted MUC triggers fallback notices in 1:1 chat)
 - **Rare processing loop stall**: single occurrence observed in v1.0.7; not yet reproduced
 
 ## Upgrade Notes
@@ -140,11 +138,12 @@ Comprehensive documentation reorg renaming IronClaw references to LunarWing acro
 | Feature | Target |
 |---------|--------|
 | Lunartica/Multica bridge WASM tool | v1.1.0+ |
-| LunarVoice (audio input/output) | v1.1.0+ |
+| LunarVoice (2-way audio input/output) | v1.1.0+ |
 | Character Lorebooks / profile enhancements | v1.1.0+ |
 | Proprietary channel removal (Discord, Slack, Telegram sources) | v1.1.0+ |
 | XMPP OMEMO MUC fallback fix | v1.0.9 |
 | Server-side WebSocket keepalive | v1.0.9 |
+| New suite of planned features with concepts adopted from Hermes Agent which will be announced and documented at a later date | v1.1.2+ |
 
 ## Testing
 
