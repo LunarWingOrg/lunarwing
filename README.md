@@ -25,7 +25,7 @@ The LunarWing project strictly maintains the AGPLv3 license on the core project 
 LunarWing adds real privacy-respecting tools and channels, with full secret support, right out of the box:
 
 ### Channels & Communication
-* **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group)
+* **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group), with XEP-0363 HTTP file upload support
 * **Weechat** -- WASM channel allowing the agent to use Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client
 * **Enjin** -- optional weechat plugin to enable E2E for normal IRC
 * **DarkIRC** -- DarkIRC WASM channel, p2p e2e protocol from DarkFi
@@ -39,6 +39,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 ### Worker Containers
 * **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4lunarwing/`)
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
+* **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
 * **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
 * **Re worked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
@@ -50,6 +51,9 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
 * TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
 * Support for embedded memory search models
+* Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
+* Supervised mode (`--supervised`) for human-gated tool execution — all tool actions require explicit approval regardless of tier
+* Response suppression and future cancellation with soft timeout and secondary hard-kill mechanism
 
 ### Development & Testing
 * Automated test suite with trace-replay E2E testing (no real LLM required)
