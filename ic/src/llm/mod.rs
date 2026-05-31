@@ -178,9 +178,13 @@ fn create_registry_provider(
     }
 
     match config.protocol {
-        ProviderProtocol::OpenAiCompletions => create_openai_compat_from_registry(config),
-        ProviderProtocol::Anthropic => create_anthropic_from_registry(config),
-        ProviderProtocol::Ollama => create_ollama_from_registry(config),
+        ProviderProtocol::OpenAiCompletions => {
+            create_openai_compat_from_registry(config, request_timeout_secs)
+        }
+        ProviderProtocol::Anthropic => {
+            create_anthropic_from_registry(config, request_timeout_secs)
+        }
+        ProviderProtocol::Ollama => create_ollama_from_registry(config, request_timeout_secs),
         ProviderProtocol::GithubCopilot => {
             let provider =
                 github_copilot::GithubCopilotProvider::new(config, request_timeout_secs)?;
@@ -246,6 +250,7 @@ async fn create_bedrock_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvid
 
 fn create_openai_compat_from_registry(
     config: &RegistryProviderConfig,
+    request_timeout_secs: u64,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
     use rig::providers::openai;
 
@@ -282,7 +287,17 @@ fn create_openai_compat_from_registry(
             "no-key".to_string()
         });
 
-    let mut builder = openai::Client::builder().api_key(&api_key);
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(request_timeout_secs))
+        .build()
+        .map_err(|e| LlmError::RequestFailed {
+            provider: config.provider_id.clone(),
+            reason: format!("Failed to create HTTP client: {e}"),
+        })?;
+
+    let mut builder = openai::Client::builder()
+        .api_key(&api_key)
+        .http_client(http_client);
     if !config.base_url.is_empty() {
         builder = builder.base_url(&config.base_url);
     }
@@ -290,14 +305,11 @@ fn create_openai_compat_from_registry(
         builder = builder.http_headers(extra_headers);
     }
 
-    let client: openai::Client = builder.build().map_err(|e| LlmError::RequestFailed {
+    let client = builder.build().map_err(|e| LlmError::RequestFailed {
         provider: config.provider_id.clone(),
         reason: format!("Failed to create OpenAI-compatible client: {e}"),
     })?;
 
-    // Use CompletionsClient (Chat Completions API) instead of the default
-    // Client (Responses API). The Responses API path in rig-core handles
-    // tool results differently, which breaks IronClaw's tool call flow.
     let client = client.completions_api();
     let model = client.completion_model(&config.model);
 
@@ -305,6 +317,7 @@ fn create_openai_compat_from_registry(
         provider = %config.provider_id,
         model = %config.model,
         base_url = %config.base_url,
+        timeout_secs = request_timeout_secs,
         "Using OpenAI-compatible provider"
     );
 
@@ -315,6 +328,7 @@ fn create_openai_compat_from_registry(
 
 fn create_anthropic_from_registry(
     config: &RegistryProviderConfig,
+    request_timeout_secs: u64,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
     // Route to OAuth provider when an OAuth token is present and no real API
     // key was provided. When both are set, the API key takes priority (standard
@@ -345,15 +359,22 @@ fn create_anthropic_from_registry(
             provider: config.provider_id.clone(),
         })?;
 
-    let client: anthropic::Client = if config.base_url.is_empty() {
-        anthropic::Client::new(&api_key)
-    } else {
-        anthropic::Client::builder()
-            .api_key(&api_key)
-            .base_url(&config.base_url)
-            .build()
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(request_timeout_secs))
+        .build()
+        .map_err(|e| LlmError::RequestFailed {
+            provider: config.provider_id.clone(),
+            reason: format!("Failed to create HTTP client: {e}"),
+        })?;
+
+    let mut builder = anthropic::Client::builder()
+        .api_key(&api_key)
+        .http_client(http_client);
+    if !config.base_url.is_empty() {
+        builder = builder.base_url(&config.base_url);
     }
-    .map_err(|e| LlmError::RequestFailed {
+
+    let client = builder.build().map_err(|e| LlmError::RequestFailed {
         provider: config.provider_id.clone(),
         reason: format!("Failed to create Anthropic client: {e}"),
     })?;
@@ -374,6 +395,7 @@ fn create_anthropic_from_registry(
         provider = %config.provider_id,
         model = %config.model,
         base_url = if config.base_url.is_empty() { "default" } else { &config.base_url },
+        timeout_secs = request_timeout_secs,
         "Using Anthropic provider"
     );
 
@@ -386,13 +408,23 @@ fn create_anthropic_from_registry(
 
 fn create_ollama_from_registry(
     config: &RegistryProviderConfig,
+    request_timeout_secs: u64,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
     use rig::client::Nothing;
     use rig::providers::ollama;
 
-    let client: ollama::Client = ollama::Client::builder()
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(request_timeout_secs))
+        .build()
+        .map_err(|e| LlmError::RequestFailed {
+            provider: config.provider_id.clone(),
+            reason: format!("Failed to create HTTP client: {e}"),
+        })?;
+
+    let client = ollama::Client::builder()
         .base_url(&config.base_url)
         .api_key(Nothing)
+        .http_client(http_client)
         .build()
         .map_err(|e| LlmError::RequestFailed {
             provider: config.provider_id.clone(),
@@ -405,6 +437,7 @@ fn create_ollama_from_registry(
         provider = %config.provider_id,
         model = %config.model,
         base_url = %config.base_url,
+        timeout_secs = request_timeout_secs,
         "Using Ollama provider"
     );
 
