@@ -290,3 +290,9 @@ LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 - Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
 - Release notes: see [docs/releases/](docs/releases/)
 - REPLv2 server and client: see [docs/internal/REPLv2_Client_and_Server.md](docs/internal/REPLv2_Client_and_Server.md)
+
+## Community
+
+### Interested in development or otherwise general discussion of LunarWing?
+
+#### See: COMMUNITY.md for more information
