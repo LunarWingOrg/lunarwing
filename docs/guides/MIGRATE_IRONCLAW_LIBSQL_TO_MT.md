@@ -326,6 +326,7 @@ Or use `SET session_replication_role = 'replica'` (shown in Step 5) to skip cons
 ## Tips
 
 * You may use ic/scripts/export-libsql.sh to help export your libsql ironclaw database to csv
+* Additionally, you may find the import-psql and reimport-fix script to also be helpful
 
 ## Rollback
 
