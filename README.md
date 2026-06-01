@@ -2,7 +2,28 @@
 
 ## Claws are overrated. So, grow your wings and fly...
 
-### Secure, Performant, Privacy-Focused AI Agent Software
+### Secure, privacy-focused AI agents you can self-host.
+
+LunarWing is an agentic software framework built in Rust. It connects AI agents to privacy-respecting communication layers — IRC, DarkIRC, XMPP with OMEMO, and more — with real secret management baked in from the start.
+
+It's a hard fork of NearAI's IronClaw, diverging significantly since February 2026. LunarWing is not affiliated with NearAI.
+
+## Why LunarWing
+
+- **Self-hostable end to end** — runs entirely on your own infrastructure, no third-party dependencies required.
+- **Privacy-first channels** — DarkIRC, XMPP/OMEMO, and WeeChat relay support out of the box. No Slack, Discord, or Telegram — by design.
+- **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
+- **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
+- **Self-healing infrastructure** — advanced healthchecks and automatic recovery for channel bridges, the daemon itself, and scheduled routines.
+- **TensorZero integration** — HTTP proxy with optimized tool_choice routing for local and remote model providers.
+- **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
+
+## Quick Links
+
+- Website: [lunarwing.org](https://lunarwing.org)
+- Source: [github.com/LunarWingOrg/lunarwing](https://github.com/LunarWingOrg/lunarwing)
+- IRC: `#lunarwing` on [irc.libera.chat](https://web.libera.chat/?channel=#lunarwing) (port 6697, TLS)
+- License: [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html)
 
 [LunarWing](https://lunarwing.org/)
 
