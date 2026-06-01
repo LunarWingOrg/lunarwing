@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use futures::StreamExt;
 use uuid::Uuid;
@@ -33,6 +34,11 @@ use crate::safety::SafetyLayer;
 use crate::skills::SkillRegistry;
 use crate::tools::ToolRegistry;
 use crate::workspace::Workspace;
+
+/// Grace period after soft timeout before the hard-kill timer aborts
+/// the orphaned task and force-resets thread state. Kept short to
+/// minimize the window where new messages queue indefinitely.
+const HARD_KILL_GRACE_SECS: u64 = 30;
 
 /// Static greeting persisted to DB and broadcast on first launch.
 ///
@@ -924,6 +930,7 @@ impl Agent {
             let suppressed_task = Arc::clone(&suppressed);
             let handle =
                 tokio::spawn(async move { agent.handle_message(&msg, &suppressed_task).await });
+            let abort_handle = handle.abort_handle();
 
             let soft_timeout = self.config.handle_message_timeout;
             match tokio::time::timeout(soft_timeout, handle).await {
@@ -967,14 +974,16 @@ impl Agent {
                         )
                         .await;
 
-                    // Hard-kill timer: if the task hasn't finished after another
-                    // full timeout period, abort it and force-reset thread state.
+                    // Hard-kill timer: after a short grace period, abort the
+                    // orphaned task and force-reset thread state + pending queue.
                     let hard_agent = Arc::clone(&self);
                     let hard_user = message.user_id.clone();
                     let hard_channel = message.channel.clone();
                     let hard_scope = message.conversation_scope().map(String::from);
                     tokio::spawn(async move {
-                        tokio::time::sleep(soft_timeout).await;
+                        tokio::time::sleep(Duration::from_secs(HARD_KILL_GRACE_SECS)).await;
+
+                        abort_handle.abort();
 
                         let (session, thread_id) = hard_agent
                             .session_manager
@@ -982,14 +991,14 @@ impl Agent {
                             .await;
                         let mut sess = session.lock().await;
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
-                            let pre_state = thread.state.clone();
+                            let pre_state = thread.state;
                             if thread.state == ThreadState::Processing {
-                                thread.fail_turn("handle_message hard timeout");
+                                thread.fail_turn_hard("handle_message hard timeout");
                                 tracing::warn!(
                                     thread_id = %thread_id,
                                     ?pre_state,
                                     new_state = ?thread.state,
-                                    "HARD TIMEOUT: reset stuck thread from Processing to Idle"
+                                    "HARD TIMEOUT: aborted task, reset thread, cleared pending messages"
                                 );
                             } else {
                                 tracing::debug!(
@@ -1460,13 +1469,26 @@ impl Agent {
                     );
 
                     // If response delivery was suppressed (soft timeout fired),
-                    // skip sending and stop draining — the user already received
-                    // a timeout message. The turn still completed via
-                    // complete_turn/fail_turn so state is clean.
+                    // discard the already-drained content and clear any remaining
+                    // queued messages. The user already received a timeout message;
+                    // processing stale queued messages alongside a future retry
+                    // would produce confusing context.
                     if suppressed.load(Ordering::SeqCst) {
+                        let cleared = {
+                            let mut sess = session.lock().await;
+                            if let Some(thread) = sess.threads.get_mut(&thread_id) {
+                                let remaining = thread.pending_messages.len();
+                                thread.pending_messages.clear();
+                                remaining
+                            } else {
+                                0
+                            }
+                        };
                         tracing::debug!(
                             thread_id = %thread_id,
-                            "Drain loop: response suppressed after soft timeout"
+                            discarded_drained_len = next_content.len(),
+                            cleared_remaining = cleared,
+                            "Drain loop: response suppressed, discarded queued messages"
                         );
                         break;
                     }

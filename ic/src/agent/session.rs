@@ -365,6 +365,15 @@ impl Thread {
         self.updated_at = Utc::now();
     }
 
+    /// Fail the current turn AND clear the pending message queue.
+    ///
+    /// Used by hard-timeout and abort paths where the in-flight task has
+    /// been abandoned and no drain loop will ever process queued messages.
+    pub fn fail_turn_hard(&mut self, error: impl Into<String>) {
+        self.fail_turn(error);
+        self.pending_messages.clear();
+    }
+
     /// Mark the thread as awaiting approval with pending request details.
     pub fn await_approval(&mut self, pending: PendingApproval) {
         self.state = ThreadState::AwaitingApproval;
@@ -1667,5 +1676,60 @@ mod tests {
         assert_eq!(thread.state, ThreadState::Processing);
         thread.complete_turn("success");
         assert_eq!(thread.state, ThreadState::Idle);
+    }
+
+    /// Regression: hard timeout must clear pending_messages to prevent
+    /// orphaned queued messages from leaking into future turns.
+    #[test]
+    fn test_fail_turn_hard_clears_pending_messages() {
+        let mut thread = Thread::new(Uuid::new_v4());
+
+        thread.start_turn("slow request");
+        assert_eq!(thread.state, ThreadState::Processing);
+
+        thread.queue_message("followup 1".into());
+        thread.queue_message("followup 2".into());
+        assert_eq!(thread.pending_messages.len(), 2);
+
+        thread.fail_turn_hard("handle_message hard timeout");
+        assert_eq!(thread.state, ThreadState::Idle);
+        assert!(thread.pending_messages.is_empty());
+
+        let turn = thread.turns.last().unwrap();
+        assert_eq!(turn.state, TurnState::Failed);
+
+        thread.start_turn("retry");
+        assert_eq!(thread.state, ThreadState::Processing);
+        thread.complete_turn("success");
+        assert_eq!(thread.state, ThreadState::Idle);
+    }
+
+    /// Normal fail_turn preserves pending_messages for the requeue_drained
+    /// error-recovery path.
+    #[test]
+    fn test_fail_turn_preserves_pending_messages() {
+        let mut thread = Thread::new(Uuid::new_v4());
+
+        thread.start_turn("request");
+        thread.queue_message("queued msg".into());
+        assert_eq!(thread.pending_messages.len(), 1);
+
+        thread.fail_turn("transient error");
+        assert_eq!(thread.state, ThreadState::Idle);
+        assert_eq!(thread.pending_messages.len(), 1);
+
+        let merged = thread.drain_pending_messages().unwrap();
+        assert_eq!(merged, "queued msg");
+    }
+
+    /// fail_turn_hard on an empty thread is a safe no-op.
+    #[test]
+    fn test_fail_turn_hard_on_empty_thread() {
+        let mut thread = Thread::new(Uuid::new_v4());
+
+        thread.fail_turn_hard("phantom error");
+        assert_eq!(thread.state, ThreadState::Idle);
+        assert!(thread.turns.is_empty());
+        assert!(thread.pending_messages.is_empty());
     }
 }
