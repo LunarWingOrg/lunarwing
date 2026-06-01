@@ -129,6 +129,8 @@ The circuit breaker wraps the entire provider chain. When open, it immediately r
 
 Configure via `NearAiConfig.max_retries` (env: `NEARAI_MAX_RETRIES`; default: 3). Set to 0 to disable.
 
+**Empty-response retry (reasoning.rs):** A separate retry mechanism in `Reasoning::respond_with_tools()` handles the case where the LLM returns a valid HTTP response but the content cleans to empty (e.g. reasoning models returning only `<think>` tags). This retries up to `MAX_EMPTY_RESPONSE_RETRIES` (default 1) before returning the "I'm not sure how to respond to that." fallback. It is independent of `RetryProvider` — `RetryProvider` handles transport-level errors, while this handles content-level cleaning artifacts.
+
 ## LlmProvider Trait
 
 The full trait (all methods must be implemented or rely on defaults):
@@ -217,6 +219,7 @@ Raw provider
 - `TokenUsage` — input/output token counts
 - `SILENT_REPLY_TOKEN` (`"NO_REPLY"`) and `is_silent_reply()` — used by the dispatcher to suppress empty responses in group chats
 - Thinking-tag stripping — regex-based removal of `<thinking>`, `<reflection>`, `<scratchpad>`, `<|think|>`, `<final>`, etc. from model responses before returning to the user
+- Empty-response retry — when `clean_response` strips all content (e.g. reasoning models returning only `<think>` tags), `respond_with_tools` retries the LLM call up to `MAX_EMPTY_RESPONSE_RETRIES` times (default 1) before falling back to a generic message. Original content is logged at `warn` level for diagnosis. This is separate from `RetryProvider` (which handles transport/rate-limit errors).
 
 ## costs.rs Details
 

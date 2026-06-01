@@ -1,0 +1,2622 @@
+# TensorZero Gateway Configuration
+# Last updated on May 31th 2026 20:54
+# Latest Change: Added function kageho
+# Special thanks to Sweetiebot, Volta, and Baud
+
+[gateway]
+bind_address = "0.0.0.0:3000"
+global_outbound_http_timeout_ms = 550000
+
+# ############################################################################
+#                              MODELS
+# ############################################################################
+
+[models.hermes3_70b_nanogpt]
+routing = ["nanogpt"]
+[models.hermes3_70b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.hermes3_70b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.hermes3_70b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "nousresearch/hermes-3-llama-3.1-70b"
+type = "openai"
+
+[models.llama33_abliterated_nanogpt]
+routing = ["nanogpt"]
+[models.llama33_abliterated_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.llama33_abliterated_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.llama33_abliterated_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "huihui-ai/Llama-3.3-70B-Instruct-abliterated"
+type = "openai"
+
+[models.ds_r1_distill_abl70b_nanogpt]
+routing = ["nanogpt"]
+[models.ds_r1_distill_abl70b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.ds_r1_distill_abl70b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.ds_r1_distill_abl70b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "huihui-ai/DeepSeek-R1-Distill-Llama-70B-abliterated"
+type = "openai"
+
+[models.dolphin_2_9_2_qwen72b_nanogpt]
+routing = ["nanogpt"]
+[models.dolphin_2_9_2_qwen72b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.dolphin_2_9_2_qwen72b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.dolphin_2_9_2_qwen72b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+type = "openai"
+
+[models.qwen35_27b_omega_derestricted_nanogpt]
+routing = ["nanogpt"]
+[models.qwen35_27b_omega_derestricted_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwen35_27b_omega_derestricted_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen35_27b_omega_derestricted_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "Qwen/Qwen3.5-27B-Omega-Evolution-v2.2-Derestricted"
+type = "openai"
+
+[models.gemma4_31b_fabled_nanogpt]
+routing = ["nanogpt"]
+[models.gemma4_31b_fabled_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gemma4_31b_fabled_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.gemma4_31b_fabled_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "gemma-4-31B-Fabled"
+type = "openai"
+
+[models.gemma4_31b_meromero_nanogpt]
+routing = ["nanogpt"]
+[models.gemma4_31b_meromero_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gemma4_31b_meromero_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.gemma4_31b_meromero_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "gemma-4-31B-MeroMero"
+type = "openai"
+
+[models.glm51_tee_chutes]
+routing = ["chutes"]
+[models.glm51_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.glm51_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.glm51_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "zai-org/GLM-5.1-TEE"
+type = "openai"
+
+[models.deepseek_v32_tee_chutes]
+routing = ["chutes"]
+[models.deepseek_v32_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.deepseek_v32_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.deepseek_v32_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "deepseek-ai/DeepSeek-V3.2-TEE"
+type = "openai"
+
+[models.kimi_k25_tee_chutes]
+routing = ["chutes"]
+[models.kimi_k25_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.kimi_k25_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.kimi_k25_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "moonshotai/Kimi-K2.5-TEE"
+type = "openai"
+
+# ============================================================================
+# NEW Chutes TEE models (added May 27, 2026)
+# ============================================================================
+
+[models.minimax_m25_tee_chutes]
+routing = ["chutes"]
+[models.minimax_m25_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.minimax_m25_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.minimax_m25_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "MiniMaxAI/MiniMax-M2.5-TEE"
+type = "openai"
+
+[models.qwen36_27b_tee_chutes]
+routing = ["chutes"]
+[models.qwen36_27b_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.qwen36_27b_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen36_27b_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "Qwen/Qwen3.6-27B-TEE"
+type = "openai"
+
+[models.kimi_k26_tee_chutes]
+routing = ["chutes"]
+[models.kimi_k26_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.kimi_k26_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.kimi_k26_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "moonshotai/Kimi-K2.6-TEE"
+type = "openai"
+
+# ============================================================================
+# DeepSeek / DS
+# ============================================================================
+
+[models.ds_native]
+routing = ["deepseek"]
+
+[models.ds_native.timeouts.streaming]
+ttft_ms = 7000
+total_ms = 550000
+
+[models.ds_native.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_native.providers.deepseek]
+api_base = "https://api.deepseek.com/v1/"
+api_key_location = "env::DEEPSEEK_API_KEY"
+model_name = "deepseek-chat"
+type = "openai"
+
+[models.ds_v4_flash_deepseek]
+routing = ["deepseek"]
+
+[models.ds_v4_flash_deepseek.timeouts.streaming]
+ttft_ms = 7000
+total_ms = 550000
+
+[models.ds_v4_flash_deepseek.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_v4_flash_deepseek.providers.deepseek]
+api_base = "https://api.deepseek.com/v1/"
+api_key_location = "env::DEEPSEEK_API_KEY"
+model_name = "deepseek-v4-flash"
+type = "openai"
+
+[models.ds4_deepseek]
+routing = ["deepseek"]
+
+[models.ds4_deepseek.timeouts.streaming]
+ttft_ms = 7000
+total_ms = 550000
+
+[models.ds4_deepseek.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds4_deepseek.providers.deepseek]
+api_base = "https://api.deepseek.com/v1/"
+api_key_location = "env::DEEPSEEK_API_KEY"
+model_name = "deepseek-v4-pro"
+type = "openai"
+
+[models.ds_v4_flash_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds_v4_flash_nanogpt.timeouts.streaming]
+ttft_ms = 19000
+total_ms = 550000
+
+[models.ds_v4_flash_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_v4_flash_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-v4-flash"
+type = "openai"
+
+[models.ds_v4_pro_cheaper_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds_v4_pro_cheaper_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds_v4_pro_cheaper_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_v4_pro_cheaper_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-v4-pro-cheaper"
+type = "openai"
+
+[models.ds_v4_pro_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds_v4_pro_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds_v4_pro_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_v4_pro_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-v4-pro"
+type = "openai"
+
+[models.ds_v4_pro_nanogpt_tee]
+routing = ["nanogpt"]
+
+[models.ds_v4_pro_nanogpt_tee.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds_v4_pro_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_v4_pro_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/deepseek-v4-pro"
+type = "openai"
+
+[models.ds32_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds32_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 29000
+
+[models.ds32_nanogpt.timeouts.non_streaming]
+total_ms = 35000
+
+[models.ds32_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-v3.2"
+type = "openai"
+
+[models.ds32_speciale_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds32_speciale_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds32_speciale_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds32_speciale_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-v3.2-speciale"
+type = "openai"
+
+[models.ds_latest_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds_latest_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.ds_latest_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds_latest_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "deepseek/deepseek-latest"
+type = "openai"
+
+[models.ds31_nex_n1_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds31_nex_n1_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds31_nex_n1_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds31_nex_n1_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "nex-agi/deepseek-v3.1-nex-n1"
+type = "openai"
+
+[models.ds32_nanogpt_tee]
+routing = ["nanogpt"]
+
+[models.ds32_nanogpt_tee.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds32_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds32_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/deepseek-v3.2"
+type = "openai"
+
+# ============================================================================
+# Qwen
+# ============================================================================
+
+[models.qwen122b_nearai]
+routing = ["nearai"]
+
+[models.qwen122b_nearai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 90000
+
+[models.qwen122b_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.qwen122b_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "Qwen/Qwen3.5-122B-A10B"
+type = "openai"
+
+[models.qwen235b_chutes_tee]
+routing = ["chutes"]
+
+[models.qwen235b_chutes_tee.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.qwen235b_chutes_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen235b_chutes_tee.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+type = "openai"
+
+[models.qwen235b_nanogpt_tee]
+routing = ["nanogpt"]
+
+[models.qwen235b_nanogpt_tee.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.qwen235b_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen235b_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+type = "openai"
+
+[models.qwen35_27b_earica_derestricted_nanogpt]
+routing = ["nanogpt"]
+
+[models.qwen35_27b_earica_derestricted_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.qwen35_27b_earica_derestricted_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen35_27b_earica_derestricted_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "Qwen/Qwen3.5-27B-earica-Derestricted"
+type = "openai"
+
+[models.qwen35_27b_marvin_derestricted_nanogpt]
+routing = ["nanogpt"]
+
+[models.qwen35_27b_marvin_derestricted_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.qwen35_27b_marvin_derestricted_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen35_27b_marvin_derestricted_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "Qwen/Qwen3.5-27B-Marvin-DPO-V2-Derestricted"
+type = "openai"
+
+[models.qwen397b_chutes_tee]
+routing = ["chutes"]
+
+[models.qwen397b_chutes_tee.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.qwen397b_chutes_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen397b_chutes_tee.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "Qwen/Qwen3.5-397B-A17B-TEE"
+type = "openai"
+
+[models.qwen397b_nanogpt]
+routing = ["nanogpt"]
+
+[models.qwen397b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.qwen397b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen397b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "qwen/qwen3.5-397b-a17b"
+type = "openai"
+
+[models.qwen_coder_next_chutes_tee]
+routing = ["chutes"]
+
+[models.qwen_coder_next_chutes_tee.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.qwen_coder_next_chutes_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen_coder_next_chutes_tee.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "Qwen/Qwen3-Coder-Next-TEE"
+type = "openai"
+
+[models.qwen_tee_redundant]
+routing = ["nanogpt_235b"]
+
+[models.qwen_tee_redundant.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.qwen_tee_redundant.timeouts.non_streaming]
+total_ms = 550000
+
+[models.qwen_tee_redundant.providers.nanogpt_235b]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE"
+type = "openai"
+
+# --- DeepSeek V3.2 Experimental on NanoGPT (non-TEE) -----------------------
+[models.ds32_exp_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds32_exp_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.ds32_exp_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.ds32_exp_nanogpt.providers.nanogpt]
+type = "openai"
+model_name = "deepseek-ai/deepseek-v3.2-exp"
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+
+# --- DeepSeek R1 Distill Qwen 32B Abliterated on NanoGPT (non-TEE) ---------
+[models.ds_r1_abl_nanogpt]
+routing = ["nanogpt"]
+
+[models.ds_r1_abl_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 120000
+
+[models.ds_r1_abl_nanogpt.timeouts.non_streaming]
+total_ms = 125000
+
+[models.ds_r1_abl_nanogpt.providers.nanogpt]
+type = "openai"
+model_name = "huihui-ai/DeepSeek-R1-Distill-Qwen-32B-abliterated"
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+
+# --- Llama 3.3 70B Instruct Abliterated on NanoGPT (non-TEE) ---------------
+[models.llama33_abl_nanogpt]
+routing = ["nanogpt"]
+
+[models.llama33_abl_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 120000
+
+[models.llama33_abl_nanogpt.timeouts.non_streaming]
+total_ms = 125000
+
+[models.llama33_abl_nanogpt.providers.nanogpt]
+type = "openai"
+model_name = "huihui-ai/Llama-3.3-70B-Instruct-abliterated"
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+
+# --- Llama 3 70B Instruct Abliterated v3.5 on NanoGPT (non-TEE) ------------
+[models.llama3_failspy_nanogpt]
+routing = ["nanogpt"]
+
+[models.llama3_failspy_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 120000
+
+[models.llama3_failspy_nanogpt.timeouts.non_streaming]
+total_ms = 125000
+
+[models.llama3_failspy_nanogpt.providers.nanogpt]
+type = "openai"
+model_name = "failspy/Meta-Llama-3-70B-Instruct-abliterated-v3.5"
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+
+# --- NeuralDaredevil 8B Abliterated on NanoGPT (non-TEE) -------------------
+[models.neuraldaredevil_nanogpt]
+routing = ["nanogpt"]
+
+[models.neuraldaredevil_nanogpt.timeouts.streaming]
+ttft_ms = 58000
+total_ms = 550000
+
+[models.neuraldaredevil_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.neuraldaredevil_nanogpt.providers.nanogpt]
+type = "openai"
+model_name = "mlabonne/NeuralDaredevil-8B-abliterated"
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+
+# ============================================================================
+# Kimi
+# ============================================================================
+
+[models.kimi_k25_chutes_tee]
+routing = ["chutes"]
+
+[models.kimi_k25_chutes_tee.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.kimi_k25_chutes_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.kimi_k25_chutes_tee.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "moonshotai/Kimi-K2.5-TEE"
+type = "openai"
+
+[models.kimi_k26_nanogpt]
+routing = ["nanogpt"]
+
+[models.kimi_k26_nanogpt.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.kimi_k26_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.kimi_k26_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "moonshotai/kimi-k2.6"
+type = "openai"
+
+[models.kimi_k26_nanogpt_tee]
+routing = ["nanogpt"]
+
+[models.kimi_k26_nanogpt_tee.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.kimi_k26_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.kimi_k26_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/kimi-k2.6"
+type = "openai"
+
+[models.kimi_latest_nanogpt]
+routing = ["nanogpt"]
+
+[models.kimi_latest_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.kimi_latest_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.kimi_latest_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "moonshotai/kimi-latest"
+type = "openai"
+
+# ============================================================================
+# GLM
+# ============================================================================
+
+[models.glm51_fp8_nearai]
+routing = ["nearai"]
+
+[models.glm51_fp8_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 89000
+
+[models.glm51_fp8_nearai.timeouts.non_streaming]
+total_ms = 499000
+
+[models.glm51_fp8_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "zai-org/GLM-5.1-FP8"
+type = "openai"
+
+[models.glm5_nanogpt_tee]
+routing = ["nanogpt"]
+
+[models.glm5_nanogpt_tee.timeouts.streaming]
+ttft_ms = 58000
+total_ms = 550000
+
+[models.glm5_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+
+[models.glm5_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/glm-5"
+type = "openai"
+
+[models.glm5_turbo_nanogpt]
+routing = ["nanogpt"]
+
+[models.glm5_turbo_nanogpt.timeouts.streaming]
+ttft_ms = 15000
+total_ms = 550000
+
+[models.glm5_turbo_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.glm5_turbo_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "z-ai/glm-5-turbo"
+type = "openai"
+
+[models.glm_nontee_redundant]
+routing = ["nanogpt_turbo", "nanogpt_zai"]
+
+[models.glm_nontee_redundant.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.glm_nontee_redundant.timeouts.non_streaming]
+total_ms = 550000
+
+[models.glm_nontee_redundant.providers.nanogpt_turbo]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "z-ai/glm-5-turbo"
+type = "openai"
+
+[models.glm_nontee_redundant.providers.nanogpt_zai]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "zai-org/glm-5"
+type = "openai"
+
+[models.glm_latest_nanogpt]
+routing = ["nanogpt"]
+[models.glm_latest_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.glm_latest_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.glm_latest_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "zai-org/glm-latest"
+type = "openai"
+
+[models.glm5v_turbo_thinking_nanogpt]
+routing = ["nanogpt"]
+[models.glm5v_turbo_thinking_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.glm5v_turbo_thinking_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.glm5v_turbo_thinking_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "z-ai/glm-5v-turbo:thinking"
+type = "openai"
+
+# ============================================================================
+# Claude
+# ============================================================================
+
+[models.claude_opus46_nearai]
+routing = ["nearai"]
+
+[models.claude_opus46_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.claude_opus46_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.claude_opus46_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "anthropic/claude-opus-4-6"
+type = "openai"
+
+[models.claude_opus47_nearai]
+routing = ["nearai"]
+
+[models.claude_opus47_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.claude_opus47_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.claude_opus47_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "anthropic/claude-opus-4-7"
+type = "openai"
+
+[models.claude_sonnet45_nearai]
+routing = ["nearai"]
+
+[models.claude_sonnet45_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.claude_sonnet45_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.claude_sonnet45_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "anthropic/claude-sonnet-4-5"
+type = "openai"
+
+[models.gpt51_codex_nanogpt]
+routing = ["nanogpt"]
+
+[models.gpt51_codex_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.gpt51_codex_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.gpt51_codex_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "openai/gpt-5.1-codex"
+type = "openai"
+
+[models.gpt52_nearai]
+routing = ["nearai"]
+
+[models.gpt52_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.gpt52_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.gpt52_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "openai/gpt-5.2"
+type = "openai"
+
+[models.gpt54_nearai]
+routing = ["nearai"]
+
+[models.gpt54_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.gpt54_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.gpt54_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "openai/gpt-5.4"
+type = "openai"
+
+[models.gptoss120b_nearai]
+routing = ["nearai"]
+
+[models.gptoss120b_nearai.timeouts.streaming]
+ttft_ms = 7000
+total_ms = 90000
+
+[models.gptoss120b_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.gptoss120b_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "openai/gpt-oss-120b"
+type = "openai"
+
+[models.qwen36_35b_a3b_fp8_nearai]
+routing = ["nearai"]
+
+[models.qwen36_35b_a3b_fp8_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.qwen36_35b_a3b_fp8_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.qwen36_35b_a3b_fp8_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "Qwen/Qwen3.6-35B-A3B-FP8"
+type = "openai"
+
+[models.qwen37_max_nearai]
+routing = ["nearai"]
+
+[models.qwen37_max_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.qwen37_max_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.qwen37_max_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "qwen/qwen3.7-max"
+type = "openai"
+
+[models.kimi_k26_nearai]
+routing = ["nearai"]
+
+[models.kimi_k26_nearai.timeouts.streaming]
+ttft_ms = 57000
+total_ms = 90000
+
+[models.kimi_k26_nearai.timeouts.non_streaming]
+total_ms = 299000
+
+[models.kimi_k26_nearai.providers.nearai]
+api_base = "https://cloud-api.near.ai/v1/"
+api_key_location = "env::NEAR_AI_API_KEY"
+model_name = "moonshotai/kimi-k2.6"
+type = "openai"
+
+# ============================================================================
+# Grok / xAI
+# ============================================================================
+
+[models.minimax_latest_nanogpt]
+routing = ["nanogpt"]
+
+[models.minimax_latest_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.minimax_latest_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.minimax_latest_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "minimax/minimax-latest"
+type = "openai"
+
+[models.minimax_m21_nanogpt]
+routing = ["nanogpt"]
+
+[models.minimax_m21_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.minimax_m21_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.minimax_m21_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "minimax/minimax-m2.1"
+type = "openai"
+
+[models.gemini3_flash_preview_nanogpt]
+routing = ["nanogpt"]
+
+[models.gemini3_flash_preview_nanogpt.timeouts.streaming]
+ttft_ms = 15000
+total_ms = 550000
+
+[models.gemini3_flash_preview_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.gemini3_flash_preview_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "google/gemini-3-flash-preview"
+type = "openai"
+
+[models.gemma4_26b_nanogpt]
+routing = ["nanogpt"]
+
+[models.gemma4_26b_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.gemma4_26b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.gemma4_26b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "google/gemma-4-26b-a4b-it"
+type = "openai"
+
+[models.mimo_v25_pro_nanogpt]
+routing = ["nanogpt"]
+
+[models.mimo_v25_pro_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.mimo_v25_pro_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.mimo_v25_pro_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "xiaomi/mimo-v2.5-pro"
+type = "openai"
+
+[models.nemotron3_nano_omni_nanogpt]
+routing = ["nanogpt"]
+
+[models.nemotron3_nano_omni_nanogpt.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+
+[models.nemotron3_nano_omni_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.nemotron3_nano_omni_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+type = "openai"
+
+# ============================================================================
+# Claw (Coding)
+# ============================================================================
+
+[models.claw_high_nanogpt]
+routing = ["nanogpt"]
+
+[models.claw_high_nanogpt.timeouts.streaming]
+ttft_ms = 75000
+total_ms = 540000
+
+[models.claw_high_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.claw_high_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "claw-high"
+type = "openai"
+
+[models.claw_medium_nanogpt]
+routing = ["nanogpt"]
+
+[models.claw_medium_nanogpt.timeouts.streaming]
+ttft_ms = 75000
+total_ms = 550000
+
+[models.claw_medium_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.claw_medium_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "claw-medium"
+type = "openai"
+
+# ============================================================================
+# Hermes / StepFun (NanoGPT)
+# ============================================================================
+
+[models.hermes_high_nanogpt]
+routing = ["nanogpt"]
+
+[models.hermes_high_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.hermes_high_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.hermes_high_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "hermes-high"
+type = "openai"
+
+[models.step36_nanogpt]
+routing = ["nanogpt"]
+
+[models.step36_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+
+[models.step36_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+
+[models.step36_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "stepfun-ai/step-3.6"
+type = "openai"
+
+# ============================================================================
+# Local / LAN
+# ============================================================================
+
+[models.local_lastresort]
+routing = ["laptop"]
+
+[models.local_lastresort.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 58000
+
+[models.local_lastresort.timeouts.non_streaming]
+total_ms = 59000
+
+[models.local_lastresort.providers.laptop]
+api_base = "http://192.168.1.213:5556/v1/"
+api_key_location = "none"
+model_name = "Qwen3.5-9B-Q6_K"
+type = "openai"
+
+[models.qwen_laptop]
+routing = ["ollama_laptop"]
+
+[models.qwen_laptop.timeouts.streaming]
+ttft_ms = 5000
+total_ms = 6000
+
+[models.qwen_laptop.timeouts.non_streaming]
+total_ms = 7000
+
+[models.qwen_laptop.providers.ollama_laptop]
+api_base = "http://192.168.1.213:5556/v1/"
+api_key_location = "none"
+model_name = "Qwen3.5-9B-Q6_K"
+type = "openai"
+
+[models.other_nontee_redundant]
+routing = ["nanogpt_kimi", "nanogpt_kimi_tee"]
+
+[models.other_nontee_redundant.timeouts.streaming]
+ttft_ms = 59000
+total_ms = 550000
+
+[models.other_nontee_redundant.timeouts.non_streaming]
+total_ms = 550000
+
+[models.other_nontee_redundant.providers.nanogpt_kimi]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "moonshotai/kimi-k2.6"
+type = "openai"
+
+[models.other_nontee_redundant.providers.nanogpt_kimi_tee]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/kimi-k2.6"
+type = "openai"
+
+# ============================================================================
+# New NanoGPT Models (added May 24, 2026)
+# ============================================================================
+
+[models.qwen37_max_nanogpt]
+routing = ["nanogpt"]
+[models.qwen37_max_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwen37_max_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen37_max_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "qwen3.7-max"
+type = "openai"
+
+[models.qwen36_35b_uncensored_nanogpt_tee]
+routing = ["nanogpt"]
+[models.qwen36_35b_uncensored_nanogpt_tee.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwen36_35b_uncensored_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen36_35b_uncensored_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/qwen3.6-35b-a3b-uncensored"
+type = "openai"
+
+[models.gemma4_26b_uncensored_nanogpt_tee]
+routing = ["nanogpt"]
+[models.gemma4_26b_uncensored_nanogpt_tee.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gemma4_26b_uncensored_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+[models.gemma4_26b_uncensored_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/gemma-4-26b-a4b-uncensored"
+type = "openai"
+
+[models.hermes4_405b_nanogpt]
+routing = ["nanogpt"]
+[models.hermes4_405b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.hermes4_405b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.hermes4_405b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "nousresearch/hermes-4-405b"
+type = "openai"
+
+[models.hermes4_70b_nanogpt]
+routing = ["nanogpt"]
+[models.hermes4_70b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.hermes4_70b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.hermes4_70b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "nousresearch/hermes-4-70b"
+type = "openai"
+
+[models.deephermes3_mistral_24b_nanogpt]
+routing = ["nanogpt"]
+[models.deephermes3_mistral_24b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.deephermes3_mistral_24b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.deephermes3_mistral_24b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "NousResearch/DeepHermes-3-Mistral-24B-Preview"
+type = "openai"
+
+[models.qwq_32b_nanogpt]
+routing = ["nanogpt"]
+[models.qwq_32b_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwq_32b_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.qwq_32b_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "qwq-32b"
+type = "openai"
+
+[models.qvq_max_nanogpt]
+routing = ["nanogpt"]
+[models.qvq_max_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qvq_max_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.qvq_max_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "qvq-max"
+type = "openai"
+
+# ============================================================================
+# NEW: haimaker / llmai / openai provider models (added May 27, 2026)
+# ============================================================================
+
+[models.claude_opus46_llmai]
+routing = ["llmai"]
+[models.claude_opus46_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.claude_opus46_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.claude_opus46_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "claude-opus-4.6"
+type = "openai"
+
+[models.claude_opus46_thinking_llmai]
+routing = ["llmai"]
+[models.claude_opus46_thinking_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.claude_opus46_thinking_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.claude_opus46_thinking_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "claude-opus-4.6-thinking"
+type = "openai"
+
+[models.claude_opus47_llmai]
+routing = ["llmai"]
+[models.claude_opus47_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.claude_opus47_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.claude_opus47_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "claude-opus-4.7"
+type = "openai"
+
+[models.claude_opus47_thinking_llmai]
+routing = ["llmai"]
+[models.claude_opus47_thinking_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.claude_opus47_thinking_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.claude_opus47_thinking_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "claude-opus-4.7-thinking"
+type = "openai"
+
+[models.gpt_54_llmai]
+routing = ["llmai"]
+[models.gpt_54_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gpt_54_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.gpt_54_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "gpt-5.4"
+type = "openai"
+
+[models.gpt_54_openai]
+routing = ["openai"]
+[models.gpt_54_openai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gpt_54_openai.timeouts.non_streaming]
+total_ms = 550000
+[models.gpt_54_openai.providers.openai]
+api_base = "https://api.openai.com/v1/"
+api_key_location = "env::OPENAI_API_KEY"
+model_name = "gpt-5.4"
+type = "openai"
+
+[models.claude_opus46_haimaker]
+routing = ["haimaker"]
+[models.claude_opus46_haimaker.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.claude_opus46_haimaker.timeouts.non_streaming]
+total_ms = 550000
+[models.claude_opus46_haimaker.providers.haimaker]
+api_base = "https://api.haimaker.ai/v1/"
+api_key_location = "env::HAIMAKER_API_KEY"
+model_name = "anthropic/claude-opus-4-6"
+type = "openai"
+
+[models.gpt_54_haimaker]
+routing = ["haimaker"]
+[models.gpt_54_haimaker.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.gpt_54_haimaker.timeouts.non_streaming]
+total_ms = 550000
+[models.gpt_54_haimaker.providers.haimaker]
+api_base = "https://api.haimaker.ai/v1/"
+api_key_location = "env::HAIMAKER_API_KEY"
+model_name = "openai/gpt-5.4"
+type = "openai"
+
+# ============================================================================
+# NEW: additional llmai + nanogpt entrypoint models (added May 29, 2026)
+# Added to entrypoints of: coding, sweetiebot, baud_simple, hermes
+# ============================================================================
+
+[models.qwen36_plus_llmai]
+routing = ["llmai"]
+[models.qwen36_plus_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwen36_plus_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen36_plus_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "qwen3.6-plus"
+type = "openai"
+
+[models.ds_v4_pro_llmai]
+routing = ["llmai"]
+[models.ds_v4_pro_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.ds_v4_pro_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.ds_v4_pro_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "deepseek-v4-pro"
+type = "openai"
+
+[models.kimi_k26_llmai]
+routing = ["llmai"]
+[models.kimi_k26_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.kimi_k26_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.kimi_k26_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "kimi-k2.6"
+type = "openai"
+
+[models.minimax_m27_llmai]
+routing = ["llmai"]
+[models.minimax_m27_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.minimax_m27_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.minimax_m27_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "minimax-m2.7"
+type = "openai"
+
+[models.mimo_v25_pro_llmai]
+routing = ["llmai"]
+[models.mimo_v25_pro_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.mimo_v25_pro_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.mimo_v25_pro_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "mimo-v2.5-pro"
+type = "openai"
+
+[models.glm51_llmai]
+routing = ["llmai"]
+[models.glm51_llmai.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.glm51_llmai.timeouts.non_streaming]
+total_ms = 550000
+[models.glm51_llmai.providers.llmai]
+api_base = "https://api.llmai.dev/v1/"
+api_key_location = "env::LLMAI_API_KEY"
+model_name = "glm-5.1"
+type = "openai"
+
+[models.step37_flash_nanogpt]
+routing = ["nanogpt"]
+[models.step37_flash_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.step37_flash_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.step37_flash_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "stepfun/step-3.7-flash"
+type = "openai"
+
+[models.laguna_m1_nanogpt]
+routing = ["nanogpt"]
+[models.laguna_m1_nanogpt.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.laguna_m1_nanogpt.timeouts.non_streaming]
+total_ms = 550000
+[models.laguna_m1_nanogpt.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "poolside/laguna-m.1"
+type = "openai"
+
+# ============================================================================
+# NEW models for kageho function (added May 31, 2026)
+# ============================================================================
+
+[models.qwen35_122b_a10b_nanogpt_tee]
+routing = ["nanogpt"]
+[models.qwen35_122b_a10b_nanogpt_tee.timeouts.streaming]
+ttft_ms = 50000
+total_ms = 550000
+[models.qwen35_122b_a10b_nanogpt_tee.timeouts.non_streaming]
+total_ms = 550000
+[models.qwen35_122b_a10b_nanogpt_tee.providers.nanogpt]
+api_base = "https://nano-gpt.com/api/v1/"
+api_key_location = "env::NANOGPT_API_KEY"
+model_name = "TEE/qwen3.5-122b-a10b"
+type = "openai"
+
+[models.gemma4_31b_turbo_tee_chutes]
+routing = ["chutes"]
+[models.gemma4_31b_turbo_tee_chutes.timeouts.streaming]
+ttft_ms = 55000
+total_ms = 550000
+[models.gemma4_31b_turbo_tee_chutes.timeouts.non_streaming]
+total_ms = 550000
+[models.gemma4_31b_turbo_tee_chutes.providers.chutes]
+api_base = "https://llm.chutes.ai/v1/"
+api_key_location = "env::CHUTES_AI_API_KEY"
+model_name = "google/gemma-4-31B-turbo-TEE"
+type = "openai"
+
+# ############################################################################
+#                             FUNCTIONS
+# ############################################################################
+
+[functions.default_chat]
+type = "chat"
+
+[functions.default_chat.experimentation]
+type = "static_weights"
+candidate_variants = { ds31 = 0.90, claude_opus46_llmai = 0.02, gpt_54_llmai = 0.02, gpt_54_openai = 0.02, claude_opus46_haimaker = 0.02, gpt_54_haimaker = 0.02 }
+fallback_variants = ["other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+[functions.default_chat.variants.ds31]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.default_chat.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.default_chat.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.default_chat.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.default_chat.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.default_chat.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.default_chat.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.default_chat.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.default_chat.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.default_chat.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.summarization]
+type = "chat"
+
+[functions.summarization.experimentation]
+type = "static_weights"
+candidate_variants = { default = 0.90, claude_opus46_llmai = 0.02, gpt_54_llmai = 0.02, gpt_54_openai = 0.02, claude_opus46_haimaker = 0.02, gpt_54_haimaker = 0.02 }
+fallback_variants = ["fallback", "ds4_deepseek_fallback"]
+
+[functions.summarization.variants.default]
+type = "chat_completion"
+model = "glm5_turbo_nanogpt"
+
+[functions.summarization.variants.fallback]
+type = "chat_completion"
+model = "local_lastresort"
+
+[functions.summarization.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.summarization.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.summarization.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.summarization.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.summarization.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.summarization.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.document_qa]
+type = "chat"
+
+[functions.document_qa.experimentation]
+type = "static_weights"
+candidate_variants = { default = 0.90, claude_opus46_llmai = 0.02, gpt_54_llmai = 0.02, gpt_54_openai = 0.02, claude_opus46_haimaker = 0.02, gpt_54_haimaker = 0.02 }
+fallback_variants = ["fallback", "ds4_deepseek_fallback"]
+
+[functions.document_qa.variants.default]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.document_qa.variants.fallback]
+type = "chat_completion"
+model = "qwen397b_nanogpt"
+
+[functions.document_qa.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.document_qa.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.document_qa.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.document_qa.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.document_qa.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.document_qa.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.coding]
+type = "chat"
+
+# WEIGHT NOTE (May 27, 2026):
+# Existing candidates scaled by 0.85 to accommodate 6 new models at 0.025 each.
+# Total = 0.85 + 0.15 = 1.0
+[functions.coding.experimentation]
+type = "static_weights"
+candidate_variants = { claw_high_ng = 0.018088, claw_medium_ng = 0.011288, kimi_latest_ng = 0.013296, minimax_latest_ng = 0.013296, ds_latest_ng = 0.199296, kimi_k25_tee = 0.083296, qwen397b_tee = 0.082688, minimax_m25_tee = 0.016188, qwen36_27b_tee = 0.016188, ds_v32_tee_chutes = 0.016188, kimi_k26_tee_chutes = 0.016188, claude_opus46_llmai = 0.089, claude_opus46_thinking_llmai = 0.079, claude_opus47_llmai = 0.019, claude_opus47_thinking_llmai = 0.029, gpt_54_llmai = 0.009, hermes_high_nanogpt = 0.039, qwen36_plus_llmai = 0.01, ds_v4_pro_llmai = 0.18, kimi_k26_llmai = 0.01, minimax_m27_llmai = 0.01, mimo_v25_pro_llmai = 0.01, glm51_llmai = 0.01, step37_flash_nanogpt = 0.01, laguna_m1_nanogpt = 0.01 }
+fallback_variants = ["qwen235b_nanogpt", "ds32_ng", "gemma4_26b_ng", "ds4_deepseek_fallback"]
+
+# Entrypoint variants added May 29, 2026
+[functions.coding.variants.qwen36_plus_llmai]
+type = "chat_completion"
+model = "qwen36_plus_llmai"
+[functions.coding.variants.ds_v4_pro_llmai]
+type = "chat_completion"
+model = "ds_v4_pro_llmai"
+[functions.coding.variants.kimi_k26_llmai]
+type = "chat_completion"
+model = "kimi_k26_llmai"
+[functions.coding.variants.minimax_m27_llmai]
+type = "chat_completion"
+model = "minimax_m27_llmai"
+[functions.coding.variants.mimo_v25_pro_llmai]
+type = "chat_completion"
+model = "mimo_v25_pro_llmai"
+[functions.coding.variants.glm51_llmai]
+type = "chat_completion"
+model = "glm51_llmai"
+[functions.coding.variants.step37_flash_nanogpt]
+type = "chat_completion"
+model = "step37_flash_nanogpt"
+[functions.coding.variants.laguna_m1_nanogpt]
+type = "chat_completion"
+model = "laguna_m1_nanogpt"
+
+
+[functions.coding.variants.claw_high_ng]
+type = "chat_completion"
+model = "claw_high_nanogpt"
+
+[functions.coding.variants.claw_medium_ng]
+type = "chat_completion"
+model = "claw_medium_nanogpt"
+
+[functions.coding.variants.kimi_latest_ng]
+type = "chat_completion"
+model = "kimi_latest_nanogpt"
+
+[functions.coding.variants.minimax_latest_ng]
+type = "chat_completion"
+model = "minimax_latest_nanogpt"
+
+[functions.coding.variants.ds_latest_ng]
+type = "chat_completion"
+model = "ds_latest_nanogpt"
+
+[functions.coding.variants.kimi_k25_tee]
+type = "chat_completion"
+model = "kimi_k25_chutes_tee"
+
+[functions.coding.variants.qwen397b_tee]
+type = "chat_completion"
+model = "qwen397b_chutes_tee"
+
+[functions.coding.variants.minimax_m25_tee]
+type = "chat_completion"
+model = "minimax_m25_tee_chutes"
+
+[functions.coding.variants.qwen36_27b_tee]
+type = "chat_completion"
+model = "qwen36_27b_tee_chutes"
+
+[functions.coding.variants.ds_v32_tee_chutes]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.coding.variants.kimi_k26_tee_chutes]
+type = "chat_completion"
+model = "kimi_k26_tee_chutes"
+
+# --- New models added May 27, 2026 ---
+[functions.coding.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.coding.variants.claude_opus46_thinking_llmai]
+type = "chat_completion"
+model = "claude_opus46_thinking_llmai"
+
+[functions.coding.variants.claude_opus47_llmai]
+type = "chat_completion"
+model = "claude_opus47_llmai"
+
+[functions.coding.variants.claude_opus47_thinking_llmai]
+type = "chat_completion"
+model = "claude_opus47_thinking_llmai"
+
+[functions.coding.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.coding.variants.hermes_high_nanogpt]
+type = "chat_completion"
+model = "hermes_high_nanogpt"
+
+# --- Fallbacks (unchanged) ---
+[functions.coding.variants.qwen235b_nanogpt]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.coding.variants.ds32_ng]
+type = "chat_completion"
+model = "ds32_nanogpt"
+
+[functions.coding.variants.gemma4_26b_ng]
+type = "chat_completion"
+model = "gemma4_26b_nanogpt"
+
+[functions.coding.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.codex]
+type = "chat"
+
+[functions.codex.experimentation]
+type = "static_weights"
+candidate_variants = { qwen_tee = 0.70, claude_opus46_llmai = 0.22, gpt_54_llmai = 0.02, gpt_54_openai = 0.02, claude_opus46_haimaker = 0.02, gpt_54_haimaker = 0.02 }
+fallback_variants = ["qwen235b_chutes", "qwen397b_chutes", "qwen_coder_next_chutes", "ds4_deepseek_fallback"]
+
+[functions.codex.variants.local_laptop]
+type = "chat_completion"
+model = "qwen_laptop"
+
+[functions.codex.variants.qwen_tee]
+type = "chat_completion"
+model = "qwen_tee_redundant"
+
+[functions.codex.variants.kimi_k25_tee]
+type = "chat_completion"
+model = "kimi_k25_chutes_tee"
+
+[functions.codex.variants.qwen397b_chutes]
+type = "chat_completion"
+model = "qwen397b_chutes_tee"
+
+[functions.codex.variants.qwen235b_chutes]
+type = "chat_completion"
+model = "qwen235b_chutes_tee"
+
+[functions.codex.variants.qwen_coder_next_chutes]
+type = "chat_completion"
+model = "qwen_coder_next_chutes_tee"
+
+[functions.codex.variants.glm_tee]
+type = "chat_completion"
+model = "glm5_nanogpt_tee"
+
+[functions.codex.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.codex.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.codex.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.codex.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.codex.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.codex.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.ironclaw]
+type = "chat"
+
+[functions.ironclaw.experimentation]
+type = "static_weights"
+candidate_variants = { glm51_fp8_nearai = 0.05, qwen36_35b_a3b_fp8_nearai = 0.50, qwen37_max_nearai = 0.30, gptoss120b_nearai = 0.07, kimi_k26_nearai = 0.05, claude_opus46_nearai = 0.03 }
+fallback_variants = ["qwen235b_nanogpt", "gemma4_26b_ng", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+[functions.ironclaw.variants.glm51_fp8_nearai]
+type = "chat_completion"
+model = "glm51_fp8_nearai"
+
+[functions.ironclaw.variants.qwen36_35b_a3b_fp8_nearai]
+type = "chat_completion"
+model = "qwen36_35b_a3b_fp8_nearai"
+
+[functions.ironclaw.variants.qwen37_max_nearai]
+type = "chat_completion"
+model = "qwen37_max_nearai"
+
+[functions.ironclaw.variants.gptoss120b_nearai]
+type = "chat_completion"
+model = "gptoss120b_nearai"
+
+[functions.ironclaw.variants.kimi_k26_nearai]
+type = "chat_completion"
+model = "kimi_k26_nearai"
+
+[functions.ironclaw.variants.claude_opus46_nearai]
+type = "chat_completion"
+model = "claude_opus46_nearai"
+
+[functions.ironclaw.variants.qwen235b_nanogpt]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.ironclaw.variants.gemma4_26b_ng]
+type = "chat_completion"
+model = "gemma4_26b_nanogpt"
+
+[functions.ironclaw.variants.local_laptop]
+type = "chat_completion"
+model = "qwen_laptop"
+
+[functions.ironclaw.variants.qwen_tee]
+type = "chat_completion"
+model = "qwen_tee_redundant"
+
+[functions.ironclaw.variants.kimi_k25_tee]
+type = "chat_completion"
+model = "kimi_k25_chutes_tee"
+
+[functions.ironclaw.variants.qwen397b_chutes]
+type = "chat_completion"
+model = "qwen397b_chutes_tee"
+
+[functions.ironclaw.variants.qwen235b_chutes]
+type = "chat_completion"
+model = "qwen235b_chutes_tee"
+
+[functions.ironclaw.variants.qwen_coder_next_chutes]
+type = "chat_completion"
+model = "qwen_coder_next_chutes_tee"
+
+[functions.ironclaw.variants.glm_tee]
+type = "chat_completion"
+model = "glm5_nanogpt_tee"
+
+[functions.ironclaw.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.ironclaw.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.lunarwing]
+type = "chat"
+
+[functions.lunarwing.experimentation]
+type = "static_weights"
+candidate_variants = { glm51_fp8_nearai = 0.19, qwen36_35b_a3b_fp8_nearai = 0.01, qwen37_max_nearai = 0.40, gptoss120b_nearai = 0.33, kimi_k26_nearai = 0.05, claude_opus46_nearai = 0.02 }
+fallback_variants = ["qwen235b_nanogpt", "gemma4_26b_ng", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+[functions.lunarwing.variants.glm51_fp8_nearai]
+type = "chat_completion"
+model = "glm51_fp8_nearai"
+
+[functions.lunarwing.variants.qwen36_35b_a3b_fp8_nearai]
+type = "chat_completion"
+model = "qwen36_35b_a3b_fp8_nearai"
+
+[functions.lunarwing.variants.qwen37_max_nearai]
+type = "chat_completion"
+model = "qwen37_max_nearai"
+
+[functions.lunarwing.variants.gptoss120b_nearai]
+type = "chat_completion"
+model = "gptoss120b_nearai"
+
+[functions.lunarwing.variants.kimi_k26_nearai]
+type = "chat_completion"
+model = "kimi_k26_nearai"
+
+[functions.lunarwing.variants.claude_opus46_nearai]
+type = "chat_completion"
+model = "claude_opus46_nearai"
+
+[functions.lunarwing.variants.qwen235b_nanogpt]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.lunarwing.variants.gemma4_26b_ng]
+type = "chat_completion"
+model = "gemma4_26b_nanogpt"
+
+[functions.lunarwing.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.lunarwing.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.kageho]
+type = "chat"
+
+# Based on lunarwing but with no nearai endpoints.
+# Entrypoints: qwen3.5-122b-a10b (nanogpt), qwen3.6-35b-a3b-uncensored (nanogpt),
+#              gemma-4-31B-turbo-TEE (chutes, 70% weight)
+# Added May 31, 2026
+
+[functions.kageho.experimentation]
+type = "static_weights"
+candidate_variants = { gemma4_31b_turbo_tee_entry = 0.70, qwen35_122b_a10b_tee_entry = 0.15, qwen36_35b_uncensored_tee_entry = 0.15 }
+fallback_variants = ["qwen235b_nanogpt", "gemma4_26b_ng", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+# Entrypoint variants
+[functions.kageho.variants.gemma4_31b_turbo_tee_entry]
+type = "chat_completion"
+model = "gemma4_31b_turbo_tee_chutes"
+
+[functions.kageho.variants.qwen35_122b_a10b_tee_entry]
+type = "chat_completion"
+model = "qwen35_122b_a10b_nanogpt_tee"
+
+[functions.kageho.variants.qwen36_35b_uncensored_tee_entry]
+type = "chat_completion"
+model = "qwen36_35b_uncensored_nanogpt_tee"
+
+# Fallbacks (non-nearai, carried over from lunarwing)
+[functions.kageho.variants.qwen235b_nanogpt]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.kageho.variants.gemma4_26b_ng]
+type = "chat_completion"
+model = "gemma4_26b_nanogpt"
+
+[functions.kageho.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.kageho.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.volta]
+type = "chat"
+
+# WEIGHT NOTE (May 27, 2026):
+# Added 4 new chutes TEE entry variants at 0.025 each (total 0.10).
+# Existing 7 candidates scaled by 0.9 to preserve their ratios.
+# Sum = 0.045+0.045+0.486+0.009+0.216+0.054+0.045 + 0.025*4 = 0.900 + 0.100 = 1.000
+[functions.volta.experimentation]
+type = "static_weights"
+candidate_variants = { ds31_nex_n1_ng_entry = 0.045, ds_v4_pro_tee_ng_entry = 0.045, ds32_ng_entry = 0.386, ds32_tee_ng_entry = 0.009, qwen37_max_ng_entry = 0.216, qwq_32b_ng_entry = 0.054, qvq_max_ng_entry = 0.045, minimax_m25_tee_entry = 0.025, qwen36_27b_tee_entry = 0.025, ds_v32_tee_chutes_entry = 0.025, kimi_k26_tee_chutes_entry = 0.125 }
+fallback_variants = ["glm51_tee_chutes", "deepseek_v32_tee_chutes", "kimi_k25_tee_chutes", "ds4_deepseek_fallback"]
+
+# Entry variants — DS models (ds31 prioritized)
+[functions.volta.variants.ds31_nex_n1_ng_entry]
+type = "chat_completion"
+model = "ds31_nex_n1_nanogpt"
+
+[functions.volta.variants.ds_v4_pro_tee_ng_entry]
+type = "chat_completion"
+model = "ds_v4_pro_nanogpt_tee"
+
+[functions.volta.variants.ds32_ng_entry]
+type = "chat_completion"
+model = "ds32_nanogpt"
+
+[functions.volta.variants.ds32_tee_ng_entry]
+type = "chat_completion"
+model = "ds32_nanogpt_tee"
+
+# Entry variants — Qwen models
+[functions.volta.variants.qwen37_max_ng_entry]
+type = "chat_completion"
+model = "qwen37_max_nanogpt"
+
+[functions.volta.variants.qwq_32b_ng_entry]
+type = "chat_completion"
+model = "qwq_32b_nanogpt"
+
+[functions.volta.variants.qvq_max_ng_entry]
+type = "chat_completion"
+model = "qvq_max_nanogpt"
+
+# Entry variants — NEW chutes TEE (May 27, 2026)
+[functions.volta.variants.minimax_m25_tee_entry]
+type = "chat_completion"
+model = "minimax_m25_tee_chutes"
+
+[functions.volta.variants.qwen36_27b_tee_entry]
+type = "chat_completion"
+model = "qwen36_27b_tee_chutes"
+
+[functions.volta.variants.ds_v32_tee_chutes_entry]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.volta.variants.kimi_k26_tee_chutes_entry]
+type = "chat_completion"
+model = "kimi_k26_tee_chutes"
+
+# Fallback layers
+[functions.volta.variants.glm51_tee_chutes]
+type = "chat_completion"
+model = "glm51_tee_chutes"
+
+[functions.volta.variants.deepseek_v32_tee_chutes]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.volta.variants.kimi_k25_tee_chutes]
+type = "chat_completion"
+model = "kimi_k25_tee_chutes"
+
+[functions.volta.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.baud]
+type = "chat"
+
+# WEIGHT NOTE (May 27, 2026):
+# Added 4 new chutes TEE entry variants at 0.025 each (total 0.10).
+# Existing 13 candidates scaled by 0.9 to preserve their ratios.
+# Sum = 0.324+0.162+0.081+0.081+0.0405+0.0405+0.0405+0.0405+0.018*5 + 0.025*4
+#     = 0.900 + 0.100 = 1.000
+[functions.baud.experimentation]
+type = "static_weights"
+candidate_variants = { ds_v4_pro_cheaper_ng_entry = 0.324, kimi_k26_ng_entry = 0.162, qwen235b_ng_tee_entry = 0.081, ds_v4_flash_ng_entry = 0.081, gpt51_codex_ng_entry = 0.0405, ds32_ng_entry = 0.0405, minimax_m21_ng_entry = 0.0405, qwen397b_ng_entry = 0.0405, claude_opus46_llmai = 0.018, gpt_54_llmai = 0.018, gpt_54_openai = 0.018, claude_opus46_haimaker = 0.018, gpt_54_haimaker = 0.018, minimax_m25_tee_entry = 0.025, qwen36_27b_tee_entry = 0.025, ds_v32_tee_chutes_entry = 0.025, kimi_k26_tee_chutes_entry = 0.025 }
+fallback_variants = ["kimi_k26_nanogpt", "kimi_k26_nanogpt_tee", "other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+[functions.baud.variants.ds_v4_pro_cheaper_ng_entry]
+type = "chat_completion"
+model = "ds_v4_pro_cheaper_nanogpt"
+
+[functions.baud.variants.kimi_k26_ng_entry]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.baud.variants.qwen235b_ng_tee_entry]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.baud.variants.ds_v4_flash_ng_entry]
+type = "chat_completion"
+model = "ds_v4_flash_nanogpt"
+
+[functions.baud.variants.gpt51_codex_ng_entry]
+type = "chat_completion"
+model = "gpt51_codex_nanogpt"
+
+[functions.baud.variants.ds32_ng_entry]
+type = "chat_completion"
+model = "ds32_nanogpt"
+
+[functions.baud.variants.minimax_m21_ng_entry]
+type = "chat_completion"
+model = "minimax_m21_nanogpt"
+
+[functions.baud.variants.qwen397b_ng_entry]
+type = "chat_completion"
+model = "qwen397b_nanogpt"
+
+# Entry variants — NEW chutes TEE (May 27, 2026)
+[functions.baud.variants.minimax_m25_tee_entry]
+type = "chat_completion"
+model = "minimax_m25_tee_chutes"
+
+[functions.baud.variants.qwen36_27b_tee_entry]
+type = "chat_completion"
+model = "qwen36_27b_tee_chutes"
+
+[functions.baud.variants.ds_v32_tee_chutes_entry]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.baud.variants.kimi_k26_tee_chutes_entry]
+type = "chat_completion"
+model = "kimi_k26_tee_chutes"
+
+# Fallbacks
+[functions.baud.variants.kimi_k26_nanogpt]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.baud.variants.kimi_k26_nanogpt_tee]
+type = "chat_completion"
+model = "kimi_k26_nanogpt_tee"
+
+[functions.baud.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.baud.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.baud.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.baud.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.baud.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.baud.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.baud.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.baud.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.baud.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.sweetiebot]
+type = "chat"
+
+# WEIGHT NOTE (May 27, 2026):
+# Added 4 new chutes TEE entry variants at 0.025 each (total 0.10).
+# Existing 12 candidates scaled by 0.9 to preserve their ratios.
+# Sum = 0.243+0.243+0.081+0.2187+0.0081+0.0081+0.0081+0.018*5 + 0.025*4
+#     = 0.900 + 0.100 = 1.000
+[functions.sweetiebot.experimentation]
+type = "static_weights"
+candidate_variants = { ds_v4_pro_cheaper_ng_entry = 0.14094, ds_v4_flash_ng_entry = 0.02494, gpt51_codex_ng_entry = 0.04698, kimi_k26_ng_entry = 0.026846, qwen235b_ng_tee_entry = 0.004698, ds32_speciale_ng_entry = 0.004698, gemini3_flash_preview_ng_entry = 0.004698, claude_opus46_llmai = 0.12644, gpt_54_llmai = 0.02204, gpt_54_openai = 0.01044, claude_opus46_haimaker = 0.00464, gpt_54_haimaker = 0.00464, minimax_m25_tee_entry = 0.0145, qwen36_27b_tee_entry = 0.0145, ds_v32_tee_chutes_entry = 0.0145, kimi_k26_tee_chutes_entry = 0.0145, qwen36_plus_llmai = 0.03, ds_v4_pro_llmai = 0.03, kimi_k26_llmai = 0.03, minimax_m27_llmai = 0.03, mimo_v25_pro_llmai = 0.03, glm51_llmai = 0.03, step37_flash_nanogpt = 0.03, laguna_m1_nanogpt = 0.03, claude_opus47_llmai = 0.19, claude_opus47_thinking_llmai = 0.09 }
+fallback_variants = ["kimi_k26_nanogpt", "kimi_k26_nanogpt_tee", "other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+# Entrypoint variants added May 29, 2026
+[functions.sweetiebot.variants.qwen36_plus_llmai]
+type = "chat_completion"
+model = "qwen36_plus_llmai"
+[functions.sweetiebot.variants.ds_v4_pro_llmai]
+type = "chat_completion"
+model = "ds_v4_pro_llmai"
+[functions.sweetiebot.variants.kimi_k26_llmai]
+type = "chat_completion"
+model = "kimi_k26_llmai"
+[functions.sweetiebot.variants.minimax_m27_llmai]
+type = "chat_completion"
+model = "minimax_m27_llmai"
+[functions.sweetiebot.variants.mimo_v25_pro_llmai]
+type = "chat_completion"
+model = "mimo_v25_pro_llmai"
+[functions.sweetiebot.variants.glm51_llmai]
+type = "chat_completion"
+model = "glm51_llmai"
+[functions.sweetiebot.variants.step37_flash_nanogpt]
+type = "chat_completion"
+model = "step37_flash_nanogpt"
+[functions.sweetiebot.variants.laguna_m1_nanogpt]
+type = "chat_completion"
+model = "laguna_m1_nanogpt"
+[functions.sweetiebot.variants.claude_opus47_llmai]
+type = "chat_completion"
+model = "claude_opus47_llmai"
+[functions.sweetiebot.variants.claude_opus47_thinking_llmai]
+type = "chat_completion"
+model = "claude_opus47_thinking_llmai"
+
+
+[functions.sweetiebot.variants.ds_v4_pro_cheaper_ng_entry]
+type = "chat_completion"
+model = "ds_v4_pro_cheaper_nanogpt"
+
+[functions.sweetiebot.variants.kimi_k26_ng_entry]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.sweetiebot.variants.qwen235b_ng_tee_entry]
+type = "chat_completion"
+model = "qwen235b_nanogpt_tee"
+
+[functions.sweetiebot.variants.ds_v4_flash_ng_entry]
+type = "chat_completion"
+model = "ds_v4_flash_nanogpt"
+
+[functions.sweetiebot.variants.ds32_speciale_ng_entry]
+type = "chat_completion"
+model = "ds32_speciale_nanogpt"
+
+[functions.sweetiebot.variants.ds32_ng_entry]
+type = "chat_completion"
+model = "ds32_nanogpt"
+
+[functions.sweetiebot.variants.minimax_m21_ng_entry]
+type = "chat_completion"
+model = "minimax_m21_nanogpt"
+
+[functions.sweetiebot.variants.gpt51_codex_ng_entry]
+type = "chat_completion"
+model = "gpt51_codex_nanogpt"
+
+[functions.sweetiebot.variants.gemini3_flash_preview_ng_entry]
+type = "chat_completion"
+model = "gemini3_flash_preview_nanogpt"
+
+# Entry variants — NEW chutes TEE (May 27, 2026)
+[functions.sweetiebot.variants.minimax_m25_tee_entry]
+type = "chat_completion"
+model = "minimax_m25_tee_chutes"
+
+[functions.sweetiebot.variants.qwen36_27b_tee_entry]
+type = "chat_completion"
+model = "qwen36_27b_tee_chutes"
+
+[functions.sweetiebot.variants.ds_v32_tee_chutes_entry]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.sweetiebot.variants.kimi_k26_tee_chutes_entry]
+type = "chat_completion"
+model = "kimi_k26_tee_chutes"
+
+# Fallbacks
+[functions.sweetiebot.variants.kimi_k26_nanogpt]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.sweetiebot.variants.kimi_k26_nanogpt_tee]
+type = "chat_completion"
+model = "kimi_k26_nanogpt_tee"
+
+[functions.sweetiebot.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.sweetiebot.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.sweetiebot.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.sweetiebot.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.sweetiebot.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.sweetiebot.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.sweetiebot.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.sweetiebot.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.sweetiebot.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.baud_simple]
+type = "chat"
+
+# WEIGHT NOTE (May 27, 2026):
+# Added 4 new chutes TEE entry variants at 0.025 each (total 0.10).
+# Existing 9 candidates scaled by 0.9 to preserve their ratios.
+# Sum = 0.0324+0.0324+0.2187+0.5265+0.018*5 + 0.025*4 = 0.900 + 0.100 = 1.000
+[functions.baud_simple.experimentation]
+type = "static_weights"
+candidate_variants = { claw_high_ng_entry = 0.007192, hermes_high_ng_entry = 0.007192, step36_ng_entry = 0.092046, ds_v4_pro_ng_entry = 0.18937, claude_opus46_llmai = 0.19604, gpt_54_llmai = 0.01044, gpt_54_openai = 0.01044, claude_opus46_haimaker = 0.00464, gpt_54_haimaker = 0.00464, minimax_m25_tee_entry = 0.0145, qwen36_27b_tee_entry = 0.0145, ds_v32_tee_chutes_entry = 0.0145, kimi_k26_tee_chutes_entry = 0.0145, qwen36_plus_llmai = 0.03, ds_v4_pro_llmai = 0.03, kimi_k26_llmai = 0.03, minimax_m27_llmai = 0.03, mimo_v25_pro_llmai = 0.03, glm51_llmai = 0.03, step37_flash_nanogpt = 0.03, laguna_m1_nanogpt = 0.03, claude_opus47_llmai = 0.09, claude_opus47_thinking_llmai = 0.09 }
+fallback_variants = ["kimi_k26_nanogpt", "kimi_k26_nanogpt_tee", "other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+# Entrypoint variants added May 29, 2026
+[functions.baud_simple.variants.qwen36_plus_llmai]
+type = "chat_completion"
+model = "qwen36_plus_llmai"
+[functions.baud_simple.variants.ds_v4_pro_llmai]
+type = "chat_completion"
+model = "ds_v4_pro_llmai"
+[functions.baud_simple.variants.kimi_k26_llmai]
+type = "chat_completion"
+model = "kimi_k26_llmai"
+[functions.baud_simple.variants.minimax_m27_llmai]
+type = "chat_completion"
+model = "minimax_m27_llmai"
+[functions.baud_simple.variants.mimo_v25_pro_llmai]
+type = "chat_completion"
+model = "mimo_v25_pro_llmai"
+[functions.baud_simple.variants.glm51_llmai]
+type = "chat_completion"
+model = "glm51_llmai"
+[functions.baud_simple.variants.step37_flash_nanogpt]
+type = "chat_completion"
+model = "step37_flash_nanogpt"
+[functions.baud_simple.variants.laguna_m1_nanogpt]
+type = "chat_completion"
+model = "laguna_m1_nanogpt"
+[functions.baud_simple.variants.claude_opus47_llmai]
+type = "chat_completion"
+model = "claude_opus47_llmai"
+[functions.baud_simple.variants.claude_opus47_thinking_llmai]
+type = "chat_completion"
+model = "claude_opus47_thinking_llmai"
+
+
+[functions.baud_simple.variants.claw_high_ng_entry]
+type = "chat_completion"
+model = "claw_high_nanogpt"
+
+[functions.baud_simple.variants.hermes_high_ng_entry]
+type = "chat_completion"
+model = "hermes_high_nanogpt"
+
+[functions.baud_simple.variants.step36_ng_entry]
+type = "chat_completion"
+model = "step36_nanogpt"
+
+[functions.baud_simple.variants.ds_v4_pro_ng_entry]
+type = "chat_completion"
+model = "ds_v4_pro_nanogpt"
+
+# Entry variants — NEW chutes TEE (May 27, 2026)
+[functions.baud_simple.variants.minimax_m25_tee_entry]
+type = "chat_completion"
+model = "minimax_m25_tee_chutes"
+
+[functions.baud_simple.variants.qwen36_27b_tee_entry]
+type = "chat_completion"
+model = "qwen36_27b_tee_chutes"
+
+[functions.baud_simple.variants.ds_v32_tee_chutes_entry]
+type = "chat_completion"
+model = "deepseek_v32_tee_chutes"
+
+[functions.baud_simple.variants.kimi_k26_tee_chutes_entry]
+type = "chat_completion"
+model = "kimi_k26_tee_chutes"
+
+# Fallbacks
+[functions.baud_simple.variants.kimi_k26_nanogpt]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.baud_simple.variants.kimi_k26_nanogpt_tee]
+type = "chat_completion"
+model = "kimi_k26_nanogpt_tee"
+
+[functions.baud_simple.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.baud_simple.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.baud_simple.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.baud_simple.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.baud_simple.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.baud_simple.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.baud_simple.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.baud_simple.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.baud_simple.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.sweetiebot_simple]
+type = "chat"
+
+[functions.sweetiebot_simple.experimentation]
+type = "static_weights"
+candidate_variants = { kimi_k26_ng_entry = 0.165, ds_v4_pro_cheaper_ng_entry = 0.535, claude_opus46_llmai = 0.22, gpt_54_llmai = 0.02, gpt_54_openai = 0.02, claude_opus46_haimaker = 0.02, gpt_54_haimaker = 0.02 }
+fallback_variants = ["kimi_k26_nanogpt", "kimi_k26_nanogpt_tee", "other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+[functions.sweetiebot_simple.variants.kimi_k26_ng_entry]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.sweetiebot_simple.variants.ds_v4_pro_cheaper_ng_entry]
+type = "chat_completion"
+model = "ds_v4_pro_cheaper_nanogpt"
+
+[functions.sweetiebot_simple.variants.kimi_k26_nanogpt]
+type = "chat_completion"
+model = "kimi_k26_nanogpt"
+
+[functions.sweetiebot_simple.variants.kimi_k26_nanogpt_tee]
+type = "chat_completion"
+model = "kimi_k26_nanogpt_tee"
+
+[functions.sweetiebot_simple.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.sweetiebot_simple.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.sweetiebot_simple.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.sweetiebot_simple.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.sweetiebot_simple.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.sweetiebot_simple.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.sweetiebot_simple.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.sweetiebot_simple.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.sweetiebot_simple.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+[functions.hermes]
+type = "chat"
+
+[functions.hermes.experimentation]
+type = "static_weights"
+candidate_variants = { kimi_latest_ng_entry = 0.0203, ds_latest_ng_entry = 0.2436, hermes_high_ng_entry = 0.0261, claude_opus46_llmai = 0.2436, gpt_54_llmai = 0.0116, gpt_54_openai = 0.0232, claude_opus46_haimaker = 0.0058, gpt_54_haimaker = 0.0058, qwen36_plus_llmai = 0.03, ds_v4_pro_llmai = 0.03, kimi_k26_llmai = 0.03, minimax_m27_llmai = 0.03, mimo_v25_pro_llmai = 0.03, glm51_llmai = 0.03, step37_flash_nanogpt = 0.03, laguna_m1_nanogpt = 0.03, claude_opus47_llmai = 0.09, claude_opus47_thinking_llmai = 0.09 }
+fallback_variants = ["other_nontee", "glm_nontee", "ds_native_fallback", "ds4_deepseek_fallback"]
+
+# Entrypoint variants added May 29, 2026
+[functions.hermes.variants.qwen36_plus_llmai]
+type = "chat_completion"
+model = "qwen36_plus_llmai"
+[functions.hermes.variants.ds_v4_pro_llmai]
+type = "chat_completion"
+model = "ds_v4_pro_llmai"
+[functions.hermes.variants.kimi_k26_llmai]
+type = "chat_completion"
+model = "kimi_k26_llmai"
+[functions.hermes.variants.minimax_m27_llmai]
+type = "chat_completion"
+model = "minimax_m27_llmai"
+[functions.hermes.variants.mimo_v25_pro_llmai]
+type = "chat_completion"
+model = "mimo_v25_pro_llmai"
+[functions.hermes.variants.glm51_llmai]
+type = "chat_completion"
+model = "glm51_llmai"
+[functions.hermes.variants.step37_flash_nanogpt]
+type = "chat_completion"
+model = "step37_flash_nanogpt"
+[functions.hermes.variants.laguna_m1_nanogpt]
+type = "chat_completion"
+model = "laguna_m1_nanogpt"
+[functions.hermes.variants.claude_opus47_llmai]
+type = "chat_completion"
+model = "claude_opus47_llmai"
+[functions.hermes.variants.claude_opus47_thinking_llmai]
+type = "chat_completion"
+model = "claude_opus47_thinking_llmai"
+
+
+[functions.hermes.variants.hermes_high_ng_entry]
+type = "chat_completion"
+model = "hermes_high_nanogpt"
+
+[functions.hermes.variants.kimi_latest_ng_entry]
+type = "chat_completion"
+model = "kimi_latest_nanogpt"
+
+[functions.hermes.variants.ds_latest_ng_entry]
+type = "chat_completion"
+model = "ds_latest_nanogpt"
+
+[functions.hermes.variants.other_nontee]
+type = "chat_completion"
+model = "other_nontee_redundant"
+
+[functions.hermes.variants.glm_nontee]
+type = "chat_completion"
+model = "glm_nontee_redundant"
+
+[functions.hermes.variants.ds_native_fallback]
+type = "chat_completion"
+model = "ds_native"
+
+[functions.hermes.variants.ds4_deepseek_fallback]
+type = "chat_completion"
+model = "ds4_deepseek"
+
+[functions.hermes.variants.claude_opus46_llmai]
+type = "chat_completion"
+model = "claude_opus46_llmai"
+
+[functions.hermes.variants.gpt_54_llmai]
+type = "chat_completion"
+model = "gpt_54_llmai"
+
+[functions.hermes.variants.gpt_54_openai]
+type = "chat_completion"
+model = "gpt_54_openai"
+
+[functions.hermes.variants.claude_opus46_haimaker]
+type = "chat_completion"
+model = "claude_opus46_haimaker"
+
+[functions.hermes.variants.gpt_54_haimaker]
+type = "chat_completion"
+model = "gpt_54_haimaker"
+
+# ############################################################################
+#                              METRICS
+# ############################################################################
+
+[metrics.task_success]
+type = "boolean"
+optimize = "max"
+level = "episode"

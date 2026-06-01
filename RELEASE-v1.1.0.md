@@ -53,6 +53,7 @@ Two new proposal documents for future work:
 
 ## Bug Fixes
 
+- **Empty-response "momentary lapse" fix** — Reasoning models (Qwen3, DeepSeek R1, Gemma 4, GLM-5) occasionally return responses consisting entirely of `<think>` tags, which `clean_response` strips to empty text. Previously, the agent silently substituted "I'm not sure how to respond to that." with no retry and no diagnostic logging. Now `respond_with_tools` retries the LLM call once before falling back, and logs the original response content at `warn` level so the offending model/variant can be identified. This was cross-model and observed as far back as pre-migration Ironclaw instances.
 - **LLM timeout not applied to rig-core providers** — `LLM_REQUEST_TIMEOUT_SECS` was silently ignored for `openai_compatible`, `anthropic`, and `ollama` backends. See Changes section above for details.
 - **Tool call diagnostic script error** — Fixed Python script that was not correctly referencing its entry point
 

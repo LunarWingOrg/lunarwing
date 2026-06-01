@@ -30,6 +30,12 @@ Use the tool_calls mechanism to invoke the appropriate tool.";
 /// the same positional index.
 const RECOVERED_TOOL_CALL_SEED: usize = 99;
 
+/// Maximum retries when an LLM response cleans to empty text (e.g. reasoning
+/// models that return only `<think>` tags). Separate from `RetryProvider`,
+/// which handles transport/rate-limit errors. A value of 1 means 2 total
+/// attempts (1 original + 1 retry).
+const MAX_EMPTY_RESPONSE_RETRIES: u32 = 1;
+
 /// Detect when an LLM response expresses intent to call a tool without
 /// actually issuing tool calls. Returns `true` if the text contains phrases
 /// like "Let me search …" or "I'll fetch …" outside of fenced/indented code blocks.
@@ -689,112 +695,144 @@ Respond in JSON format:
 
         // If we have tools, use tool completion mode
         if !effective_tools.is_empty() {
-            let mut request = ToolCompletionRequest::new(messages, effective_tools)
-                .with_max_tokens(4096)
-                .with_temperature(0.7)
-                .with_tool_choice("auto");
-            request.metadata = context.metadata.clone();
+            let mut total_usage = TokenUsage::default();
 
-            let response = self.llm.complete_with_tools(request).await?;
-            let usage = TokenUsage {
-                input_tokens: response.input_tokens,
-                output_tokens: response.output_tokens,
-                cache_read_input_tokens: response.cache_read_input_tokens,
-                cache_creation_input_tokens: response.cache_creation_input_tokens,
-            };
+            for attempt in 0..=MAX_EMPTY_RESPONSE_RETRIES {
+                let mut request =
+                    ToolCompletionRequest::new(messages.clone(), effective_tools.clone())
+                        .with_max_tokens(4096)
+                        .with_temperature(0.7)
+                        .with_tool_choice("auto");
+                request.metadata = context.metadata.clone();
 
-            // If there were tool calls, return them for execution
-            if !response.tool_calls.is_empty() {
-                return Ok(RespondOutput {
-                    result: RespondResult::ToolCalls {
-                        tool_calls: response.tool_calls,
-                        content: response.content.map(|c| {
-                            let pre_truncated = truncate_at_tool_tags(&c);
-                            clean_response(&pre_truncated)
-                        }),
-                    },
-                    usage,
-                });
-            }
+                let response = self.llm.complete_with_tools(request).await?;
+                total_usage.input_tokens += response.input_tokens;
+                total_usage.output_tokens += response.output_tokens;
+                total_usage.cache_read_input_tokens += response.cache_read_input_tokens;
+                total_usage.cache_creation_input_tokens +=
+                    response.cache_creation_input_tokens;
 
-            let content = response
-                .content
-                .unwrap_or_else(|| "I'm not sure how to respond to that.".to_string());
+                // If there were tool calls, return them for execution
+                if !response.tool_calls.is_empty() {
+                    return Ok(RespondOutput {
+                        result: RespondResult::ToolCalls {
+                            tool_calls: response.tool_calls,
+                            content: response.content.map(|c| {
+                                let pre_truncated = truncate_at_tool_tags(&c);
+                                clean_response(&pre_truncated)
+                            }),
+                        },
+                        usage: total_usage,
+                    });
+                }
 
-            // Some models (e.g. GLM-4.7) emit tool calls as XML tags in content
-            // instead of using the structured tool_calls field. Try to recover
-            // them before giving up and returning plain text.
-            // NOTE: Recovery runs on the raw content (before truncation) so it can
-            // parse tool-call JSON from the XML tags. Truncation only applies to the
-            // remaining *text* content returned alongside the recovered tool calls.
-            let recovered = recover_tool_calls_from_content(&content, &context.available_tools);
-            if !recovered.is_empty() {
+                let content = response.content.unwrap_or_default();
+
+                // Some models (e.g. GLM-4.7) emit tool calls as XML tags in
+                // content instead of using the structured tool_calls field.
+                // Try to recover them before giving up and returning plain text.
+                let recovered =
+                    recover_tool_calls_from_content(&content, &context.available_tools);
+                if !recovered.is_empty() {
+                    let pre_truncated = truncate_at_tool_tags(&content);
+                    let cleaned = clean_response(&pre_truncated);
+                    return Ok(RespondOutput {
+                        result: RespondResult::ToolCalls {
+                            tool_calls: recovered,
+                            content: if cleaned.is_empty() {
+                                None
+                            } else {
+                                Some(cleaned)
+                            },
+                        },
+                        usage: total_usage,
+                    });
+                }
+
                 let pre_truncated = truncate_at_tool_tags(&content);
                 let cleaned = clean_response(&pre_truncated);
+
+                if !cleaned.trim().is_empty() {
+                    return Ok(RespondOutput {
+                        result: RespondResult::Text(cleaned),
+                        usage: total_usage,
+                    });
+                }
+
+                // Response cleaned to empty — log original content and retry or fall back
+                let log_snippet = truncate_for_log(&content, 500);
+                if attempt < MAX_EMPTY_RESPONSE_RETRIES {
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_attempts = MAX_EMPTY_RESPONSE_RETRIES + 1,
+                        original_len = content.len(),
+                        "LLM response empty after cleaning, retrying. Original: {log_snippet}"
+                    );
+                    continue;
+                }
+
+                tracing::warn!(
+                    original_len = content.len(),
+                    "LLM response empty after cleaning, retries exhausted. Original: {log_snippet}"
+                );
                 return Ok(RespondOutput {
-                    result: RespondResult::ToolCalls {
-                        tool_calls: recovered,
-                        content: if cleaned.is_empty() {
-                            None
-                        } else {
-                            Some(cleaned)
-                        },
-                    },
-                    usage,
+                    result: RespondResult::Text(
+                        "I'm not sure how to respond to that.".to_string(),
+                    ),
+                    usage: total_usage,
                 });
             }
-
-            // Guard against empty text after cleaning. This can happen when:
-            // 1. Reasoning models (e.g. GLM-5) return chain-of-thought in
-            //    reasoning_content wrapped in <think> tags — clean_response
-            //    strips the think tags leaving an empty string.
-            // 2. Local models (Qwen3, DeepSeek) emit <tool_call> XML in text
-            //    responses even in force_text mode — strip_xml_tag discards
-            //    from unclosed opening tag onward (issue #789).
-            // Pre-truncate at tool tags to preserve text before the tag.
-            let pre_truncated = truncate_at_tool_tags(&content);
-            let cleaned = clean_response(&pre_truncated);
-            let final_text = if cleaned.trim().is_empty() {
-                tracing::warn!(
-                    "LLM response was empty after cleaning (original len={}), using fallback",
-                    content.len()
-                );
-                "I'm not sure how to respond to that.".to_string()
-            } else {
-                cleaned
-            };
-            Ok(RespondOutput {
-                result: RespondResult::Text(final_text),
-                usage,
-            })
+            unreachable!("empty-response retry loop must return")
         } else {
             // No tools, use simple completion
-            let mut request = CompletionRequest::new(messages)
-                .with_max_tokens(4096)
-                .with_temperature(0.7);
-            request.metadata = context.metadata.clone();
+            let mut total_usage = TokenUsage::default();
 
-            let response = self.llm.complete(request).await?;
-            let pre_truncated = truncate_at_tool_tags(&response.content);
-            let cleaned = clean_response(&pre_truncated);
-            let final_text = if cleaned.trim().is_empty() {
+            for attempt in 0..=MAX_EMPTY_RESPONSE_RETRIES {
+                let mut request = CompletionRequest::new(messages.clone())
+                    .with_max_tokens(4096)
+                    .with_temperature(0.7);
+                request.metadata = context.metadata.clone();
+
+                let response = self.llm.complete(request).await?;
+                total_usage.input_tokens += response.input_tokens;
+                total_usage.output_tokens += response.output_tokens;
+                total_usage.cache_read_input_tokens += response.cache_read_input_tokens;
+                total_usage.cache_creation_input_tokens +=
+                    response.cache_creation_input_tokens;
+
+                let pre_truncated = truncate_at_tool_tags(&response.content);
+                let cleaned = clean_response(&pre_truncated);
+
+                if !cleaned.trim().is_empty() {
+                    return Ok(RespondOutput {
+                        result: RespondResult::Text(cleaned),
+                        usage: total_usage,
+                    });
+                }
+
+                let log_snippet = truncate_for_log(&response.content, 500);
+                if attempt < MAX_EMPTY_RESPONSE_RETRIES {
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_attempts = MAX_EMPTY_RESPONSE_RETRIES + 1,
+                        original_len = response.content.len(),
+                        "LLM response empty after cleaning, retrying. Original: {log_snippet}"
+                    );
+                    continue;
+                }
+
                 tracing::warn!(
-                    "LLM response was empty after cleaning (original len={}), using fallback",
-                    response.content.len()
+                    original_len = response.content.len(),
+                    "LLM response empty after cleaning, retries exhausted. Original: {log_snippet}"
                 );
-                "I'm not sure how to respond to that.".to_string()
-            } else {
-                cleaned
-            };
-            Ok(RespondOutput {
-                result: RespondResult::Text(final_text),
-                usage: TokenUsage {
-                    input_tokens: response.input_tokens,
-                    output_tokens: response.output_tokens,
-                    cache_read_input_tokens: response.cache_read_input_tokens,
-                    cache_creation_input_tokens: response.cache_creation_input_tokens,
-                },
-            })
+                return Ok(RespondOutput {
+                    result: RespondResult::Text(
+                        "I'm not sure how to respond to that.".to_string(),
+                    ),
+                    usage: total_usage,
+                });
+            }
+            unreachable!("empty-response retry loop must return")
         }
     }
 
@@ -1458,6 +1496,20 @@ fn recover_tool_calls_from_content(
     }
 
     calls
+}
+
+/// Truncate a string to at most `max_bytes` at a UTF-8 char boundary.
+/// Used for including original LLM content in log messages without
+/// blowing up log storage.
+fn truncate_for_log(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 /// `<tool_call>tool_list</tool_call>` or `<|tool_call|>` in the content field
@@ -2914,6 +2966,7 @@ That's my plan."#;
         use crate::testing::StubLlm;
         let response = "<tool_call>{\"name\": \"search\"}";
         let llm = Arc::new(StubLlm::new(response));
+        let llm_ref = llm.clone();
         let reasoning = Reasoning::new(llm);
 
         let mut context = ReasoningContext::new().with_message(ChatMessage::user("hi"));
@@ -2928,6 +2981,12 @@ That's my plan."#;
                 panic!("Expected fallback text, not tool calls");
             }
         }
+        // Verify retry happened (original + MAX_EMPTY_RESPONSE_RETRIES retries)
+        assert_eq!(
+            llm_ref.calls(),
+            MAX_EMPTY_RESPONSE_RETRIES + 1,
+            "should retry before falling back"
+        );
     }
 
     #[tokio::test]
@@ -3200,5 +3259,120 @@ That's my plan."#;
             "the docs say \"run the tests\""
         ));
         assert!(!user_signals_execution_intent("```\nrun the tests\n```"));
+    }
+
+    // ---- Empty-response retry ("momentary lapse" bug) ----
+
+    #[tokio::test]
+    async fn test_empty_response_retry_with_tools_think_only() {
+        use crate::testing::StubLlm;
+        // Model returns only think tags — cleans to empty, should retry
+        let llm = Arc::new(StubLlm::new("<think>I need to analyze this carefully...</think>"));
+        let llm_ref = llm.clone();
+        let reasoning = Reasoning::new(llm);
+
+        let context = ReasoningContext::new()
+            .with_message(ChatMessage::user("hello"))
+            .with_tools(vec![ToolDefinition {
+                name: "echo".to_string(),
+                description: "Echoes input".to_string(),
+                parameters: serde_json::json!({}),
+            }]);
+
+        let output = reasoning.respond_with_tools(&context).await.unwrap();
+        match output.result {
+            RespondResult::Text(text) => {
+                assert_eq!(text, "I'm not sure how to respond to that.");
+            }
+            RespondResult::ToolCalls { .. } => {
+                panic!("Expected fallback text");
+            }
+        }
+        assert_eq!(
+            llm_ref.calls(),
+            MAX_EMPTY_RESPONSE_RETRIES + 1,
+            "should retry before falling back"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_empty_response_retry_no_tools_think_only() {
+        use crate::testing::StubLlm;
+        let llm = Arc::new(StubLlm::new("<think>reasoning only</think>"));
+        let llm_ref = llm.clone();
+        let reasoning = Reasoning::new(llm);
+
+        let mut context = ReasoningContext::new().with_message(ChatMessage::user("hello"));
+        context.force_text = true;
+
+        let output = reasoning.respond_with_tools(&context).await.unwrap();
+        match output.result {
+            RespondResult::Text(text) => {
+                assert_eq!(text, "I'm not sure how to respond to that.");
+            }
+            RespondResult::ToolCalls { .. } => {
+                panic!("Expected fallback text");
+            }
+        }
+        assert_eq!(
+            llm_ref.calls(),
+            MAX_EMPTY_RESPONSE_RETRIES + 1,
+            "no-tools path should also retry"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_retry_when_response_has_content() {
+        use crate::testing::StubLlm;
+        let llm = Arc::new(StubLlm::new("Here is a normal response."));
+        let llm_ref = llm.clone();
+        let reasoning = Reasoning::new(llm);
+
+        let mut context = ReasoningContext::new().with_message(ChatMessage::user("hello"));
+        context.force_text = true;
+
+        let output = reasoning.respond_with_tools(&context).await.unwrap();
+        match output.result {
+            RespondResult::Text(text) => {
+                assert_eq!(text, "Here is a normal response.");
+            }
+            RespondResult::ToolCalls { .. } => {
+                panic!("Expected text result");
+            }
+        }
+        assert_eq!(llm_ref.calls(), 1, "should not retry when response is valid");
+    }
+
+    #[tokio::test]
+    async fn test_empty_response_retry_accumulates_usage() {
+        use crate::testing::StubLlm;
+        let llm = Arc::new(StubLlm::new("<think>thinking only</think>"));
+        let reasoning = Reasoning::new(llm);
+
+        let mut context = ReasoningContext::new().with_message(ChatMessage::user("hi"));
+        context.force_text = true;
+
+        let output = reasoning.respond_with_tools(&context).await.unwrap();
+        assert!(matches!(output.result, RespondResult::Text(_)));
+        // StubLlm reports 15 tokens per call (10 input + 5 output).
+        // With 2 attempts (original + 1 retry), usage should be doubled.
+        let attempts = MAX_EMPTY_RESPONSE_RETRIES + 1;
+        assert_eq!(output.usage.input_tokens, 10 * attempts);
+        assert_eq!(output.usage.output_tokens, 5 * attempts);
+    }
+
+    #[test]
+    fn test_truncate_for_log_ascii() {
+        assert_eq!(truncate_for_log("hello world", 5), "hello");
+        assert_eq!(truncate_for_log("hello", 10), "hello");
+        assert_eq!(truncate_for_log("", 5), "");
+    }
+
+    #[test]
+    fn test_truncate_for_log_unicode_boundary() {
+        let s = "こんにちは"; // 15 bytes (3 per char)
+        assert_eq!(truncate_for_log(s, 6), "こん"); // 6 bytes = 2 chars
+        assert_eq!(truncate_for_log(s, 7), "こん"); // 7 is mid-char, backs up to 6
+        assert_eq!(truncate_for_log(s, 15), s); // exact fit
     }
 }
