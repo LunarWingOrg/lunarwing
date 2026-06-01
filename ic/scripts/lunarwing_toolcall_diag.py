@@ -26,9 +26,9 @@ from urllib.error import URLError, HTTPError
 # CONFIGURATION
 # ============================================================================
 
-GATEWAY_HOST = "127.0.0.1"
+GATEWAY_HOST = "192.168.1.157"
 GATEWAY_PORT = 3000
-FUNCTION_NAME = "lunarwing"
+FUNCTION_NAME = "kageho"
 NUM_ITERATIONS = 40          # bump higher to hit low-weight variants
 REQUEST_TIMEOUT = 120        # seconds per request
 STREAM = False
