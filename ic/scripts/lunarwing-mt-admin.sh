@@ -1360,6 +1360,9 @@ render_tenant_systemd_units() {
   local proxy_bin
   proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
+  local ws_adapter_path
+  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+
   # Proxy unit
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
 [Unit]
@@ -1370,6 +1373,26 @@ After=network.target
 Type=simple
 ExecStart=$(command -v python3) $proxy_bin --port $proxy_port --bind 127.0.0.1 --tensorzero $DEFAULT_TENSORZERO_URL
 EnvironmentFile=$env_dir/proxy.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
+EOF
+
+  # WeeChat WS adapter unit
+  cat >"$user_unit_dir/lunarwing-weechat-adapter-${name}.service" <<EOF
+[Unit]
+Description=LunarWing WeeChat WS adapter ($name)
+After=network.target
+PartOf=lunarwing-${name}.service
+
+[Service]
+Type=simple
+WorkingDirectory=$(dirname "$ws_adapter_path")
+EnvironmentFile=$env_dir/lunarwing.env
+ExecStart=$(command -v python3) $ws_adapter_path
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -1402,8 +1425,8 @@ EOF
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
+After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
 
 [Service]
 Type=simple
@@ -1459,7 +1482,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -1472,7 +1495,7 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
 
@@ -1497,6 +1520,11 @@ render_tenant_openrc_units() {
 
   local proxy_bin
   proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+
+  local ws_adapter_path
+  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  local ws_adapter_dir
+  ws_adapter_dir="$(dirname "$ws_adapter_path")"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -1539,7 +1567,7 @@ required_files="\${command}"
 depend() {
     need net localmount
     use dns logger
-    after firewall xmpp-bridge-${name} lunarwing-proxy-${name}
+    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}
 }
 
 load_env() {
@@ -1685,10 +1713,71 @@ start_pre() {
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
 
+  # WeeChat WS adapter init script
+  cat >"/etc/init.d/lunarwing-weechat-adapter-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing WeeChat WS adapter ($name)"
+
+: "\${adapter_command:=$(command -v python3)}"
+: "\${adapter_args:=$ws_adapter_path}"
+: "\${adapter_user:=$name}"
+: "\${adapter_group:=$name}"
+: "\${adapter_pidfile:=$run_dir/weechat-adapter.pid}"
+: "\${adapter_runtime_dir:=$run_dir}"
+: "\${adapter_log_dir:=$log_dir}"
+: "\${adapter_output_log:=\${adapter_log_dir}/weechat-adapter.log}"
+: "\${adapter_error_log:=\${adapter_log_dir}/weechat-adapter.err}"
+: "\${adapter_env_file:=$env_dir/lunarwing.env}"
+: "\${adapter_umask:=0077}"
+: "\${adapter_respawn_delay:=5}"
+: "\${adapter_respawn_max:=5}"
+: "\${adapter_respawn_period:=60}"
+: "\${adapter_retry:=SIGTERM/30/KILL/5}"
+
+command="\${adapter_command}"
+command_args="\${adapter_args}"
+command_user="\${adapter_user}:\${adapter_group}"
+directory="$ws_adapter_dir"
+pidfile="\${adapter_pidfile}"
+supervisor="supervise-daemon"
+retry="\${adapter_retry}"
+respawn_delay="\${adapter_respawn_delay}"
+respawn_max="\${adapter_respawn_max}"
+respawn_period="\${adapter_respawn_period}"
+output_log="\${adapter_output_log}"
+error_log="\${adapter_error_log}"
+
+depend() {
+    need net
+    use dns
+    after firewall
+    before lunarwing-${name}
+}
+
+load_env() {
+    if [ -n "\${adapter_env_file}" ] && [ -r "\${adapter_env_file}" ]; then
+        set -a
+        . "\${adapter_env_file}"
+        set +a
+    fi
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o "\${adapter_user}:\${adapter_group}" "\${adapter_runtime_dir}"
+    checkpath -d -m 0750 -o "\${adapter_user}:\${adapter_group}" "\${adapter_log_dir}"
+    checkpath -f -m 0640 -o "\${adapter_user}:\${adapter_group}" "\${output_log}"
+    checkpath -f -m 0640 -o "\${adapter_user}:\${adapter_group}" "\${error_log}"
+    load_env || return 1
+    umask "\${adapter_umask}"
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-weechat-adapter-${name}"
+
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -1700,11 +1789,16 @@ CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
+  cat >"/etc/conf.d/lunarwing-weechat-adapter-${name}" <<CONFD
+# Auto-generated by lunarwing-mt-admin.sh for tenant: $name
+CONFD
+
   say "rendered OpenRC init scripts and conf.d for $name"
 }
 
 start_tenant_openrc() {
   local name="$1"
+  rc-service "lunarwing-weechat-adapter-${name}" start
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
@@ -1716,12 +1810,13 @@ stop_tenant_openrc() {
   rc-service "lunarwing-${name}" stop 2>/dev/null || true
   rc-service "xmpp-bridge-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
