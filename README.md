@@ -1,4 +1,4 @@
-# LunarWing
+# LunarWing Introduction
 
 ## Claws are overrated. So, grow your wings and fly...
 
@@ -18,6 +18,10 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 - **TensorZero integration** — HTTP proxy with optimized tool_choice routing for local and remote model providers.
 - **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 
+<p align="center">
+  <img src="./logo_new_black_bg.png" alt="LunarWing" width="400">
+</p>
+
 ## Quick Links
 
 - Website: [lunarwing.org](https://lunarwing.org)
@@ -27,9 +31,9 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 
 [LunarWing](https://lunarwing.org/)
 
-<p align="center">
-  <img src="./logo_new_black_bg.png" alt="LunarWing" width="400">
-</p>
+---
+
+# Detailed information
 
 The LunarWing project began in February 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
 
