@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.0.9 — Codename Ninja
 
-**Release Date:** TBD
+**Release Date:** 2026-06-01
 
 ## Overview
 
@@ -30,6 +30,8 @@ Added scripts and documentation to support cross-backend migration from legacy I
 - **`ic/scripts/import-to-pg.sh`** — Imports exported CSVs into a tenant's PostgreSQL database with explicit column lists, FK constraint deferral, and sequence reset
 - **`ic/scripts/reimport-fixes.sh`** — Handles re-import of tables that require special treatment: hex-encoded BYTEA columns for `secrets`, Python-based CSV re-export for `settings` (JSON quoting), and `agent_jobs` (multiline descriptions)
 - **`docs/guides/MIGRATE_IRONCLAW_LIBSQL_TO_MT.md`** — Updated with additional notes from the live Kageho migration
+
+Also performed more testing of this process from various versions of Ironclaw!
 
 ### Tool Calling Diagnostic Script
 
@@ -84,4 +86,4 @@ Two new proposal documents for future work:
 
 ## Testing
 
-*Testing to be completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*Testing has been completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
