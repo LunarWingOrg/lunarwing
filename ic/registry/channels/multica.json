@@ -1,0 +1,39 @@
+{
+  "name": "multica",
+  "display_name": "Multica/Lunartica Channel",
+  "kind": "channel",
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Polls a Multica/Lunartica board for tasks, routes agent output back as completions and comments",
+  "keywords": [
+    "multica",
+    "lunartica",
+    "task-management",
+    "daemon",
+    "polling"
+  ],
+  "source": {
+    "dir": "channels-src/multica",
+    "capabilities": "multica.capabilities.json",
+    "crate_name": "multica-channel"
+  },
+  "artifacts": {
+    "wasm32-wasip2": {
+      "url": null,
+      "sha256": null
+    }
+  },
+  "auth_summary": {
+    "method": "manual",
+    "provider": "Multica/Lunartica",
+    "secrets": [
+      "multica_api_token"
+    ],
+    "shared_auth": null,
+    "setup_url": null
+  },
+  "tags": [
+    "lunarwing",
+    "task-management"
+  ]
+}
