@@ -80,10 +80,12 @@ Commands:
   build-tenant <name>             Build binaries for one tenant (OOM-safe flock)
     --with-wasm                    Also build WASM extensions
     --with-nanocode                Also build the nanocode worker Docker image
+    --with-pebble                  Also build the pebble worker Docker image
 
   build-all                        Build each tenant sequentially
     --with-wasm                    Also build WASM extensions
     --with-nanocode                Also build the nanocode worker Docker image
+    --with-pebble                  Also build the pebble worker Docker image
 
   build-nanocode-worker            Build the nanocode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
@@ -100,6 +102,10 @@ Commands:
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
                                    (updates workspace config + capabilities)
+
+  configure-pebble <name>          Configure pebble worker for a tenant
+    --nanogpt-api-key <key>        NanoGPT API key
+    --model <model>                Pebble model (default: openai/gpt-5.2)
 
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
@@ -498,6 +504,7 @@ build_tenant() {
   local name="$1"
   local with_wasm="${2:-false}"
   local with_nanocode="${3:-false}"
+  local with_pebble="${4:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -531,11 +538,16 @@ build_tenant() {
   if [[ "$with_nanocode" == "true" ]]; then
     build_nanocode_worker "false"
   fi
+
+  if [[ "$with_pebble" == "true" ]]; then
+    build_pebble_worker "false"
+  fi
 }
 
 build_all() {
   local with_wasm="${1:-false}"
   local with_nanocode="${2:-false}"
+  local with_pebble="${3:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -544,17 +556,23 @@ build_all() {
     return 0
   fi
 
-  # Build nanocode worker image once (shared across tenants)
+  # Build worker images once (shared across tenants)
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
     build_nanocode_worker "false"
   fi
 
+  if [[ "$with_pebble" == "true" ]]; then
+    say ""
+    say "=== Building pebble worker image ==="
+    build_pebble_worker "false"
+  fi
+
   while IFS= read -r name; do
     say ""
     say "=== Building tenant: $name ==="
-    build_tenant "$name" "$with_wasm" "false"
+    build_tenant "$name" "$with_wasm" "false" "false"
   done <<< "$names"
 }
 
@@ -1013,6 +1031,43 @@ configure_gotify_capabilities() {
   mv "$tmp" "$caps_path"
   chown "$name:$name" "$caps_path"
   say "  configured gotify capabilities for host: $host"
+}
+
+# ── Pebble worker configuration ──────────────────────────────────────────────
+
+configure_pebble() {
+  local name="$1"
+  local nanogpt_api_key="$2"
+  local model="$3"
+
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local env_dir env_path
+  env_dir="$(tenant_env_dir "$name")"
+  env_path="$env_dir/pebble.env"
+
+  mkdir -p "$env_dir"
+
+  : >"$env_path"
+
+  if [[ -n "$nanogpt_api_key" ]]; then
+    printf 'NANOGPT_API_KEY=%s\n' "$nanogpt_api_key" >>"$env_path"
+  fi
+
+  if [[ -n "$model" ]]; then
+    printf 'PEBBLE_MODEL=%s\n' "$model" >>"$env_path"
+  fi
+
+  chown "$name:$name" "$env_path"
+  chmod 600 "$env_path"
+  say "pebble configured for tenant '$name' at $env_path"
+
+  local container_name="lunarwing-pebble-$name"
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null 2>&1; then
+    say "note: restart the pebble worker to pick up new config:"
+    say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
+  fi
 }
 
 # ── Nanocode worker container ─────────────────────────────────────────────────
@@ -2071,11 +2126,12 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false" with_nanocode="false"
+      local name="" with_wasm="false" with_nanocode="false" with_pebble="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --with-wasm)     with_wasm="true"; shift ;;
           --with-nanocode) with_nanocode="true"; shift ;;
+          --with-pebble)   with_pebble="true"; shift ;;
           -*)              die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
@@ -2084,22 +2140,23 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false" with_nanocode="false"
+      local with_wasm="false" with_nanocode="false" with_pebble="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --with-wasm)     with_wasm="true"; shift ;;
           --with-nanocode) with_nanocode="true"; shift ;;
+          --with-pebble)   with_pebble="true"; shift ;;
           -*)              die "unknown flag: $1" ;;
           *)               die "unexpected argument: $1" ;;
         esac
       done
-      build_all "$with_wasm" "$with_nanocode"
+      build_all "$with_wasm" "$with_nanocode" "$with_pebble"
       ;;
 
     build-nanocode-worker)
@@ -2180,6 +2237,27 @@ main() {
       write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
       configure_gotify_capabilities "$name" "$gotify_url"
       say "Gotify configured for tenant '$name': $gotify_url"
+      ;;
+
+    configure-pebble)
+      require_root
+      local name="" nanogpt_key="" pebble_model=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --nanogpt-api-key) nanogpt_key="$2"; shift 2 ;;
+          --model)           pebble_model="$2"; shift 2 ;;
+          -*)                die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-pebble <name> --nanogpt-api-key <key> [--model <model>]"
+      [[ -n "$nanogpt_key" ]] || die "configure-pebble requires --nanogpt-api-key"
+      ports_registry_init
+      configure_pebble "$(sanitize_name "$name")" "$nanogpt_key" "$pebble_model"
       ;;
 
     patch-env)

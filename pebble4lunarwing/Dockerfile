@@ -1,5 +1,7 @@
 FROM rust:1.92-bookworm AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Build the bridge binary
@@ -8,7 +10,7 @@ COPY pebble4lunarwing/src ./bridge/src
 RUN cd bridge && cargo build --release
 
 # Build pebble
-COPY pebble/ ./pebble/
+RUN git clone --depth 1 https://github.com/nanogpt-community/pebble.git ./pebble
 RUN cd pebble && cargo build --release --bin pebble
 
 # --- Runtime ---

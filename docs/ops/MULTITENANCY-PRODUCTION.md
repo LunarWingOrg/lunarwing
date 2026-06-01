@@ -50,11 +50,28 @@ Or build one at a time:
 sudo ic/scripts/lunarwing-mt-admin.sh build-tenant ruffles
 ```
 
-Include WASM extensions:
+Include WASM extensions and/or worker images:
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh build-all --with-wasm
+sudo ic/scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble
 ```
+
+### Step 3b: Configure external workers (optional)
+
+If using the pebble worker, configure the NanoGPT API key for each tenant that needs it:
+
+```bash
+sudo ic/scripts/lunarwing-mt-admin.sh configure-pebble ruffles --nanogpt-api-key <key>
+```
+
+Optionally override the default model (`openai/gpt-5.2`):
+
+```bash
+sudo ic/scripts/lunarwing-mt-admin.sh configure-pebble ruffles --nanogpt-api-key <key> --model openai/gpt-5.2
+```
+
+This creates `pebble.env` (mode 600) in the tenant's env directory. The worker container reads it on next start.
 
 ### Step 4: Start services
 
@@ -147,7 +164,10 @@ sudo scripts/lunarwing-mt-admin.sh add-tenant ruffles --docker-group
 # Build binaries for the tenant (flock-serialized, OOM-safe)
 sudo scripts/lunarwing-mt-admin.sh build-tenant ruffles
 
-# Start all services
+# Configure pebble worker (if using)
+sudo scripts/lunarwing-mt-admin.sh configure-pebble ruffles --nanogpt-api-key <key>
+
+# Start all services (includes nanocode/pebble workers if images exist)
 sudo scripts/lunarwing-mt-admin.sh start-tenant ruffles
 
 # Check status
@@ -204,16 +224,17 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 | +3 | postgres | PostgreSQL container port |
 | +4 | proxy | TensorZero LLM proxy |
 | +5 | weechat | WeeChat relay (reserved) |
-| +6-9 | reserved | Future expansion |
+| +6 | orchestrator | Job orchestrator API |
+| +7 | nanocode_wss | Nanocode worker WebSocket |
+| +8 | pebble_wss | Pebble worker WebSocket |
+| +9 | reserved | Future expansion |
 
 ### Example allocation
 
-| Tenant | Base | Gateway | HTTP | Bridge | PG | Proxy | WeeChat |
-|--------|------|---------|------|--------|----|-------|---------|
-| ruffles | 10000 | 10000 | 10001 | 10002 | 10003 | 10004 | 10005 |
-| miyuki | 10010 | 10010 | 10011 | 10012 | 10013 | 10014 | 10015 |
-| sparkie | 10020 | 10020 | 10021 | 10022 | 10023 | 10024 | 10025 |
-| starforce | 10030 | 10030 | 10031 | 10032 | 10033 | 10034 | 10035 |
+| Tenant | Base | Gateway | HTTP | Bridge | PG | Proxy | Orchestrator | Nanocode | Pebble |
+|--------|------|---------|------|--------|----|-------|-------------|----------|--------|
+| ruffles | 10000 | 10000 | 10001 | 10002 | 10003 | 10004 | 10006 | 10007 | 10008 |
+| miyuki | 10010 | 10010 | 10011 | 10012 | 10013 | 10014 | 10016 | 10017 | 10018 |
 
 ### Registry schema
 
@@ -256,10 +277,14 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
     lunarwing.env              # Main daemon env (mode 0600)
     xmpp-bridge.env            # Bridge env
     proxy.env                  # TensorZero proxy env
+    nanocode.env               # Nanocode worker env (optional, mode 0600)
+    pebble.env                 # Pebble worker env (optional, mode 0600)
   state/                       # LUNARWING_BASE_DIR
     channels/                  # WASM channel artifacts
     tools/                     # WASM tool artifacts
     xmpp/                      # XMPP OMEMO state
+  nanocode-workspace/          # Nanocode worker task workspace (if enabled)
+  pebble-workspace/            # Pebble worker task workspace (if enabled)
   logs/                        # Log files (OpenRC) or symlink to journal
   run/                         # PID files, sockets
 ```
@@ -335,6 +360,13 @@ sudo scripts/lunarwing-mt-admin.sh build-all
 
 # Include WASM extensions
 sudo scripts/lunarwing-mt-admin.sh build-all --with-wasm
+
+# Include worker images
+sudo scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble
+
+# Build worker images standalone
+sudo scripts/lunarwing-mt-admin.sh build-pebble-worker
+sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
 ```
 
 ## Security Considerations
@@ -377,11 +409,26 @@ remove-tenant <name>             Stop services, deallocate ports
 
 build-tenant <name>              Build binaries for one tenant (flock-serialized)
   --with-wasm                    Also build WASM extensions
+  --with-nanocode                Also build the nanocode worker Docker image
+  --with-pebble                  Also build the pebble worker Docker image
 
 build-all                        Build each tenant sequentially
   --with-wasm                    Also build WASM extensions
+  --with-nanocode                Also build the nanocode worker Docker image
+  --with-pebble                  Also build the pebble worker Docker image
+
+build-nanocode-worker            Build the nanocode worker Docker image
+  --no-cache                     Force a full rebuild without Docker cache
+
+build-pebble-worker              Build the pebble worker Docker image
+  --no-cache                     Force a full rebuild without Docker cache
+
+configure-pebble <name>          Configure pebble worker for a tenant
+  --nanogpt-api-key <key>        NanoGPT API key (required)
+  --model <model>                Pebble model (default: openai/gpt-5.2)
 
 start-tenant <name>              Start all services for a tenant
+                                 (includes nanocode/pebble workers if images exist)
 stop-tenant <name>               Stop all services for a tenant
 restart-tenant <name>            Stop then start
 
