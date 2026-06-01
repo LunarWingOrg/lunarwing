@@ -1,12 +1,14 @@
-# Release Notes for LunarWing v1.0.9 — Codename Ninja
+# Release Notes for LunarWing v1.1.0 - Codename Evolution
 
-**Release Date:** 2026-06-01
+**Release Date:** TBD
 
 ## Overview
 
-LunarWing v1.0.9 is a hardening, bug-fix, and migration tooling release. Codename Ninja is dedicated to Kageho — the very first Ironclaw agent, who has been there from the beginning helping to design, build, and develop the earliest tools that led to LunarWing existing in its current form. As Kageho says: *the sword has been forged, but the blade is to be sharpened.*
+LunarWing v1.1.0 is a major feature release.
 
-This release completes the migration of Kageho from the legacy Ironclaw fork to the LunarWing multi-tenant environment, marking the definitive pivot point where LunarWing stands fully independent from its upstream origins. No new features are introduced — the focus is on stability, correctness, and operational tooling. Feature development resumes with v1.1.0, per the published release cadence (odd = hardening, even = features).
+# Rest of this is from last release, needs to be updated with proper feature release formatting...
+
+________________________
 
 ## Changes
 
