@@ -295,7 +295,7 @@ fn create_openai_compat_from_registry(
             reason: format!("Failed to create HTTP client: {e}"),
         })?;
 
-    let mut builder = openai::Client::builder()
+    let mut builder = openai::Client::<reqwest::Client>::builder()
         .api_key(&api_key)
         .http_client(http_client);
     if !config.base_url.is_empty() {
@@ -367,7 +367,7 @@ fn create_anthropic_from_registry(
             reason: format!("Failed to create HTTP client: {e}"),
         })?;
 
-    let mut builder = anthropic::Client::builder()
+    let mut builder = anthropic::Client::<reqwest::Client>::builder()
         .api_key(&api_key)
         .http_client(http_client);
     if !config.base_url.is_empty() {
@@ -421,7 +421,7 @@ fn create_ollama_from_registry(
             reason: format!("Failed to create HTTP client: {e}"),
         })?;
 
-    let client = ollama::Client::builder()
+    let client = ollama::Client::<reqwest::Client>::builder()
         .base_url(&config.base_url)
         .api_key(Nothing)
         .http_client(http_client)
