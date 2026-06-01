@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- *(llm)* Retry LLM call once when response cleans to empty text (reasoning models returning only `<think>` tags). Logs original content at warn level for diagnosis. Prevents silent "I'm not sure how to respond to that." fallback on transient reasoning-tag-only responses.
+
 ## [0.19.0](https://github.com/nearai/ironclaw/compare/v0.18.0...v0.19.0) - 2026-03-17
 
 ### Added
