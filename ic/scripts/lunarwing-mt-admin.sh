@@ -284,6 +284,27 @@ ports_migrate() {
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v4"
   fi
+
+  if [[ "$current_version" -lt 5 ]]; then
+    say "migrating port registry v4 -> v5 (reserved_3 -> weechat_adapter) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .version = 5 |
+      .tenants |= with_entries(
+        .value.ports |= (
+          if .reserved_3 then
+            .weechat_adapter = .reserved_3 | del(.reserved_3)
+          else
+            . + { weechat_adapter: (.orchestrator + 3) }
+          end
+        )
+      )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v5"
+  fi
 }
 
 ports_allocate() {
@@ -313,16 +334,16 @@ ports_allocate() {
       user: $name,
       created_at: $ts,
       ports: {
-        gateway:      ($base + 0),
-        http:         ($base + 1),
-        bridge:       ($base + 2),
-        postgres:     ($base + 3),
-        proxy:        ($base + 4),
-        weechat:      ($base + 5),
-        orchestrator: ($base + 6),
-        nanocode_wss: ($base + 7),
-        pebble_wss:   ($base + 8),
-        reserved_3:   ($base + 9)
+        gateway:          ($base + 0),
+        http:             ($base + 1),
+        bridge:           ($base + 2),
+        postgres:         ($base + 3),
+        proxy:            ($base + 4),
+        weechat:          ($base + 5),
+        orchestrator:     ($base + 6),
+        nanocode_wss:     ($base + 7),
+        pebble_wss:       ($base + 8),
+        weechat_adapter:  ($base + 9)
       }
     }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -363,8 +384,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH,NANOCODE,PEBBLE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,ORCH,NANOCODE,PEBBLE"
 }
 
 tenant_exists_in_registry() {
@@ -778,13 +799,14 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port nanocode_wss_port pebble_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
   bridge_port="$(ports_get "$name" bridge)"
   pg_port="$(ports_get "$name" postgres)"
   proxy_port="$(ports_get "$name" proxy)"
+  weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
@@ -861,6 +883,9 @@ NANOCODE_WSS_PORT=$nanocode_wss_port
 
 # Pebble worker (WebSocket port for agent communication)
 PEBBLE_WSS_PORT=$pebble_wss_port
+
+# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)
+WEECHAT_ADAPTER_PORT=$weechat_adapter_port
 
 # Daemon mode
 CLI_ENABLED=false
@@ -975,6 +1000,17 @@ patch_tenant_env() {
     else
       printf '\n# Pebble worker (WebSocket port for agent communication)\nPEBBLE_WSS_PORT=%s\n' "$pebble_wss_port" >>"$env_path"
       say "added PEBBLE_WSS_PORT=$pebble_wss_port to $env_path"
+    fi
+  fi
+
+  local weechat_adapter_port
+  weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
+  if [[ -n "$weechat_adapter_port" ]]; then
+    if grep -q '^WEECHAT_ADAPTER_PORT=' "$env_path"; then
+      say "WEECHAT_ADAPTER_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)\nWEECHAT_ADAPTER_PORT=%s\n' "$weechat_adapter_port" >>"$env_path"
+      say "added WEECHAT_ADAPTER_PORT=$weechat_adapter_port to $env_path"
     fi
   fi
 }
@@ -1743,15 +1779,16 @@ add_tenant() {
   say "=== Tenant '$name' added ==="
   say ""
   say "Port block: $base_port-$((base_port + PORT_BLOCK_SIZE - 1))"
-  say "  gateway:      $(ports_get "$name" gateway)"
-  say "  http:         $(ports_get "$name" http)"
-  say "  bridge:       $(ports_get "$name" bridge)"
-  say "  postgres:     $(ports_get "$name" postgres)"
-  say "  proxy:        $(ports_get "$name" proxy)"
-  say "  weechat:      $(ports_get "$name" weechat)"
-  say "  orchestrator: $(ports_get "$name" orchestrator)"
-  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
-  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
+  say "  gateway:          $(ports_get "$name" gateway)"
+  say "  http:             $(ports_get "$name" http)"
+  say "  bridge:           $(ports_get "$name" bridge)"
+  say "  postgres:         $(ports_get "$name" postgres)"
+  say "  proxy:            $(ports_get "$name" proxy)"
+  say "  weechat:          $(ports_get "$name" weechat)"
+  say "  orchestrator:     $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -1863,15 +1900,16 @@ status_tenant() {
   say "=== Tenant: $name ==="
   say ""
   say "Ports:"
-  say "  gateway:      $(ports_get "$name" gateway)"
-  say "  http:         $(ports_get "$name" http)"
-  say "  bridge:       $(ports_get "$name" bridge)"
-  say "  postgres:     $(ports_get "$name" postgres)"
-  say "  proxy:        $(ports_get "$name" proxy)"
-  say "  weechat:      $(ports_get "$name" weechat)"
-  say "  orchestrator: $(ports_get "$name" orchestrator)"
-  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
-  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
+  say "  gateway:          $(ports_get "$name" gateway)"
+  say "  http:             $(ports_get "$name" http)"
+  say "  bridge:           $(ports_get "$name" bridge)"
+  say "  postgres:         $(ports_get "$name" postgres)"
+  say "  proxy:            $(ports_get "$name" proxy)"
+  say "  weechat:          $(ports_get "$name" weechat)"
+  say "  orchestrator:     $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say ""
 
   ensure_container_runtime
@@ -1930,13 +1968,13 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH" "NANOCODE" "PEBBLE"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------" "----" "--------" "------"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "WS_ADPT" "ORCH" "NANOCODE" "PEBBLE"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "-------" "----" "--------" "------"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
@@ -1944,6 +1982,7 @@ list_tenants() {
       "$(ports_get "$name" postgres)" \
       "$(ports_get "$name" proxy)" \
       "$(ports_get "$name" weechat)" \
+      "$(ports_get "$name" weechat_adapter)" \
       "$(ports_get "$name" orchestrator)" \
       "$(ports_get "$name" nanocode_wss)" \
       "$(ports_get "$name" pebble_wss)"

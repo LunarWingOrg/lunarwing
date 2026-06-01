@@ -18,6 +18,7 @@ Usage:
 
     Or via environment variables:
     RELAY_URL=http://127.0.0.1:9001 RELAY_PASSWORD=secret python3 ws_adapter.py
+    WEECHAT_ADAPTER_PORT=10009 python3 ws_adapter.py
     MESSAGE_DELAY_SECONDS=3 python3 ws_adapter.py  # add 3s delay to all messages
 
 Dependencies:
@@ -474,8 +475,8 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("ADAPTER_PORT", "6681")),
-        help="Local HTTP port for this adapter (default: 6681)",
+        default=int(os.environ.get("ADAPTER_PORT") or os.environ.get("WEECHAT_ADAPTER_PORT") or "6681"),
+        help="Local HTTP port for this adapter (default: 6681).  Also reads ADAPTER_PORT or WEECHAT_ADAPTER_PORT from env.",
     )
     parser.add_argument(
         "--message-delay",
