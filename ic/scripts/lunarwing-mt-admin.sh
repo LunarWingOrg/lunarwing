@@ -103,6 +103,10 @@ Commands:
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
                                    (updates workspace config + capabilities)
 
+  configure-pebble <name>          Configure pebble worker for a tenant
+    --nanogpt-api-key <key>        NanoGPT API key
+    --model <model>                Pebble model (default: openai/gpt-5.2)
+
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
 
@@ -1027,6 +1031,43 @@ configure_gotify_capabilities() {
   mv "$tmp" "$caps_path"
   chown "$name:$name" "$caps_path"
   say "  configured gotify capabilities for host: $host"
+}
+
+# ── Pebble worker configuration ──────────────────────────────────────────────
+
+configure_pebble() {
+  local name="$1"
+  local nanogpt_api_key="$2"
+  local model="$3"
+
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local env_dir env_path
+  env_dir="$(tenant_env_dir "$name")"
+  env_path="$env_dir/pebble.env"
+
+  mkdir -p "$env_dir"
+
+  : >"$env_path"
+
+  if [[ -n "$nanogpt_api_key" ]]; then
+    printf 'NANOGPT_API_KEY=%s\n' "$nanogpt_api_key" >>"$env_path"
+  fi
+
+  if [[ -n "$model" ]]; then
+    printf 'PEBBLE_MODEL=%s\n' "$model" >>"$env_path"
+  fi
+
+  chown "$name:$name" "$env_path"
+  chmod 600 "$env_path"
+  say "pebble configured for tenant '$name' at $env_path"
+
+  local container_name="lunarwing-pebble-$name"
+  if $CONTAINER_RT inspect "$container_name" &>/dev/null 2>&1; then
+    say "note: restart the pebble worker to pick up new config:"
+    say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
+  fi
 }
 
 # ── Nanocode worker container ─────────────────────────────────────────────────
@@ -2196,6 +2237,27 @@ main() {
       write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
       configure_gotify_capabilities "$name" "$gotify_url"
       say "Gotify configured for tenant '$name': $gotify_url"
+      ;;
+
+    configure-pebble)
+      require_root
+      local name="" nanogpt_key="" pebble_model=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --nanogpt-api-key) nanogpt_key="$2"; shift 2 ;;
+          --model)           pebble_model="$2"; shift 2 ;;
+          -*)                die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-pebble <name> --nanogpt-api-key <key> [--model <model>]"
+      [[ -n "$nanogpt_key" ]] || die "configure-pebble requires --nanogpt-api-key"
+      ports_registry_init
+      configure_pebble "$(sanitize_name "$name")" "$nanogpt_key" "$pebble_model"
       ;;
 
     patch-env)
