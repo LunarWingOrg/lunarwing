@@ -323,6 +323,10 @@ If importing history tables fails due to foreign key constraints, import in depe
 
 Or use `SET session_replication_role = 'replica'` (shown in Step 5) to skip constraint checks during import.
 
+## Tips
+
+* You may use ic/scripts/export-libsql.sh to help export your libsql ironclaw database to csv
+
 ## Rollback
 
 The original libSQL database file is never modified. To roll back:
