@@ -31,9 +31,10 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 
 [LunarWing](https://lunarwing.org/)
 
+##### End of Introduction
 ---
 
-# Detailed information
+# Finer Details
 
 The LunarWing project began in February 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
 
