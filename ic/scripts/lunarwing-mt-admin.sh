@@ -284,6 +284,27 @@ ports_migrate() {
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v4"
   fi
+
+  if [[ "$current_version" -lt 5 ]]; then
+    say "migrating port registry v4 -> v5 (reserved_3 -> weechat_adapter) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .version = 5 |
+      .tenants |= with_entries(
+        .value.ports |= (
+          if .reserved_3 then
+            .weechat_adapter = .reserved_3 | del(.reserved_3)
+          else
+            . + { weechat_adapter: (.orchestrator + 3) }
+          end
+        )
+      )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v5"
+  fi
 }
 
 ports_allocate() {
@@ -313,16 +334,16 @@ ports_allocate() {
       user: $name,
       created_at: $ts,
       ports: {
-        gateway:      ($base + 0),
-        http:         ($base + 1),
-        bridge:       ($base + 2),
-        postgres:     ($base + 3),
-        proxy:        ($base + 4),
-        weechat:      ($base + 5),
-        orchestrator: ($base + 6),
-        nanocode_wss: ($base + 7),
-        pebble_wss:   ($base + 8),
-        reserved_3:   ($base + 9)
+        gateway:          ($base + 0),
+        http:             ($base + 1),
+        bridge:           ($base + 2),
+        postgres:         ($base + 3),
+        proxy:            ($base + 4),
+        weechat:          ($base + 5),
+        orchestrator:     ($base + 6),
+        nanocode_wss:     ($base + 7),
+        pebble_wss:       ($base + 8),
+        weechat_adapter:  ($base + 9)
       }
     }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -363,8 +384,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,ORCH,NANOCODE,PEBBLE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,ORCH,NANOCODE,PEBBLE"
 }
 
 tenant_exists_in_registry() {
@@ -778,13 +799,14 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port orchestrator_port nanocode_wss_port pebble_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
   bridge_port="$(ports_get "$name" bridge)"
   pg_port="$(ports_get "$name" postgres)"
   proxy_port="$(ports_get "$name" proxy)"
+  weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
@@ -861,6 +883,9 @@ NANOCODE_WSS_PORT=$nanocode_wss_port
 
 # Pebble worker (WebSocket port for agent communication)
 PEBBLE_WSS_PORT=$pebble_wss_port
+
+# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)
+WEECHAT_ADAPTER_PORT=$weechat_adapter_port
 
 # Daemon mode
 CLI_ENABLED=false
@@ -975,6 +1000,17 @@ patch_tenant_env() {
     else
       printf '\n# Pebble worker (WebSocket port for agent communication)\nPEBBLE_WSS_PORT=%s\n' "$pebble_wss_port" >>"$env_path"
       say "added PEBBLE_WSS_PORT=$pebble_wss_port to $env_path"
+    fi
+  fi
+
+  local weechat_adapter_port
+  weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
+  if [[ -n "$weechat_adapter_port" ]]; then
+    if grep -q '^WEECHAT_ADAPTER_PORT=' "$env_path"; then
+      say "WEECHAT_ADAPTER_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)\nWEECHAT_ADAPTER_PORT=%s\n' "$weechat_adapter_port" >>"$env_path"
+      say "added WEECHAT_ADAPTER_PORT=$weechat_adapter_port to $env_path"
     fi
   fi
 }
@@ -1324,6 +1360,9 @@ render_tenant_systemd_units() {
   local proxy_bin
   proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
+  local ws_adapter_path
+  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+
   # Proxy unit
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
 [Unit]
@@ -1334,6 +1373,26 @@ After=network.target
 Type=simple
 ExecStart=$(command -v python3) $proxy_bin --port $proxy_port --bind 127.0.0.1 --tensorzero $DEFAULT_TENSORZERO_URL
 EnvironmentFile=$env_dir/proxy.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
+EOF
+
+  # WeeChat WS adapter unit
+  cat >"$user_unit_dir/lunarwing-weechat-adapter-${name}.service" <<EOF
+[Unit]
+Description=LunarWing WeeChat WS adapter ($name)
+After=network.target
+PartOf=lunarwing-${name}.service
+
+[Service]
+Type=simple
+WorkingDirectory=$(dirname "$ws_adapter_path")
+EnvironmentFile=$env_dir/lunarwing.env
+ExecStart=$(command -v python3) $ws_adapter_path
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -1366,8 +1425,8 @@ EOF
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service
+After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
 
 [Service]
 Type=simple
@@ -1423,7 +1482,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -1436,7 +1495,7 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
 
@@ -1461,6 +1520,11 @@ render_tenant_openrc_units() {
 
   local proxy_bin
   proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+
+  local ws_adapter_path
+  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  local ws_adapter_dir
+  ws_adapter_dir="$(dirname "$ws_adapter_path")"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -1503,7 +1567,7 @@ required_files="\${command}"
 depend() {
     need net localmount
     use dns logger
-    after firewall xmpp-bridge-${name} lunarwing-proxy-${name}
+    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}
 }
 
 load_env() {
@@ -1649,10 +1713,71 @@ start_pre() {
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
 
+  # WeeChat WS adapter init script
+  cat >"/etc/init.d/lunarwing-weechat-adapter-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing WeeChat WS adapter ($name)"
+
+: "\${adapter_command:=$(command -v python3)}"
+: "\${adapter_args:=$ws_adapter_path}"
+: "\${adapter_user:=$name}"
+: "\${adapter_group:=$name}"
+: "\${adapter_pidfile:=$run_dir/weechat-adapter.pid}"
+: "\${adapter_runtime_dir:=$run_dir}"
+: "\${adapter_log_dir:=$log_dir}"
+: "\${adapter_output_log:=\${adapter_log_dir}/weechat-adapter.log}"
+: "\${adapter_error_log:=\${adapter_log_dir}/weechat-adapter.err}"
+: "\${adapter_env_file:=$env_dir/lunarwing.env}"
+: "\${adapter_umask:=0077}"
+: "\${adapter_respawn_delay:=5}"
+: "\${adapter_respawn_max:=5}"
+: "\${adapter_respawn_period:=60}"
+: "\${adapter_retry:=SIGTERM/30/KILL/5}"
+
+command="\${adapter_command}"
+command_args="\${adapter_args}"
+command_user="\${adapter_user}:\${adapter_group}"
+directory="$ws_adapter_dir"
+pidfile="\${adapter_pidfile}"
+supervisor="supervise-daemon"
+retry="\${adapter_retry}"
+respawn_delay="\${adapter_respawn_delay}"
+respawn_max="\${adapter_respawn_max}"
+respawn_period="\${adapter_respawn_period}"
+output_log="\${adapter_output_log}"
+error_log="\${adapter_error_log}"
+
+depend() {
+    need net
+    use dns
+    after firewall
+    before lunarwing-${name}
+}
+
+load_env() {
+    if [ -n "\${adapter_env_file}" ] && [ -r "\${adapter_env_file}" ]; then
+        set -a
+        . "\${adapter_env_file}"
+        set +a
+    fi
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o "\${adapter_user}:\${adapter_group}" "\${adapter_runtime_dir}"
+    checkpath -d -m 0750 -o "\${adapter_user}:\${adapter_group}" "\${adapter_log_dir}"
+    checkpath -f -m 0640 -o "\${adapter_user}:\${adapter_group}" "\${output_log}"
+    checkpath -f -m 0640 -o "\${adapter_user}:\${adapter_group}" "\${error_log}"
+    load_env || return 1
+    umask "\${adapter_umask}"
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-weechat-adapter-${name}"
+
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -1664,11 +1789,16 @@ CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
+  cat >"/etc/conf.d/lunarwing-weechat-adapter-${name}" <<CONFD
+# Auto-generated by lunarwing-mt-admin.sh for tenant: $name
+CONFD
+
   say "rendered OpenRC init scripts and conf.d for $name"
 }
 
 start_tenant_openrc() {
   local name="$1"
+  rc-service "lunarwing-weechat-adapter-${name}" start
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
@@ -1680,12 +1810,13 @@ stop_tenant_openrc() {
   rc-service "lunarwing-${name}" stop 2>/dev/null || true
   rc-service "xmpp-bridge-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -1743,15 +1874,16 @@ add_tenant() {
   say "=== Tenant '$name' added ==="
   say ""
   say "Port block: $base_port-$((base_port + PORT_BLOCK_SIZE - 1))"
-  say "  gateway:      $(ports_get "$name" gateway)"
-  say "  http:         $(ports_get "$name" http)"
-  say "  bridge:       $(ports_get "$name" bridge)"
-  say "  postgres:     $(ports_get "$name" postgres)"
-  say "  proxy:        $(ports_get "$name" proxy)"
-  say "  weechat:      $(ports_get "$name" weechat)"
-  say "  orchestrator: $(ports_get "$name" orchestrator)"
-  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
-  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
+  say "  gateway:          $(ports_get "$name" gateway)"
+  say "  http:             $(ports_get "$name" http)"
+  say "  bridge:           $(ports_get "$name" bridge)"
+  say "  postgres:         $(ports_get "$name" postgres)"
+  say "  proxy:            $(ports_get "$name" proxy)"
+  say "  weechat:          $(ports_get "$name" weechat)"
+  say "  orchestrator:     $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -1863,15 +1995,16 @@ status_tenant() {
   say "=== Tenant: $name ==="
   say ""
   say "Ports:"
-  say "  gateway:      $(ports_get "$name" gateway)"
-  say "  http:         $(ports_get "$name" http)"
-  say "  bridge:       $(ports_get "$name" bridge)"
-  say "  postgres:     $(ports_get "$name" postgres)"
-  say "  proxy:        $(ports_get "$name" proxy)"
-  say "  weechat:      $(ports_get "$name" weechat)"
-  say "  orchestrator: $(ports_get "$name" orchestrator)"
-  say "  nanocode_wss: $(ports_get "$name" nanocode_wss)"
-  say "  pebble_wss:   $(ports_get "$name" pebble_wss)"
+  say "  gateway:          $(ports_get "$name" gateway)"
+  say "  http:             $(ports_get "$name" http)"
+  say "  bridge:           $(ports_get "$name" bridge)"
+  say "  postgres:         $(ports_get "$name" postgres)"
+  say "  proxy:            $(ports_get "$name" proxy)"
+  say "  weechat:          $(ports_get "$name" weechat)"
+  say "  orchestrator:     $(ports_get "$name" orchestrator)"
+  say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
+  say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say ""
 
   ensure_container_runtime
@@ -1930,13 +2063,13 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "ORCH" "NANOCODE" "PEBBLE"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------" "----" "--------" "------"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "WS_ADPT" "ORCH" "NANOCODE" "PEBBLE"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "-------" "----" "--------" "------"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
@@ -1944,6 +2077,7 @@ list_tenants() {
       "$(ports_get "$name" postgres)" \
       "$(ports_get "$name" proxy)" \
       "$(ports_get "$name" weechat)" \
+      "$(ports_get "$name" weechat_adapter)" \
       "$(ports_get "$name" orchestrator)" \
       "$(ports_get "$name" nanocode_wss)" \
       "$(ports_get "$name" pebble_wss)"
