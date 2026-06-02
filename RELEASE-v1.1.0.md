@@ -151,13 +151,17 @@ Bootstrap workspace seeding now respects a new `ONBOARD_COMPLETED` environment v
 | Feature | Target |
 |---------|--------|
 | Multica bridge and channel refinements and agent orechestration workflow improvements| v1.1.1+ (currently marked as pre-release/experimental feature; more testing required) |
-| LunarVoice (2-way audio input/output) | v1.1.6+ |
-| Character Lorebooks / profile enhancements | v1.1.4+ |
+| LunarVoice (Further planning required) | v1.1.6+ |
+| Character Lorebook support / Agent Profile enhancements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4+ |
 | Proprietary channel removal (Discord, Slack, Telegram sources) | v1.1.4+ |
 | XMPP OMEMO MUC fallback fix | v1.1.3 |
 | Server-side WebSocket keepalive adjustment | v1.1.3 |
 | New suite of planned features with concepts adopted from Hermes Agent, Will seperate some of these out into actual categories here in the next release notes. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.6+ |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.2+ |
+| Attempt to safely remove the other non-supported default proprietary channels that still remain. Discord, Slack, and Telegram remain. Core code changes will be required for all of these cases, just like what was done with WhatsApp removal | v1.1.2+ |
+| Remove other non-supported extensions. Google related ones. It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.2+ |
+| Upgrade version of tensorzero and tensorzero-proxy, plus optional tighter integration across deployments | v1.1.2+ |
+| Improve script to test various tool calls across any openai compatible api | v1.1.1+ |
 
 ## Testing
 
