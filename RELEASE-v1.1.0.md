@@ -149,6 +149,9 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
+- **5 tests are failing due to not being updated after previous production code refactors. No production code is broken and these test failures have been throroughly documented.**
+- **One test is failing due to an assertion count mismatch**
+- **One test is failing due to env-specific SSRF check.**
 
 ## Upgrade Notes
 
@@ -164,18 +167,18 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 | Feature | Target |
 |---------|--------|
 | Multica bridge and channel refinements and agent orechestration workflow improvements| v1.1.1+ (currently marked as pre-release/experimental feature; more testing required) |
-| LunarVoice (Further planning required) | v1.1.6+ |
+| LunarVoice (Further planning required) | v1.1.4+ |
 | Character Lorebook support / Agent Profile enhancements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4+ |
-| Proprietary channel removal (Discord, Slack, Telegram sources) | v1.1.4+ |
-| XMPP OMEMO MUC fallback fix | v1.1.3 |
-| Server-side WebSocket keepalive adjustment | v1.1.3 |
-| New suite of planned features with concepts adopted from Hermes Agent, Will seperate some of these out into actual categories here in the next release notes. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.6+ |
+| XMPP OMEMO MUC fallback fix | v1.1.1 |
+| Server-side WebSocket keepalive adjustment | v1.1.1 |
+| New suite of planned features with concepts adopted from Hermes Agent, Will seperate some of these out into actual categories here in the next release notes. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4+ |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.2+ |
+| Proprietary channel removal (Discord, Slack, Telegram sources) | v1.1.2+ |
 | Attempt to safely remove the other non-supported default proprietary channels that still remain. Discord, Slack, and Telegram remain. Core code changes will be required for all of these cases, just like what was done with WhatsApp removal | v1.1.2+ |
-| Remove other non-supported extensions. Google related ones. It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.2+ |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.2+ |
 | Upgrade version of tensorzero and tensorzero-proxy, plus optional tighter integration across deployments | v1.1.2+ |
-| Improve script to test various tool calls across any openai compatible api | v1.1.1+ |
+| Improve/fix script to test various tool calls across any openai compatible api | v1.1.1+ |
 
 ## Testing
 
-*Testing has been completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*Testing IS IN PROGRESS before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
