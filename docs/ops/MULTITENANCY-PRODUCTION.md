@@ -227,7 +227,7 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 | +6 | orchestrator | Job orchestrator API |
 | +7 | nanocode_wss | Nanocode worker WebSocket |
 | +8 | pebble_wss | Pebble worker WebSocket |
-| +9 | reserved | Future expansion |
+| +9 | weechat_adapter | WeeChat WS adapter HTTP API |
 
 ### Example allocation
 
