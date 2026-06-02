@@ -4,7 +4,7 @@
 
 ## Overview
 
-LunarWing v1.1.0 is a major feature release bringing Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support.
+LunarWing v1.1.0 is a major feature release bringing Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes, improvements to workspace seeding, and an easier onboarding process for new users. 
 
 ---
 
@@ -64,6 +64,14 @@ Also performed more testing of this process from various versions of Ironclaw!
 ### Tool Calling Diagnostic Script
 
 Added `ic/scripts/lunarwing_toolcall_diag.py` — a standalone diagnostic script that tests tool call functionality against a running LunarWing instance. Validates that the LLM provider can generate properly-formatted tool calls and that the agent processes them correctly.
+
+### WS_Adapter for weechat channel is now available as systemd/openrc service
+
+Instead of merely a standalone python script, this has been made into to a real service. Additionally, this has its own port in mt port mapping
+
+### Port mapping v5
+
+tba
 
 ### Community Resources
 
