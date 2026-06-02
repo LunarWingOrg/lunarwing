@@ -554,6 +554,9 @@ build_tenant() {
     fi
 
     say "build complete for $name"
+    say ""
+    say "Reminder: set your LLM provider API key (if applicable to your backend) in $(tenant_env_dir "$name")/lunarwing.env"
+    say "  e.g.  LLM_API_KEY=sk-..."
   ) 200>"$BUILD_LOCK"
 
   if [[ "$with_nanocode" == "true" ]]; then
