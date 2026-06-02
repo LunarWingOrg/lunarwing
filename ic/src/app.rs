@@ -825,11 +825,18 @@ impl AppBuilder {
 
         // Load bootstrap-completed flag from settings so that existing users
         // who already completed onboarding don't re-get bootstrap injection.
+        // Also check ONBOARD_COMPLETED env var — MT tenants set this to skip
+        // the setup wizard, and should not get bootstrap seeding either.
         if let Some(ref ws) = workspace {
+            let onboard_env = std::env::var("ONBOARD_COMPLETED")
+                .map(|v| v == "true")
+                .unwrap_or(false);
             let toml_path = crate::settings::Settings::default_toml_path();
-            if let Ok(Some(settings)) = crate::settings::Settings::load_toml(&toml_path)
-                && settings.profile_onboarding_completed
-            {
+            let profile_done = matches!(
+                crate::settings::Settings::load_toml(&toml_path),
+                Ok(Some(ref s)) if s.profile_onboarding_completed
+            );
+            if onboard_env || profile_done {
                 ws.mark_bootstrap_completed();
             }
         }

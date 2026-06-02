@@ -1625,7 +1625,7 @@ impl Workspace {
             !d.content.trim().is_empty()
                 && serde_json::from_str::<crate::profile::PsychographicProfile>(&d.content).is_ok()
         });
-        if is_fresh_workspace && !has_profile {
+        if is_fresh_workspace && !has_profile && !self.is_bootstrap_completed() {
             if let Err(e) = self.write(paths::BOOTSTRAP, BOOTSTRAP_SEED).await {
                 tracing::warn!("Failed to seed {}: {}", paths::BOOTSTRAP, e);
             } else {
