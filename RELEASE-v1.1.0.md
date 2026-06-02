@@ -20,8 +20,6 @@ Initial integration with the Multica self-hostable agent orchestration server:
 - **Multica deployment guide** (`docs/guides/MULTICA_DEPLOYMENT.md`) — Server compatibility verification and deployment walkthrough.
 - **Compatibility confirmed** (`docs/proposals/MULTICA_SERVER_COMPATIBILITY_CONFIRMED.md`) — Verification that Multica server is compatible with the bridge tool.
 
-Live testing against a running Multica instance is the next step.
-
 ### Pebble Worker Multi-Tenant Support
 
 The `lunarwing-mt-admin.sh` script now fully supports Pebble worker lifecycle:
@@ -138,7 +136,6 @@ Bootstrap workspace seeding now respects a new `ONBOARD_COMPLETED` environment v
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
-- **Multica bridge not yet live-tested** — The multica-bridge WASM tool and channel are built but have not yet been validated against a running Multica server instance yet.
 
 ## Upgrade Notes
 
@@ -153,14 +150,15 @@ Bootstrap workspace seeding now respects a new `ONBOARD_COMPLETED` environment v
 
 | Feature | Target |
 |---------|--------|
-| Multica bridge refinements | v1.1.1+ (pre-release feature) |
-| LunarVoice (2-way audio input/output) | v1.1.4+ |
+| Multica bridge and channel refinements and agent orechestration workflow improvements| v1.1.1+ (currently marked as pre-release/experimental feature; more testing required) |
+| LunarVoice (2-way audio input/output) | v1.1.6+ |
 | Character Lorebooks / profile enhancements | v1.1.4+ |
 | Proprietary channel removal (Discord, Slack, Telegram sources) | v1.1.4+ |
 | XMPP OMEMO MUC fallback fix | v1.1.3 |
-| Server-side WebSocket keepalive | v1.1.3 |
-| New suite of planned features with concepts adopted from Hermes Agent | v1.1.6+ |
+| Server-side WebSocket keepalive adjustment | v1.1.3 |
+| New suite of planned features with concepts adopted from Hermes Agent, Will seperate some of these out into actual categories here in the next release notes. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.6+ |
+| List of planned suggested features to pre-emptively improve security via input validation | v1.1.2+ |
 
 ## Testing
 
-*Testing will be completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*Testing has been completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
