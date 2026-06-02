@@ -4,7 +4,7 @@
 
 ## Overview
 
-LunarWing v1.1.0 is a major feature release bringing Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes, improvements to workspace seeding, and an easier onboarding process for new users.
+LunarWing v1.1.0 is a major feature release bringing the pre-release version of Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes, improvements to workspace seeding, and an easier onboarding process for new users.
 
 ---
 
@@ -19,6 +19,7 @@ Initial integration with the Multica self-hostable agent orchestration server:
 - **`multica-poll` skill** (`ic/skills/multica-poll/`) — Skill prompt for polling Multica.
 - **Multica deployment guide** (`docs/guides/MULTICA_DEPLOYMENT.md`) — Server compatibility verification and deployment walkthrough.
 - **Compatibility confirmed** (`docs/proposals/MULTICA_SERVER_COMPATIBILITY_CONFIRMED.md`) — Verification that Multica server is compatible with the bridge tool.
+- **Experimental** - Multica and Lunartica support is still new, but will continue to be prioritized in development going forward and is as a great self-hostable solution for orchestrating multi-agent workflows!
 
 ### Pebble Worker Multi-Tenant Support
 
@@ -152,6 +153,7 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 - **5 tests are failing due to not being updated after previous production code refactors. No production code is broken and these test failures have been throroughly documented.** - See docs/bugs for further information on these test failures and proposed fixes.
 - **One test is failing due to an assertion count mismatch**
 - **One test is failing due to env-specific SSRF check.**
+- **Two tests for gateway workflow harness and test_rig from the test harness are failing for similar reasons to the ones above.** - See docs/bugs for further information on these test failures and proposed fixes.
 - **Several E2E playright tests may also need to be updated to account for major code refactoring.**
 
 ## Upgrade Notes
