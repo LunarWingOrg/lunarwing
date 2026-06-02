@@ -95,6 +95,19 @@ Bootstrap workspace seeding now respects a new `ONBOARD_COMPLETED` environment v
 - **Build reminder** — `build-tenant` now prints a post-build reminder at the end of output with next-step instructions.
 - **Tenant Configuration Guide** — New `docs/ops/TENANT-CONFIGURATION.md` (331 lines) covering post-provisioning customization: file layout, LLM provider switching, XMPP bridge setup, Gotify, routine management, env var priority order, and applying changes across init systems.
 
+### Crate Version Alignment
+
+All workspace crates have been unified at version 1.1.0. Previously the main `lunarwing` crate was at 1.0.9 while the four internal crates (`lunarwing_common`, `lunarwing_safety`, `lunarwing_skills`, `lunarwing_engine`) and the XMPP bridge remained at 1.0.0. Going forward, all crates will be bumped together for each release.
+
+| Crate | Previous | New |
+|-------|----------|-----|
+| `lunarwing` (main) | 1.0.9 | 1.1.0 |
+| `lunarwing_common` | 1.0.0 | 1.1.0 |
+| `lunarwing_safety` | 1.0.0 | 1.1.0 |
+| `lunarwing_skills` | 1.0.0 | 1.1.0 |
+| `lunarwing_engine` | 1.0.0 | 1.1.0 |
+| `xmpp-bridge` | 1.0.0 | 1.1.0 |
+
 ### Community Resources
 
 - Created `COMMUNITY.md` with IRC channel information (`#lunarwing` on Libera Chat), connection instructions for WeeChat and browser clients, and community guidelines
