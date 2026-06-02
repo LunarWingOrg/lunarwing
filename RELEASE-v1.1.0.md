@@ -154,7 +154,7 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 - **One test is failing due to an assertion count mismatch**
 - **One test is failing due to env-specific SSRF check.**
 - **Two tests for gateway workflow harness and test_rig from the test harness are failing for similar reasons to the ones above.** - See docs/bugs for further information on these test failures and proposed fixes.
-- **Several E2E playright tests may also need to be updated to account for major code refactoring.**
+- **Several E2E playwright tests may also need to be updated to account for major code refactoring.**
 
 ## Upgrade Notes
 
