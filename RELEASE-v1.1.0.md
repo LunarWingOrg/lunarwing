@@ -149,9 +149,10 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
-- **5 tests are failing due to not being updated after previous production code refactors. No production code is broken and these test failures have been throroughly documented.**
+- **5 tests are failing due to not being updated after previous production code refactors. No production code is broken and these test failures have been throroughly documented.** - See docs/bugs for further information on these test failures and proposed fixes.
 - **One test is failing due to an assertion count mismatch**
 - **One test is failing due to env-specific SSRF check.**
+- **Several E2E playright tests may also need to be updated to account for major code refactoring.**
 
 ## Upgrade Notes
 
