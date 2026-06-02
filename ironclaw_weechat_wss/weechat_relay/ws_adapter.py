@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Improved by Baud on June 1 2026
 """
 WeeChat WebSocket Adapter for IronClaw
 
