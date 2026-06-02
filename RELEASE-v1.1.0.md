@@ -4,7 +4,7 @@
 
 ## Overview
 
-LunarWing v1.1.0 is a major feature release bringing the pre-release version of Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes, improvements to workspace seeding, and an easier onboarding process for new users.
+LunarWing v1.1.0 is a major feature and bugfix combined release bringing the pre-release version of Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes related to the new agent_loop.rs and a long-time (since Ironclaw) rare bug where when certain reasoning models return rubbish responses, which clean_response stripped to empty text and caused a temporary `lapse` without any debug logging or retry mechanism (this has been further explained in the release notes below). Additional changes in this release include improvements to workspace seeding and an easier onboarding process for new users (complete with a new quick MT setup guide for getting LunarWing and one of the channels up and running).
 
 ---
 
