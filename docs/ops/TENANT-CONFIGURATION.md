@@ -226,7 +226,6 @@ On first start, the daemon seeds `state/workspace-template/` with default identi
 | `IDENTITY.md` | Agent identity, name, and role |
 | `AGENTS.md` | Agent rules and constraints |
 | `USER.md` | Information about the primary user |
-| `BOOTSTRAP.md` | First-conversation onboarding instructions |
 | `HEARTBEAT.md` | Instructions for periodic heartbeat execution |
 | `TOOLS.md` | Tool usage guidance |
 | `MEMORY.md` | Memory system configuration |

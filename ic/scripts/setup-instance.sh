@@ -32,7 +32,7 @@ Usage:
 Prepare a fresh LunarWing/IronClaw instance directory with:
   - config.toml
   - .env bootstrap file
-  - workspace-template/*.md defaults (SOUL.md, IDENTITY.md, BOOTSTRAP.md, ...)
+  - workspace-template/*.md defaults (SOUL.md, IDENTITY.md, ...)
 
 Options:
   --base-dir PATH            Instance directory. Default: $LUNARWING_BASE_DIR, $IRONCLAW_BASE_DIR, or ~/.ironclaw

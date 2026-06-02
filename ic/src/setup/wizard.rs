@@ -52,10 +52,6 @@ const DEFAULT_WORKSPACE_TEMPLATE_FILES: &[(&str, &str)] = &[
         include_str!("../../deploy/workspace-template/AGENTS.md"),
     ),
     (
-        "BOOTSTRAP.md",
-        include_str!("../../deploy/workspace-template/BOOTSTRAP.md"),
-    ),
-    (
         "HEARTBEAT.md",
         include_str!("../../deploy/workspace-template/HEARTBEAT.md"),
     ),
