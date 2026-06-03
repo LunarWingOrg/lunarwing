@@ -1,10 +1,10 @@
 # Release Notes for LunarWing v1.1.0 - Codename Evolution
 
-**Release Date:** TBD
+**Release Date:** 2026-06-04
 
 ## Overview
 
-LunarWing v1.1.0 is a major feature and bugfix combined release bringing the pre-release version of Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. In addition, it includes major bug fixes related to the new agent_loop.rs and a long-time (since Ironclaw) rare bug where when certain reasoning models return rubbish responses, which clean_response stripped to empty text and caused a temporary `lapse` without any debug logging or retry mechanism (this has been further explained in the release notes below). Additional changes in this release include improvements to workspace seeding and an easier onboarding process for new users (complete with a new quick MT setup guide for getting LunarWing and one of the channels up and running).
+LunarWing v1.1.0 is a major feature and bugfix combined release bringing the pre-release version of Multica/Lunartica integration, expanded multi-tenant tooling for Pebble and WeeChat ws_adapter, improved LLM resilience, and cross-backend migration support. This release also includes critical concurrency fixes for the workspace/memory write path (6 bugs causing data loss, pool exhaustion, and search inconsistency under concurrent loads), fixes for the WASM sandbox wildcard host matching that prevented tools from making HTTP requests or receiving credential injection, and a new workspace reader for WASM tools enabling agent self-configuration. In addition, it includes major bug fixes related to the new agent_loop.rs and a long-time (since Ironclaw) rare bug where when certain reasoning models return rubbish responses, which clean_response stripped to empty text and caused a temporary `lapse` without any debug logging or retry mechanism (this has been further explained in the release notes below). Additional changes in this release include improvements to workspace seeding and an easier onboarding process for new users (complete with a new quick MT setup guide for getting LunarWing and one of the channels up and running).
 
 ---
 
@@ -154,6 +154,13 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 - **Stuck tasks blocking message queue** — Hard-timeout recovery left orphaned tokio tasks running and stale pending messages in the queue. See Stuck-Run Recovery Hardening above.
 - **TensorZero default URL missing path** — Multi-tenant admin default upstream URL was missing the `/openai/v1` path suffix, causing routing failures for OpenAI-compatible proxy requests.
 - **Multi-tenant bootstrap seeding on provisioned tenants** — Tenants created via `mt-admin` would still receive the first-run onboarding flow because only the TOML flag was checked. Now respects `ONBOARD_COMPLETED` env var.
+- **Workspace ghost writes under concurrent unique-path writes** — PostgreSQL `UNIQUE` constraints with `NULL agent_id` allowed duplicate rows, causing data loss. Fixed via `NULLS NOT DISTINCT` migration (V21) and atomic `get_or_create_document_by_path`. See Workspace/Memory Concurrency Fixes above.
+- **Workspace append race condition** — Concurrent appends to the same path used a read-modify-write pattern across separate connections, silently losing all but the last write. Fixed with atomic SQL append.
+- **Connection pool exhaustion at 10+ concurrent writes** — `reindex_document()` held database connections during embedding network calls, starving the pool. Fixed by computing embeddings without holding connections.
+- **Search index inconsistency after writes** — Content and chunk updates happened in separate transactions, creating a window where search returned stale or zero results. Fixed with atomic document + chunk replacement.
+- **WASM tool workspace reads always returned None** — WASM tools with `workspace` capability had `reader: None` injected at registration, silently breaking `workspace_read()`. Fixed by pre-loading workspace data before WASM execution and injecting a `PreloadedWorkspaceReader`.
+- **Bare `*` wildcard ignored in WASM HTTP allowlist** — `host_matches()` only handled `*.domain.com` subdomain wildcards. Tools declaring `"host": "*"` had all HTTP requests blocked. Fixed in both `EndpointPattern::host_matches()` and `host_matches_pattern()` in the credential injector.
+- **WASM credential injection skipped for `*` host patterns** — Same bare wildcard bug in the credential injector prevented `Authorization` headers from being injected for tools with `"host_patterns": ["*"]`.
 
 ## Documentation
 
@@ -167,6 +174,9 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 - Seven new proposal/planning documents added (see Proposals section)
 - Began some of the implementation work to port some of the unique and useful features from Hermes Agent to LunarWing. This work is not included in this release, but there is documentation present for it.
 - `GOALS_1.1.0.md` created with release milestone targets
+- `docs/bugs/BUG-workspace-concurrency-fixes-v1.1.0.md` — Full analysis of 6 concurrency bugs found during pre-release stress testing, including root causes, fixes, regression tests, and stress test results
+- `docs/architecture/MULTICA-SEC.md` — Security analysis of the multica-bridge workspace/secret boundary model
+- `docs/ops/XMPP_KNOWN_ISSUES.md` — Known XMPP issues including OMEMO device trust requirements and inbound XEP-0363 file upload limitation (outbound supported, inbound OOB parsing not yet implemented)
 
 ## Known Issues
 
@@ -177,10 +187,11 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 - **One test is failing due to env-specific SSRF check.**
 - **Two tests for gateway workflow harness and test_rig from the test harness are failing for similar reasons to the ones above.** - See docs/bugs for further information on these test failures and proposed fixes.
 - **Several E2E playwright tests may also need to be updated to account for major code refactoring.**
+- **XMPP inbound file uploads not supported** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`.
 
 ## Upgrade Notes
 
-1. **Database migrations**: V19 (reflex patterns) and V20 (reflex embeddings) will run automatically on startup. Back up your database before upgrading.
+1. **Database migrations**: V19 (reflex patterns), V20 (reflex embeddings), and V21 (NULL-safe unique constraint on `memory_documents`) will run automatically on startup. V21 deduplicates any existing rows with NULL `agent_id` before adding the constraint. **Back up your database before upgrading.** PostgreSQL 15+ is required for V21's `NULLS NOT DISTINCT` syntax.
 2. **Ironclaw migration**: Agents running on the legacy Ironclaw fork can now be migrated using the new export/import scripts. See `docs/guides/MIGRATE_IRONCLAW_LIBSQL_TO_MT.md` for the full walkthrough. Preserve the `SECRET_MASTER_KEY` from the old instance to ensure encrypted secrets remain accessible.
 3. **Tenant git remotes**: Tenant repos created before v1.0.8 may have their git origin pointing to a local path (`/home/cmc/lunarwing`) instead of the GitHub remote. Fix with `git remote set-url origin https://github.com/LunarWingOrg/lunarwing.git` before pulling updates.
 4. **Port registry migration**: Existing multi-tenant deployments will auto-migrate the port registry from v4 to v5 on the next `add-tenant` or `ports list` call, renaming `reserved_3` to `weechat_adapter`. For standalone migration, run `ic/scripts/migrate-ports-v5.sh` as root.
@@ -195,6 +206,7 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 | LunarVoice (Further planning required) | v1.1.4+ |
 | Character Lorebook support / Agent Profile enhancements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4+ |
 | XMPP OMEMO MUC fallback fix | v1.1.1 |
+| XMPP inbound file upload support (XEP-0363/OOB parsing) | v1.1.1+ |
 | Server-side WebSocket keepalive adjustment | v1.1.1 |
 | New suite of planned features with concepts adopted from Hermes Agent, Will seperate some of these out into actual categories here in the next release notes. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4+ |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.2+ |
