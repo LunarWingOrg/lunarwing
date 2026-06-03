@@ -100,40 +100,39 @@ impl Repository {
     }
 
     /// Get or create a document by path.
+    ///
+    /// Uses a single INSERT ... ON CONFLICT ... RETURNING statement so the
+    /// operation is atomic and uses exactly one connection from the pool.
     pub async fn get_or_create_document_by_path(
         &self,
         user_id: &str,
         agent_id: Option<Uuid>,
         path: &str,
     ) -> Result<MemoryDocument, WorkspaceError> {
-        // Try to get existing document first
-        match self.get_document_by_path(user_id, agent_id, path).await {
-            Ok(doc) => return Ok(doc),
-            Err(WorkspaceError::DocumentNotFound { .. }) => {}
-            Err(e) => return Err(e),
-        }
-
-        // Create new document
         let conn = self.conn().await?;
         let id = Uuid::new_v4();
         let now = Utc::now();
         let metadata = serde_json::json!({});
 
-        conn.execute(
-            r#"
-            INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, '', $5, $6, $7)
-            ON CONFLICT (user_id, agent_id, path) DO NOTHING
-            "#,
-            &[&id, &user_id, &agent_id, &path, &metadata, &now, &now],
-        )
-        .await
-        .map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Insert failed: {}", e),
-        })?;
+        // The no-op DO UPDATE (id = memory_documents.id) ensures RETURNING
+        // fires for both the insert and conflict cases.
+        let row = conn
+            .query_one(
+                r#"
+                INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, '', $5, $6, $7)
+                ON CONFLICT (user_id, agent_id, path)
+                DO UPDATE SET id = memory_documents.id
+                RETURNING id, user_id, agent_id, path, content, created_at, updated_at, metadata
+                "#,
+                &[&id, &user_id, &agent_id, &path, &metadata, &now, &now],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Insert/get failed: {e}"),
+            })?;
 
-        // Fetch the document (might have been created by concurrent request)
-        self.get_document_by_path(user_id, agent_id, path).await
+        Ok(self.row_to_document(&row))
     }
 
     /// Update a document's content.

@@ -325,14 +325,6 @@ impl WorkspaceStore for LibSqlBackend {
         agent_id: Option<Uuid>,
         path: &str,
     ) -> Result<MemoryDocument, WorkspaceError> {
-        // Try get
-        match self.get_document_by_path(user_id, agent_id, path).await {
-            Ok(doc) => return Ok(doc),
-            Err(WorkspaceError::DocumentNotFound { .. }) => {}
-            Err(e) => return Err(e),
-        }
-
-        // Create
         let conn = self
             .connect()
             .await
@@ -341,20 +333,69 @@ impl WorkspaceStore for LibSqlBackend {
             })?;
         let id = Uuid::new_v4();
         let agent_id_str = agent_id.map(|id| id.to_string());
-        conn.execute(
+
+        // Single transaction: insert-if-absent then select. Uses one
+        // connection and is immune to TOCTOU races between concurrent writers.
+        let tx = conn.transaction().await.map_err(|e| {
+            WorkspaceError::SearchFailed {
+                reason: format!("Failed to start transaction: {e}"),
+            }
+        })?;
+
+        tx.execute(
             r#"
-                INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata)
-                VALUES (?1, ?2, ?3, ?4, '', '{}')
-                ON CONFLICT (user_id, agent_id, path) DO NOTHING
-                "#,
-            params![id.to_string(), user_id, agent_id_str.as_deref(), path],
+            INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata)
+            VALUES (?1, ?2, ?3, ?4, '', '{}')
+            ON CONFLICT (user_id, agent_id, path) DO NOTHING
+            "#,
+            params![
+                id.to_string(),
+                user_id,
+                agent_id_str.as_deref(),
+                path
+            ],
         )
         .await
         .map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Insert failed: {}", e),
+            reason: format!("Insert failed: {e}"),
         })?;
 
-        self.get_document_by_path(user_id, agent_id, path).await
+        let mut rows = tx
+            .query(
+                r#"
+                SELECT id, user_id, agent_id, path, content,
+                       created_at, updated_at, metadata
+                FROM memory_documents
+                WHERE user_id = ?1 AND agent_id IS ?2 AND path = ?3
+                "#,
+                params![user_id, agent_id_str.as_deref(), path],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Query failed: {e}"),
+            })?;
+
+        let doc = match rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Row fetch failed: {e}"),
+            })? {
+            Some(row) => row_to_memory_document(&row),
+            None => {
+                return Err(WorkspaceError::DocumentNotFound {
+                    doc_type: path.to_string(),
+                    user_id: user_id.to_string(),
+                });
+            }
+        };
+        drop(rows);
+
+        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Commit failed: {e}"),
+        })?;
+
+        Ok(doc)
     }
 
     async fn update_document(&self, id: Uuid, content: &str) -> Result<(), WorkspaceError> {
