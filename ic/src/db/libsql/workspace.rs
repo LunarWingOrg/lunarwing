@@ -342,11 +342,14 @@ impl WorkspaceStore for LibSqlBackend {
             }
         })?;
 
+        // Use the expression index (user_id, COALESCE(agent_id, ''), path)
+        // as the conflict target because the column-list form does not match
+        // when agent_id is NULL (SQLite treats NULLs as distinct).
         tx.execute(
             r#"
             INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata)
             VALUES (?1, ?2, ?3, ?4, '', '{}')
-            ON CONFLICT (user_id, agent_id, path) DO NOTHING
+            ON CONFLICT (user_id, COALESCE(agent_id, ''), path) DO NOTHING
             "#,
             params![
                 id.to_string(),

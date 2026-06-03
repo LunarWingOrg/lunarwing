@@ -114,14 +114,16 @@ impl Repository {
         let now = Utc::now();
         let metadata = serde_json::json!({});
 
-        // The no-op DO UPDATE (id = memory_documents.id) ensures RETURNING
-        // fires for both the insert and conflict cases.
+        // Reference the constraint by name because the column-list form
+        // ON CONFLICT (user_id, agent_id, path) does not match when
+        // agent_id is NULL (PostgreSQL treats NULLs as distinct).
+        // The named constraint uses NULLS NOT DISTINCT (V21 migration).
         let row = conn
             .query_one(
                 r#"
                 INSERT INTO memory_documents (id, user_id, agent_id, path, content, metadata, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, '', $5, $6, $7)
-                ON CONFLICT (user_id, agent_id, path)
+                ON CONFLICT ON CONSTRAINT unique_path_per_user
                 DO UPDATE SET id = memory_documents.id
                 RETURNING id, user_id, agent_id, path, content, created_at, updated_at, metadata
                 "#,

@@ -213,6 +213,11 @@ CREATE TABLE IF NOT EXISTS memory_documents (
     UNIQUE (user_id, agent_id, path)
 );
 
+-- The table-level UNIQUE does not prevent duplicates when agent_id is NULL
+-- (SQLite treats NULLs as distinct). This expression index covers that case.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_documents_unique_path
+    ON memory_documents(user_id, COALESCE(agent_id, ''), path);
+
 CREATE INDEX IF NOT EXISTS idx_memory_documents_user ON memory_documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_documents_path ON memory_documents(user_id, path);
 CREATE INDEX IF NOT EXISTS idx_memory_documents_updated ON memory_documents(updated_at DESC);
