@@ -234,6 +234,11 @@ impl EndpointPattern {
 
     /// Check if host pattern matches (public for allowlist validation).
     pub fn host_matches(&self, url_host: &str) -> bool {
+        // Bare "*" matches any host
+        if self.host == "*" {
+            return true;
+        }
+
         if self.host == url_host {
             return true;
         }
@@ -359,6 +364,16 @@ mod tests {
         assert!(pattern.matches("sub.api.example.com", "/", "GET"));
         assert!(!pattern.matches("example.com", "/", "GET"));
         assert!(!pattern.matches("notexample.com", "/", "GET"));
+    }
+
+    #[test]
+    fn test_endpoint_pattern_bare_wildcard_host() {
+        let pattern = EndpointPattern::host("*").with_path_prefix("/api/");
+
+        assert!(pattern.matches("multica.ai", "/api/daemon/register", "POST"));
+        assert!(pattern.matches("example.com", "/api/issues", "GET"));
+        assert!(pattern.matches("localhost", "/api/health", "GET"));
+        assert!(!pattern.matches("multica.ai", "/other/path", "GET"));
     }
 
     #[test]
