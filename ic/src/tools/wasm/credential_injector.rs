@@ -311,6 +311,11 @@ pub(crate) fn inject_credential(
 
 /// Check if a host matches a pattern (supports wildcards).
 pub(crate) fn host_matches_pattern(host: &str, pattern: &str) -> bool {
+    // Bare "*" matches any host
+    if pattern == "*" {
+        return true;
+    }
+
     if pattern == host {
         return true;
     }
@@ -390,6 +395,13 @@ mod tests {
         assert!(host_matches_pattern("api.example.com", "*.example.com"));
         assert!(host_matches_pattern("sub.api.example.com", "*.example.com"));
         assert!(!host_matches_pattern("example.com", "*.example.com"));
+    }
+
+    #[test]
+    fn test_host_matches_bare_wildcard() {
+        assert!(host_matches_pattern("multica.ai", "*"));
+        assert!(host_matches_pattern("example.com", "*"));
+        assert!(host_matches_pattern("localhost", "*"));
     }
 
     #[test]
