@@ -22,7 +22,8 @@ Initial integration with the Multica self-hostable agent orchestration server:
 - **WASM tool workspace reader** — WASM tools declaring `workspace` capability can now read from the database-backed workspace memory. Previously, tools had `reader: None` injected at registration time, silently breaking `workspace_read()` for all WASM tools. The fix pre-loads workspace documents matching the tool's allowed prefixes before WASM execution and injects a `PreloadedWorkspaceReader`. This enables agent self-configuration: agents can write `config/multica.json` via `memory_write` and the tool reads it via `workspace_read`.
 - **Config fallback** — `load_config()` now falls back to individual workspace keys (`config/multica_url`, `config/multica_workspace_id`, etc.) when the JSON config file is not present, allowing incremental configuration.
 - **Multica security analysis** (`docs/architecture/MULTICA-SEC.md`) — Documents the security model for the bridge tool, confirming workspace data is database-backed (not filesystem), config values are not secrets, and the WIT boundary is sound.
-- **Experimental** - Multica and Lunartica support is still new, but will continue to be prioritized in development going forward and is as a great self-hostable solution for orchestrating multi-agent workflows!
+- **Fully Functional** - Bridge itself is fully functional with workspace read.
+- **Experimental** - Multica and Lunartica support is still new and marked as experimental, but will continue to be prioritized in development going forward and is as a great self-hostable solution for orchestrating multi-agent workflows!
 
 ### Pebble Worker Multi-Tenant Support
 
