@@ -87,6 +87,65 @@ struct ResolvedHostCredential {
     secret_value: String,
 }
 
+/// Workspace reader backed by pre-loaded data.
+///
+/// Loaded asynchronously before WASM execution so the sync host function
+/// can read without blocking on async I/O.
+struct PreloadedWorkspaceReader {
+    data: HashMap<String, String>,
+}
+
+impl crate::tools::wasm::WorkspaceReader for PreloadedWorkspaceReader {
+    fn read(&self, path: &str) -> Option<String> {
+        self.data.get(path).cloned()
+    }
+}
+
+/// Pre-load workspace documents matching the given prefixes into a sync reader.
+async fn preload_workspace_reader(
+    workspace: &crate::workspace::Workspace,
+    prefixes: &[String],
+) -> PreloadedWorkspaceReader {
+    let mut data = HashMap::new();
+
+    let paths = match workspace.list_all().await {
+        Ok(paths) => paths,
+        Err(e) => {
+            tracing::debug!("Failed to list workspace for WASM pre-load: {e}");
+            return PreloadedWorkspaceReader { data };
+        }
+    };
+
+    let matching: Vec<&String> = if prefixes.is_empty() {
+        paths.iter().collect()
+    } else {
+        paths
+            .iter()
+            .filter(|p| prefixes.iter().any(|pfx| p.starts_with(pfx)))
+            .collect()
+    };
+
+    for path in matching {
+        match workspace.read(path).await {
+            Ok(doc) => {
+                data.insert(path.clone(), doc.content);
+            }
+            Err(e) => {
+                tracing::debug!(path = %path, "Failed to pre-load workspace doc for WASM: {e}");
+            }
+        }
+    }
+
+    if !data.is_empty() {
+        tracing::debug!(
+            count = data.len(),
+            "Pre-loaded workspace documents for WASM tool"
+        );
+    }
+
+    PreloadedWorkspaceReader { data }
+}
+
 /// Store data for WASM tool execution.
 ///
 /// Contains the resource limiter, host state, WASI context, and injected
@@ -587,6 +646,8 @@ pub struct WasmToolWrapper {
     /// Optional HTTP interceptor for testing — returns canned responses
     /// instead of making real requests when set.
     http_interceptor: Option<Arc<dyn HttpInterceptor>>,
+    /// Workspace for pre-loading workspace data before WASM execution.
+    workspace: Option<Arc<crate::workspace::Workspace>>,
 }
 
 #[derive(Debug, Clone)]
@@ -817,6 +878,7 @@ impl WasmToolWrapper {
             secrets_store: None,
             oauth_refresh: None,
             http_interceptor: None,
+            workspace: None,
         }
     }
 
@@ -878,6 +940,16 @@ impl WasmToolWrapper {
     /// each call and silently refreshes it using the stored refresh token.
     pub fn with_oauth_refresh(mut self, config: OAuthRefreshConfig) -> Self {
         self.oauth_refresh = Some(config);
+        self
+    }
+
+    /// Set the workspace for pre-loading workspace data before WASM execution.
+    ///
+    /// When set, tools with `workspace_read` capability can read from the
+    /// database-backed workspace. Data is pre-loaded asynchronously before
+    /// entering the sync WASM execution.
+    pub fn with_workspace(mut self, workspace: Arc<crate::workspace::Workspace>) -> Self {
+        self.workspace = Some(workspace);
         self
     }
 
@@ -1126,10 +1198,22 @@ impl Tool for WasmToolWrapper {
         // Serialize context for WASM
         let context_json = serde_json::to_string(ctx).ok();
 
+        // Pre-load workspace data (async, before blocking task).
+        // WASM tools run in a sync context (spawn_blocking), so we load
+        // all matching workspace documents now and inject a HashMap-backed
+        // reader that the sync host function can use.
+        let mut capabilities = self.capabilities.clone();
+        if let (Some(ws), Some(ws_cap)) = (&self.workspace, &capabilities.workspace_read) {
+            let prefixes = ws_cap.allowed_prefixes.clone();
+            let reader = preload_workspace_reader(ws, &prefixes).await;
+            if let Some(ref mut cap) = capabilities.workspace_read {
+                cap.reader = Some(Arc::new(reader));
+            }
+        }
+
         // Clone what we need for the blocking task
         let runtime = Arc::clone(&self.runtime);
         let prepared = Arc::clone(&self.prepared);
-        let capabilities = self.capabilities.clone();
         let description = self.description.clone();
         let schemas = self.schemas.clone();
         let credentials = self.credentials.clone();
@@ -1146,6 +1230,7 @@ impl Tool for WasmToolWrapper {
                 secrets_store: None, // Not needed in blocking task
                 oauth_refresh: None, // Already used above for pre-refresh
                 http_interceptor: self.http_interceptor.clone(),
+                workspace: None, // Not needed in blocking task
             };
 
             tokio::task::spawn_blocking(move || {
@@ -3233,5 +3318,52 @@ mod tests {
             result.missing_required,
             vec!["google_oauth_token".to_string()]
         );
+    }
+
+    #[test]
+    fn test_preloaded_workspace_reader() {
+        use crate::tools::wasm::WorkspaceReader;
+
+        let mut data = HashMap::new();
+        data.insert(
+            "config/multica.json".to_string(),
+            r#"{"url":"https://example.com","workspace_id":"ws-1"}"#.to_string(),
+        );
+        data.insert("config/other.txt".to_string(), "other content".to_string());
+
+        let reader = super::PreloadedWorkspaceReader { data };
+
+        assert_eq!(
+            reader.read("config/multica.json"),
+            Some(r#"{"url":"https://example.com","workspace_id":"ws-1"}"#.to_string())
+        );
+        assert_eq!(
+            reader.read("config/other.txt"),
+            Some("other content".to_string())
+        );
+        assert_eq!(reader.read("config/nonexistent"), None);
+    }
+
+    #[test]
+    fn test_preloaded_workspace_reader_works_with_host_state() {
+        let mut data = HashMap::new();
+        data.insert("config/test.json".to_string(), "test data".to_string());
+
+        let reader = Arc::new(super::PreloadedWorkspaceReader { data });
+        let capabilities = Capabilities {
+            workspace_read: Some(crate::tools::wasm::WorkspaceCapability {
+                allowed_prefixes: vec!["config/".to_string()],
+                reader: Some(reader),
+            }),
+            ..Default::default()
+        };
+
+        let state = crate::tools::wasm::HostState::new(capabilities);
+
+        let result = state.workspace_read("config/test.json").unwrap();
+        assert_eq!(result, Some("test data".to_string()));
+
+        let result = state.workspace_read("other/test.json").unwrap();
+        assert_eq!(result, None);
     }
 }

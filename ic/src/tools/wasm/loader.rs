@@ -82,6 +82,7 @@ pub struct WasmToolLoader {
     runtime: Arc<WasmToolRuntime>,
     registry: Arc<ToolRegistry>,
     secrets_store: Option<Arc<dyn SecretsStore + Send + Sync>>,
+    workspace: Option<Arc<crate::workspace::Workspace>>,
 }
 
 impl WasmToolLoader {
@@ -91,12 +92,19 @@ impl WasmToolLoader {
             runtime,
             registry,
             secrets_store: None,
+            workspace: None,
         }
     }
 
     /// Set the secrets store for credential injection in WASM tools.
     pub fn with_secrets_store(mut self, store: Arc<dyn SecretsStore + Send + Sync>) -> Self {
         self.secrets_store = Some(store);
+        self
+    }
+
+    /// Set the workspace for WASM tool workspace reads.
+    pub fn with_workspace(mut self, workspace: Arc<crate::workspace::Workspace>) -> Self {
+        self.workspace = Some(workspace);
         self
     }
 
@@ -181,6 +189,7 @@ impl WasmToolLoader {
                 schema: None,
                 secrets_store: self.secrets_store.clone(),
                 oauth_refresh,
+                workspace: self.workspace.clone(),
             })
             .await?;
 

@@ -29,9 +29,44 @@ fn default_runtime_type() -> String {
 }
 
 fn load_config() -> Result<MulticaConfig, String> {
-    let content = near::agent::host::workspace_read("config/multica.json")
-        .ok_or("config/multica.json not found in workspace")?;
-    serde_json::from_str(&content).map_err(|e| format!("failed to parse config/multica.json: {e}"))
+    // Try structured JSON config first
+    if let Some(content) = near::agent::host::workspace_read("config/multica.json") {
+        return serde_json::from_str(&content)
+            .map_err(|e| format!("failed to parse config/multica.json: {e}"));
+    }
+
+    // Fall back to individual workspace keys
+    let url = near::agent::host::workspace_read("config/multica_url")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or(
+            "Multica config not found. Write config/multica.json to workspace with: \
+             {\"url\": \"https://...\", \"workspace_id\": \"...\"}  \
+             Or set individual keys: config/multica_url, config/multica_workspace_id",
+        )?;
+    let workspace_id = near::agent::host::workspace_read("config/multica_workspace_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or("config/multica_workspace_id not found in workspace")?;
+    let runtime_id = near::agent::host::workspace_read("config/multica_runtime_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let daemon_id = near::agent::host::workspace_read("config/multica_daemon_id")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(default_daemon_id);
+    let runtime_type = near::agent::host::workspace_read("config/multica_runtime_type")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(default_runtime_type);
+
+    Ok(MulticaConfig {
+        url,
+        workspace_id,
+        runtime_id,
+        daemon_id,
+        runtime_type,
+    })
 }
 
 // ── Request types ──────────────────────────────────────────────

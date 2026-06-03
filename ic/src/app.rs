@@ -433,6 +433,7 @@ impl AppBuilder {
         &self,
         tools: &Arc<ToolRegistry>,
         hooks: &Arc<HookRegistry>,
+        workspace: &Option<Arc<Workspace>>,
     ) -> Result<
         (
             Arc<McpSessionManager>,
@@ -468,6 +469,7 @@ impl AppBuilder {
             let secrets_store = self.secrets_store.clone();
             let tools = Arc::clone(tools);
             let wasm_config = self.config.wasm.clone();
+            let workspace = workspace.clone();
             async move {
                 let mut dev_loaded_tool_names: Vec<String> = Vec::new();
 
@@ -475,6 +477,9 @@ impl AppBuilder {
                     let mut loader = WasmToolLoader::new(Arc::clone(runtime), Arc::clone(&tools));
                     if let Some(ref secrets) = secrets_store {
                         loader = loader.with_secrets_store(Arc::clone(secrets));
+                    }
+                    if let Some(ref ws) = workspace {
+                        loader = loader.with_workspace(Arc::clone(ws));
                     }
 
                     match loader.load_from_dir(&wasm_config.tools_dir).await {
@@ -821,7 +826,7 @@ impl AppBuilder {
             extension_manager,
             catalog_entries,
             dev_loaded_tool_names,
-        ) = self.init_extensions(&tools, &hooks).await?;
+        ) = self.init_extensions(&tools, &hooks, &workspace).await?;
 
         // Load bootstrap-completed flag from settings so that existing users
         // who already completed onboarding don't re-get bootstrap injection.

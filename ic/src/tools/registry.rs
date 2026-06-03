@@ -721,6 +721,9 @@ impl ToolRegistry {
         if let Some(oauth) = reg.oauth_refresh {
             wrapper = wrapper.with_oauth_refresh(oauth);
         }
+        if let Some(ws) = reg.workspace {
+            wrapper = wrapper.with_workspace(ws);
+        }
 
         // Register the tool
         self.register(Arc::new(wrapper)).await;
@@ -791,6 +794,7 @@ impl ToolRegistry {
             schema: Some(tool_with_binary.tool.parameters_schema.clone()),
             secrets_store: self.secrets_store.clone(),
             oauth_refresh: None,
+            workspace: None,
         })
         .await
         .map_err(WasmRegistrationError::Wasm)?;
@@ -836,6 +840,8 @@ pub struct WasmToolRegistration<'a> {
     pub secrets_store: Option<Arc<dyn SecretsStore + Send + Sync>>,
     /// OAuth refresh configuration for auto-refreshing expired tokens.
     pub oauth_refresh: Option<OAuthRefreshConfig>,
+    /// Workspace for pre-loading data accessible via `workspace_read`.
+    pub workspace: Option<Arc<Workspace>>,
 }
 
 impl Default for ToolRegistry {
