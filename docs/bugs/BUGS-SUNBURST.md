@@ -79,4 +79,4 @@ And the search lag being non-atomic makes sense too — commit the document, the
 
 These are all solid findings for the 1.1.0 release. Want me to keep poking at anything else, or are we good for now?
 
-
+Fixed
