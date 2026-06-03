@@ -19,6 +19,9 @@ Initial integration with the Multica self-hostable agent orchestration server:
 - **`multica-poll` skill** (`ic/skills/multica-poll/`) — Skill prompt for polling Multica.
 - **Multica deployment guide** (`docs/guides/MULTICA_DEPLOYMENT.md`) — Server compatibility verification and deployment walkthrough.
 - **Compatibility confirmed** (`docs/proposals/MULTICA_SERVER_COMPATIBILITY_CONFIRMED.md`) — Verification that Multica server is compatible with the bridge tool.
+- **WASM tool workspace reader** — WASM tools declaring `workspace` capability can now read from the database-backed workspace memory. Previously, tools had `reader: None` injected at registration time, silently breaking `workspace_read()` for all WASM tools. The fix pre-loads workspace documents matching the tool's allowed prefixes before WASM execution and injects a `PreloadedWorkspaceReader`. This enables agent self-configuration: agents can write `config/multica.json` via `memory_write` and the tool reads it via `workspace_read`.
+- **Config fallback** — `load_config()` now falls back to individual workspace keys (`config/multica_url`, `config/multica_workspace_id`, etc.) when the JSON config file is not present, allowing incremental configuration.
+- **Multica security analysis** (`docs/architecture/MULTICA-SEC.md`) — Documents the security model for the bridge tool, confirming workspace data is database-backed (not filesystem), config values are not secrets, and the WIT boundary is sound.
 - **Experimental** - Multica and Lunartica support is still new, but will continue to be prioritized in development going forward and is as a great self-hostable solution for orchestrating multi-agent workflows!
 
 ### Pebble Worker Multi-Tenant Support
@@ -71,6 +74,25 @@ The multi-tenant port registry has been upgraded from v4 to v5, reclaiming the l
 - **`reserved_3` renamed to `weechat_adapter`** — New tenants allocate `weechat_adapter` at base+9. Existing registries are auto-migrated inline during `add-tenant` or `ports list`.
 - **Standalone migration script** — `ic/scripts/migrate-ports-v5.sh` performs the v4-to-v5 migration independently of `mt-admin`, for operators who need to migrate registries without provisioning a new tenant. Requires root and validates the current version before acting.
 - **`ports list` updated** — Output now includes a `WS_ADPT` column reflecting the new slot.
+
+### Workspace/Memory Concurrency Fixes
+
+Six concurrency bugs in the workspace/memory write path were discovered during pre-release stress testing and fixed. Under concurrent write loads (8+ simultaneous operations), agents experienced data loss, silent failures, timeouts, and stale search results. Normal sequential agent operation was never affected. See `docs/bugs/BUG-workspace-concurrency-fixes-v1.1.0.md` for the full analysis.
+
+- **NULL-safe unique constraint** — PostgreSQL `UNIQUE` constraints do not prevent duplicates when `agent_id IS NULL`. Migration V21 adds `NULLS NOT DISTINCT` constraint; libSQL gets a `COALESCE` expression index.
+- **Atomic `get_or_create_document_by_path`** — Replaced a 3-connection check/insert/fetch sequence with a single atomic `INSERT ... ON CONFLICT ... RETURNING *` statement. Connection usage per operation reduced from 2-3 to 1.
+- **Atomic SQL append** — Added `append_document()` to the `WorkspaceStore` trait. Concatenation now happens in SQL (`content || separator || new_content`) rather than read-modify-write across separate connections.
+- **Connection-efficient reindex** — Embedding generation now runs without holding database connections. Added `prepare_chunks()` helper and `replace_chunks()` trait method. Connection usage per write reduced from ~6+N to ~3.
+- **Atomic document + chunk update** — Added `update_document_and_replace_chunks()` to wrap content update and chunk replacement in a single transaction, eliminating search inconsistency windows.
+- **3 regression tests** covering concurrent unique-path writes, concurrent same-path appends, and concurrent get_or_create returning the same document ID.
+
+### WASM Sandbox Bare Wildcard Host Fix
+
+The WASM HTTP allowlist and credential injector both supported subdomain wildcards (`*.example.com`) but did not treat bare `*` as a universal wildcard. Tools declaring `"host": "*"` in their capabilities (like multica-bridge) had all HTTP requests silently blocked and all credential injections silently skipped.
+
+- **`EndpointPattern::host_matches()`** — Now returns `true` when `self.host == "*"`.
+- **`host_matches_pattern()`** in credential injector — Same fix applied to the credential injection host matching.
+- **2 regression tests** added for bare wildcard matching in both code paths.
 
 ### Stuck-Run Recovery Hardening
 
