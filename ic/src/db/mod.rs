@@ -795,6 +795,28 @@ pub trait WorkspaceStore: Send + Sync {
         path: &str,
     ) -> Result<MemoryDocument, WorkspaceError>;
     async fn update_document(&self, id: Uuid, content: &str) -> Result<(), WorkspaceError>;
+
+    /// Atomically append content to a document, returning the new full content.
+    ///
+    /// If the document is empty, sets content directly. Otherwise concatenates
+    /// with the given separator. The concatenation happens in SQL so concurrent
+    /// appenders cannot lose writes.
+    async fn append_document(
+        &self,
+        id: Uuid,
+        content: &str,
+        separator: &str,
+    ) -> Result<String, WorkspaceError>;
+
+    /// Atomically update a document's content and replace its chunks in a
+    /// single transaction. This ensures search never sees new content with
+    /// stale chunks (or vice versa).
+    async fn update_document_and_replace_chunks(
+        &self,
+        id: Uuid,
+        content: &str,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<(), WorkspaceError>;
     async fn delete_document_by_path(
         &self,
         user_id: &str,

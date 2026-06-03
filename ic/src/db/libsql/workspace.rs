@@ -417,6 +417,78 @@ impl WorkspaceStore for LibSqlBackend {
         Ok(())
     }
 
+    async fn append_document(
+        &self,
+        id: Uuid,
+        content: &str,
+        separator: &str,
+    ) -> Result<String, WorkspaceError> {
+        let conn = self
+            .connect()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let now = fmt_ts(&Utc::now());
+
+        let tx = conn.transaction().await.map_err(|e| {
+            WorkspaceError::SearchFailed {
+                reason: format!("Failed to start transaction: {e}"),
+            }
+        })?;
+
+        tx.execute(
+            r#"
+            UPDATE memory_documents
+            SET content = CASE WHEN content = '' THEN ?2
+                          ELSE content || ?3 || ?2 END,
+                updated_at = ?4
+            WHERE id = ?1
+            "#,
+            params![id.to_string(), content, separator, now],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Append failed: {e}"),
+        })?;
+
+        let mut rows = tx
+            .query(
+                "SELECT content FROM memory_documents WHERE id = ?1",
+                params![id.to_string()],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Read-back failed: {e}"),
+            })?;
+
+        let new_content: String = match rows
+            .next()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Row fetch failed: {e}"),
+            })? {
+            Some(row) => row
+                .get::<String>(0)
+                .map_err(|e| WorkspaceError::SearchFailed {
+                    reason: format!("Column read failed: {e}"),
+                })?,
+            None => {
+                return Err(WorkspaceError::DocumentNotFound {
+                    doc_type: "unknown".to_string(),
+                    user_id: "unknown".to_string(),
+                });
+            }
+        };
+        drop(rows);
+
+        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Commit failed: {e}"),
+        })?;
+
+        Ok(new_content)
+    }
+
     async fn delete_document_by_path(
         &self,
         user_id: &str,
@@ -683,6 +755,77 @@ impl WorkspaceStore for LibSqlBackend {
             reason: format!("Insert failed: {}", e),
         })?;
         Ok(id)
+    }
+
+    async fn update_document_and_replace_chunks(
+        &self,
+        id: Uuid,
+        content: &str,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<(), WorkspaceError> {
+        let conn = self
+            .connect()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: e.to_string(),
+            })?;
+        let now = fmt_ts(&Utc::now());
+
+        let tx = conn.transaction().await.map_err(|e| {
+            WorkspaceError::SearchFailed {
+                reason: format!("Failed to start transaction: {e}"),
+            }
+        })?;
+
+        tx.execute(
+            "UPDATE memory_documents SET content = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id.to_string(), content, now],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Update failed: {e}"),
+        })?;
+
+        tx.execute(
+            "DELETE FROM memory_chunks WHERE document_id = ?1",
+            params![id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::ChunkingFailed {
+            reason: format!("Delete chunks failed: {e}"),
+        })?;
+
+        for (chunk_index, chunk_content, embedding) in chunks {
+            let chunk_id = Uuid::new_v4();
+            let embedding_blob = embedding.as_ref().map(|e| {
+                let bytes: Vec<u8> = e.iter().flat_map(|f| f.to_le_bytes()).collect();
+                bytes
+            });
+
+            tx.execute(
+                r#"
+                INSERT INTO memory_chunks (id, document_id, chunk_index, content, embedding)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                "#,
+                params![
+                    chunk_id.to_string(),
+                    id.to_string(),
+                    *chunk_index as i64,
+                    chunk_content.as_str(),
+                    embedding_blob.map(libsql::Value::Blob),
+                ],
+            )
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Insert chunk failed: {e}"),
+            })?;
+        }
+
+        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Commit failed: {e}"),
+        })?;
+
+        Ok(())
     }
 
     async fn replace_chunks(

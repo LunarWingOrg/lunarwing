@@ -151,6 +151,35 @@ impl Repository {
         Ok(())
     }
 
+    /// Atomically append content, returning the new full content.
+    pub async fn append_document(
+        &self,
+        id: Uuid,
+        content: &str,
+        separator: &str,
+    ) -> Result<String, WorkspaceError> {
+        let conn = self.conn().await?;
+
+        let row = conn
+            .query_one(
+                r#"
+                UPDATE memory_documents
+                SET content = CASE WHEN content = '' THEN $2
+                              ELSE content || $3 || $2 END,
+                    updated_at = NOW()
+                WHERE id = $1
+                RETURNING content
+                "#,
+                &[&id, &content, &separator],
+            )
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Append failed: {e}"),
+            })?;
+
+        Ok(row.get("content"))
+    }
+
     /// Delete a document by its path.
     pub async fn delete_document_by_path(
         &self,
@@ -325,6 +354,63 @@ impl Repository {
         })?;
 
         Ok(id)
+    }
+
+    /// Atomically update document content and replace all chunks in one
+    /// transaction so search never sees a content/chunk mismatch.
+    pub async fn update_document_and_replace_chunks(
+        &self,
+        id: Uuid,
+        content: &str,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<(), WorkspaceError> {
+        let mut conn = self.conn().await?;
+        let tx = conn.transaction().await.map_err(|e| {
+            WorkspaceError::SearchFailed {
+                reason: format!("Failed to start transaction: {e}"),
+            }
+        })?;
+
+        tx.execute(
+            "UPDATE memory_documents SET content = $2, updated_at = NOW() WHERE id = $1",
+            &[&id, &content],
+        )
+        .await
+        .map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Update failed: {e}"),
+        })?;
+
+        tx.execute(
+            "DELETE FROM memory_chunks WHERE document_id = $1",
+            &[&id],
+        )
+        .await
+        .map_err(|e| WorkspaceError::ChunkingFailed {
+            reason: format!("Delete chunks failed: {e}"),
+        })?;
+
+        for (chunk_index, chunk_content, embedding) in chunks {
+            let chunk_id = Uuid::new_v4();
+            let embedding_vec = embedding.as_ref().map(|e| Vector::from(e.clone()));
+
+            tx.execute(
+                r#"
+                INSERT INTO memory_chunks (id, document_id, chunk_index, content, embedding)
+                VALUES ($1, $2, $3, $4, $5)
+                "#,
+                &[&chunk_id, &id, chunk_index, &chunk_content.as_str(), &embedding_vec],
+            )
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Insert chunk failed: {e}"),
+            })?;
+        }
+
+        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
+            reason: format!("Commit failed: {e}"),
+        })?;
+
+        Ok(())
     }
 
     /// Atomically replace all chunks for a document in a single transaction.

@@ -206,6 +206,38 @@ impl WorkspaceStorage {
         }
     }
 
+    async fn append_document(
+        &self,
+        id: Uuid,
+        content: &str,
+        separator: &str,
+    ) -> Result<String, WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => repo.append_document(id, content, separator).await,
+            Self::Db(db) => db.append_document(id, content, separator).await,
+        }
+    }
+
+    async fn update_document_and_replace_chunks(
+        &self,
+        id: Uuid,
+        content: &str,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<(), WorkspaceError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Repo(repo) => {
+                repo.update_document_and_replace_chunks(id, content, chunks)
+                    .await
+            }
+            Self::Db(db) => {
+                db.update_document_and_replace_chunks(id, content, chunks)
+                    .await
+            }
+        }
+    }
+
     async fn delete_document_by_path(
         &self,
         user_id: &str,
@@ -636,7 +668,6 @@ impl Workspace {
     /// ```
     pub async fn write(&self, path: &str, content: &str) -> Result<MemoryDocument, WorkspaceError> {
         let path = normalize_path(path);
-        // Scan system-prompt-injected files for prompt injection.
         if is_system_prompt_file(&path) && !content.is_empty() {
             reject_if_injected(&path, content)?;
         }
@@ -644,10 +675,15 @@ impl Workspace {
             .storage
             .get_or_create_document_by_path(&self.user_id, self.agent_id, &path)
             .await?;
-        self.storage.update_document(doc.id, content).await?;
-        self.reindex_document(doc.id).await?;
 
-        // Return updated doc
+        // Compute chunks + embeddings upfront (no DB connections held).
+        let prepared = self.prepare_chunks(content).await;
+
+        // Atomic: update content + replace chunks in one transaction.
+        self.storage
+            .update_document_and_replace_chunks(doc.id, content, &prepared)
+            .await?;
+
         self.storage.get_document_by_id(doc.id).await
     }
 
@@ -658,11 +694,10 @@ impl Workspace {
     /// For semantic separation (e.g., memory entries), use `append_memory()`
     /// which uses `\n\n`.
     ///
-    /// Uses a read-modify-write pattern that is not concurrency-safe:
-    /// concurrent appends to the same path may lose writes.
+    /// The concatenation is performed atomically in SQL so concurrent
+    /// appenders cannot lose writes.
     pub async fn append(&self, path: &str, content: &str) -> Result<(), WorkspaceError> {
         let path = normalize_path(path);
-        // Scan system-prompt-injected files for prompt injection.
         if is_system_prompt_file(&path) && !content.is_empty() {
             reject_if_injected(&path, content)?;
         }
@@ -671,19 +706,17 @@ impl Workspace {
             .get_or_create_document_by_path(&self.user_id, self.agent_id, &path)
             .await?;
 
-        let new_content = if doc.content.is_empty() {
-            content.to_string()
-        } else {
-            format!("{}\n{}", doc.content, content)
-        };
+        let new_content = self
+            .storage
+            .append_document(doc.id, content, "\n")
+            .await?;
 
-        // Scan the combined content (not just the appended chunk) so that
-        // injection patterns split across multiple appends are caught.
+        // Scan the combined content so that injection patterns split
+        // across multiple appends are caught.
         if is_system_prompt_file(&path) && !new_content.is_empty() {
             reject_if_injected(&path, &new_content)?;
         }
 
-        self.storage.update_document(doc.id, &new_content).await?;
         self.reindex_document(doc.id).await?;
         Ok(())
     }
@@ -769,8 +802,12 @@ impl Workspace {
             .storage
             .get_or_create_document_by_path(&scope, self.agent_id, &path)
             .await?;
-        self.storage.update_document(doc.id, content).await?;
-        self.reindex_document(doc.id).await?;
+
+        let prepared = self.prepare_chunks(content).await;
+        self.storage
+            .update_document_and_replace_chunks(doc.id, content, &prepared)
+            .await?;
+
         let document = self.storage.get_document_by_id(doc.id).await?;
         Ok(WriteResult {
             document,
@@ -792,8 +829,6 @@ impl Workspace {
     /// shared document at that path. The `WriteResult::redirected` flag
     /// indicates when this has happened.
     ///
-    /// Uses a read-modify-write pattern that is not concurrency-safe:
-    /// concurrent appends to the same path may lose writes.
     pub async fn append_to_layer(
         &self,
         layer_name: &str,
@@ -808,12 +843,9 @@ impl Workspace {
             .storage
             .get_or_create_document_by_path(&scope, self.agent_id, &path)
             .await?;
-        let new_content = if doc.content.is_empty() {
-            content.to_string()
-        } else {
-            format!("{}\n\n{}", doc.content, content)
-        };
-        self.storage.update_document(doc.id, &new_content).await?;
+        self.storage
+            .append_document(doc.id, content, "\n\n")
+            .await?;
         self.reindex_document(doc.id).await?;
         let document = self.storage.get_document_by_id(doc.id).await?;
         Ok(WriteResult {
@@ -1509,19 +1541,11 @@ impl Workspace {
 
     // ==================== Indexing ====================
 
-    /// Re-index a document (chunk and generate embeddings).
-    ///
-    /// Embeddings are generated first (no DB connections held during network
-    /// I/O), then all chunks are replaced atomically in a single transaction.
-    async fn reindex_document(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
-        let doc = self.storage.get_document_by_id(document_id).await?;
-        let chunk_texts = chunk_document(&doc.content, ChunkConfig::default());
+    /// Chunk content and generate embeddings without holding any DB connections.
+    async fn prepare_chunks(&self, content: &str) -> Vec<(i32, String, Option<Vec<f32>>)> {
+        let chunk_texts = chunk_document(content, ChunkConfig::default());
 
-        // Generate all embeddings upfront — no DB connections held during
-        // this potentially slow network I/O.
-        let prepared: Vec<(i32, String, Option<Vec<f32>>)> = if let Some(ref provider) =
-            self.embeddings
-        {
+        if let Some(ref provider) = self.embeddings {
             let embed_futures: Vec<_> = chunk_texts
                 .iter()
                 .map(|text| {
@@ -1552,14 +1576,20 @@ impl Workspace {
                 .enumerate()
                 .map(|(i, text)| (i as i32, text, None))
                 .collect()
-        };
+        }
+    }
 
-        // Atomic replace: delete old chunks + insert all new ones in one
-        // transaction, using a single DB connection.
+    /// Re-index a document (chunk and generate embeddings).
+    ///
+    /// Used by `append()` where the content update is already committed.
+    /// For `write()` / `write_to_layer()`, prefer `update_document_and_replace_chunks`
+    /// which makes the content update and chunk replacement atomic.
+    async fn reindex_document(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
+        let doc = self.storage.get_document_by_id(document_id).await?;
+        let prepared = self.prepare_chunks(&doc.content).await;
         self.storage
             .replace_chunks(document_id, &prepared)
             .await?;
-
         Ok(())
     }
 
@@ -2118,5 +2148,115 @@ mod seed_tests {
 
         // Multi scope: is multi
         assert!(multi_count > 1);
+    }
+
+    // ── Concurrency regression tests (Sunburst stress-test findings) ──
+
+    #[cfg(feature = "libsql")]
+    mod concurrency {
+        use std::sync::Arc;
+
+        use crate::db::Database;
+        use crate::db::libsql::LibSqlBackend;
+        use crate::workspace::Workspace;
+
+        async fn setup_workspace() -> (Workspace, tempfile::TempDir) {
+            let tmp = tempfile::tempdir().unwrap();
+            let db_path = tmp.path().join("concurrency_test.db");
+            let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
+            backend.run_migrations().await.unwrap();
+            let ws = Workspace::new_with_db("test-user", Arc::new(backend) as Arc<dyn Database>);
+            (ws, tmp)
+        }
+
+        #[tokio::test]
+        async fn test_concurrent_writes_unique_paths_no_ghost() {
+            let (ws, _tmp) = setup_workspace().await;
+            let ws = Arc::new(ws);
+            let n = 10;
+
+            let mut handles = Vec::new();
+            for i in 0..n {
+                let ws = ws.clone();
+                handles.push(tokio::spawn(async move {
+                    let path = format!("concurrent/file_{i}.md");
+                    let content = format!("content for file {i}");
+                    ws.write(&path, &content).await
+                }));
+            }
+
+            let results: Vec<_> = futures::future::join_all(handles).await;
+            for r in &results {
+                assert!(r.as_ref().unwrap().is_ok(), "write should succeed");
+            }
+
+            for i in 0..n {
+                let path = format!("concurrent/file_{i}.md");
+                let doc = ws.read(&path).await.expect("file must be readable");
+                assert_eq!(doc.content, format!("content for file {i}"));
+            }
+        }
+
+        #[tokio::test]
+        async fn test_concurrent_appends_same_path_no_lost_writes() {
+            let (ws, _tmp) = setup_workspace().await;
+            let ws = Arc::new(ws);
+            let n = 10;
+
+            ws.write("append_target.md", "").await.unwrap();
+
+            let mut handles = Vec::new();
+            for i in 0..n {
+                let ws = ws.clone();
+                handles.push(tokio::spawn(async move {
+                    ws.append("append_target.md", &format!("line-{i}"))
+                        .await
+                }));
+            }
+
+            let results: Vec<_> = futures::future::join_all(handles).await;
+            for r in &results {
+                assert!(r.as_ref().unwrap().is_ok(), "append should succeed");
+            }
+
+            let doc = ws.read("append_target.md").await.unwrap();
+            for i in 0..n {
+                assert!(
+                    doc.content.contains(&format!("line-{i}")),
+                    "line-{i} must be present in content: {:?}",
+                    doc.content
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn test_get_or_create_concurrent_same_path_returns_same_id() {
+            let tmp = tempfile::tempdir().unwrap();
+            let db_path = tmp.path().join("toctou_test.db");
+            let backend = LibSqlBackend::new_local(&db_path).await.unwrap();
+            backend.run_migrations().await.unwrap();
+            let db: Arc<dyn Database> = Arc::new(backend);
+            let n = 10;
+
+            let mut handles = Vec::new();
+            for _ in 0..n {
+                let db = db.clone();
+                handles.push(tokio::spawn(async move {
+                    db.get_or_create_document_by_path("user", None, "race.md")
+                        .await
+                }));
+            }
+
+            let results: Vec<_> = futures::future::join_all(handles).await;
+            let ids: Vec<_> = results
+                .into_iter()
+                .map(|r| r.unwrap().unwrap().id)
+                .collect();
+
+            let first = ids[0];
+            for id in &ids[1..] {
+                assert_eq!(*id, first, "all concurrent creates must return same doc ID");
+            }
+        }
     }
 }
