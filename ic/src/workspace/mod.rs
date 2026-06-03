@@ -244,31 +244,15 @@ impl WorkspaceStorage {
         }
     }
 
-    async fn delete_chunks(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
-        match self {
-            #[cfg(feature = "postgres")]
-            Self::Repo(repo) => repo.delete_chunks(document_id).await,
-            Self::Db(db) => db.delete_chunks(document_id).await,
-        }
-    }
-
-    async fn insert_chunk(
+    async fn replace_chunks(
         &self,
         document_id: Uuid,
-        chunk_index: i32,
-        content: &str,
-        embedding: Option<&[f32]>,
-    ) -> Result<Uuid, WorkspaceError> {
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<Vec<Uuid>, WorkspaceError> {
         match self {
             #[cfg(feature = "postgres")]
-            Self::Repo(repo) => {
-                repo.insert_chunk(document_id, chunk_index, content, embedding)
-                    .await
-            }
-            Self::Db(db) => {
-                db.insert_chunk(document_id, chunk_index, content, embedding)
-                    .await
-            }
+            Self::Repo(repo) => repo.replace_chunks(document_id, chunks).await,
+            Self::Db(db) => db.replace_chunks(document_id, chunks).await,
         }
     }
 
@@ -1526,35 +1510,55 @@ impl Workspace {
     // ==================== Indexing ====================
 
     /// Re-index a document (chunk and generate embeddings).
+    ///
+    /// Embeddings are generated first (no DB connections held during network
+    /// I/O), then all chunks are replaced atomically in a single transaction.
     async fn reindex_document(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
-        // Get the document
         let doc = self.storage.get_document_by_id(document_id).await?;
+        let chunk_texts = chunk_document(&doc.content, ChunkConfig::default());
 
-        // Chunk the content
-        let chunks = chunk_document(&doc.content, ChunkConfig::default());
-
-        // Delete old chunks
-        self.storage.delete_chunks(document_id).await?;
-
-        // Insert new chunks
-        for (index, content) in chunks.into_iter().enumerate() {
-            // Generate embedding if provider available
-            let embedding = if let Some(ref provider) = self.embeddings {
-                match provider.embed(&content).await {
-                    Ok(emb) => Some(emb),
-                    Err(e) => {
-                        tracing::warn!("Failed to generate embedding: {}", e);
-                        None
+        // Generate all embeddings upfront — no DB connections held during
+        // this potentially slow network I/O.
+        let prepared: Vec<(i32, String, Option<Vec<f32>>)> = if let Some(ref provider) =
+            self.embeddings
+        {
+            let embed_futures: Vec<_> = chunk_texts
+                .iter()
+                .map(|text| {
+                    let provider = provider.clone();
+                    let text = text.clone();
+                    async move {
+                        match provider.embed(&text).await {
+                            Ok(emb) => Some(emb),
+                            Err(e) => {
+                                tracing::warn!("Failed to generate embedding: {e}");
+                                None
+                            }
+                        }
                     }
-                }
-            } else {
-                None
-            };
+                })
+                .collect();
 
-            self.storage
-                .insert_chunk(document_id, index as i32, &content, embedding.as_deref())
-                .await?;
-        }
+            let embeddings = futures::future::join_all(embed_futures).await;
+            chunk_texts
+                .into_iter()
+                .zip(embeddings)
+                .enumerate()
+                .map(|(i, (text, emb))| (i as i32, text, emb))
+                .collect()
+        } else {
+            chunk_texts
+                .into_iter()
+                .enumerate()
+                .map(|(i, text)| (i as i32, text, None))
+                .collect()
+        };
+
+        // Atomic replace: delete old chunks + insert all new ones in one
+        // transaction, using a single DB connection.
+        self.storage
+            .replace_chunks(document_id, &prepared)
+            .await?;
 
         Ok(())
     }

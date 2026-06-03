@@ -825,6 +825,18 @@ pub trait WorkspaceStore: Send + Sync {
         content: &str,
         embedding: Option<&[f32]>,
     ) -> Result<Uuid, WorkspaceError>;
+
+    /// Atomically replace all chunks for a document in a single transaction.
+    ///
+    /// Deletes existing chunks and inserts the new set. Each entry in `chunks`
+    /// is `(chunk_index, content, optional_embedding)`. Embeddings must be
+    /// pre-computed by the caller so no network I/O occurs while the transaction
+    /// is open.
+    async fn replace_chunks(
+        &self,
+        document_id: Uuid,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<Vec<Uuid>, WorkspaceError>;
     async fn update_chunk_embedding(
         &self,
         chunk_id: Uuid,

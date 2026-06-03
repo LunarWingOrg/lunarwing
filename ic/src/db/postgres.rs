@@ -762,6 +762,14 @@ impl WorkspaceStore for PgBackend {
             .await
     }
 
+    async fn replace_chunks(
+        &self,
+        document_id: Uuid,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<Vec<Uuid>, WorkspaceError> {
+        self.repo.replace_chunks(document_id, chunks).await
+    }
+
     async fn update_chunk_embedding(
         &self,
         chunk_id: Uuid,

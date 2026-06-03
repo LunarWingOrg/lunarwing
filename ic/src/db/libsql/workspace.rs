@@ -644,6 +644,68 @@ impl WorkspaceStore for LibSqlBackend {
         Ok(id)
     }
 
+    async fn replace_chunks(
+        &self,
+        document_id: Uuid,
+        chunks: &[(i32, String, Option<Vec<f32>>)],
+    ) -> Result<Vec<Uuid>, WorkspaceError> {
+        let conn = self
+            .connect()
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: e.to_string(),
+            })?;
+
+        let tx = conn.transaction().await.map_err(|e| {
+            WorkspaceError::ChunkingFailed {
+                reason: format!("Failed to start transaction: {e}"),
+            }
+        })?;
+
+        tx.execute(
+            "DELETE FROM memory_chunks WHERE document_id = ?1",
+            params![document_id.to_string()],
+        )
+        .await
+        .map_err(|e| WorkspaceError::ChunkingFailed {
+            reason: format!("Delete failed: {e}"),
+        })?;
+
+        let mut ids = Vec::with_capacity(chunks.len());
+        for (chunk_index, content, embedding) in chunks {
+            let id = Uuid::new_v4();
+            let embedding_blob = embedding.as_ref().map(|e| {
+                let bytes: Vec<u8> = e.iter().flat_map(|f| f.to_le_bytes()).collect();
+                bytes
+            });
+
+            tx.execute(
+                r#"
+                INSERT INTO memory_chunks (id, document_id, chunk_index, content, embedding)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                "#,
+                params![
+                    id.to_string(),
+                    document_id.to_string(),
+                    *chunk_index as i64,
+                    content.as_str(),
+                    embedding_blob.map(libsql::Value::Blob),
+                ],
+            )
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Insert failed: {e}"),
+            })?;
+            ids.push(id);
+        }
+
+        tx.commit().await.map_err(|e| WorkspaceError::ChunkingFailed {
+            reason: format!("Commit failed: {e}"),
+        })?;
+
+        Ok(ids)
+    }
+
     async fn update_chunk_embedding(
         &self,
         chunk_id: Uuid,
