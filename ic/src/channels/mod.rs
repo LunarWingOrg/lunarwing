@@ -30,7 +30,6 @@
 mod channel;
 mod http;
 mod manager;
-pub mod relay;
 mod repl;
 mod signal;
 #[cfg(unix)]

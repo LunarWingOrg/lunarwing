@@ -5,9 +5,7 @@
 
 use tokio::sync::RwLock;
 
-use crate::extensions::{
-    AuthHint, ExtensionKind, ExtensionSource, RegistryEntry, ResultSource, SearchResult,
-};
+use crate::extensions::{ExtensionKind, RegistryEntry, ResultSource, SearchResult};
 
 /// Curated extension registry with fuzzy search.
 pub struct ExtensionRegistry {
@@ -28,8 +26,8 @@ impl ExtensionRegistry {
 
     /// Create a new registry merging builtin entries with catalog-provided entries.
     ///
-    /// Deduplicates by `(name, kind)` pair -- a builtin MCP "slack" and a registry
-    /// WASM "slack" can coexist since they're different kinds.
+    /// Deduplicates by `(name, kind)` pair -- a builtin MCP "telegram" and a registry
+    /// WASM "telegram" can coexist since they're different kinds.
     pub fn new_with_catalog(catalog_entries: Vec<RegistryEntry>) -> Self {
         let mut entries = builtin_entries();
         for entry in catalog_entries {
@@ -225,40 +223,10 @@ fn score_entry(entry: &RegistryEntry, tokens: &[String]) -> u32 {
 
 /// Well-known extensions that ship with lunarwing.
 ///
-/// If `relay_url` is provided, a channel-relay Slack entry is included in the list.
-/// Pass `None` when the relay is not configured.
-pub fn builtin_entries() -> Vec<RegistryEntry> {
-    builtin_entries_with_relay(std::env::var("CHANNEL_RELAY_URL").ok())
-}
-
-/// Well-known extensions, with an optional relay URL for the channel-relay entry.
-///
 /// MCP server entries are loaded from `registry/mcp-servers/*.json` via the catalog
-/// system. Only runtime-dependent entries (like channel-relay) remain here.
-pub fn builtin_entries_with_relay(relay_url: Option<String>) -> Vec<RegistryEntry> {
-    let mut entries = vec![];
-
-    // Conditionally add channel-relay entries when relay URL is configured
-    if let Some(relay_url) = relay_url {
-        entries.push(RegistryEntry {
-            name: crate::channels::relay::DEFAULT_RELAY_NAME.to_string(),
-            display_name: "Slack".to_string(),
-            kind: ExtensionKind::ChannelRelay,
-            description: "Connect Slack workspace via channel relay".to_string(),
-            keywords: vec![
-                "slack".into(),
-                "chat".into(),
-                "messaging".into(),
-                "relay".into(),
-            ],
-            source: ExtensionSource::ChannelRelay { relay_url },
-            fallback_source: None,
-            auth_hint: AuthHint::ChannelRelayOAuth,
-            version: None,
-        });
-    }
-
-    entries
+/// system. Builtin entries here are for runtime-dependent extensions only.
+pub fn builtin_entries() -> Vec<RegistryEntry> {
+    vec![]
 }
 
 #[cfg(test)]
@@ -705,7 +673,7 @@ mod tests {
         assert_eq!(entry.unwrap().display_name, "Cached Tool");
     }
 
-    // Channel tests (telegram, slack) require the embedded catalog
+    // Channel tests (telegram) require the embedded catalog
     // to be loaded via new_with_catalog(). See test_new_with_catalog for catalog coverage.
 
     // === QA Plan P2 - 2.4: Extension registry collision tests ===
@@ -819,29 +787,4 @@ mod tests {
         assert_eq!(entry.unwrap().kind, ExtensionKind::WasmChannel);
     }
 
-    #[test]
-    fn test_builtin_entries_with_relay_none_excludes_relay() {
-        let entries = super::builtin_entries_with_relay(None);
-        assert!(
-            !entries
-                .iter()
-                .any(|e| e.kind == ExtensionKind::ChannelRelay),
-            "No ChannelRelay entry when relay URL is None"
-        );
-    }
-
-    #[test]
-    fn test_builtin_entries_with_relay_some_includes_relay() {
-        let entries =
-            super::builtin_entries_with_relay(Some("http://relay.example.com".to_string()));
-        let relay = entries
-            .iter()
-            .find(|e| e.kind == ExtensionKind::ChannelRelay);
-        assert!(relay.is_some(), "ChannelRelay entry should be present");
-        if let ExtensionSource::ChannelRelay { relay_url } = &relay.unwrap().source {
-            assert_eq!(relay_url, "http://relay.example.com");
-        } else {
-            panic!("Expected ChannelRelay source");
-        }
-    }
 }
