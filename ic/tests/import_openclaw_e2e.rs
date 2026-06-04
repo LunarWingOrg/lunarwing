@@ -132,7 +132,7 @@ mod e2e_import_tests {
             let channel = match conv_num {
                 0 => "telegram",
                 1 => "slack",
-                _ => "discord",
+                _ => "xmpp",
             };
 
             conn.execute(
@@ -485,6 +485,6 @@ mod e2e_import_tests {
             conversations.iter().map(|c| c.channel.as_str()).collect();
         assert!(channels.contains("telegram"));
         assert!(channels.contains("slack"));
-        assert!(channels.contains("discord"));
+        assert!(channels.contains("xmpp"));
     }
 }

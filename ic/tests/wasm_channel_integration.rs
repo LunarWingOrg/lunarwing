@@ -154,7 +154,7 @@ mod router_tests {
         let runtime = create_test_runtime();
 
         // Register multiple channels
-        for name in &["slack", "telegram", "discord"] {
+        for name in &["slack", "telegram", "darkirc"] {
             let channel = Arc::new(create_test_channel(
                 Arc::clone(&runtime),
                 name,
@@ -176,10 +176,10 @@ mod router_tests {
         assert_eq!(channels.len(), 3);
         assert!(channels.contains(&"slack".to_string()));
         assert!(channels.contains(&"telegram".to_string()));
-        assert!(channels.contains(&"discord".to_string()));
+        assert!(channels.contains(&"darkirc".to_string()));
 
         // Verify all paths work
-        for name in &["slack", "telegram", "discord"] {
+        for name in &["slack", "telegram", "darkirc"] {
             let found = router
                 .get_channel_for_path(&format!("/webhook/{}", name))
                 .await;

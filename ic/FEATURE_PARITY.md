@@ -69,7 +69,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | REPL (simple) | ✅ | ✅ | - | For testing |
 | WASM channels | ❌ | ✅ | - | LunarWing innovation; host resolves owner scope vs sender identity |
 | Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username, DM topics, setup-time owner auto-verification, owner-scoped persistence |
-| Discord | ✅ | ❌ | P2 | discord.js, thread parent binding inheritance |
 | Signal | ✅ | ✅ | P2 | signal-cli daemonPC, SSE listener HTTP/JSON-R, user/group allowlists, DM pairing |
 | XMPP | ❌ | 🚧 | P3 | Installable WASM channel plus local `xmpp-bridge`; DM/MUC routing and setup-time secrets/fields work, configured rooms are auto-joined on connect with zero-history MUC presence, and `encrypted_rooms` now add fail-closed encrypted-room handling with disco validation (`muc_nonanonymous` + `muc_membersonly`), member/admin/owner list retrieval, occupant real-JID tracking from MUC presence, bridge status reporting for encrypted-room readiness, and outbound/inbound encrypted groupchat on the current legacy-compatible OMEMO path. Bridge-owned DM OMEMO also has in-tree session bootstrap/decrypt/persisted-session coverage, initial availability presence is sent on connect so roster presence reflects online state, outbound OMEMO IQ responses are matched even when peers omit `from`, reply routing preserves the sender OMEMO device ID when an established session exists, device-list/bundle fetches prefer the latest published item, legacy OMEMO prekey bundles now use registration ID `0` for external-client interop, and the bridge can now live-toggle/reset the outbound hourly XMPP message cap via `/v1/outbound-rate-limit` without a restart. Remaining gaps are full OMEMO 2/SCE room interop validation and broader external-client interoperability validation |
 | Slack | ✅ | ✅ | - | WASM tool |
@@ -96,14 +95,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Cron/heartbeat topic targeting | ✅ | ❌ | Messages land in correct topic |
 | DM topics support | ✅ | ❌ | Agent/topic bindings in DMs and agent-scoped SessionKeys |
 | Persistent ACP topic binding | ✅ | ❌ | ACP harness sessions can pin to Telegram forum or DM topics |
-
-### Discord-Specific Features (since Feb 2025)
-
-| Feature | OpenClaw | LunarWing | Notes |
-|---------|----------|----------|-------|
-| Forwarded attachment downloads | ✅ | ❌ | Fetch media from forwarded messages |
-| Faster reaction state machine | ✅ | ❌ | Watchdog + debounce |
-| Thread parent binding inheritance | ✅ | ❌ | Threads inherit parent routing |
 
 ### Slack-Specific Features (since Feb 2025)
 

@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Google Sheets returns 403 PERMISSION_DENIED after completing OAuth ([#1164](https://github.com/nearai/ironclaw/pull/1164))
 - HTTP webhook secret transmitted in request body rather than via header, docs inconsistency and security concern ([#1162](https://github.com/nearai/ironclaw/pull/1162))
 - *(ci)* exclude ironclaw_safety from release automation ([#1146](https://github.com/nearai/ironclaw/pull/1146))
-- *(registry)* bump versions for github, web-search, and discord extensions ([#1106](https://github.com/nearai/ironclaw/pull/1106))
+- *(registry)* bump versions for github and web-search extensions ([#1106](https://github.com/nearai/ironclaw/pull/1106))
 - *(mcp)* address 14 audit findings across MCP module ([#1094](https://github.com/nearai/ironclaw/pull/1094))
 - *(http)* replace .expect() with match in webhook handler ([#1133](https://github.com/nearai/ironclaw/pull/1133))
 - *(time)* treat empty timezone string as absent ([#1127](https://github.com/nearai/ironclaw/pull/1127))
@@ -374,7 +374,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - guard zsh compdef call to prevent error before compinit ([#422](https://github.com/nearai/ironclaw/pull/422))
 - *(telegram)* remove restart button, validate token on setup ([#434](https://github.com/nearai/ironclaw/pull/434))
 - web UI routines tab shows all routines regardless of creating channel ([#391](https://github.com/nearai/ironclaw/pull/391))
-- Discord Ed25519 signature verification and capabilities header alias ([#148](https://github.com/nearai/ironclaw/pull/148)) ([#372](https://github.com/nearai/ironclaw/pull/372))
 - prevent duplicate WASM channel activation on startup ([#390](https://github.com/nearai/ironclaw/pull/390))
 
 ### Other

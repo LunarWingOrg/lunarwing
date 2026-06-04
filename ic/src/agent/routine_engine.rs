@@ -2352,7 +2352,7 @@ mod tests {
         assert!(super::routine_matches_message(&routine, &msg_exact));
 
         // Different channel must not match
-        let msg_wrong = make_message("user1", "discord", "hello");
+        let msg_wrong = make_message("user1", "weechat", "hello");
         assert!(!super::routine_matches_message(&routine, &msg_wrong));
     }
 

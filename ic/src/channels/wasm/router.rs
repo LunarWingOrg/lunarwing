@@ -186,7 +186,7 @@ impl WasmChannelRouter {
     /// Register an Ed25519 public key for signature verification.
     ///
     /// Validates that the key is valid hex encoding of a 32-byte Ed25519 public key.
-    /// Channels with a registered key will have Discord-style Ed25519
+    /// Channels with a registered key will have Ed25519
     /// signature validation performed before forwarding to WASM.
     pub async fn register_signature_key(
         &self,
@@ -402,7 +402,7 @@ async fn webhook_handler(
         }
     }
 
-    // Ed25519 signature verification (Discord-style)
+    // Ed25519 signature verification
     if let Some(pub_key_hex) = state.router.get_signature_key(channel_name).await {
         let sig_hex = headers
             .get("x-signature-ed25519")
@@ -418,7 +418,7 @@ async fn webhook_handler(
                     .unwrap_or_default()
                     .as_secs() as i64;
 
-                if !crate::channels::wasm::signature::verify_discord_signature(
+                if !crate::channels::wasm::signature::verify_ed25519_signature(
                     &pub_key_hex,
                     sig,
                     ts,
@@ -869,17 +869,17 @@ mod tests {
     #[tokio::test]
     async fn test_register_and_get_signature_key() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
 
         router.register(channel, vec![], None, None).await;
 
         let fake_pub_key = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2";
         router
-            .register_signature_key("discord", fake_pub_key)
+            .register_signature_key("test_channel", fake_pub_key)
             .await
             .unwrap();
 
-        let key = router.get_signature_key("discord").await;
+        let key = router.get_signature_key("test_channel").await;
         assert_eq!(key, Some(fake_pub_key.to_string()));
     }
 
@@ -897,11 +897,11 @@ mod tests {
     #[tokio::test]
     async fn test_unregister_removes_signature_key() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
 
         let endpoints = vec![RegisteredEndpoint {
-            channel_name: "discord".to_string(),
-            path: "/webhook/discord".to_string(),
+            channel_name: "test_channel".to_string(),
+            path: "/webhook/test_channel".to_string(),
             methods: vec!["POST".to_string()],
             require_secret: false,
         }];
@@ -910,18 +910,18 @@ mod tests {
         // Use a valid 32-byte Ed25519 key for this test
         let valid_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b7e8c7ac6602";
         router
-            .register_signature_key("discord", valid_key)
+            .register_signature_key("test_channel", valid_key)
             .await
             .unwrap();
 
         // Key should exist
-        assert!(router.get_signature_key("discord").await.is_some());
+        assert!(router.get_signature_key("test_channel").await.is_some());
 
         // Unregister
-        router.unregister("discord").await;
+        router.unregister("test_channel").await;
 
         // Key should be gone
-        assert!(router.get_signature_key("discord").await.is_none());
+        assert!(router.get_signature_key("test_channel").await.is_none());
     }
 
     // ── Key Validation Tests ──────────────────────────────────────────
@@ -929,23 +929,23 @@ mod tests {
     #[tokio::test]
     async fn test_register_valid_signature_key_succeeds() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
         // Valid 32-byte Ed25519 public key (from test keypair)
         let valid_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b7e8c7ac6602";
-        let result = router.register_signature_key("discord", valid_key).await;
+        let result = router.register_signature_key("test_channel", valid_key).await;
         assert!(result.is_ok(), "Valid Ed25519 key should be accepted");
     }
 
     #[tokio::test]
     async fn test_register_invalid_hex_key_fails() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
         let result = router
-            .register_signature_key("discord", "not-valid-hex-zzz")
+            .register_signature_key("test_channel", "not-valid-hex-zzz")
             .await;
         assert!(result.is_err(), "Invalid hex should be rejected");
     }
@@ -953,54 +953,54 @@ mod tests {
     #[tokio::test]
     async fn test_register_wrong_length_key_fails() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
         // 16 bytes instead of 32
         let short_key = hex::encode([0u8; 16]);
-        let result = router.register_signature_key("discord", &short_key).await;
+        let result = router.register_signature_key("test_channel", &short_key).await;
         assert!(result.is_err(), "Wrong-length key should be rejected");
     }
 
     #[tokio::test]
     async fn test_register_empty_key_fails() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
-        let result = router.register_signature_key("discord", "").await;
+        let result = router.register_signature_key("test_channel", "").await;
         assert!(result.is_err(), "Empty key should be rejected");
     }
 
     #[tokio::test]
     async fn test_valid_key_is_retrievable() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
         let valid_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b7e8c7ac6602";
         router
-            .register_signature_key("discord", valid_key)
+            .register_signature_key("test_channel", valid_key)
             .await
             .unwrap();
 
-        let stored = router.get_signature_key("discord").await;
+        let stored = router.get_signature_key("test_channel").await;
         assert_eq!(stored, Some(valid_key.to_string()));
     }
 
     #[tokio::test]
     async fn test_invalid_key_does_not_store() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
         router.register(channel, vec![], None, None).await;
 
         // Attempt to register invalid key
         let _ = router
-            .register_signature_key("discord", "not-valid-hex")
+            .register_signature_key("test_channel", "not-valid-hex")
             .await;
 
         // Should not have stored anything
-        let stored = router.get_signature_key("discord").await;
+        let stored = router.get_signature_key("test_channel").await;
         assert!(stored.is_none(), "Invalid key should not be stored");
     }
 
@@ -1014,14 +1014,14 @@ mod tests {
     use crate::channels::wasm::router::create_wasm_channel_router;
     use ed25519_dalek::{Signer, SigningKey};
 
-    /// Helper to create a router with a registered channel at /webhook/discord.
-    async fn setup_discord_router() -> (Arc<WasmChannelRouter>, AxumRouter) {
+    /// Helper to create a router with a registered channel at /webhook/test_channel.
+    async fn setup_test_router() -> (Arc<WasmChannelRouter>, AxumRouter) {
         let wasm_router = Arc::new(WasmChannelRouter::new());
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
 
         let endpoints = vec![RegisteredEndpoint {
-            channel_name: "discord".to_string(),
-            path: "/webhook/discord".to_string(),
+            channel_name: "test_channel".to_string(),
+            path: "/webhook/test_channel".to_string(),
             methods: vec!["POST".to_string()],
             require_secret: false,
         }];
@@ -1043,20 +1043,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_rejects_missing_sig_headers() {
-        let (wasm_router, app) = setup_discord_router().await;
+        let (wasm_router, app) = setup_test_router().await;
 
         // Register a signature key
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
         // Send request without signature headers
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .body(Body::from(r#"{"type":1}"#))
             .unwrap();
@@ -1071,18 +1071,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_rejects_invalid_signature() {
-        let (wasm_router, app) = setup_discord_router().await;
+        let (wasm_router, app) = setup_test_router().await;
 
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .header("x-signature-ed25519", "deadbeefdeadbeef")
             .header("x-signature-timestamp", "1234567890")
@@ -1099,12 +1099,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_accepts_valid_signature() {
-        let (wasm_router, app) = setup_discord_router().await;
+        let (wasm_router, app) = setup_test_router().await;
 
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
@@ -1124,7 +1124,7 @@ mod tests {
 
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .header("x-signature-ed25519", &sig_hex)
             .header("x-signature-timestamp", &timestamp)
@@ -1142,12 +1142,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_skips_sig_for_no_key() {
-        let (_wasm_router, app) = setup_discord_router().await;
+        let (_wasm_router, app) = setup_test_router().await;
 
         // No signature key registered — should not require signature
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .body(Body::from(r#"{"type":1}"#))
             .unwrap();
@@ -1163,12 +1163,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_sig_check_uses_body() {
-        let (wasm_router, app) = setup_discord_router().await;
+        let (wasm_router, app) = setup_test_router().await;
 
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
@@ -1185,7 +1185,7 @@ mod tests {
         let body_b = br#"{"type":2}"#;
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .header("x-signature-ed25519", &sig_hex)
             .header("x-signature-timestamp", timestamp)
@@ -1202,12 +1202,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_sig_check_uses_timestamp() {
-        let (wasm_router, app) = setup_discord_router().await;
+        let (wasm_router, app) = setup_test_router().await;
 
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
@@ -1224,7 +1224,7 @@ mod tests {
         let timestamp_b = "9999999999";
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord")
+            .uri("/webhook/test_channel")
             .header("content-type", "application/json")
             .header("x-signature-ed25519", &sig_hex)
             .header("x-signature-timestamp", timestamp_b)
@@ -1242,11 +1242,11 @@ mod tests {
     #[tokio::test]
     async fn test_webhook_sig_plus_secret() {
         let wasm_router = Arc::new(WasmChannelRouter::new());
-        let channel = create_test_channel("discord");
+        let channel = create_test_channel("test_channel");
 
         let endpoints = vec![RegisteredEndpoint {
-            channel_name: "discord".to_string(),
-            path: "/webhook/discord".to_string(),
+            channel_name: "test_channel".to_string(),
+            path: "/webhook/test_channel".to_string(),
             methods: vec!["POST".to_string()],
             require_secret: true,
         }];
@@ -1259,7 +1259,7 @@ mod tests {
         let signing_key = test_signing_key();
         let pub_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
         wasm_router
-            .register_signature_key("discord", &pub_key_hex)
+            .register_signature_key("test_channel", &pub_key_hex)
             .await
             .unwrap();
 
@@ -1281,7 +1281,7 @@ mod tests {
         // Provide valid signature AND valid secret
         let req = Request::builder()
             .method("POST")
-            .uri("/webhook/discord?secret=my-secret")
+            .uri("/webhook/test_channel?secret=my-secret")
             .header("content-type", "application/json")
             .header("x-signature-ed25519", &sig_hex)
             .header("x-signature-timestamp", &timestamp)

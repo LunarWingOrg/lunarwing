@@ -299,7 +299,7 @@ pub struct WebhookSchema {
     pub secret_name: Option<String>,
 
     /// Secret name in secrets store containing the Ed25519 public key
-    /// for signature verification (e.g., Discord interaction verification).
+    /// for Ed25519 signature verification.
     #[serde(default)]
     pub signature_key_secret_name: Option<String>,
 
@@ -678,7 +678,7 @@ mod tests {
         );
     }
 
-    // ── Category 5: Discord Capabilities Setup & Configuration ──────────
+    // ── Category 5: Channel Capabilities Setup & Configuration ──────────
 
     #[test]
     fn test_validate_channel_short_prompt() {
@@ -740,41 +740,21 @@ mod tests {
     }
 
     #[test]
-    fn test_discord_capabilities_has_public_key_secret() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-
-        let secret_names: Vec<&str> = file
-            .setup
-            .required_secrets
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-
-        assert!(
-            secret_names.contains(&"discord_public_key"),
-            "discord.capabilities.json must include discord_public_key in setup.required_secrets, \
-             found: {:?}",
-            secret_names
-        );
-    }
-
-    #[test]
     fn test_webhook_schema_signature_key_secret_name() {
         let json = r#"{
-            "name": "discord",
+            "name": "test_channel",
             "capabilities": {
                 "channel": {
-                    "allowed_paths": ["/webhook/discord"],
+                    "allowed_paths": ["/webhook/test_channel"],
                     "webhook": {
-                        "signature_key_secret_name": "discord_public_key"
+                        "signature_key_secret_name": "test_public_key"
                     }
                 }
             }
         }"#;
 
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-        assert_eq!(file.signature_key_secret_name(), Some("discord_public_key"));
+        assert_eq!(file.signature_key_secret_name(), Some("test_public_key"));
     }
 
     #[test]
@@ -795,31 +775,4 @@ mod tests {
         assert_eq!(file.signature_key_secret_name(), None);
     }
 
-    #[test]
-    fn test_discord_capabilities_signature_key() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-        assert_eq!(
-            file.signature_key_secret_name(),
-            Some("discord_public_key"),
-            "discord.capabilities.json must declare signature_key_secret_name"
-        );
-    }
-
-    #[test]
-    fn test_discord_capabilities_secrets_allowlist() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-
-        let caps = file.to_capabilities();
-        let secrets_caps = caps
-            .tool_capabilities
-            .secrets
-            .expect("Discord should have secrets capability");
-
-        assert!(
-            secrets_caps.is_allowed("discord_public_key"),
-            "discord_public_key must be in the secrets allowlist"
-        );
-    }
 }

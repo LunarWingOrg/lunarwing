@@ -26,7 +26,6 @@ pub const RESERVED_CHANNEL_NAMES: &[&str] = &[
     "telegram",
     "signal",
     "slack",
-    "discord",
     "repl",
     "cli",
     "http",

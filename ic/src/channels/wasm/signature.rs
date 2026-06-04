@@ -1,22 +1,19 @@
-//! Webhook signature verification (Discord Ed25519 and Slack HMAC-SHA256).
+//! Webhook signature verification (Ed25519 and HMAC-SHA256).
 //!
 //! Validates request signatures for incoming webhooks:
-//! - Discord: `X-Signature-Ed25519` and `X-Signature-Timestamp` headers
-//! - Slack: `X-Slack-Signature` and `X-Slack-Request-Timestamp` headers
-//!
-//! See: <https://discord.com/developers/docs/interactions/overview#validating-security-request-headers>
-//! See: <https://api.slack.com/authentication/verifying-requests-from-slack>
+//! - Ed25519: `X-Signature-Ed25519` and `X-Signature-Timestamp` headers
+//! - HMAC-SHA256: `X-Slack-Signature` and `X-Slack-Request-Timestamp` headers
 
-/// Verify a Discord interaction signature.
+/// Verify an Ed25519 webhook signature.
 ///
-/// Discord signs each interaction with Ed25519 using:
+/// Validates using:
 /// - message = `timestamp` (UTF-8 bytes) ++ `body` (raw bytes)
 /// - signature = Ed25519 detached signature (hex-encoded in header)
-/// - public_key = Application public key from Developer Portal (hex-encoded)
+/// - public_key = Ed25519 public key (hex-encoded)
 ///
 /// Returns `true` if the signature is valid, `false` on any error
 /// (bad hex, wrong length, invalid signature, etc.).
-pub fn verify_discord_signature(
+pub fn verify_ed25519_signature(
     public_key_hex: &str,
     signature_hex: &str,
     timestamp: &str,
@@ -173,7 +170,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
 
         assert!(
-            verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS),
+            verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS),
             "Valid signature should verify successfully"
         );
     }
@@ -190,7 +187,7 @@ mod tests {
         sig = hex::encode(&sig_bytes);
 
         assert!(
-            !verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS),
             "Tampered signature should fail verification"
         );
     }
@@ -203,7 +200,7 @@ mod tests {
 
         let tampered_body = b"tampered body";
         assert!(
-            !verify_discord_signature(&pub_key, &sig, &ts, tampered_body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, &sig, &ts, tampered_body, TEST_TS),
             "Signature for different body should fail"
         );
     }
@@ -215,7 +212,7 @@ mod tests {
         let (pub_key, sig, _ts) = sign_test_message(timestamp, body);
 
         assert!(
-            !verify_discord_signature(&pub_key, &sig, "9999999999", body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, &sig, "9999999999", body, TEST_TS),
             "Signature with wrong timestamp should fail"
         );
     }
@@ -227,7 +224,7 @@ mod tests {
         let (pub_key, _sig, ts) = sign_test_message(timestamp, body);
 
         assert!(
-            !verify_discord_signature(&pub_key, "not-valid-hex-zzz", &ts, body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, "not-valid-hex-zzz", &ts, body, TEST_TS),
             "Non-hex signature should fail gracefully"
         );
     }
@@ -239,7 +236,7 @@ mod tests {
         let (_pub_key, sig, ts) = sign_test_message(timestamp, body);
 
         assert!(
-            !verify_discord_signature("not-valid-hex-zzz", &sig, &ts, body, TEST_TS),
+            !verify_ed25519_signature("not-valid-hex-zzz", &sig, &ts, body, TEST_TS),
             "Non-hex public key should fail gracefully"
         );
     }
@@ -253,7 +250,7 @@ mod tests {
         // Too short (only 32 bytes instead of 64)
         let short_sig = hex::encode([0u8; 32]);
         assert!(
-            !verify_discord_signature(&pub_key, &short_sig, &ts, body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, &short_sig, &ts, body, TEST_TS),
             "Short signature should fail"
         );
     }
@@ -267,7 +264,7 @@ mod tests {
         // Too short (only 16 bytes instead of 32)
         let short_key = hex::encode([0u8; 16]);
         assert!(
-            !verify_discord_signature(&short_key, &sig, &ts, body, TEST_TS),
+            !verify_ed25519_signature(&short_key, &sig, &ts, body, TEST_TS),
             "Short public key should fail"
         );
     }
@@ -279,13 +276,13 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
 
         assert!(
-            verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS),
+            verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS),
             "Empty body with valid signature should succeed"
         );
     }
 
     #[test]
-    fn test_discord_reference_vector() {
+    fn test_ed25519_reference_vector() {
         // Hardcoded test vector using the RFC 8032 test key
         // This ensures the implementation matches the standard Ed25519 algorithm
         let signing_key = SigningKey::from_bytes(&[
@@ -298,7 +295,7 @@ mod tests {
 
         let timestamp = "1609459200";
         let now_secs: i64 = 1609459200;
-        let body = br#"{"type":1}"#; // Discord PING
+        let body = br#"{"type":1}"#;
 
         let mut message = Vec::new();
         message.extend_from_slice(timestamp.as_bytes());
@@ -308,13 +305,13 @@ mod tests {
         let signature_hex = hex::encode(signature.to_bytes());
 
         assert!(
-            verify_discord_signature(&public_key_hex, &signature_hex, timestamp, body, now_secs),
+            verify_ed25519_signature(&public_key_hex, &signature_hex, timestamp, body, now_secs),
             "Reference vector should verify"
         );
 
         // Same key, but tampered body should fail
         assert!(
-            !verify_discord_signature(
+            !verify_ed25519_signature(
                 &public_key_hex,
                 &signature_hex,
                 timestamp,
@@ -334,7 +331,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
         // now_secs is 100 seconds after the timestamp — too stale
         assert!(
-            !verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS + 100),
+            !verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS + 100),
             "Stale timestamp (100s old) should be rejected"
         );
     }
@@ -346,7 +343,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
         // now_secs is 100 seconds before the timestamp — future
         assert!(
-            !verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS - 100),
+            !verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS - 100),
             "Future timestamp (100s ahead) should be rejected"
         );
     }
@@ -358,7 +355,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
         // now_secs matches exactly — fresh
         assert!(
-            verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS),
+            verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS),
             "Fresh timestamp (0s difference) should be accepted"
         );
     }
@@ -370,7 +367,7 @@ mod tests {
         let (pub_key, sig, _ts) = sign_test_message(timestamp, body);
         // Pass a non-numeric timestamp string
         assert!(
-            !verify_discord_signature(&pub_key, &sig, "not-a-number", body, 0),
+            !verify_ed25519_signature(&pub_key, &sig, "not-a-number", body, 0),
             "Non-numeric timestamp should be rejected"
         );
     }
@@ -382,7 +379,7 @@ mod tests {
         let (pub_key, sig, _ts) = sign_test_message(timestamp, body);
         // Pass an empty timestamp string
         assert!(
-            !verify_discord_signature(&pub_key, &sig, "", body, 0),
+            !verify_ed25519_signature(&pub_key, &sig, "", body, 0),
             "Empty timestamp should be rejected"
         );
     }
@@ -394,7 +391,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
         // Exactly 5 seconds difference — should be accepted (> 5, not >= 5)
         assert!(
-            verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS + 5),
+            verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS + 5),
             "Timestamp exactly 5s old should be accepted"
         );
     }
@@ -406,7 +403,7 @@ mod tests {
         let (pub_key, sig, ts) = sign_test_message(timestamp, body);
         // 6 seconds difference — should be rejected
         assert!(
-            !verify_discord_signature(&pub_key, &sig, &ts, body, TEST_TS + 6),
+            !verify_ed25519_signature(&pub_key, &sig, &ts, body, TEST_TS + 6),
             "Timestamp 6s old should be rejected"
         );
     }
@@ -418,7 +415,7 @@ mod tests {
         let (pub_key, sig, _ts) = sign_test_message(timestamp, body);
         // Pass a negative timestamp string
         assert!(
-            !verify_discord_signature(&pub_key, &sig, "-1", body, TEST_TS),
+            !verify_ed25519_signature(&pub_key, &sig, "-1", body, TEST_TS),
             "Negative timestamp should be rejected"
         );
     }

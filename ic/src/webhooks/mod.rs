@@ -310,7 +310,7 @@ async fn validate_webhook_auth(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        if !crate::channels::wasm::signature::verify_discord_signature(key, sig, ts, body, now_secs)
+        if !crate::channels::wasm::signature::verify_ed25519_signature(key, sig, ts, body, now_secs)
         {
             return Err("Invalid signature".to_string());
         }

@@ -322,7 +322,7 @@ pub struct WebhookCapability {
     pub secret_header: Option<String>,
     /// Secret name in secrets store for shared-secret validation.
     pub secret_name: Option<String>,
-    /// Secret name in secrets store containing Ed25519 public key (Discord-style).
+    /// Secret name in secrets store containing Ed25519 public key.
     pub signature_key_secret_name: Option<String>,
     /// Secret name in secrets store for HMAC-SHA256 signing validation.
     pub hmac_secret_name: Option<String>,

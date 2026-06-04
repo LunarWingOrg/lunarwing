@@ -1038,12 +1038,12 @@ mod tests {
     fn test_header_location_with_name_field() {
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "discord.com" }],
+                "allowlist": [{ "host": "api.example.com" }],
                 "credentials": {
                     "bot_token": {
-                        "secret_name": "discord_bot_token",
+                        "secret_name": "bot_token",
                         "location": { "type": "header", "name": "Authorization", "prefix": "Bot " },
-                        "host_patterns": ["discord.com"]
+                        "host_patterns": ["api.example.com"]
                     }
                 }
             }
@@ -1066,12 +1066,12 @@ mod tests {
         // Uses "header_name" instead of "name" — should parse via serde alias
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "discord.com" }],
+                "allowlist": [{ "host": "api.example.com" }],
                 "credentials": {
                     "bot_token": {
-                        "secret_name": "discord_bot_token",
+                        "secret_name": "bot_token",
                         "location": { "type": "header", "header_name": "Authorization", "prefix": "Bot " },
-                        "host_patterns": ["discord.com"]
+                        "host_patterns": ["api.example.com"]
                     }
                 }
             }
@@ -1089,49 +1089,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_discord_capabilities_file_parses() {
-        // Full Discord capabilities JSON — tests end-to-end parsing
-        let json = r#"{
-            "type": "channel",
-            "name": "discord",
-            "description": "Discord channel",
-            "setup": {
-                "required_secrets": [
-                    {
-                        "name": "discord_bot_token",
-                        "prompt": "Enter your Discord Bot Token",
-                        "optional": false
-                    },
-                    {
-                        "name": "discord_public_key",
-                        "prompt": "Enter your Discord Public Key",
-                        "optional": false
-                    }
-                ]
-            },
-            "capabilities": {
-                "http": {
-                    "allowlist": [{ "host": "discord.com", "path_prefix": "/api/v10" }],
-                    "credentials": {
-                        "discord_bot_token": {
-                            "secret_name": "discord_bot_token",
-                            "location": { "type": "header", "name": "Authorization", "prefix": "Bot " },
-                            "host_patterns": ["discord.com"]
-                        }
-                    }
-                }
-            },
-            "config": {
-                "require_signature_verification": true
-            }
-        }"#;
-
-        // This must not panic — parsing should succeed
-        let caps = CapabilitiesFile::from_json(json).unwrap();
-        let http = caps.http.unwrap();
-        assert!(http.credentials.contains_key("discord_bot_token"));
-    }
 
     #[test]
     fn test_header_location_missing_name_fails() {

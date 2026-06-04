@@ -6,7 +6,7 @@
 
 * Telegram
 * Slack
-* Discord
+* Discord (Removed)
 * WhatsApp (Removed)
 * Feishu (Removed)
   

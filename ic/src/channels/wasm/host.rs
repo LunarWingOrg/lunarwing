@@ -904,8 +904,8 @@ mod tests {
     #[test]
     fn test_emit_and_take_preserves_order_and_content() {
         // Emit multiple messages, take them, verify order and content.
-        let caps = ChannelCapabilities::for_channel("discord");
-        let mut state = ChannelHostState::new("discord", caps);
+        let caps = ChannelCapabilities::for_channel("weechat");
+        let mut state = ChannelHostState::new("weechat", caps);
 
         let messages_data = vec![
             ("user-a", "Hello from A"),

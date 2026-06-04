@@ -2,7 +2,6 @@
 members = [".", "crates/lunarwing_common", "crates/lunarwing_safety", "crates/lunarwing_skills", "crates/lunarwing_engine"]
 exclude = [
     "job_prompt",
-    "channels-src/discord",
     "channels-src/telegram",
     "channels-src/slack",
     "channels-src/xmpp",

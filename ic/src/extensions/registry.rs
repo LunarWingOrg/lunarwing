@@ -705,7 +705,7 @@ mod tests {
         assert_eq!(entry.unwrap().display_name, "Cached Tool");
     }
 
-    // Channel tests (telegram, slack, discord) require the embedded catalog
+    // Channel tests (telegram, slack) require the embedded catalog
     // to be loaded via new_with_catalog(). See test_new_with_catalog for catalog coverage.
 
     // === QA Plan P2 - 2.4: Extension registry collision tests ===
