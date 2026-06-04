@@ -16,7 +16,7 @@ use exports::near::agent::channel::{
     AgentResponse, Attachment, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse,
     PollConfig, StatusType, StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage};
+use near::agent::channel_host::{self, EmittedMessage, InboundAttachment};
 
 const CONFIG_PATH: &str = "config.json";
 const CURSOR_PATH: &str = "cursor.txt";
@@ -71,6 +71,15 @@ struct BridgeIncomingMessage {
     content: String,
     thread_id: Option<String>,
     metadata_json: String,
+    #[serde(default)]
+    attachments: Vec<BridgeIncomingAttachment>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BridgeIncomingAttachment {
+    filename: String,
+    mime_type: String,
+    data_base64: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,13 +191,14 @@ impl Guest for XmppChannel {
         };
 
         for message in &response.messages {
+            let inbound_attachments = decode_inbound_attachments(&message.attachments);
             channel_host::emit_message(&EmittedMessage {
                 user_id: message.user_id.clone(),
                 user_name: message.user_name.clone(),
                 content: message.content.clone(),
                 thread_id: message.thread_id.clone(),
                 metadata_json: normalize_metadata_json(&message.metadata_json),
-                attachments: Vec::new(),
+                attachments: inbound_attachments,
             });
         }
 
@@ -321,6 +331,48 @@ fn send_message_via_bridge(
     let payload = serde_json::to_vec(&request)
         .map_err(|e| format!("failed to serialize XMPP bridge send request: {}", e))?;
     request_json("POST", &url, Some(payload)).map(|_| ())
+}
+
+/// Decode base64-encoded inbound attachments from the bridge, store their data,
+/// and return WIT InboundAttachment records for emission.
+fn decode_inbound_attachments(attachments: &[BridgeIncomingAttachment]) -> Vec<InboundAttachment> {
+    attachments
+        .iter()
+        .filter_map(|att| {
+            let data = match base64::engine::general_purpose::STANDARD.decode(&att.data_base64) {
+                Ok(d) => d,
+                Err(e) => {
+                    channel_host::log(
+                        channel_host::LogLevel::Warn,
+                        &format!(
+                            "Failed to decode base64 for attachment '{}': {}",
+                            att.filename, e
+                        ),
+                    );
+                    return None;
+                }
+            };
+            let id = format!("oob-{}", att.filename);
+            let size = data.len() as u64;
+            if let Err(e) = channel_host::store_attachment_data(&id, &data) {
+                channel_host::log(
+                    channel_host::LogLevel::Warn,
+                    &format!("Failed to store attachment data for '{}': {}", att.filename, e),
+                );
+                return None;
+            }
+            Some(InboundAttachment {
+                id,
+                mime_type: att.mime_type.clone(),
+                filename: Some(att.filename.clone()),
+                size_bytes: Some(size),
+                source_url: None,
+                storage_key: None,
+                extracted_text: None,
+                extras_json: String::new(),
+            })
+        })
+        .collect()
 }
 
 /// Convert host-provided WIT attachments into base64-encoded bridge attachments.

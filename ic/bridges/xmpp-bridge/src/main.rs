@@ -489,6 +489,16 @@ async fn send_handler(
 async fn enqueue_message(state: &AppState, message: IncomingMessage) {
     let metadata_json =
         serde_json::to_string(&message.metadata).unwrap_or_else(|_| "{}".to_string());
+    let attachments: Vec<_> = message
+        .attachments
+        .iter()
+        .filter(|a| !a.data.is_empty())
+        .map(|a| openclaw_xmpp_bridge_contract::BridgeAttachment {
+            filename: a.filename.clone().unwrap_or_else(|| "file".to_string()),
+            mime_type: a.mime_type.clone(),
+            data_base64: base64::engine::general_purpose::STANDARD.encode(&a.data),
+        })
+        .collect();
     let payload = BridgeMessage {
         message_id: message.id.to_string(),
         user_id: message.user_id,
@@ -496,6 +506,7 @@ async fn enqueue_message(state: &AppState, message: IncomingMessage) {
         content: message.content,
         thread_id: message.thread_id,
         metadata_json,
+        attachments,
     };
 
     let mut inner = state.inner.write().await;

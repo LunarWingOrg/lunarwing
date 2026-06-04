@@ -33,7 +33,10 @@ use xmpp_parsers::pubsub::pubsub::{Item as PubSubItem, Items, PubSub, Publish, P
 use xmpp_parsers::pubsub::{NodeName, PubSubPayload};
 use xmpp_parsers::{minidom::Element, ns};
 
-use crate::channels::{Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate};
+use crate::channels::{
+    AttachmentKind, Channel, IncomingAttachment, IncomingMessage, MessageStream, OutgoingResponse,
+    StatusUpdate,
+};
 use crate::config::XmppConfig;
 use crate::error::ChannelError;
 use crate::pairing::PairingStore;
@@ -45,6 +48,8 @@ const MAX_REPLY_TARGETS: usize = 10_000;
 const OMEMO_SEND_TIMEOUT_SECS: u64 = 10;
 const MUC_ADMIN_NS: &str = "http://jabber.org/protocol/muc#admin";
 const OUTBOUND_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60 * 60);
+const OOB_DOWNLOAD_TIMEOUT_SECS: u64 = 30;
+const OOB_MAX_FILE_SIZE: u64 = 20 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default)]
 struct EncryptedRoomState {
@@ -1419,19 +1424,17 @@ async fn handle_message_stanza(
                     .await;
                 return Ok(());
             }
-            match extract_body_from_message(&msg) {
-                Some(body) if !body.is_empty() => body,
-                _ => return Ok(()),
-            }
+            extract_body_from_message(&msg).unwrap_or_default()
         }
     } else {
-        match extract_body_from_message(&msg) {
-            Some(body) if !body.is_empty() => body,
-            _ => return Ok(()),
-        }
+        extract_body_from_message(&msg).unwrap_or_default()
     };
 
-    if content.trim().is_empty() {
+    let has_oob = msg
+        .payloads
+        .iter()
+        .any(|p| Oob::try_from(p.clone()).is_ok());
+    if content.trim().is_empty() && !has_oob {
         return Ok(());
     }
 
@@ -1477,11 +1480,23 @@ async fn handle_message_stanza(
             .or_insert_with(HashSet::new);
     }
 
+    let attachments = extract_oob_attachments(&msg.payloads).await;
+    let content = if !attachments.is_empty()
+        && attachments
+            .iter()
+            .any(|a| a.source_url.as_deref() == Some(content.trim()))
+    {
+        String::new()
+    } else {
+        content
+    };
+
     let mut incoming = IncomingMessage::new("xmpp", target_jid.clone(), content)
         .with_owner_id(&config.jid)
         .with_thread(&thread_id)
         .with_sender_id(sender_id)
-        .with_metadata(metadata);
+        .with_metadata(metadata)
+        .with_attachments(attachments);
     if is_groupchat && let Some(nick) = jid_resource(&from_jid) {
         incoming = incoming.with_user_name(nick);
     }
@@ -2749,6 +2764,109 @@ fn extract_body_from_message(msg: &xmpp_parsers::message::Message) -> Option<Str
         return Some(body.clone());
     }
     msg.bodies.values().find(|b| !b.is_empty()).cloned()
+}
+
+/// Extract OOB URLs from message payloads, download the files, and return as attachments.
+async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment> {
+    let oob_urls: Vec<(String, Option<String>)> = payloads
+        .iter()
+        .filter_map(|p| Oob::try_from(p.clone()).ok())
+        .map(|oob| (oob.url, oob.desc))
+        .collect();
+
+    if oob_urls.is_empty() {
+        return Vec::new();
+    }
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(OOB_DOWNLOAD_TIMEOUT_SECS))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Failed to build HTTP client for OOB download: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let mut attachments = Vec::new();
+    for (url, _desc) in &oob_urls {
+        match download_oob_file(&client, url).await {
+            Ok(attachment) => attachments.push(attachment),
+            Err(e) => {
+                tracing::warn!(url = %url, "OOB file download failed: {}", e);
+            }
+        }
+    }
+    attachments
+}
+
+/// Download a single file from an OOB URL and return as an IncomingAttachment.
+async fn download_oob_file(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<IncomingAttachment, String> {
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP GET failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {} from OOB URL", response.status()));
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let content_length = response
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+
+    if let Some(len) = content_length {
+        if len > OOB_MAX_FILE_SIZE {
+            return Err(format!("File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"));
+        }
+    }
+
+    let data = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+
+    if data.len() as u64 > OOB_MAX_FILE_SIZE {
+        return Err(format!(
+            "File too large: {} bytes (max {OOB_MAX_FILE_SIZE})",
+            data.len()
+        ));
+    }
+
+    let mime_type = content_type.split(';').next().unwrap_or("application/octet-stream").trim();
+    let filename = url
+        .split('/')
+        .last()
+        .and_then(|s| s.split('?').next())
+        .filter(|s| !s.is_empty() && s.contains('.'))
+        .map(|s| s.to_string());
+
+    Ok(IncomingAttachment {
+        id: Uuid::new_v4().to_string(),
+        kind: AttachmentKind::from_mime_type(mime_type),
+        mime_type: mime_type.to_string(),
+        filename,
+        size_bytes: Some(data.len() as u64),
+        source_url: Some(url.to_string()),
+        storage_key: None,
+        extracted_text: None,
+        data: data.to_vec(),
+        duration_secs: None,
+    })
 }
 
 #[cfg(test)]
