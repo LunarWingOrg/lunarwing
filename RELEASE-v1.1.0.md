@@ -219,4 +219,4 @@ All workspace crates have been unified at version 1.1.0. Previously the main `lu
 
 ## Testing
 
-*Testing IS IN PROGRESS before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*Testing completed before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
