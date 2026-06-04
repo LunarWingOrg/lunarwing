@@ -75,7 +75,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Slack | ✅ | ✅ | - | WASM tool |
 | iMessage | ✅ | ❌ | P3 | BlueBubbles or Linq recommended |
 | Linq | ✅ | ❌ | P3 | Real iMessage via API, no Mac required |
-| Feishu/Lark | ✅ | 🚧 | P3 | WASM channel with Event Subscription v2.0; Bitable/Docx tools planned |
 | LINE | ✅ | ❌ | P3 | |
 | WebChat | ✅ | ✅ | - | Web gateway chat |
 | Matrix | ✅ | ❌ | P3 | E2EE support |
@@ -121,13 +120,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 |---------|----------|----------|-------|
 | Interactive buttons | ✅ | ❌ | Clickable message buttons with signed callback flow |
 | Interactive model picker | ✅ | ❌ | In-channel provider/model chooser |
-
-### Feishu/Lark-Specific Features (since Mar 2026)
-
-| Feature | OpenClaw | LunarWing | Notes |
-|---------|----------|----------|-------|
-| Doc/table actions | ✅ | ❌ | `feishu_doc` supports tables, positional insert, color_text, image upload, and file upload |
-| Rich-text embedded media extraction | ✅ | ❌ | Pull video/media attachments from post messages |
 
 ### Channel Features
 

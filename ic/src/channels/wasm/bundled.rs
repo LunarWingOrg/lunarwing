@@ -20,7 +20,6 @@ const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const KNOWN_CHANNELS: &[(&str, &str)] = &[
     ("darkirc", "darkirc_channel"),
     ("discord", "discord_channel"),
-    ("feishu", "feishu_channel"),
     ("slack", "slack_channel"),
     ("telegram", "telegram_channel"),
     ("weechat", "weechat_relay_channel"),
@@ -149,7 +148,6 @@ mod tests {
         let names = bundled_channel_names();
         assert!(names.contains(&"darkirc"));
         assert!(names.contains(&"discord"));
-        assert!(names.contains(&"feishu"));
         assert!(names.contains(&"slack"));
         assert!(names.contains(&"telegram"));
         assert!(names.contains(&"weechat"));

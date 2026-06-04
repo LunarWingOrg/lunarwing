@@ -19,8 +19,7 @@
       "extensions": [
         "channels/discord",
         "channels/telegram",
-        "channels/slack",
-        "channels/feishu"
+        "channels/slack"
       ],
       "shared_auth": null
     },

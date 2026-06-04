@@ -22,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reuse Codex CLI OAuth tokens for ChatGPT backend LLM calls ([#693](https://github.com/nearai/ironclaw/pull/693))
 - add pre-push git hook with delta lint mode ([#833](https://github.com/nearai/ironclaw/pull/833))
 - *(cli)* add `logs` command for gateway log access ([#1105](https://github.com/nearai/ironclaw/pull/1105))
-- add Feishu/Lark WASM channel plugin ([#1110](https://github.com/nearai/ironclaw/pull/1110))
 - add Criterion benchmarks for safety layer hot paths ([#836](https://github.com/nearai/ironclaw/pull/836))
 - *(routines)* human-readable cron schedule summaries in web UI ([#1154](https://github.com/nearai/ironclaw/pull/1154))
 - *(web)* add follow-up suggestion chips and ghost text ([#1156](https://github.com/nearai/ironclaw/pull/1156))

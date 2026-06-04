@@ -8,7 +8,7 @@
 * Slack
 * Discord
 * WhatsApp (Removed)
-* Feishu
+* Feishu (Removed)
   
 ### dont need these:
 

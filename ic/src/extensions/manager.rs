@@ -5730,10 +5730,6 @@ async fn load_channel_config_secret_overrides(
     };
 
     let secret_config_mappings: &[(&str, &str)] = match channel_name {
-        "feishu" => &[
-            ("app_id", "feishu_app_id"),
-            ("app_secret", "feishu_app_secret"),
-        ],
         "xmpp" => &[("xmpp_password", "xmpp_password")],
         _ => return overrides,
     };

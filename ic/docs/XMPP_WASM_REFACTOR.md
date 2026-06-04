@@ -219,7 +219,7 @@ Reuse existing channel secret patterns:
 
 1. `setup.required_secrets` prompts the user and stores encrypted values.
 2. `inject_channel_credentials()` injects secrets into placeholders when the WASM channel makes HTTP requests.
-3. For secrets that must become runtime config values rather than HTTP placeholders, add XMPP-specific config injection just like the existing `feishu` special case in `src/channels/wasm/setup.rs`.
+3. For secrets that must become runtime config values rather than HTTP placeholders, add XMPP-specific entries to the `inject_channel_secrets_into_config` match in `src/channels/wasm/setup.rs`.
 
 ## Non-Secret Setup Fields
 

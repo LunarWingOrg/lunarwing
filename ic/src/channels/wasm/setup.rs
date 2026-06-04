@@ -196,10 +196,8 @@ async fn register_channel(
             .await,
         );
         // Inject channel-specific secrets into config for channels that need
-        // credentials in API request bodies (e.g., Feishu token exchange).
-        // The credential injection system only replaces placeholders in URLs
-        // and headers, so channels like Feishu that exchange app_id + app_secret
-        // for a tenant token need the raw values in their config.
+        // credentials as runtime config values rather than HTTP placeholders
+        // (e.g., XMPP password).
         inject_channel_secrets_into_config(
             &channel_name,
             secrets_store,
@@ -454,14 +452,9 @@ fn setting_value_is_present(value: &serde_json::Value) -> bool {
 
 /// Inject channel-specific secrets into the config JSON.
 ///
-/// Some channels (e.g., Feishu) need raw credential values in their config
-/// because they perform token exchanges that require secrets in the HTTP
-/// request body. The standard credential injection system only replaces
-/// placeholders in URLs and headers, so this function fills config fields
-/// that map to secret names.
-///
-/// Mapping: for a channel named "feishu", secrets `feishu_app_id` and
-/// `feishu_app_secret` are injected as config keys `app_id` and `app_secret`.
+/// Some channels (e.g., XMPP) need raw credential values in their config
+/// rather than HTTP header/URL placeholders. This function fills config
+/// fields that map to secret names.
 async fn inject_channel_secrets_into_config(
     channel_name: &str,
     secrets_store: &Option<Arc<dyn SecretsStore + Send + Sync>>,
@@ -470,10 +463,6 @@ async fn inject_channel_secrets_into_config(
 ) {
     // Map of (config_key, secret_name) pairs per channel.
     let secret_config_mappings: &[(&str, &str)] = match channel_name {
-        "feishu" => &[
-            ("app_id", "feishu_app_id"),
-            ("app_secret", "feishu_app_secret"),
-        ],
         "xmpp" => &[("xmpp_password", "xmpp_password")],
         _ => return,
     };
