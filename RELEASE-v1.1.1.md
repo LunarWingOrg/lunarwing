@@ -63,6 +63,8 @@ LunarWing v1.1.1 is primarily a release purely focused on adding polish, bug-fix
 | Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.2+ |
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.2+ |
 | Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.2+ |
+| Update funding.json | v1.1.1+ |
+| WASM Channel Polish | v1.1.1+ |
 
 ## Testing
 
