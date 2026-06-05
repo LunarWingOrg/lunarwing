@@ -2527,33 +2527,33 @@ mod tests {
         let mgr = make_mission_manager(Arc::clone(&store) as Arc<dyn Store>);
         let project_id = ProjectId::new();
 
-        // Create a system mission
+        // Create a mission owned by a specific (non-shared) user
         let system_id = mgr
             .create_mission(
                 project_id,
-                "system",
-                "shared-mission",
-                "shared goal",
+                "admin-user",
+                "admin-mission",
+                "admin goal",
                 MissionCadence::Manual,
                 Vec::new(),
             )
             .await
             .unwrap();
 
-        // Regular user cannot pause system mission
+        // Regular user cannot pause another user's mission
         let result = mgr.pause_mission(system_id, "alice").await;
         assert!(
             matches!(result.unwrap_err(), EngineError::AccessDenied { .. }),
-            "regular user cannot manage system missions"
+            "regular user cannot manage another user's missions"
         );
 
-        // System user can pause (admin path passes "system" as user_id)
-        mgr.pause_mission(system_id, "system").await.unwrap();
+        // Owner can pause their own mission
+        mgr.pause_mission(system_id, "admin-user").await.unwrap();
         let m = mgr.get_mission(system_id).await.unwrap().unwrap();
         assert_eq!(m.status, MissionStatus::Paused);
 
-        // System user can resume
-        mgr.resume_mission(system_id, "system").await.unwrap();
+        // Owner can resume their own mission
+        mgr.resume_mission(system_id, "admin-user").await.unwrap();
         let m = mgr.get_mission(system_id).await.unwrap().unwrap();
         assert_eq!(m.status, MissionStatus::Active);
     }

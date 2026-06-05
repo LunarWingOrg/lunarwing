@@ -617,8 +617,13 @@ mod tests {
         let outcome = exec.run().await.unwrap();
         assert!(matches!(outcome, ThreadOutcome::Completed { response: Some(r) } if r == "Done!"));
         assert_eq!(exec.thread.step_count, 2);
-        // Should have: system(nudge not counted), assistant+actions, action_result, assistant
-        assert!(exec.thread.messages.len() >= 3);
+        // Visible messages: system prompt + final response
+        assert!(exec.thread.messages.len() >= 2);
+        // Internal transcript should contain action execution trace
+        assert!(
+            !exec.thread.internal_messages.is_empty(),
+            "internal transcript should contain action execution trace"
+        );
     }
 
     #[tokio::test]
@@ -735,10 +740,10 @@ mod tests {
             matches!(outcome, ThreadOutcome::Completed { response: Some(r) } if r == "The answer is 42")
         );
         assert_eq!(exec.thread.step_count, 2);
-        // Should have nudge system message
+        // Nudge message should appear in internal orchestrator transcript
         assert!(
             exec.thread
-                .messages
+                .internal_messages
                 .iter()
                 .any(|m| m.content.contains("did not include any tool calls"))
         );
@@ -873,10 +878,10 @@ mod tests {
             matches!(outcome, ThreadOutcome::Completed { response: Some(r) } if r == "done, x was 30")
         );
         assert_eq!(exec.thread.step_count, 2);
-        // The output metadata from first step should be in messages
+        // Code output should appear in internal orchestrator transcript
         assert!(
             exec.thread
-                .messages
+                .internal_messages
                 .iter()
                 .any(|m| m.content.contains("x = 30"))
         );
@@ -901,10 +906,10 @@ mod tests {
             matches!(outcome, ThreadOutcome::Completed { response: Some(r) } if r == "recovered")
         );
         assert_eq!(exec.thread.step_count, 2);
-        // First step should have error in output metadata
+        // First step error should appear in internal orchestrator transcript
         assert!(
             exec.thread
-                .messages
+                .internal_messages
                 .iter()
                 .any(|m| { m.content.contains("NameError") || m.content.contains("Error") })
         );

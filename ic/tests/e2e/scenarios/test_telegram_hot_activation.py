@@ -129,7 +129,7 @@ async def test_telegram_setup_modal_shows_bot_token_field(page):
     modal = page.locator(SEL["configure_modal"])
     await modal.wait_for(state="visible", timeout=5000)
     assert "Telegram Bot API token" in await modal.text_content()
-    assert "IronClaw will show a one-time code" in (
+    assert "LunarWing will show a one-time code" in (
         await modal.text_content()
     )
     input_el = modal.locator(_CONFIGURE_SECRET_INPUT)
@@ -253,6 +253,6 @@ async def test_telegram_hot_activation_transitions_installed_to_active(page):
     assert await card.locator(SEL["ext_pairing_label"]).count() == 0
 
     assert captured_setup_payloads == [
-        {"secrets": {"telegram_bot_token": "123456789:ABCdefGhI"}},
-        {"secrets": {}},
+        {"secrets": {"telegram_bot_token": "123456789:ABCdefGhI"}, "fields": {}},
+        {"secrets": {}, "fields": {}},
     ]

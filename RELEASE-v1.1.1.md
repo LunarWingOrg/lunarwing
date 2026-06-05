@@ -1,10 +1,10 @@
-# Release Notes for LunarWing v1.1.1 - Codename Unknown
+# Release Notes for LunarWing v1.1.1 - Codename Freedom
 
 **Release Date:** TBD
 
 ## Overview
 
-LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in v1.1.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and the addition of project funding infrastructure.
+LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and other various minor changes.
 
 ---
 
@@ -63,7 +63,7 @@ Added project funding metadata for potential donors:
 
 ### Self-Healing Improvements
 
-References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (filesystem-level changes).
+References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes).
 
 ### Release Notes Archival
 
@@ -89,15 +89,12 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
-- **5 tests are failing due to not being updated after previous production code refactors. No production code is broken and these test failures have been thoroughly documented.** - See docs/bugs for further information on these test failures and proposed fixes.
-- **One test is failing due to an assertion count mismatch**
 - **One test is failing due to env-specific SSRF check.**
-- **Two tests for gateway workflow harness and test_rig from the test harness are failing for similar reasons to the ones above.** - See docs/bugs for further information on these test failures and proposed fixes.
 - **Several E2E playwright tests may also need to be updated to account for major code refactoring.**
-- **XMPP inbound file uploads not supported** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`.
+- **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
-- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.2.
+- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.1.
 
 ## Upgrade Notes
 
@@ -109,32 +106,34 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 6. **Proprietary channel removal**: If your deployment previously used the Discord, Feishu/Lark, or Slack WASM channels or the Slack tool, these are no longer available. The relay channel infrastructure has also been removed. Migrate to open-protocol alternatives (XMPP, WeeChat, DarkIRC) before upgrading.
 7. **XMPP bridge compatibility**: The bridge contract now includes an `attachments` field in `BridgeMessage`. The field uses `#[serde(default)]` so older bridge binaries will still work (attachments will be empty), but rebuild the XMPP bridge binary to enable inbound file transfer support.
 
-## Features Deferred to Future Releases
+## Features and changes deferred to future releases
 
 | Feature | Target |
 |---------|--------|
-| Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis) | v1.1.2 |
+| Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis) | v1.1.1 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.2 |
 | LunarVoice (Further planning required) | v1.1.4 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.2 |
-| XMPP File Upload Extensive round of further polishing | v1.1.2 |
-| Server-side WebSocket keepalive adjustment | v1.1.2 |
+| XMPP File Upload Extensive round of further polishing | v1.1.1 |
+| Server-side WebSocket keepalive adjustment | v1.1.1 |
 | New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.2 |
-| Proprietary channel removal continuation (Telegram) | v1.1.2 |
-| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.2 |
-| LunarWing developer CI/CD Pipeline | v1.1.2 |
-| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.2 |
-| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.2 |
-| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.2 |
-| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.2 |
+| Proprietary channel removal continuation (Telegram) | v1.1.4 |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.1 |
+| LunarWing developer CI/CD Pipeline | v1.1.4 |
+| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.4 |
+| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.4 |
+| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.4 |
+| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.4 |
 | Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.2 |
-| Update funding.json with actual payment addresses | v1.1.2 |
-| Rename ironclaw references in WeeChat ws_channel and adapter | v1.1.2 |
+| Update funding.json with actual payment addresses | v1.1.1 |
+| Rename ironclaw references in WeeChat ws_channel and adapter | v1.1.3 |
 | Multica/Lunartica UI reskin | v1.1.2 |
 | WASM Channel Polishing | v1.1.2 |
 
 ## Testing
 
-*Testing in progress before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*In accordance with developer guidelines, a brief testing period must begin before each release.*
+
+*Testing before final release not yet commenced — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
