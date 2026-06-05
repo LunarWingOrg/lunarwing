@@ -1,0 +1,3 @@
+# Placeholder
+
+* funding.json
