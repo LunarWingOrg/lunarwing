@@ -708,8 +708,7 @@ Respond in JSON format:
                 total_usage.input_tokens += response.input_tokens;
                 total_usage.output_tokens += response.output_tokens;
                 total_usage.cache_read_input_tokens += response.cache_read_input_tokens;
-                total_usage.cache_creation_input_tokens +=
-                    response.cache_creation_input_tokens;
+                total_usage.cache_creation_input_tokens += response.cache_creation_input_tokens;
 
                 // If there were tool calls, return them for execution
                 if !response.tool_calls.is_empty() {
@@ -730,8 +729,7 @@ Respond in JSON format:
                 // Some models (e.g. GLM-4.7) emit tool calls as XML tags in
                 // content instead of using the structured tool_calls field.
                 // Try to recover them before giving up and returning plain text.
-                let recovered =
-                    recover_tool_calls_from_content(&content, &context.available_tools);
+                let recovered = recover_tool_calls_from_content(&content, &context.available_tools);
                 if !recovered.is_empty() {
                     let pre_truncated = truncate_at_tool_tags(&content);
                     let cleaned = clean_response(&pre_truncated);
@@ -775,9 +773,7 @@ Respond in JSON format:
                     "LLM response empty after cleaning, retries exhausted. Original: {log_snippet}"
                 );
                 return Ok(RespondOutput {
-                    result: RespondResult::Text(
-                        "I'm not sure how to respond to that.".to_string(),
-                    ),
+                    result: RespondResult::Text("I'm not sure how to respond to that.".to_string()),
                     usage: total_usage,
                 });
             }
@@ -796,8 +792,7 @@ Respond in JSON format:
                 total_usage.input_tokens += response.input_tokens;
                 total_usage.output_tokens += response.output_tokens;
                 total_usage.cache_read_input_tokens += response.cache_read_input_tokens;
-                total_usage.cache_creation_input_tokens +=
-                    response.cache_creation_input_tokens;
+                total_usage.cache_creation_input_tokens += response.cache_creation_input_tokens;
 
                 let pre_truncated = truncate_at_tool_tags(&response.content);
                 let cleaned = clean_response(&pre_truncated);
@@ -825,9 +820,7 @@ Respond in JSON format:
                     "LLM response empty after cleaning, retries exhausted. Original: {log_snippet}"
                 );
                 return Ok(RespondOutput {
-                    result: RespondResult::Text(
-                        "I'm not sure how to respond to that.".to_string(),
-                    ),
+                    result: RespondResult::Text("I'm not sure how to respond to that.".to_string()),
                     usage: total_usage,
                 });
             }
@@ -3261,7 +3254,9 @@ That's my plan."#;
     async fn test_empty_response_retry_with_tools_think_only() {
         use crate::testing::StubLlm;
         // Model returns only think tags — cleans to empty, should retry
-        let llm = Arc::new(StubLlm::new("<think>I need to analyze this carefully...</think>"));
+        let llm = Arc::new(StubLlm::new(
+            "<think>I need to analyze this carefully...</think>",
+        ));
         let llm_ref = llm.clone();
         let reasoning = Reasoning::new(llm);
 
@@ -3334,7 +3329,11 @@ That's my plan."#;
                 panic!("Expected text result");
             }
         }
-        assert_eq!(llm_ref.calls(), 1, "should not retry when response is valid");
+        assert_eq!(
+            llm_ref.calls(),
+            1,
+            "should not retry when response is valid"
+        );
     }
 
     #[tokio::test]

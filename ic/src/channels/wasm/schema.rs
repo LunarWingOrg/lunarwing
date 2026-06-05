@@ -501,10 +501,7 @@ mod tests {
 
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
         assert_eq!(file.name, "weechat");
-        assert_eq!(
-            file.description,
-            Some("WeeChat relay channel".to_string())
-        );
+        assert_eq!(file.description, Some("WeeChat relay channel".to_string()));
 
         let caps = file.to_capabilities();
         assert!(caps.is_path_allowed("/webhook/weechat"));
@@ -773,5 +770,4 @@ mod tests {
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
         assert_eq!(file.signature_key_secret_name(), None);
     }
-
 }

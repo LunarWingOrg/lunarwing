@@ -1089,7 +1089,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_header_location_missing_name_fails() {
         // Neither "name" nor "header_name" provided — should fail

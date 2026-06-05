@@ -330,9 +330,8 @@ async fn validate_webhook_auth(
         let prefix = cfg.hmac_prefix.as_deref().unwrap_or("sha256=");
         let sig = header_value(headers, sig_header)
             .ok_or_else(|| "Missing HMAC signature header".to_string())?;
-        if !crate::channels::wasm::signature::verify_hmac_sha256_prefixed(
-            secret, body, sig, prefix,
-        ) {
+        if !crate::channels::wasm::signature::verify_hmac_sha256_prefixed(secret, body, sig, prefix)
+        {
             return Err("Invalid HMAC signature".to_string());
         }
     }

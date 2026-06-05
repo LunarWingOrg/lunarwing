@@ -525,6 +525,34 @@ fn parse_scope_uuid(scope: Option<&str>) -> Option<uuid::Uuid> {
     scope.and_then(|s| uuid::Uuid::parse_str(s).ok())
 }
 
+/// Resolve the v1 conversation ID for a message, handling both UUID and
+/// non-UUID scopes (XMPP room JIDs, WeeChat buffers, etc.).
+async fn resolve_v1_conversation_for_message(
+    db: &dyn Database,
+    message: &IncomingMessage,
+) -> Option<uuid::Uuid> {
+    if let Some(scope) = message.conversation_scope() {
+        match db
+            .get_or_create_scoped_conversation(&message.channel, &message.user_id, scope)
+            .await
+        {
+            Ok(id) => Some(id),
+            Err(e) => {
+                tracing::warn!(
+                    channel = %message.channel,
+                    user_id = %message.user_id,
+                    "failed to resolve scoped conversation: {e}"
+                );
+                None
+            }
+        }
+    } else {
+        db.get_or_create_assistant_conversation(&message.user_id, &message.channel)
+            .await
+            .ok()
+    }
+}
+
 async fn reconcile_pending_gate_state(
     store: &Arc<dyn Store>,
     pending_gates: &crate::gate::store::PendingGateStore,
@@ -2192,29 +2220,8 @@ async fn handle_with_engine_inner(
         .map_err(|e| engine_err("thread error", e))?;
 
     // Dual-write to v1 database so the gateway history API shows messages.
-    // Use the thread-scoped conversation (from thread_id) when available,
-    // falling back to the default assistant conversation.
     if let Some(ref db) = state.db {
-        let v1_conv_id = if let Some(tid) = scope
-            && let Ok(uuid) = uuid::Uuid::parse_str(tid)
-        {
-            // Ensure the v1 conversation exists for this thread
-            let _ = db
-                .ensure_conversation(
-                    uuid,
-                    &message.channel,
-                    &message.user_id,
-                    Some(tid),
-                    Some(&message.channel),
-                )
-                .await;
-            Some(uuid)
-        } else {
-            db.get_or_create_assistant_conversation(&message.user_id, &message.channel)
-                .await
-                .ok()
-        };
-        if let Some(cid) = v1_conv_id {
+        if let Some(cid) = resolve_v1_conversation_for_message(db.as_ref(), message).await {
             let _ = db.add_conversation_message(cid, "user", content).await;
         }
     }
@@ -2294,10 +2301,10 @@ async fn await_thread_outcome(
         let channel = message.channel.clone();
         let text = text.to_string();
         async move {
-            let v1_conv_id = if let Some(tid) = scope
-                && let Ok(uuid) = uuid::Uuid::parse_str(&tid)
-            {
-                Some(uuid)
+            let v1_conv_id = if let Some(ref scope) = scope {
+                db.get_or_create_scoped_conversation(&channel, &user_id, scope)
+                    .await
+                    .ok()
             } else {
                 db.get_or_create_assistant_conversation(&user_id, &channel)
                     .await

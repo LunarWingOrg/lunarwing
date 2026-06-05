@@ -226,8 +226,7 @@ impl ReflexRouter {
                 continue;
             }
 
-            let words_pat: std::collections::HashSet<&str> =
-                pattern.split_whitespace().collect();
+            let words_pat: std::collections::HashSet<&str> = pattern.split_whitespace().collect();
 
             // Quick word-overlap pre-filter
             let overlap = word_overlap(normalized, pattern);
@@ -243,10 +242,10 @@ impl ReflexRouter {
             // This handles cases like "please check the disk space on the server"
             // containing all words from "check disk space".
             let all_words_contained = words_pat.iter().all(|w| words_input.contains(w));
-            
+
             // Jaro-Winkler similarity
             let jw_score = jaro_winkler(normalized, pattern);
-            
+
             // Boost score if all pattern words are contained in input
             let score = if all_words_contained {
                 // Word containment is a strong signal — boost to at least 0.9
@@ -254,7 +253,7 @@ impl ReflexRouter {
             } else {
                 jw_score
             };
-            
+
             if score >= self.fuzzy_threshold {
                 candidates.push((pattern.clone(), score));
             }

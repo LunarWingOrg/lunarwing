@@ -359,8 +359,8 @@ mod tests {
                 ]
             }
         });
-        let mut f =
-            std::fs::File::create(dir.path().join("gotify.capabilities.json")).expect("create file");
+        let mut f = std::fs::File::create(dir.path().join("gotify.capabilities.json"))
+            .expect("create file");
         f.write_all(serde_json::to_string(&caps).unwrap().as_bytes())
             .expect("write");
 
