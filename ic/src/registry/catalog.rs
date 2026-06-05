@@ -516,23 +516,23 @@ mod tests {
         fs::create_dir_all(&mcp_dir).unwrap();
 
         fs::write(
-            tools_dir.join("slack.json"),
+            tools_dir.join("gotify.json"),
             r#"{
-                "name": "slack",
-                "display_name": "Slack",
+                "name": "gotify",
+                "display_name": "Gotify",
                 "kind": "tool",
                 "version": "0.1.0",
-                "description": "Post messages via Slack API",
-                "keywords": ["messaging", "chat"],
+                "description": "Send push notifications via Gotify",
+                "keywords": ["messaging", "notifications"],
                 "source": {
-                    "dir": "tools-src/slack",
-                    "capabilities": "slack-tool.capabilities.json",
-                    "crate_name": "slack-tool"
+                    "dir": "tools-src/gotify",
+                    "capabilities": "gotify-tool.capabilities.json",
+                    "crate_name": "gotify-tool"
                 },
                 "auth_summary": {
-                    "method": "oauth",
-                    "provider": "Slack",
-                    "secrets": ["slack_bot_token"]
+                    "method": "token",
+                    "provider": "Gotify",
+                    "secrets": ["gotify_app_token"]
                 },
                 "tags": ["default", "messaging"]
             }"#,
@@ -596,11 +596,11 @@ mod tests {
                 "bundles": {
                     "default": {
                         "display_name": "Recommended",
-                        "extensions": ["tools/slack", "tools/github", "channels/telegram"]
+                        "extensions": ["tools/gotify", "tools/github", "channels/telegram"]
                     },
                     "messaging": {
                         "display_name": "Messaging",
-                        "extensions": ["tools/slack", "channels/telegram"],
+                        "extensions": ["tools/gotify", "channels/telegram"],
                         "shared_auth": null
                     }
                 }
@@ -644,7 +644,7 @@ mod tests {
         assert_eq!(defaults.len(), 2);
 
         let messaging = catalog.list(None, Some("messaging"));
-        assert_eq!(messaging.len(), 2); // slack (tool) and telegram (channel) both have "messaging" tag
+        assert_eq!(messaging.len(), 2); // gotify (tool) and telegram (channel) both have "messaging" tag
     }
 
     #[test]
@@ -655,11 +655,11 @@ mod tests {
         let catalog = RegistryCatalog::load(tmp.path()).unwrap();
 
         // Full key
-        assert!(catalog.get("tools/slack").is_some());
+        assert!(catalog.get("tools/gotify").is_some());
         assert!(catalog.get("mcp-servers/notion").is_some());
 
         // Bare name
-        assert!(catalog.get("slack").is_some());
+        assert!(catalog.get("gotify").is_some());
         assert!(catalog.get("telegram").is_some());
         assert!(catalog.get("notion").is_some());
 
@@ -674,9 +674,9 @@ mod tests {
 
         let catalog = RegistryCatalog::load(tmp.path()).unwrap();
 
-        let results = catalog.search("slack");
+        let results = catalog.search("gotify");
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].name, "slack");
+        assert_eq!(results[0].name, "gotify");
 
         let results = catalog.search("messaging");
         assert!(!results.is_empty());
@@ -707,7 +707,7 @@ mod tests {
         let catalog = RegistryCatalog::load(tmp.path()).unwrap();
 
         // Single extension
-        let (manifests, bundle) = catalog.resolve("slack").unwrap();
+        let (manifests, bundle) = catalog.resolve("gotify").unwrap();
         assert_eq!(manifests.len(), 1);
         assert!(bundle.is_none());
 

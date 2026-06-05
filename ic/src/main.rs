@@ -894,12 +894,9 @@ async fn async_main() -> anyhow::Result<()> {
         tracing::debug!("Channel runtime wired into extension manager for hot-activation");
 
         // Auto-activate WASM channels that were active in a previous session.
-        // Relay channels are handled separately below via restore_relay_channels().
         let persisted = ext_mgr.load_persisted_active_channels(&ext_user_id).await;
         for name in &persisted {
-            if active_at_startup.contains(name)
-                || ext_mgr.is_relay_channel(name, &ext_user_id).await
-            {
+            if active_at_startup.contains(name) {
                 continue;
             }
             match ext_mgr.activate(name, &ext_user_id).await {
@@ -919,15 +916,6 @@ async fn async_main() -> anyhow::Result<()> {
                 }
             }
         }
-    }
-
-    // Ensure the relay channel manager is always set (even without WASM runtime),
-    // then restore any persisted relay channels.
-    if let Some(ref ext_mgr) = components.extension_manager {
-        ext_mgr
-            .set_relay_channel_manager(Arc::clone(&channels))
-            .await;
-        ext_mgr.restore_relay_channels(&ext_user_id).await;
     }
 
     // Wire SSE sender into extension manager for broadcasting status events.

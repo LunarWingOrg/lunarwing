@@ -348,17 +348,6 @@ async fn send_telegram_text_message(
 }
 
 /// Central manager for extension lifecycle operations.
-///
-/// # Initialization Order
-///
-/// Relay-channel restoration depends on a channel manager being injected first.
-/// Call one of the following before `restore_relay_channels()`:
-///
-/// 1. [`ExtensionManager::set_channel_runtime`] (also sets relay manager), or
-/// 2. [`ExtensionManager::set_relay_channel_manager`].
-///
-/// If `restore_relay_channels()` runs first, each restore attempt fails with
-/// "Channel manager not initialized" and channels remain inactive.
 pub struct ExtensionManager {
     registry: ExtensionRegistry,
     discovery: OnlineDiscovery,
@@ -376,8 +365,6 @@ pub struct ExtensionManager {
 
     // WASM channel hot-activation infrastructure (set post-construction)
     channel_runtime: RwLock<Option<ChannelRuntimeState>>,
-    /// Channel manager for hot-adding relay channels (set independently of WASM runtime).
-    relay_channel_manager: RwLock<Option<Arc<ChannelManager>>>,
 
     // Shared
     secrets: Arc<dyn SecretsStore + Send + Sync>,
@@ -391,8 +378,6 @@ pub struct ExtensionManager {
     store: Option<Arc<dyn crate::db::Database>>,
     /// Names of WASM channels that were successfully loaded at startup.
     active_channel_names: RwLock<HashSet<String>>,
-    /// Installed channel-relay extensions (no on-disk artifact, tracked in memory).
-    installed_relay_extensions: RwLock<HashSet<String>>,
     /// Last activation error for each WASM channel (ephemeral, cleared on success).
     activation_errors: RwLock<HashMap<String, String>>,
     /// SSE broadcast manager (set post-construction via `set_sse_sender()`).
@@ -406,21 +391,6 @@ pub struct ExtensionManager {
     /// Gateway auth token for authenticating with the platform token exchange proxy.
     /// Read once at construction from `GATEWAY_AUTH_TOKEN` env var.
     gateway_token: Option<String>,
-    /// Relay config captured at startup. Used by `auth_channel_relay` and
-    /// `activate_channel_relay` instead of re-reading env vars.
-    relay_config: Option<crate::config::RelayConfig>,
-    /// Shared event sender for the relay webhook endpoint.
-    /// Populated by `activate_channel_relay`, consumed by the web gateway's
-    /// `/relay/events` handler.
-    relay_event_tx: Arc<
-        tokio::sync::Mutex<
-            Option<tokio::sync::mpsc::Sender<crate::channels::relay::client::ChannelEvent>>,
-        >,
-    >,
-    /// Per-instance callback signing secret fetched from channel-relay at activation.
-    /// Stored here so the web gateway can verify incoming callbacks without
-    /// any env var or shared secret.
-    relay_signing_secret_cache: Arc<std::sync::Mutex<Option<Vec<u8>>>>,
     /// When `true`, OAuth flows always return an auth URL to the caller
     /// instead of opening a browser on the server via `open::that()`.
     /// Set by the web gateway at startup via `enable_gateway_mode()`.
@@ -522,7 +492,6 @@ impl ExtensionManager {
             wasm_tools_dir,
             wasm_channels_dir,
             channel_runtime: RwLock::new(None),
-            relay_channel_manager: RwLock::new(None),
             secrets,
             tool_registry,
             hooks,
@@ -531,14 +500,10 @@ impl ExtensionManager {
             user_id,
             store,
             active_channel_names: RwLock::new(HashSet::new()),
-            installed_relay_extensions: RwLock::new(HashSet::new()),
             activation_errors: RwLock::new(HashMap::new()),
             sse_manager: RwLock::new(None),
             pending_oauth_flows: crate::cli::oauth_defaults::new_pending_oauth_registry(),
             gateway_token: std::env::var("GATEWAY_AUTH_TOKEN").ok(),
-            relay_config: crate::config::RelayConfig::from_env(),
-            relay_event_tx: Arc::new(tokio::sync::Mutex::new(None)),
-            relay_signing_secret_cache: Arc::new(std::sync::Mutex::new(None)),
             gateway_mode: std::sync::atomic::AtomicBool::new(false),
             gateway_base_url: RwLock::new(None),
             pending_telegram_verification: RwLock::new(HashMap::new()),
@@ -650,41 +615,6 @@ impl ExtensionManager {
             })
     }
 
-    /// Get the relay config stored at startup.
-    fn relay_config(&self) -> Result<&crate::config::RelayConfig, ExtensionError> {
-        self.relay_config.as_ref().ok_or_else(|| {
-            ExtensionError::Config(
-                "CHANNEL_RELAY_URL and CHANNEL_RELAY_API_KEY must be set".to_string(),
-            )
-        })
-    }
-
-    /// Get the shared relay event sender for the webhook endpoint.
-    pub fn relay_event_tx(
-        &self,
-    ) -> Arc<
-        tokio::sync::Mutex<
-            Option<tokio::sync::mpsc::Sender<crate::channels::relay::client::ChannelEvent>>,
-        >,
-    > {
-        Arc::clone(&self.relay_event_tx)
-    }
-
-    /// Get the per-instance callback signing secret for webhook signature verification.
-    ///
-    /// Returns the secret that was fetched from channel-relay's
-    /// `/relay/signing-secret` endpoint during `activate_channel_relay`.
-    /// Returns `None` if the relay channel has not been activated yet.
-    pub fn relay_signing_secret(&self) -> Option<Vec<u8>> {
-        self.relay_signing_secret_cache.lock().ok()?.clone()
-    }
-
-    async fn clear_relay_webhook_state(&self) {
-        *self.relay_event_tx.lock().await = None;
-        if let Ok(mut cache) = self.relay_signing_secret_cache.lock() {
-            *cache = None;
-        }
-    }
 
     /// Inject a registry entry for testing. The entry is added to the discovery
     /// cache so it appears in search results alongside built-in entries.
@@ -705,8 +635,6 @@ impl ExtensionManager {
         wasm_channel_router: Arc<WasmChannelRouter>,
         wasm_channel_owner_ids: std::collections::HashMap<String, i64>,
     ) {
-        // Also store the channel manager for relay channel activation.
-        *self.relay_channel_manager.write().await = Some(Arc::clone(&channel_manager));
         *self.channel_runtime.write().await = Some(ChannelRuntimeState {
             channel_manager,
             wasm_channel_runtime,
@@ -886,64 +814,6 @@ impl ExtensionManager {
         })
     }
 
-    /// Set just the channel manager for relay channel hot-activation.
-    ///
-    /// Call this when WASM channel runtime is not available but relay channels
-    /// still need to be hot-added.
-    pub async fn set_relay_channel_manager(&self, channel_manager: Arc<ChannelManager>) {
-        *self.relay_channel_manager.write().await = Some(channel_manager);
-    }
-
-    /// Check if a channel name corresponds to a relay extension (has stored team_id
-    /// or is tracked in the installed relay extensions set).
-    pub async fn is_relay_channel(&self, name: &str, user_id: &str) -> bool {
-        // Check in-memory installed set first (supports no-store mode)
-        if self.installed_relay_extensions.read().await.contains(name) {
-            return true;
-        }
-        // Check for stored team_id (persisted across restarts by the OAuth callback)
-        if let Some(ref store) = self.store {
-            let key = format!("relay:{}:team_id", name);
-            if let Ok(Some(v)) = store.get_setting(user_id, &key).await {
-                return v.as_str().is_some_and(|s| !s.is_empty());
-            }
-        }
-        false
-    }
-
-    /// Restore persisted relay channels after startup.
-    ///
-    /// Loads the persisted active channel list, filters to relay types (those with
-    /// a stored team_id setting), and activates each via `activate_stored_relay()`.
-    /// Skips channels that are already active.
-    ///
-    /// Call this only after `set_relay_channel_manager()` or `set_channel_runtime()`.
-    /// Otherwise, each activation attempt fails with "Channel manager not initialized".
-    pub async fn restore_relay_channels(&self, user_id: &str) {
-        let persisted = self.load_persisted_active_channels(user_id).await;
-        let already_active = self.active_channel_names.read().await.clone();
-
-        for name in &persisted {
-            if already_active.contains(name) {
-                continue;
-            }
-            if !self.is_relay_channel(name, user_id).await {
-                continue;
-            }
-            match self.activate_stored_relay(name, user_id).await {
-                Ok(_) => {
-                    tracing::debug!(channel = %name, "Restored persisted relay channel");
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        channel = %name,
-                        error = %e,
-                        "Failed to restore persisted relay channel"
-                    );
-                }
-            }
-        }
-    }
 
     /// Access the secrets store (used by OAuth callback handlers).
     pub fn secrets(&self) -> &Arc<dyn SecretsStore + Send + Sync> {
@@ -1101,7 +971,6 @@ impl ExtensionManager {
                 }
                 None
             }
-            ExtensionKind::ChannelRelay => None,
         }
     }
 
@@ -1267,12 +1136,6 @@ impl ExtensionManager {
                 ExtensionKind::WasmChannel => {
                     self.install_wasm_channel_from_url(name, url, None).await
                 }
-                ExtensionKind::ChannelRelay => {
-                    // ChannelRelay extensions are installed from registry, not by URL
-                    Err(ExtensionError::InstallFailed(
-                        "Channel relay extensions cannot be installed by URL".to_string(),
-                    ))
-                }
             }
             .map_err(|e| {
                 let sanitized = sanitize_url_for_logging(url);
@@ -1304,7 +1167,6 @@ impl ExtensionManager {
             ExtensionKind::McpServer => self.auth_mcp(name, user_id).await,
             ExtensionKind::WasmTool => self.auth_wasm_tool(name, user_id).await,
             ExtensionKind::WasmChannel => self.auth_wasm_channel_status(name, user_id).await,
-            ExtensionKind::ChannelRelay => self.auth_channel_relay(name, user_id).await,
         }
     }
 
@@ -1321,7 +1183,6 @@ impl ExtensionManager {
             ExtensionKind::McpServer => self.activate_mcp(name, user_id).await,
             ExtensionKind::WasmTool => self.activate_wasm_tool(name, user_id).await,
             ExtensionKind::WasmChannel => self.activate_wasm_channel(name, user_id).await,
-            ExtensionKind::ChannelRelay => self.activate_channel_relay(name, user_id).await,
         }
     }
 
@@ -1493,39 +1354,6 @@ impl ExtensionManager {
             }
         }
 
-        // List channel-relay extensions
-        if kind_filter.is_none() || kind_filter == Some(ExtensionKind::ChannelRelay) {
-            let installed = self.installed_relay_extensions.read().await;
-            let active_names = self.active_channel_names.read().await;
-            let errors = self.activation_errors.read().await;
-            for name in installed.iter() {
-                let active = active_names.contains(name);
-                let authenticated = self.is_relay_channel(name, user_id).await;
-                let activation_error = errors.get(name).cloned();
-                let registry_entry = self
-                    .registry
-                    .get_with_kind(name, Some(ExtensionKind::ChannelRelay))
-                    .await;
-                let display_name = registry_entry.as_ref().map(|e| e.display_name.clone());
-                let description = registry_entry.as_ref().map(|e| e.description.clone());
-                extensions.push(InstalledExtension {
-                    name: name.clone(),
-                    kind: ExtensionKind::ChannelRelay,
-                    display_name,
-                    description,
-                    url: None,
-                    authenticated,
-                    active,
-                    tools: Vec::new(),
-                    needs_setup: false,
-                    has_auth: true,
-                    installed: true,
-                    activation_error,
-                    version: None,
-                });
-            }
-        }
-
         // Append available-but-not-installed registry entries
         if include_available {
             let installed_names: std::collections::HashSet<(String, ExtensionKind)> = extensions
@@ -1688,59 +1516,6 @@ impl ExtensionManager {
                     name
                 ))
             }
-            ExtensionKind::ChannelRelay => {
-                // Remove from installed set
-                self.installed_relay_extensions.write().await.remove(name);
-
-                // Remove from active channels
-                self.active_channel_names.write().await.remove(name);
-                self.persist_active_channels(user_id).await;
-                self.activation_errors.write().await.remove(name);
-
-                // Remove stored team_id setting and clean up secrets
-                if let Some(ref store) = self.store
-                    && let Err(e) = store
-                        .delete_setting(user_id, &format!("relay:{}:team_id", name))
-                        .await
-                {
-                    tracing::warn!(error = %e, name, "Failed to delete relay team_id setting on removal");
-                }
-                if let Err(e) = self
-                    .secrets
-                    .delete(user_id, &format!("relay:{}:oauth_state", name))
-                    .await
-                {
-                    tracing::warn!(error = %e, name, "Failed to delete relay oauth_state secret on removal");
-                }
-                // Clean up legacy stream_token secret from pre-webhook installs
-                let _ = self
-                    .secrets
-                    .delete(user_id, &format!("relay:{}:stream_token", name))
-                    .await;
-
-                // Stop webhook traffic before removing the channel from the managers.
-                self.clear_relay_webhook_state().await;
-
-                // Shut down and remove the channel (check both runtime paths for
-                // WASM+relay and relay-only modes).
-                let mut shut_down = false;
-                if let Some(ref rt) = *self.channel_runtime.read().await
-                    && let Some(channel) = rt.channel_manager.get_channel(name).await
-                {
-                    let _ = channel.shutdown().await;
-                    rt.channel_manager.remove(name).await;
-                    shut_down = true;
-                }
-                if !shut_down
-                    && let Some(ref cm) = *self.relay_channel_manager.read().await
-                    && let Some(channel) = cm.get_channel(name).await
-                {
-                    let _ = channel.shutdown().await;
-                    cm.remove(name).await;
-                }
-
-                Ok(format!("Removed channel relay '{}'", name))
-            }
         }
     }
 
@@ -1832,7 +1607,7 @@ impl ExtensionManager {
                 &self.wasm_channels_dir,
                 crate::tools::wasm::WIT_CHANNEL_VERSION,
             ),
-            ExtensionKind::McpServer | ExtensionKind::ChannelRelay => {
+            ExtensionKind::McpServer => {
                 return UpgradeOutcome {
                     name: name.to_string(),
                     kind,
@@ -1858,7 +1633,7 @@ impl ExtensionManager {
                                 .ok()
                                 .and_then(|c| c.wit_version)
                         }
-                        ExtensionKind::McpServer | ExtensionKind::ChannelRelay => None,
+                        ExtensionKind::McpServer => None,
                     };
                     wit
                 }
@@ -2019,14 +1794,6 @@ impl ExtensionManager {
                     "name": name,
                     "kind": "mcp_server",
                     "connected": self.mcp_clients.read().await.contains_key(name),
-                });
-                Ok(info)
-            }
-            ExtensionKind::ChannelRelay => {
-                let info = serde_json::json!({
-                    "name": name,
-                    "kind": "channel_relay",
-                    "active": self.active_channel_names.read().await.contains(name),
                 });
                 Ok(info)
             }
@@ -2204,21 +1971,6 @@ impl ExtensionManager {
                     "WASM channel entry has no download URL or build info".to_string(),
                 )),
             },
-            ExtensionKind::ChannelRelay => {
-                // No download needed — just mark as installed.
-                self.installed_relay_extensions
-                    .write()
-                    .await
-                    .insert(entry.name.clone());
-                Ok(InstallResult {
-                    name: entry.name.clone(),
-                    kind: ExtensionKind::ChannelRelay,
-                    message: format!(
-                        "'{}' installed. Click Activate to connect your workspace.",
-                        entry.display_name
-                    ),
-                })
-            }
         }
     }
 
@@ -2579,7 +2331,6 @@ impl ExtensionManager {
             ExtensionKind::WasmTool => "WASM tool",
             ExtensionKind::WasmChannel => "WASM channel",
             ExtensionKind::McpServer => "MCP server",
-            ExtensionKind::ChannelRelay => "channel relay",
         };
 
         tracing::info!(
@@ -4295,177 +4046,7 @@ impl ExtensionManager {
         })
     }
 
-    // ── Channel-relay extension methods ──────────────────────────────────
-
-    /// Derive a stable instance ID from the relay config and user_id.
-    fn relay_instance_id(&self, config: &crate::config::RelayConfig, user_id: &str) -> String {
-        config.instance_id.clone().unwrap_or_else(|| {
-            uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, user_id.as_bytes()).to_string()
-        })
-    }
-
-    /// Authenticate a channel-relay extension.
-    ///
-    /// For Slack: initiates OAuth flow (redirect-based).
-    /// For Telegram: accepts a bot token, registers it with channel-relay,
-    /// and stores the team_id setting.
-    async fn auth_channel_relay(
-        &self,
-        name: &str,
-        user_id: &str,
-    ) -> Result<AuthResult, ExtensionError> {
-        // Check if already authenticated (team_id setting exists)
-        if self.is_relay_channel(name, user_id).await {
-            return Ok(AuthResult::authenticated(name, ExtensionKind::ChannelRelay));
-        }
-
-        // Use relay config captured at startup
-        let relay_config = self.relay_config()?;
-
-        let client = crate::channels::relay::RelayClient::new(
-            relay_config.url.clone(),
-            relay_config.api_key.clone(),
-            relay_config.request_timeout_secs,
-        )
-        .map_err(|e| ExtensionError::Config(e.to_string()))?;
-
-        // Generate CSRF nonce — IronClaw validates this on the callback to ensure
-        // the OAuth completion is legitimate. Channel-relay embeds it in the signed
-        // state and appends it to the post-OAuth redirect URL.
-        let state_nonce = uuid::Uuid::new_v4().to_string();
-        let state_key = format!("relay:{}:oauth_state", name);
-        // Delete any stale nonce before storing the new one
-        let _ = self.secrets.delete(user_id, &state_key).await;
-        self.secrets
-            .create(user_id, CreateSecretParams::new(&state_key, &state_nonce))
-            .await
-            .map_err(|e| ExtensionError::AuthFailed(format!("Failed to store OAuth state: {e}")))?;
-
-        // Channel-relay derives all URLs from trusted instance_url in chat-api.
-        // We only pass the nonce for CSRF validation on the callback.
-        match client.initiate_oauth(Some(&state_nonce)).await {
-            Ok(auth_url) => Ok(AuthResult::awaiting_authorization(
-                name,
-                ExtensionKind::ChannelRelay,
-                auth_url,
-                "redirect".to_string(),
-            )),
-            Err(e) => Err(ExtensionError::AuthFailed(e.to_string())),
-        }
-    }
-
-    /// Activate a channel-relay extension.
-    async fn activate_channel_relay(
-        &self,
-        name: &str,
-        user_id: &str,
-    ) -> Result<ActivateResult, ExtensionError> {
-        let team_id_key = format!("relay:{}:team_id", name);
-
-        // Get team_id from settings (stored by the OAuth callback)
-        let team_id = if let Some(ref store) = self.store {
-            store
-                .get_setting(user_id, &team_id_key)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
-
-        if team_id.is_empty() {
-            return Err(ExtensionError::AuthRequired);
-        }
-
-        // Use relay config captured at startup
-        let relay_config = self.relay_config()?;
-
-        let instance_id = self.relay_instance_id(relay_config, user_id);
-
-        let client = crate::channels::relay::RelayClient::new(
-            relay_config.url.clone(),
-            relay_config.api_key.clone(),
-            relay_config.request_timeout_secs,
-        )
-        .map_err(|e| ExtensionError::ActivationFailed(e.to_string()))?;
-
-        // Fetch the per-instance signing secret from channel-relay.
-        // This must succeed — there is no fallback.
-        let signing_secret = client.get_signing_secret(&team_id).await.map_err(|e| {
-            ExtensionError::Config(format!("Failed to fetch relay signing secret: {e}"))
-        })?;
-
-        // Create the event channel for webhook callbacks
-        let (event_tx, event_rx) = tokio::sync::mpsc::channel(64);
-
-        let channel = crate::channels::relay::RelayChannel::new_with_provider(
-            client.clone(),
-            crate::channels::relay::channel::RelayProvider::Slack,
-            team_id.clone(),
-            instance_id.clone(),
-            event_tx.clone(),
-            event_rx,
-        );
-
-        // Hot-add to channel manager
-        let cm_guard = self.relay_channel_manager.read().await;
-        let channel_mgr = cm_guard.as_ref().ok_or_else(|| {
-            ExtensionError::ActivationFailed("Channel manager not initialized".to_string())
-        })?;
-
-        channel_mgr
-            .hot_add(Box::new(channel))
-            .await
-            .map_err(|e| ExtensionError::ActivationFailed(e.to_string()))?;
-
-        if let Ok(mut cache) = self.relay_signing_secret_cache.lock() {
-            *cache = Some(signing_secret);
-        }
-
-        // Store the event sender so the web gateway's relay webhook endpoint can push events
-        *self.relay_event_tx.lock().await = Some(event_tx);
-
-        // Mark as active
-        self.active_channel_names
-            .write()
-            .await
-            .insert(name.to_string());
-        self.persist_active_channels(user_id).await;
-
-        // Broadcast status
-        let status_msg = "Slack connected via channel relay".to_string();
-        self.broadcast_extension_status(name, "active", Some(&status_msg))
-            .await;
-
-        Ok(ActivateResult {
-            name: name.to_string(),
-            kind: ExtensionKind::ChannelRelay,
-            tools_loaded: Vec::new(),
-            message: status_msg,
-        })
-    }
-
-    /// Activate a channel-relay extension from stored credentials (for startup reconnect).
-    pub async fn activate_stored_relay(
-        &self,
-        name: &str,
-        user_id: &str,
-    ) -> Result<(), ExtensionError> {
-        self.installed_relay_extensions
-            .write()
-            .await
-            .insert(name.to_string());
-        self.activate_channel_relay(name, user_id).await?;
-        Ok(())
-    }
-
     /// Determine what kind of installed extension this is.
-    ///
-    /// This is a read-only check — it never modifies `installed_relay_extensions`.
-    /// To mark a relay extension as installed, use `activate_stored_relay()` or
-    /// the explicit install flow.
     async fn determine_installed_kind(
         &self,
         name: &str,
@@ -4488,17 +4069,8 @@ impl ExtensionManager {
             return Ok(ExtensionKind::WasmChannel);
         }
 
-        // Check channel-relay extensions (installed in memory or has stored team_id)
-        if self.installed_relay_extensions.read().await.contains(name) {
-            return Ok(ExtensionKind::ChannelRelay);
-        }
-        // Also check if there's a stored team_id setting (persisted across restarts)
-        if self.is_relay_channel(name, user_id).await {
-            return Ok(ExtensionKind::ChannelRelay);
-        }
-
         Err(ExtensionError::NotInstalled(format!(
-            "'{}' is not installed as an MCP server, WASM tool, WASM channel, or channel relay",
+            "'{}' is not installed as an MCP server, WASM tool, or WASM channel",
             name
         )))
     }
@@ -5161,7 +4733,6 @@ impl ExtensionManager {
                 names.insert(server.token_secret_name());
                 (names, Vec::new())
             }
-            ExtensionKind::ChannelRelay => (std::collections::HashSet::new(), Vec::new()),
         };
 
         let allowed_fields: std::collections::HashSet<String> =
@@ -5431,7 +5002,6 @@ impl ExtensionManager {
         let activate_result = match kind {
             ExtensionKind::WasmChannel => self.activate_wasm_channel(name, user_id).await,
             ExtensionKind::McpServer => self.activate_mcp(name, user_id).await,
-            ExtensionKind::ChannelRelay => self.activate_channel_relay(name, user_id).await,
             ExtensionKind::WasmTool => {
                 return Ok(ConfigureResult {
                     message: format!("Configuration saved for '{}'.", name),
@@ -5592,9 +5162,6 @@ impl ExtensionManager {
                     .map_err(|e| ExtensionError::NotInstalled(e.to_string()))?;
                 server.token_secret_name()
             }
-            ExtensionKind::ChannelRelay => {
-                return Err(ExtensionError::AuthRequired);
-            }
         };
 
         let mut secrets = std::collections::HashMap::new();
@@ -5730,10 +5297,6 @@ async fn load_channel_config_secret_overrides(
     };
 
     let secret_config_mappings: &[(&str, &str)] = match channel_name {
-        "feishu" => &[
-            ("app_id", "feishu_app_id"),
-            ("app_secret", "feishu_app_secret"),
-        ],
         "xmpp" => &[("xmpp_password", "xmpp_password")],
         _ => return overrides,
     };
@@ -6654,8 +6217,8 @@ mod tests {
         if manager.current_channel_owner_id("telegram").await != Some(12345_i64) {
             return Err("expected runtime owner id fast-path for telegram".to_string());
         }
-        if manager.current_channel_owner_id("slack").await.is_some() {
-            return Err("expected no owner id for slack".to_string());
+        if manager.current_channel_owner_id("weechat").await.is_some() {
+            return Err("expected no owner id for weechat".to_string());
         }
 
         Ok(())
@@ -7215,116 +6778,6 @@ mod tests {
         unsafe { std::env::remove_var("ICTEST6_TOKEN") };
     }
 
-    #[tokio::test]
-    async fn test_determine_installed_kind_does_not_auto_install_relay() {
-        // Regression: determine_installed_kind used to auto-insert into
-        // installed_relay_extensions when a ChannelRelay registry entry existed,
-        // even though the user never installed it. It should be read-only.
-        let dir = tempfile::tempdir().expect("temp dir");
-        let mgr = make_test_manager(None, dir.path().to_path_buf());
-
-        // The manager has no relay extensions installed
-        assert!(
-            mgr.installed_relay_extensions.read().await.is_empty(),
-            "Should start with no installed relay extensions"
-        );
-
-        // Calling determine_installed_kind for a non-installed name returns NotInstalled
-        let result = mgr.determine_installed_kind("slack-relay", "test").await;
-        assert!(result.is_err(), "Should return NotInstalled");
-
-        // Crucially: installed_relay_extensions must still be empty
-        assert!(
-            mgr.installed_relay_extensions.read().await.is_empty(),
-            "determine_installed_kind must not modify installed_relay_extensions"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_is_relay_channel_returns_false_without_store() {
-        let dir = tempfile::tempdir().expect("temp dir");
-        let mgr = make_test_manager(None, dir.path().to_path_buf());
-
-        // No store configured, no team_id → not a relay channel
-        assert!(!mgr.is_relay_channel("slack-relay", "test").await);
-    }
-
-    #[tokio::test]
-    async fn test_activate_channel_relay_without_store_returns_auth_required() {
-        let dir = tempfile::tempdir().expect("temp dir");
-        let mgr = make_test_manager(None, dir.path().to_path_buf());
-
-        let err = mgr
-            .activate_channel_relay("slack-relay", "test")
-            .await
-            .unwrap_err();
-        assert!(
-            matches!(err, ExtensionError::AuthRequired),
-            "expected AuthRequired, got: {err:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_remove_relay_shuts_down_via_relay_channel_manager() {
-        // Regression: remove() only checked channel_runtime for shutdown, missing
-        // relay-only mode where only relay_channel_manager is set.
-        let dir = tempfile::tempdir().expect("temp dir");
-        let mgr = make_test_manager(None, dir.path().to_path_buf());
-
-        // Set up relay channel manager with a stub channel
-        let cm = Arc::new(crate::channels::ChannelManager::new());
-        let (stub, _tx) = crate::testing::StubChannel::new("slack-relay");
-        cm.add(Box::new(stub)).await;
-        mgr.set_relay_channel_manager(Arc::clone(&cm)).await;
-
-        // Mark as installed + store team_id so determine_installed_kind finds it
-        mgr.installed_relay_extensions
-            .write()
-            .await
-            .insert("slack-relay".to_string());
-        *mgr.relay_event_tx.lock().await = Some(tokio::sync::mpsc::channel(1).0);
-        if let Ok(mut cache) = mgr.relay_signing_secret_cache.lock() {
-            *cache = Some(vec![9u8; 32]);
-        }
-        if let Some(ref store) = mgr.store {
-            store
-                .set_setting(
-                    "test",
-                    "relay:slack-relay:team_id",
-                    &serde_json::json!("T123"),
-                )
-                .await
-                .expect("store team_id");
-        }
-
-        // Verify channel exists before removal
-        assert!(cm.get_channel("slack-relay").await.is_some());
-
-        // Remove should succeed and shut down the channel
-        let result = mgr.remove("slack-relay", "test").await;
-        assert!(result.is_ok(), "remove should succeed: {:?}", result.err());
-
-        // installed_relay_extensions should be cleared
-        assert!(
-            !mgr.installed_relay_extensions
-                .read()
-                .await
-                .contains("slack-relay"),
-            "Should be removed from installed set"
-        );
-        assert!(
-            mgr.relay_event_tx.lock().await.is_none(),
-            "relay event sender should be cleared on remove"
-        );
-        assert!(
-            mgr.relay_signing_secret().is_none(),
-            "relay signing secret cache should be cleared on remove"
-        );
-        assert!(
-            cm.get_channel("slack-relay").await.is_none(),
-            "relay channel should be removed from the channel manager"
-        );
-    }
 
     #[tokio::test]
     async fn test_remove_wasm_tool_clears_pending_oauth_state_and_activation_error() {
@@ -8052,52 +7505,6 @@ mod tests {
         )
     }
 
-    #[tokio::test]
-    async fn test_configure_dispatches_activation_by_kind() {
-        // Regression: configure() must dispatch to the correct activation method
-        // by kind. Previously it unconditionally called activate_wasm_channel()
-        // for all non-WasmTool types, which would fail with a channel-specific
-        // error for MCP servers and channel relays.
-        let dir = tempfile::tempdir().expect("temp dir");
-        let channels_dir = dir.path().join("channels");
-        std::fs::create_dir_all(&channels_dir).unwrap();
-
-        let mgr = make_manager_custom_dirs(dir.path().join("tools"), channels_dir);
-
-        // Register a channel relay extension (in-memory)
-        mgr.installed_relay_extensions
-            .write()
-            .await
-            .insert("test-relay".to_string());
-
-        // configure() with empty secrets should dispatch to
-        // activate_channel_relay(), not activate_wasm_channel(). Relay auth
-        // is OAuth-only so there are no manual secrets to pass.
-        let result = mgr
-            .configure(
-                "test-relay",
-                &std::collections::HashMap::new(),
-                &std::collections::HashMap::new(),
-                "test",
-            )
-            .await;
-        assert!(
-            result.is_ok(),
-            "configure should return Ok: {:?}",
-            result.err()
-        );
-
-        let result = result.unwrap();
-        assert!(
-            !result.activated,
-            "activation should fail without relay config"
-        );
-        assert!(
-            !result.message.contains("WASM"),
-            "error should not mention WASM — got: {}",
-            result.message
-        );
-    }
     #[test]
     fn test_validation_failed_is_distinct_error_variant() {
         // Regression: ValidationFailed must be a distinct error variant so

@@ -48,14 +48,6 @@ pub async fn extensions_list_handler(
                     has_paired,
                     owner_bound_channels.contains(&ext.name),
                 )
-            } else if ext.kind == crate::extensions::ExtensionKind::ChannelRelay {
-                Some(if ext.active {
-                    crate::channels::web::types::ExtensionActivationStatus::Active
-                } else if ext.authenticated {
-                    crate::channels::web::types::ExtensionActivationStatus::Configured
-                } else {
-                    crate::channels::web::types::ExtensionActivationStatus::Installed
-                })
             } else {
                 None
             };
@@ -115,7 +107,6 @@ pub async fn extensions_install_handler(
         "mcp_server" => Some(crate::extensions::ExtensionKind::McpServer),
         "wasm_tool" => Some(crate::extensions::ExtensionKind::WasmTool),
         "wasm_channel" => Some(crate::extensions::ExtensionKind::WasmChannel),
-        "channel_relay" => Some(crate::extensions::ExtensionKind::ChannelRelay),
         _ => None,
     });
 

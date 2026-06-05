@@ -10,10 +10,10 @@ use crate::extensions::{AuthHint, ExtensionKind, ExtensionSource, RegistryEntry}
 /// A single extension manifest loaded from `registry/{tools,channels,mcp-servers}/<name>.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionManifest {
-    /// Unique identifier (matches crate name stem, e.g. "slack").
+    /// Unique identifier (matches crate name stem, e.g. "gotify").
     pub name: String,
 
-    /// Human-readable name (e.g. "Slack").
+    /// Human-readable name (e.g. "Gotify").
     pub display_name: String,
 
     /// Whether this is a tool, channel, or MCP server.
@@ -88,7 +88,7 @@ impl std::fmt::Display for ManifestKind {
 /// Source code location for building from source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceSpec {
-    /// Path relative to repo root (e.g. "tools-src/slack").
+    /// Path relative to repo root (e.g. "tools-src/gotify").
     pub dir: String,
 
     /// Capabilities filename relative to source dir.
@@ -122,7 +122,7 @@ pub struct AuthSummary {
     #[serde(default)]
     pub method: Option<String>,
 
-    /// Display name for the auth provider (e.g. "Google", "Slack").
+    /// Display name for the auth provider (e.g. "Google", "GitHub").
     #[serde(default)]
     pub provider: Option<String>,
 
@@ -292,32 +292,32 @@ mod tests {
     #[test]
     fn test_parse_tool_manifest() {
         let json = r#"{
-            "name": "slack",
-            "display_name": "Slack",
+            "name": "gotify",
+            "display_name": "Gotify",
             "kind": "tool",
             "version": "0.1.0",
-            "description": "Post messages via Slack API",
+            "description": "Send push notifications via Gotify",
             "keywords": ["messaging"],
             "source": {
-                "dir": "tools-src/slack",
-                "capabilities": "slack-tool.capabilities.json",
-                "crate_name": "slack-tool"
+                "dir": "tools-src/gotify",
+                "capabilities": "gotify-tool.capabilities.json",
+                "crate_name": "gotify-tool"
             },
             "artifacts": {
                 "wasm32-wasip2": { "url": null, "sha256": null }
             },
             "auth_summary": {
-                "method": "oauth",
-                "provider": "Slack",
-                "secrets": ["slack_bot_token"],
+                "method": "token",
+                "provider": "Gotify",
+                "secrets": ["gotify_app_token"],
                 "shared_auth": null,
-                "setup_url": "https://api.slack.com/apps"
+                "setup_url": "https://gotify.example.com"
             },
             "tags": ["default", "messaging"]
         }"#;
 
         let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse manifest");
-        assert_eq!(manifest.name, "slack");
+        assert_eq!(manifest.name, "gotify");
         assert_eq!(manifest.kind, ManifestKind::Tool);
         assert_eq!(manifest.version.as_deref(), Some("0.1.0"));
         assert!(manifest.tags.contains(&"default".to_string()));
@@ -363,7 +363,7 @@ mod tests {
                 },
                 "default": {
                     "display_name": "Recommended Set",
-                    "extensions": ["tools/github", "tools/slack"]
+                    "extensions": ["tools/github", "tools/gotify"]
                 }
             }
         }"#;
@@ -442,16 +442,16 @@ mod tests {
     #[test]
     fn test_manifest_with_null_url_no_fallback() {
         let json = r#"{
-            "name": "slack",
-            "display_name": "Slack",
+            "name": "gotify",
+            "display_name": "Gotify",
             "kind": "tool",
             "version": "0.1.0",
-            "description": "Slack tool",
+            "description": "Gotify push notifications",
             "keywords": [],
             "source": {
-                "dir": "tools-src/slack",
-                "capabilities": "slack-tool.capabilities.json",
-                "crate_name": "slack-tool"
+                "dir": "tools-src/gotify",
+                "capabilities": "gotify-tool.capabilities.json",
+                "crate_name": "gotify-tool"
             },
             "artifacts": {
                 "wasm32-wasip2": { "url": null, "sha256": null }

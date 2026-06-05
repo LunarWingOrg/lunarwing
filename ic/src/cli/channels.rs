@@ -266,7 +266,7 @@ mod tests {
     async fn discover_wasm_channels_finds_flat_wasm_files() {
         let tmp = tempfile::tempdir().unwrap();
         // Flat .wasm files — matches real loader (load_from_dir)
-        std::fs::File::create(tmp.path().join("slack.wasm")).unwrap();
+        std::fs::File::create(tmp.path().join("weechat.wasm")).unwrap();
         std::fs::File::create(tmp.path().join("telegram.wasm")).unwrap();
         // Non-.wasm files should be skipped
         std::fs::File::create(tmp.path().join("readme.txt")).unwrap();
@@ -274,7 +274,7 @@ mod tests {
         std::fs::create_dir(tmp.path().join("somedir")).unwrap();
 
         let result = discover_wasm_channels(tmp.path()).await;
-        assert_eq!(result, vec!["slack", "telegram"]);
+        assert_eq!(result, vec!["telegram", "weechat"]);
     }
 
     #[test]

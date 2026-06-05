@@ -31,7 +31,7 @@ impl Tool for ToolSearchTool {
 
     fn description(&self) -> &str {
         "Search for available extensions to add new capabilities. Extensions include \
-         channels (Telegram, Slack, Discord — for messaging), tools, and MCP servers. \
+         channels (Telegram, XMPP — for messaging), tools, and MCP servers. \
          Use discover:true to search online if the built-in registry has no results."
     }
 
@@ -721,7 +721,7 @@ mod tests {
         let test_cases = vec![
             ("no params", serde_json::json!({})),
             ("empty name", serde_json::json!({"name": ""})),
-            ("slack", serde_json::json!({"name": "slack"})),
+            ("gotify", serde_json::json!({"name": "gotify"})),
             ("github-cli", serde_json::json!({"name": "github-cli"})),
             (
                 "with extra fields",

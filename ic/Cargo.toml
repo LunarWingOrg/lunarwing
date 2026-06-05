@@ -2,9 +2,7 @@
 members = [".", "crates/lunarwing_common", "crates/lunarwing_safety", "crates/lunarwing_skills", "crates/lunarwing_engine"]
 exclude = [
     "job_prompt",
-    "channels-src/discord",
     "channels-src/telegram",
-    "channels-src/slack",
     "channels-src/xmpp",
     "bridges/xmpp-bridge",
     "tools-src/github",
@@ -14,7 +12,6 @@ exclude = [
     "tools-src/google-drive",
     "tools-src/google-sheets",
     "tools-src/google-slides",
-    "tools-src/slack",
     "tools-src/telegram",
     "fuzz",
     "crates/lunarwing_safety/fuzz",

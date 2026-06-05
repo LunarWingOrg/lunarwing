@@ -409,7 +409,7 @@ impl StatusUpdate {
 /// a unified format. They also handle sending responses back.
 #[async_trait]
 pub trait Channel: Send + Sync {
-    /// Get the channel name (e.g., "cli", "slack", "telegram", "http").
+    /// Get the channel name (e.g., "cli", "xmpp", "telegram", "http").
     fn name(&self) -> &str;
 
     /// Start listening for messages.

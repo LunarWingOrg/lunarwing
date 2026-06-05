@@ -25,8 +25,6 @@ pub const RESERVED_CHANNEL_NAMES: &[&str] = &[
     "gateway",
     "telegram",
     "signal",
-    "slack",
-    "discord",
     "repl",
     "cli",
     "http",
@@ -433,7 +431,7 @@ mod tests {
         store.insert(gate).await.unwrap();
 
         assert!(matches!(
-            store.take_verified(&key, request_id, "slack").await,
+            store.take_verified(&key, request_id, "xmpp").await,
             Err(GateStoreError::ChannelMismatch { .. })
         ));
     }

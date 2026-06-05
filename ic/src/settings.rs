@@ -2415,10 +2415,10 @@ timeout_ms = 300000
         // channels_only mode: reconnect_existing_db loads from DB
         let mut current = Settings::from_db_map(&db_map);
 
-        // Simulate step_channels: user enables HTTP and adds discord
+        // Simulate step_channels: user enables HTTP and adds weechat
         current.channels.http_enabled = true;
         current.channels.http_port = Some(9090);
-        current.channels.wasm_channels = vec!["telegram".to_string(), "discord".to_string()];
+        current.channels.wasm_channels = vec!["telegram".to_string(), "weechat".to_string()];
 
         // Verify: channels changed
         assert!(current.channels.http_enabled);

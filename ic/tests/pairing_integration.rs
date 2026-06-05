@@ -117,17 +117,17 @@ fn test_pairing_multiple_channels_isolated() {
     let (store, _) = test_store();
 
     let r_telegram = store.upsert_request("telegram", "user_a", None).unwrap();
-    let r_slack = store.upsert_request("slack", "user_b", None).unwrap();
+    let r_xmpp = store.upsert_request("xmpp", "user_b", None).unwrap();
 
     // Each channel has its own pending
     assert_eq!(store.list_pending("telegram").unwrap().len(), 1);
-    assert_eq!(store.list_pending("slack").unwrap().len(), 1);
+    assert_eq!(store.list_pending("xmpp").unwrap().len(), 1);
 
     // Approve in one channel doesn't affect the other
     store.approve("telegram", &r_telegram.code).unwrap();
     assert!(store.is_sender_allowed("telegram", "user_a", None).unwrap());
-    assert!(!store.is_sender_allowed("slack", "user_a", None).unwrap());
+    assert!(!store.is_sender_allowed("xmpp", "user_a", None).unwrap());
 
-    store.approve("slack", &r_slack.code).unwrap();
-    assert!(store.is_sender_allowed("slack", "user_b", None).unwrap());
+    store.approve("xmpp", &r_xmpp.code).unwrap();
+    assert!(store.is_sender_allowed("xmpp", "user_b", None).unwrap());
 }

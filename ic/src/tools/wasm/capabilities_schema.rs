@@ -1,7 +1,7 @@
 //! JSON schema for WASM tool capabilities files.
 //!
 //! External WASM tools declare their required capabilities via a sidecar JSON file
-//! (e.g., `slack.capabilities.json`). This module defines the schema for those files
+//! (e.g., `github.capabilities.json`). This module defines the schema for those files
 //! and provides conversion to runtime [`Capabilities`].
 //!
 //! # Example Capabilities File
@@ -10,19 +10,19 @@
 //! {
 //!   "http": {
 //!     "allowlist": [
-//!       { "host": "slack.com", "path_prefix": "/api/", "methods": ["GET", "POST"] }
+//!       { "host": "api.example.com", "path_prefix": "/v1/", "methods": ["GET", "POST"] }
 //!     ],
 //!     "credentials": {
-//!       "slack_bot_token": {
-//!         "secret_name": "slack_bot_token",
+//!       "api_token": {
+//!         "secret_name": "api_token",
 //!         "location": { "type": "bearer" },
-//!         "host_patterns": ["slack.com"]
+//!         "host_patterns": ["api.example.com"]
 //!       }
 //!     },
 //!     "rate_limit": { "requests_per_minute": 50, "requests_per_hour": 1000 }
 //!   },
 //!   "secrets": {
-//!     "allowed_names": ["slack_bot_token"]
+//!     "allowed_names": ["api_token"]
 //!   }
 //! }
 //! ```
@@ -320,7 +320,7 @@ impl HttpCapabilitySchema {
 /// Endpoint pattern schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndpointPatternSchema {
-    /// Hostname (e.g., "api.slack.com" or "*.slack.com").
+    /// Hostname (e.g., "api.example.com" or "*.example.com").
     pub host: String,
 
     /// Optional path prefix (e.g., "/api/").
@@ -491,7 +491,7 @@ pub struct WebhookCapabilitySchema {
     /// Signature header for HMAC verification.
     #[serde(default)]
     pub hmac_signature_header: Option<String>,
-    /// Optional timestamp header for Slack-style v0 verification.
+    /// Optional timestamp header for timestamped HMAC verification.
     #[serde(default)]
     pub hmac_timestamp_header: Option<String>,
     /// Optional signature prefix for body-only HMAC mode (default sha256=).
@@ -560,7 +560,7 @@ pub struct AuthCapabilitySchema {
     /// Must match the secret_name in credentials if HTTP capability is used.
     pub secret_name: String,
 
-    /// Human-readable name for the service (e.g., "Notion", "Slack").
+    /// Human-readable name for the service (e.g., "Notion", "GitHub").
     #[serde(default)]
     pub display_name: Option<String>,
 
@@ -762,7 +762,7 @@ mod tests {
         let json = r#"{
             "http": {
                 "allowlist": [
-                    { "host": "api.slack.com", "path_prefix": "/api/", "methods": ["GET", "POST"] }
+                    { "host": "api.github.com", "path_prefix": "/repos/", "methods": ["GET", "POST"] }
                 ]
             }
         }"#;
@@ -770,8 +770,8 @@ mod tests {
         let caps = CapabilitiesFile::from_json(json).unwrap();
         let http = caps.http.unwrap();
         assert_eq!(http.allowlist.len(), 1);
-        assert_eq!(http.allowlist[0].host, "api.slack.com");
-        assert_eq!(http.allowlist[0].path_prefix, Some("/api/".to_string()));
+        assert_eq!(http.allowlist[0].host, "api.github.com");
+        assert_eq!(http.allowlist[0].path_prefix, Some("/repos/".to_string()));
         assert_eq!(http.allowlist[0].methods, vec!["GET", "POST"]);
     }
 
@@ -779,12 +779,12 @@ mod tests {
     fn test_parse_credentials() {
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "slack.com" }],
+                "allowlist": [{ "host": "api.example.com" }],
                 "credentials": {
-                    "slack": {
-                        "secret_name": "slack_bot_token",
+                    "api_cred": {
+                        "secret_name": "api_token",
                         "location": { "type": "bearer" },
-                        "host_patterns": ["slack.com", "*.slack.com"]
+                        "host_patterns": ["api.example.com", "*.example.com"]
                     }
                 }
             }
@@ -793,10 +793,10 @@ mod tests {
         let caps = CapabilitiesFile::from_json(json).unwrap();
         let http = caps.http.unwrap();
         assert_eq!(http.credentials.len(), 1);
-        let cred = http.credentials.get("slack").unwrap();
-        assert_eq!(cred.secret_name, "slack_bot_token");
+        let cred = http.credentials.get("api_cred").unwrap();
+        assert_eq!(cred.secret_name, "api_token");
         assert!(matches!(cred.location, CredentialLocationSchema::Bearer));
-        assert_eq!(cred.host_patterns, vec!["slack.com", "*.slack.com"]);
+        assert_eq!(cred.host_patterns, vec!["api.example.com", "*.example.com"]);
     }
 
     #[test]
@@ -859,13 +859,13 @@ mod tests {
     fn test_parse_secrets_capability() {
         let json = r#"{
             "secrets": {
-                "allowed_names": ["slack_*", "openai_key"]
+                "allowed_names": ["github_*", "openai_key"]
             }
         }"#;
 
         let caps = CapabilitiesFile::from_json(json).unwrap();
         let secrets = caps.secrets.unwrap();
-        assert_eq!(secrets.allowed_names, vec!["slack_*", "openai_key"]);
+        assert_eq!(secrets.allowed_names, vec!["github_*", "openai_key"]);
     }
 
     #[test]
@@ -932,11 +932,11 @@ mod tests {
     fn test_to_capabilities() {
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "api.slack.com", "path_prefix": "/api/" }],
+                "allowlist": [{ "host": "api.github.com", "path_prefix": "/repos/" }],
                 "rate_limit": { "requests_per_minute": 50, "requests_per_hour": 500 }
             },
             "secrets": {
-                "allowed_names": ["slack_token"]
+                "allowed_names": ["github_token"]
             }
         }"#;
 
@@ -950,27 +950,27 @@ mod tests {
 
         assert!(caps.secrets.is_some());
         let secrets = caps.secrets.unwrap();
-        assert!(secrets.is_allowed("slack_token"));
+        assert!(secrets.is_allowed("github_token"));
     }
 
     #[test]
-    fn test_full_slack_example() {
+    fn test_full_capabilities_example() {
         let json = r#"{
             "http": {
                 "allowlist": [
-                    { "host": "slack.com", "path_prefix": "/api/", "methods": ["GET", "POST"] }
+                    { "host": "api.github.com", "path_prefix": "/repos/", "methods": ["GET", "POST"] }
                 ],
                 "credentials": {
-                    "slack_bot_token": {
-                        "secret_name": "slack_bot_token",
+                    "github_token": {
+                        "secret_name": "github_token",
                         "location": { "type": "bearer" },
-                        "host_patterns": ["slack.com"]
+                        "host_patterns": ["api.github.com"]
                     }
                 },
                 "rate_limit": { "requests_per_minute": 50, "requests_per_hour": 1000 }
             },
             "secrets": {
-                "allowed_names": ["slack_bot_token"]
+                "allowed_names": ["github_token"]
             }
         }"#;
 
@@ -978,11 +978,11 @@ mod tests {
         let caps = file.to_capabilities();
 
         let http = caps.http.unwrap();
-        assert_eq!(http.allowlist[0].host, "slack.com");
-        assert!(http.credentials.contains_key("slack_bot_token"));
+        assert_eq!(http.allowlist[0].host, "api.github.com");
+        assert!(http.credentials.contains_key("github_token"));
 
         let secrets = caps.secrets.unwrap();
-        assert!(secrets.is_allowed("slack_bot_token"));
+        assert!(secrets.is_allowed("github_token"));
     }
 
     #[test]
@@ -1038,12 +1038,12 @@ mod tests {
     fn test_header_location_with_name_field() {
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "discord.com" }],
+                "allowlist": [{ "host": "api.example.com" }],
                 "credentials": {
                     "bot_token": {
-                        "secret_name": "discord_bot_token",
+                        "secret_name": "bot_token",
                         "location": { "type": "header", "name": "Authorization", "prefix": "Bot " },
-                        "host_patterns": ["discord.com"]
+                        "host_patterns": ["api.example.com"]
                     }
                 }
             }
@@ -1066,12 +1066,12 @@ mod tests {
         // Uses "header_name" instead of "name" — should parse via serde alias
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "discord.com" }],
+                "allowlist": [{ "host": "api.example.com" }],
                 "credentials": {
                     "bot_token": {
-                        "secret_name": "discord_bot_token",
+                        "secret_name": "bot_token",
                         "location": { "type": "header", "header_name": "Authorization", "prefix": "Bot " },
-                        "host_patterns": ["discord.com"]
+                        "host_patterns": ["api.example.com"]
                     }
                 }
             }
@@ -1089,49 +1089,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_discord_capabilities_file_parses() {
-        // Full Discord capabilities JSON — tests end-to-end parsing
-        let json = r#"{
-            "type": "channel",
-            "name": "discord",
-            "description": "Discord channel",
-            "setup": {
-                "required_secrets": [
-                    {
-                        "name": "discord_bot_token",
-                        "prompt": "Enter your Discord Bot Token",
-                        "optional": false
-                    },
-                    {
-                        "name": "discord_public_key",
-                        "prompt": "Enter your Discord Public Key",
-                        "optional": false
-                    }
-                ]
-            },
-            "capabilities": {
-                "http": {
-                    "allowlist": [{ "host": "discord.com", "path_prefix": "/api/v10" }],
-                    "credentials": {
-                        "discord_bot_token": {
-                            "secret_name": "discord_bot_token",
-                            "location": { "type": "header", "name": "Authorization", "prefix": "Bot " },
-                            "host_patterns": ["discord.com"]
-                        }
-                    }
-                }
-            },
-            "config": {
-                "require_signature_verification": true
-            }
-        }"#;
-
-        // This must not panic — parsing should succeed
-        let caps = CapabilitiesFile::from_json(json).unwrap();
-        let http = caps.http.unwrap();
-        assert!(http.credentials.contains_key("discord_bot_token"));
-    }
 
     #[test]
     fn test_header_location_missing_name_fails() {

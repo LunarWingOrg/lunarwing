@@ -1173,9 +1173,9 @@ mod tests {
     }
 
     // Regression tests for tool/channel artifact name collision (PR #964).
-    // When a tool and channel share the same registry filename (e.g. slack.json),
-    // CI produces kind-prefixed bundles (tool-slack-*.tar.gz vs channel-slack-*.tar.gz).
-    // The files *inside* each archive use manifest.name (slack-tool.wasm vs slack.wasm).
+    // When a tool and channel share the same registry filename (e.g. notify.json),
+    // CI produces kind-prefixed bundles (tool-notify-*.tar.gz vs channel-notify-*.tar.gz).
+    // The files *inside* each archive use manifest.name (notify-tool.wasm vs notify.wasm).
     // These tests verify the installer extracts by manifest.name correctly.
 
     fn build_test_tar_gz(wasm_name: &str, caps_name: Option<&str>) -> Vec<u8> {
@@ -1212,16 +1212,16 @@ mod tests {
 
     #[test]
     fn test_extract_rejects_archive_with_wrong_wasm_name() {
-        // Simulates the collision bug: archive contains channel's slack.wasm,
-        // but installer tries to extract tool's slack-tool.wasm.
-        let gz_bytes = build_test_tar_gz("slack.wasm", Some("slack.capabilities.json"));
+        // Simulates the collision bug: archive contains channel's notify.wasm,
+        // but installer tries to extract tool's notify-tool.wasm.
+        let gz_bytes = build_test_tar_gz("notify.wasm", Some("notify.capabilities.json"));
 
         let tmp = tempfile::tempdir().unwrap();
         let result = extract_tar_gz(
             &gz_bytes,
-            "slack-tool",
-            &tmp.path().join("slack-tool.wasm"),
-            &tmp.path().join("slack-tool.capabilities.json"),
+            "notify-tool",
+            &tmp.path().join("notify-tool.wasm"),
+            &tmp.path().join("notify-tool.capabilities.json"),
             "test://url",
         );
 
@@ -1229,7 +1229,7 @@ mod tests {
         match err {
             RegistryError::DownloadFailed { reason, .. } => {
                 assert!(
-                    reason.contains("slack-tool.wasm"),
+                    reason.contains("notify-tool.wasm"),
                     "error should mention expected filename: {}",
                     reason
                 );
@@ -1240,16 +1240,17 @@ mod tests {
 
     #[test]
     fn test_extract_correct_wasm_from_tool_bundle() {
-        // Tool bundle contains slack-tool.wasm — extraction by name="slack-tool" succeeds.
-        let gz_bytes = build_test_tar_gz("slack-tool.wasm", Some("slack-tool.capabilities.json"));
+        // Tool bundle contains notify-tool.wasm — extraction by name="notify-tool" succeeds.
+        let gz_bytes =
+            build_test_tar_gz("notify-tool.wasm", Some("notify-tool.capabilities.json"));
 
         let tmp = tempfile::tempdir().unwrap();
-        let wasm_path = tmp.path().join("slack-tool.wasm");
-        let caps_path = tmp.path().join("slack-tool.capabilities.json");
+        let wasm_path = tmp.path().join("notify-tool.wasm");
+        let caps_path = tmp.path().join("notify-tool.capabilities.json");
 
         let result = extract_tar_gz(
             &gz_bytes,
-            "slack-tool",
+            "notify-tool",
             &wasm_path,
             &caps_path,
             "test://url",
@@ -1263,15 +1264,15 @@ mod tests {
 
     #[test]
     fn test_extract_correct_wasm_from_channel_bundle() {
-        // Channel bundle contains slack.wasm — extraction by name="slack" succeeds.
-        let gz_bytes = build_test_tar_gz("slack.wasm", Some("slack.capabilities.json"));
+        // Channel bundle contains notify.wasm — extraction by name="notify" succeeds.
+        let gz_bytes = build_test_tar_gz("notify.wasm", Some("notify.capabilities.json"));
 
         let tmp = tempfile::tempdir().unwrap();
-        let wasm_path = tmp.path().join("slack.wasm");
-        let caps_path = tmp.path().join("slack.capabilities.json");
+        let wasm_path = tmp.path().join("notify.wasm");
+        let caps_path = tmp.path().join("notify.capabilities.json");
 
         let result =
-            extract_tar_gz(&gz_bytes, "slack", &wasm_path, &caps_path, "test://url").unwrap();
+            extract_tar_gz(&gz_bytes, "notify", &wasm_path, &caps_path, "test://url").unwrap();
 
         assert!(wasm_path.exists());
         assert!(caps_path.exists());
@@ -1280,7 +1281,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tool_and_channel_install_to_separate_directories() {
-        // Tool and channel manifests with the same file_stem ("slack") install
+        // Tool and channel manifests with the same file_stem ("notify") install
         // to different directories without collision.
         let temp = tempfile::tempdir().expect("tempdir");
         let installer = RegistryInstaller::new(
@@ -1290,15 +1291,15 @@ mod tests {
         );
 
         let tool_manifest = test_manifest_with_kind(
-            "slack-tool",
-            "tools-src/slack",
+            "notify-tool",
+            "tools-src/notify",
             None,
             None,
             ManifestKind::Tool,
         );
         let channel_manifest = test_manifest_with_kind(
-            "slack",
-            "channels-src/slack",
+            "notify",
+            "channels-src/notify",
             None,
             None,
             ManifestKind::Channel,
@@ -1318,8 +1319,8 @@ mod tests {
         match tool_err {
             RegistryError::ManifestRead { path, .. } => {
                 assert!(
-                    path.ends_with("tools-src/slack"),
-                    "tool should resolve to tools-src/slack, got: {}",
+                    path.ends_with("tools-src/notify"),
+                    "tool should resolve to tools-src/notify, got: {}",
                     path.display()
                 );
             }
@@ -1328,8 +1329,8 @@ mod tests {
         match channel_err {
             RegistryError::ManifestRead { path, .. } => {
                 assert!(
-                    path.ends_with("channels-src/slack"),
-                    "channel should resolve to channels-src/slack, got: {}",
+                    path.ends_with("channels-src/notify"),
+                    "channel should resolve to channels-src/notify, got: {}",
                     path.display()
                 );
             }

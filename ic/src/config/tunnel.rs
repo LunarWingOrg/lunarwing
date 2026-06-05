@@ -5,7 +5,7 @@ use crate::settings::Settings;
 /// Tunnel configuration for exposing the agent to the internet.
 ///
 /// Used by channels and tools that need public webhook endpoints.
-/// The tunnel URL is shared across all channels (Telegram, Slack, etc.).
+/// The tunnel URL is shared across all channels (Telegram, XMPP, etc.).
 ///
 /// Two modes:
 /// - **Static URL** (`TUNNEL_URL`): set the public URL directly (manual tunnel)

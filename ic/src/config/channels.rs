@@ -616,7 +616,7 @@ mod tests {
     fn channels_config_with_owner_ids() {
         let mut ids = HashMap::new();
         ids.insert("telegram".to_string(), 12345_i64);
-        ids.insert("slack".to_string(), 67890_i64);
+        ids.insert("weechat".to_string(), 67890_i64);
 
         let cfg = ChannelsConfig {
             cli: CliConfig { enabled: false },
@@ -629,7 +629,7 @@ mod tests {
             wasm_channel_owner_ids: ids,
         };
         assert_eq!(cfg.wasm_channel_owner_ids.get("telegram"), Some(&12345));
-        assert_eq!(cfg.wasm_channel_owner_ids.get("slack"), Some(&67890));
+        assert_eq!(cfg.wasm_channel_owner_ids.get("weechat"), Some(&67890));
         assert!(!cfg.wasm_channels_enabled);
     }
 

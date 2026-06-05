@@ -22,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reuse Codex CLI OAuth tokens for ChatGPT backend LLM calls ([#693](https://github.com/nearai/ironclaw/pull/693))
 - add pre-push git hook with delta lint mode ([#833](https://github.com/nearai/ironclaw/pull/833))
 - *(cli)* add `logs` command for gateway log access ([#1105](https://github.com/nearai/ironclaw/pull/1105))
-- add Feishu/Lark WASM channel plugin ([#1110](https://github.com/nearai/ironclaw/pull/1110))
 - add Criterion benchmarks for safety layer hot paths ([#836](https://github.com/nearai/ironclaw/pull/836))
 - *(routines)* human-readable cron schedule summaries in web UI ([#1154](https://github.com/nearai/ironclaw/pull/1154))
 - *(web)* add follow-up suggestion chips and ghost text ([#1156](https://github.com/nearai/ironclaw/pull/1156))
@@ -32,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - *(cli)* add cron subcommand for managing scheduled routines ([#1017](https://github.com/nearai/ironclaw/pull/1017))
 - adds context-llm tool support ([#616](https://github.com/nearai/ironclaw/pull/616))
 - *(web-chat)* add hover copy button for user/assistant messages ([#948](https://github.com/nearai/ironclaw/pull/948))
-- add Slack approval buttons for tool execution in DMs ([#796](https://github.com/nearai/ironclaw/pull/796))
 - enhance HTTP tool parameter parsing ([#911](https://github.com/nearai/ironclaw/pull/911))
 - *(routines)* enable tool access in lightweight routine execution ([#257](https://github.com/nearai/ironclaw/pull/257)) ([#730](https://github.com/nearai/ironclaw/pull/730))
 - add MiniMax as a built-in LLM provider ([#940](https://github.com/nearai/ironclaw/pull/940))
@@ -74,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Google Sheets returns 403 PERMISSION_DENIED after completing OAuth ([#1164](https://github.com/nearai/ironclaw/pull/1164))
 - HTTP webhook secret transmitted in request body rather than via header, docs inconsistency and security concern ([#1162](https://github.com/nearai/ironclaw/pull/1162))
 - *(ci)* exclude ironclaw_safety from release automation ([#1146](https://github.com/nearai/ironclaw/pull/1146))
-- *(registry)* bump versions for github, web-search, and discord extensions ([#1106](https://github.com/nearai/ironclaw/pull/1106))
+- *(registry)* bump versions for github and web-search extensions ([#1106](https://github.com/nearai/ironclaw/pull/1106))
 - *(mcp)* address 14 audit findings across MCP module ([#1094](https://github.com/nearai/ironclaw/pull/1094))
 - *(http)* replace .expect() with match in webhook handler ([#1133](https://github.com/nearai/ironclaw/pull/1133))
 - *(time)* treat empty timezone string as absent ([#1127](https://github.com/nearai/ironclaw/pull/1127))
@@ -258,7 +256,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - *(e2e)* extensions tab tests, CI parallelization, and 3 production bug fixes ([#584](https://github.com/nearai/ironclaw/pull/584))
 - WASM extension versioning with WIT compat checks ([#592](https://github.com/nearai/ironclaw/pull/592))
-- Add HMAC-SHA256 webhook signature validation for Slack ([#588](https://github.com/nearai/ironclaw/pull/588))
 - restart ([#531](https://github.com/nearai/ironclaw/pull/531))
 - merge http/web_fetch tools, add tool output stash for large responses ([#578](https://github.com/nearai/ironclaw/pull/578))
 - integrate 13-dimension complexity scorer into smart routing ([#529](https://github.com/nearai/ironclaw/pull/529))
@@ -341,7 +338,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - *(web)* auto-scroll and Enter key completion for slash command autocomplete ([#475](https://github.com/nearai/ironclaw/pull/475))
-- correct download URLs for telegram-mtproto and slack-tool extensions ([#470](https://github.com/nearai/ironclaw/pull/470))
+- correct download URLs for telegram-mtproto extension ([#470](https://github.com/nearai/ironclaw/pull/470))
 
 ## [0.13.0](https://github.com/nearai/ironclaw/compare/v0.12.0...v0.13.0) - 2026-03-02
 
@@ -375,7 +372,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - guard zsh compdef call to prevent error before compinit ([#422](https://github.com/nearai/ironclaw/pull/422))
 - *(telegram)* remove restart button, validate token on setup ([#434](https://github.com/nearai/ironclaw/pull/434))
 - web UI routines tab shows all routines regardless of creating channel ([#391](https://github.com/nearai/ironclaw/pull/391))
-- Discord Ed25519 signature verification and capabilities header alias ([#148](https://github.com/nearai/ironclaw/pull/148)) ([#372](https://github.com/nearai/ironclaw/pull/372))
 - prevent duplicate WASM channel activation on startup ([#390](https://github.com/nearai/ironclaw/pull/390))
 
 ### Other
@@ -399,7 +395,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct MCP registry URLs and remove non-existent Google endpoints ([#370](https://github.com/nearai/ironclaw/pull/370))
 - resolve_thread adopts existing session threads by UUID ([#377](https://github.com/nearai/ironclaw/pull/377))
-- resolve telegram/slack name collision between tool and channel registries ([#346](https://github.com/nearai/ironclaw/pull/346))
+- resolve name collision between tool and channel registries ([#346](https://github.com/nearai/ironclaw/pull/346))
 - make onboarding installs prefer release artifacts with source fallback ([#323](https://github.com/nearai/ironclaw/pull/323))
 - copy missing files in Dockerfile to fix build ([#322](https://github.com/nearai/ironclaw/pull/322))
 - fall back to build-from-source when extension download fails ([#312](https://github.com/nearai/ironclaw/pull/312))

@@ -1,7 +1,7 @@
 //! JSON schema for WASM channel capabilities files.
 //!
 //! External WASM channels declare their required capabilities via a sidecar JSON file
-//! (e.g., `slack.capabilities.json`). This module defines the schema for those files
+//! (e.g., `weechat.capabilities.json`). This module defines the schema for those files
 //! and provides conversion to runtime [`ChannelCapabilities`].
 //!
 //! # Example Capabilities File
@@ -9,31 +9,31 @@
 //! ```json
 //! {
 //!   "type": "channel",
-//!   "name": "slack",
-//!   "description": "Slack Events API channel",
+//!   "name": "weechat",
+//!   "description": "WeeChat relay channel",
 //!   "capabilities": {
 //!     "http": {
 //!       "allowlist": [
-//!         { "host": "slack.com", "path_prefix": "/api/" }
+//!         { "host": "relay.example.com", "path_prefix": "/api/" }
 //!       ],
 //!       "credentials": {
-//!         "slack_bot": {
-//!           "secret_name": "slack_bot_token",
+//!         "relay_token": {
+//!           "secret_name": "weechat_relay_token",
 //!           "location": { "type": "bearer" },
-//!           "host_patterns": ["slack.com"]
+//!           "host_patterns": ["relay.example.com"]
 //!         }
 //!       }
 //!     },
-//!     "secrets": { "allowed_names": ["slack_*"] },
+//!     "secrets": { "allowed_names": ["weechat_*"] },
 //!     "channel": {
-//!       "allowed_paths": ["/webhook/slack"],
+//!       "allowed_paths": ["/webhook/weechat"],
 //!       "allow_polling": false,
-//!       "workspace_prefix": "channels/slack/",
+//!       "workspace_prefix": "channels/weechat/",
 //!       "emit_rate_limit": { "messages_per_minute": 100 }
 //!     }
 //!   },
 //!   "config": {
-//!     "signing_secret_name": "slack_signing_secret"
+//!     "signing_secret_name": "weechat_signing_secret"
 //!   }
 //! }
 //! ```
@@ -169,7 +169,7 @@ impl ChannelCapabilitiesFile {
     /// Get the HMAC-SHA256 signing secret name for this channel.
     ///
     /// Returns the secret name declared in `webhook.hmac_secret_name`,
-    /// used to look up the HMAC signing secret in the secrets store (Slack-style).
+    /// used to look up the HMAC signing secret in the secrets store.
     pub fn hmac_secret_name(&self) -> Option<&str> {
         self.capabilities
             .channel
@@ -287,7 +287,6 @@ pub struct WebhookSchema {
     ///
     /// Examples:
     /// - Telegram: "X-Telegram-Bot-Api-Secret-Token"
-    /// - Slack: "X-Slack-Signature"
     /// - GitHub: "X-Hub-Signature-256"
     /// - Generic: "X-Webhook-Secret"
     #[serde(default)]
@@ -299,11 +298,11 @@ pub struct WebhookSchema {
     pub secret_name: Option<String>,
 
     /// Secret name in secrets store containing the Ed25519 public key
-    /// for signature verification (e.g., Discord interaction verification).
+    /// for Ed25519 signature verification.
     #[serde(default)]
     pub signature_key_secret_name: Option<String>,
 
-    /// Secret name in secrets store for HMAC-SHA256 signing (Slack-style).
+    /// Secret name in secrets store for HMAC-SHA256 signing.
     #[serde(default)]
     pub hmac_secret_name: Option<String>,
 }
@@ -469,48 +468,48 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_full_slack_example() {
+    fn test_parse_full_channel_example() {
         let json = r#"{
             "type": "channel",
-            "name": "slack",
-            "description": "Slack Events API channel",
+            "name": "weechat",
+            "description": "WeeChat relay channel",
             "capabilities": {
                 "http": {
                     "allowlist": [
-                        { "host": "slack.com", "path_prefix": "/api/" }
+                        { "host": "relay.example.com", "path_prefix": "/api/" }
                     ],
                     "credentials": {
-                        "slack_bot": {
-                            "secret_name": "slack_bot_token",
+                        "relay_token": {
+                            "secret_name": "weechat_relay_token",
                             "location": { "type": "bearer" },
-                            "host_patterns": ["slack.com"]
+                            "host_patterns": ["relay.example.com"]
                         }
                     },
                     "rate_limit": { "requests_per_minute": 50, "requests_per_hour": 1000 }
                 },
-                "secrets": { "allowed_names": ["slack_*"] },
+                "secrets": { "allowed_names": ["weechat_*"] },
                 "channel": {
-                    "allowed_paths": ["/webhook/slack"],
+                    "allowed_paths": ["/webhook/weechat"],
                     "allow_polling": false,
                     "emit_rate_limit": { "messages_per_minute": 100, "messages_per_hour": 5000 }
                 }
             },
             "config": {
-                "signing_secret_name": "slack_signing_secret"
+                "signing_secret_name": "weechat_signing_secret"
             }
         }"#;
 
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-        assert_eq!(file.name, "slack");
+        assert_eq!(file.name, "weechat");
         assert_eq!(
             file.description,
-            Some("Slack Events API channel".to_string())
+            Some("WeeChat relay channel".to_string())
         );
 
         let caps = file.to_capabilities();
-        assert!(caps.is_path_allowed("/webhook/slack"));
+        assert!(caps.is_path_allowed("/webhook/weechat"));
         assert!(!caps.allow_polling);
-        assert_eq!(caps.workspace_prefix, "channels/slack/");
+        assert_eq!(caps.workspace_prefix, "channels/weechat/");
 
         // Check tool capabilities were parsed
         assert!(caps.tool_capabilities.http.is_some());
@@ -678,7 +677,7 @@ mod tests {
         );
     }
 
-    // ── Category 5: Discord Capabilities Setup & Configuration ──────────
+    // ── Category 5: Channel Capabilities Setup & Configuration ──────────
 
     #[test]
     fn test_validate_channel_short_prompt() {
@@ -740,41 +739,21 @@ mod tests {
     }
 
     #[test]
-    fn test_discord_capabilities_has_public_key_secret() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-
-        let secret_names: Vec<&str> = file
-            .setup
-            .required_secrets
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-
-        assert!(
-            secret_names.contains(&"discord_public_key"),
-            "discord.capabilities.json must include discord_public_key in setup.required_secrets, \
-             found: {:?}",
-            secret_names
-        );
-    }
-
-    #[test]
     fn test_webhook_schema_signature_key_secret_name() {
         let json = r#"{
-            "name": "discord",
+            "name": "test_channel",
             "capabilities": {
                 "channel": {
-                    "allowed_paths": ["/webhook/discord"],
+                    "allowed_paths": ["/webhook/test_channel"],
                     "webhook": {
-                        "signature_key_secret_name": "discord_public_key"
+                        "signature_key_secret_name": "test_public_key"
                     }
                 }
             }
         }"#;
 
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-        assert_eq!(file.signature_key_secret_name(), Some("discord_public_key"));
+        assert_eq!(file.signature_key_secret_name(), Some("test_public_key"));
     }
 
     #[test]
@@ -795,31 +774,4 @@ mod tests {
         assert_eq!(file.signature_key_secret_name(), None);
     }
 
-    #[test]
-    fn test_discord_capabilities_signature_key() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-        assert_eq!(
-            file.signature_key_secret_name(),
-            Some("discord_public_key"),
-            "discord.capabilities.json must declare signature_key_secret_name"
-        );
-    }
-
-    #[test]
-    fn test_discord_capabilities_secrets_allowlist() {
-        let json = include_str!("../../../channels-src/discord/discord.capabilities.json");
-        let file = ChannelCapabilitiesFile::from_json(json).unwrap();
-
-        let caps = file.to_capabilities();
-        let secrets_caps = caps
-            .tool_capabilities
-            .secrets
-            .expect("Discord should have secrets capability");
-
-        assert!(
-            secrets_caps.is_allowed("discord_public_key"),
-            "discord_public_key must be in the secrets allowlist"
-        );
-    }
 }

@@ -76,7 +76,7 @@ wasmtime::component::bindgen!({
 /// WASM channels never see the raw secret values.
 #[derive(Clone)]
 struct ResolvedHostCredential {
-    /// Host patterns this credential applies to (e.g., "api.slack.com").
+    /// Host patterns this credential applies to (e.g., "api.example.com").
     host_patterns: Vec<String>,
     /// Headers to add to matching requests (e.g., "Authorization: Bearer ...").
     headers: HashMap<String, String>,
@@ -133,7 +133,7 @@ impl ChannelStoreData {
 
     /// Inject credentials into a string by replacing placeholders.
     ///
-    /// Replaces patterns like `{TELEGRAM_BOT_TOKEN}` or `{SLACK_BOT_TOKEN}`
+    /// Replaces patterns like `{TELEGRAM_BOT_TOKEN}` or `{API_TOKEN}`
     /// with actual values from the injected credentials map. This allows WASM
     /// channels to reference credentials without ever seeing the actual values.
     ///
@@ -330,7 +330,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
         })?;
 
         // Parse headers and inject credentials into header values
-        // This allows patterns like "Authorization": "Bearer {SLACK_BOT_TOKEN}"
+        // This allows patterns like "Authorization": "Bearer {BOT_TOKEN}"
         let raw_headers: std::collections::HashMap<String, String> =
             serde_json::from_str(&headers_json).unwrap_or_default();
 
@@ -357,7 +357,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
 
         // Leak scan runs on WASM-provided values BEFORE host credential injection.
         // This prevents false positives where the host-injected Bearer token
-        // (e.g., xoxb- Slack token) triggers the leak detector — WASM never saw
+        // (e.g., xoxb- API token) triggers the leak detector — WASM never saw
         // the real value, so scanning the pre-injection state is correct.
         let leak_detector = LeakDetector::new();
         let header_vec: Vec<(String, String)> = headers
@@ -871,7 +871,7 @@ impl WasmChannel {
     ///
     /// When set, credentials declared in the channel's capabilities are
     /// automatically decrypted and injected into HTTP requests based on
-    /// the target host (e.g., Bearer token for api.slack.com).
+    /// the target host (e.g., Bearer token for api.example.com).
     pub fn with_secrets_store(mut self, store: Arc<dyn SecretsStore + Send + Sync>) -> Self {
         self.secrets_store = Some(store);
         self
@@ -2045,7 +2045,7 @@ impl WasmChannel {
                 allow_always,
                 ..
             } => {
-                // WASM channels (Telegram, Slack, etc.) cannot render
+                // WASM channels (Telegram, XMPP, etc.) cannot render
                 // interactive approval overlays.  Send the approval prompt
                 // as an actual message so the user can reply yes/no.
                 self.cancel_typing_task().await;

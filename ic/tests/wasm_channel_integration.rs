@@ -154,7 +154,7 @@ mod router_tests {
         let runtime = create_test_runtime();
 
         // Register multiple channels
-        for name in &["slack", "telegram", "discord"] {
+        for name in &["weechat", "telegram", "darkirc"] {
             let channel = Arc::new(create_test_channel(
                 Arc::clone(&runtime),
                 name,
@@ -174,12 +174,12 @@ mod router_tests {
         // Verify all channels are registered
         let channels = router.list_channels().await;
         assert_eq!(channels.len(), 3);
-        assert!(channels.contains(&"slack".to_string()));
+        assert!(channels.contains(&"weechat".to_string()));
         assert!(channels.contains(&"telegram".to_string()));
-        assert!(channels.contains(&"discord".to_string()));
+        assert!(channels.contains(&"darkirc".to_string()));
 
         // Verify all paths work
-        for name in &["slack", "telegram", "discord"] {
+        for name in &["weechat", "telegram", "darkirc"] {
             let found = router
                 .get_channel_for_path(&format!("/webhook/{}", name))
                 .await;
@@ -259,7 +259,7 @@ mod loader_tests {
         let dir = TempDir::new().expect("Failed to create temp dir");
 
         // Create fake WASM files
-        std::fs::File::create(dir.path().join("slack.wasm")).expect("Failed to create file");
+        std::fs::File::create(dir.path().join("weechat.wasm")).expect("Failed to create file");
         std::fs::File::create(dir.path().join("telegram.wasm")).expect("Failed to create file");
 
         let channels = lunarwing::channels::wasm::discover_channels(dir.path())
@@ -267,7 +267,7 @@ mod loader_tests {
             .expect("Discovery failed");
 
         assert_eq!(channels.len(), 2);
-        assert!(channels.contains_key("slack"));
+        assert!(channels.contains_key("weechat"));
         assert!(channels.contains_key("telegram"));
     }
 
@@ -336,13 +336,13 @@ mod capabilities_tests {
 
     #[test]
     fn test_capabilities_workspace_prefix() {
-        let caps = ChannelCapabilities::for_channel("slack");
+        let caps = ChannelCapabilities::for_channel("weechat");
 
-        assert_eq!(caps.workspace_prefix, "channels/slack/");
+        assert_eq!(caps.workspace_prefix, "channels/weechat/");
 
         // Validate path prefixing
         let prefixed = caps.prefix_workspace_path("state.json");
-        assert_eq!(prefixed, "channels/slack/state.json");
+        assert_eq!(prefixed, "channels/weechat/state.json");
     }
 
     #[test]

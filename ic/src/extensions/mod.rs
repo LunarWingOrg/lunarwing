@@ -2,7 +2,7 @@
 //! and activation of channels, tools, and MCP servers.
 //!
 //! Extensions are the user-facing abstraction that unifies three runtime kinds:
-//! - **Channels** (Telegram, Slack, Discord) — messaging integrations (WASM)
+//! - **Channels** (Telegram, XMPP) — messaging integrations (WASM)
 //! - **Tools** — sandboxed capabilities (WASM)
 //! - **MCP servers** — external API integrations via Model Context Protocol
 //!
@@ -38,8 +38,6 @@ pub enum ExtensionKind {
     WasmTool,
     /// WASM channel module with hot-activation support.
     WasmChannel,
-    /// External channel via channel-relay service (Slack, etc.).
-    ChannelRelay,
 }
 
 impl std::fmt::Display for ExtensionKind {
@@ -48,7 +46,6 @@ impl std::fmt::Display for ExtensionKind {
             ExtensionKind::McpServer => write!(f, "mcp_server"),
             ExtensionKind::WasmTool => write!(f, "wasm_tool"),
             ExtensionKind::WasmChannel => write!(f, "wasm_channel"),
-            ExtensionKind::ChannelRelay => write!(f, "channel_relay"),
         }
     }
 }
@@ -103,8 +100,6 @@ pub enum ExtensionSource {
     },
     /// Discovered online (not yet validated for a specific source type).
     Discovered { url: String },
-    /// External channel via channel-relay service.
-    ChannelRelay { relay_url: String },
 }
 
 /// Hint about what authentication method is needed.
@@ -122,8 +117,6 @@ pub enum AuthHint {
     CapabilitiesAuth,
     /// No authentication needed.
     None,
-    /// OAuth via channel-relay service.
-    ChannelRelayOAuth,
 }
 
 /// Where a search result came from.
@@ -908,13 +901,13 @@ mod tests {
     #[test]
     fn activate_result_serde_roundtrip() {
         let ar = ActivateResult {
-            name: "slack".to_string(),
+            name: "weechat".to_string(),
             kind: ExtensionKind::WasmChannel,
             tools_loaded: vec!["send_message".to_string(), "read_channel".to_string()],
             message: "Activated with 2 tools".to_string(),
         };
         let json = serde_json::to_value(&ar).unwrap();
-        assert_eq!(json["name"], "slack");
+        assert_eq!(json["name"], "weechat");
         assert_eq!(json["kind"], "wasm_channel");
         assert_eq!(json["tools_loaded"].as_array().unwrap().len(), 2);
         let back: ActivateResult = serde_json::from_value(json).unwrap();
