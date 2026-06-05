@@ -44,7 +44,7 @@ The release is smaller than 0.29.0 but contains a **high-severity conversation i
 ## P0 — Security / Correctness (Port Immediately)
 
 ### P0-A: Scope V1 History for Non-UUID Channel Conversations — Cross-Conversation Leakage
-**Commit:** `d588abff3` (#4320) | **Complexity:** S-M | **Dependencies:** None
+**Commit:** `d588abff3` (#4320) | **Complexity:** S-M | **Dependencies:** None | **Status:** Not implemented — LunarWing's `src/bridge/router.rs` still uses the UUID-only `Uuid::parse_str()` pattern at lines ~2198 and ~2297; no `scoped_conversation_id` or `resolve_v1_conversation_for_message` in `src/db/mod.rs` or `src/bridge/router.rs`.
 
 **Why:** LunarWing's v1 history persistence in `src/bridge/router.rs` only handles UUID-formatted conversation scopes correctly. When a channel produces a non-UUID scope — as XMPP does for room JIDs (`xmpp:room:dev@conference.example.org`), DM JIDs (`xmpp:dm:alice@example.org`), WeeChat buffer names, or DarkIRC channel identifiers — the `Uuid::parse_str()` call fails silently and all messages fall back to a single shared "assistant conversation" per user+channel. This means:
 
