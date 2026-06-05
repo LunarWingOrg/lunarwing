@@ -98,7 +98,8 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
-- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.1.
+- ~~**Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread.~~ **FIXED** — `scoped_conversation_id()` now derives stable UUID v5 from non-UUID scopes; `resolve_v1_conversation_for_message()` replaces inline `Uuid::parse_str()` fallback. See `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` implementation note.
+- **`test_context_length_recovery_via_compaction_and_retry` failing** — Unit test in `src/agent/dispatcher.rs` asserts `left: 3, right: 2` on LLM call count. Pre-existing on the branch; not introduced by any recent change. Does not affect runtime behavior.
 
 ## Upgrade Notes
 
@@ -114,7 +115,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 | Feature | Target |
 |---------|--------|
-| Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis) | v1.1.1 |
+| ~~Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis)~~ | ~~v1.1.1~~ **DONE** |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.2 |
 | LunarVoice (Further planning required) | v1.1.4 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |

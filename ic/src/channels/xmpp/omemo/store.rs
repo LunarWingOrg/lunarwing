@@ -893,7 +893,10 @@ mod tests {
         let store = OmemoStore::new(dir.path().to_path_buf());
         let metadata = store.initialize(4242).unwrap();
         assert_eq!(metadata.device_id, 4242);
-        assert_eq!(metadata.migration_state, MigrationState::LegacyIdentityPreserved);
+        assert_eq!(
+            metadata.migration_state,
+            MigrationState::LegacyIdentityPreserved
+        );
     }
 
     #[test]

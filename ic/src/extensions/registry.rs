@@ -786,5 +786,4 @@ mod tests {
         // The first catalog entry added is the channel.
         assert_eq!(entry.unwrap().kind, ExtensionKind::WasmChannel);
     }
-
 }

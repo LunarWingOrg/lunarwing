@@ -1,7 +1,7 @@
 # Port IronClaw 0.29.1 Changes to LunarWing
 
-**Date:** 2026-06-05
-**Status:** Analysis complete
+**Date:** 2026-06-05 (status updated 2026-06-05)
+**Status:** Analysis complete. P0-A implemented 2026-06-05.
 
 ## Context
 
@@ -44,7 +44,7 @@ The release is smaller than 0.29.0 but contains a **high-severity conversation i
 ## P0 — Security / Correctness (Port Immediately)
 
 ### P0-A: Scope V1 History for Non-UUID Channel Conversations — Cross-Conversation Leakage
-**Commit:** `d588abff3` (#4320) | **Complexity:** S-M | **Dependencies:** None | **Status:** Not implemented — LunarWing's `src/bridge/router.rs` still uses the UUID-only `Uuid::parse_str()` pattern at lines ~2198 and ~2297; no `scoped_conversation_id` or `resolve_v1_conversation_for_message` in `src/db/mod.rs` or `src/bridge/router.rs`.
+**Commit:** `d588abff3` (#4320) | **Complexity:** S-M | **Dependencies:** None | **Status:** Implemented 2026-06-05. See [Implementation Note](#implementation-note-2026-06-05-p0-a).
 
 **Why:** LunarWing's v1 history persistence in `src/bridge/router.rs` only handles UUID-formatted conversation scopes correctly. When a channel produces a non-UUID scope — as XMPP does for room JIDs (`xmpp:room:dev@conference.example.org`), DM JIDs (`xmpp:dm:alice@example.org`), WeeChat buffer names, or DarkIRC channel identifiers — the `Uuid::parse_str()` call fails silently and all messages fall back to a single shared "assistant conversation" per user+channel. This means:
 
@@ -85,10 +85,36 @@ This is directly relevant to LunarWing's XMPP/OMEMO channels, which are the prim
 ## Recommended Implementation Order
 
 ```
-1. P0-A  Scope v1 history for non-UUID channel conversations   [S-M]   prevents cross-conversation history leakage via XMPP/WeeChat/DarkIRC
+1. P0-A  Scope v1 history for non-UUID channel conversations   [S-M]   DONE 2026-06-05
 ```
 
-Single item. Can be done in one PR.
+Single item. Implemented in one changeset.
+
+## Implementation Note (2026-06-05): P0-A
+
+Three additions to fix non-UUID conversation scope leakage, following the IronClaw 0.29.1 pattern adapted to LunarWing's smaller router (2 v1 persist sites vs IronClaw's 4).
+
+| File | Change |
+|------|--------|
+| `src/db/mod.rs` | Added `scoped_conversation_id()` — pure function that returns UUID passthrough for valid UUIDs, or generates a stable UUID v5 from a length-prefixed `(channel, user_id, scope)` seed. Uses `Uuid::NAMESPACE_OID` (same namespace class as the existing `thread_id_from_jid` in `src/channels/xmpp/config.rs`). |
+| `src/db/mod.rs` | Added `get_or_create_scoped_conversation()` as a default method on `ConversationStore` — combines `scoped_conversation_id()` + `ensure_conversation()`. No per-backend implementation needed. Original scope string preserved in the `thread_id` column. |
+| `src/bridge/router.rs` | Added `resolve_v1_conversation_for_message()` — unified resolver replacing inline UUID-parse-or-fallback. Calls `get_or_create_scoped_conversation` when a scope exists, falls back to `get_or_create_assistant_conversation` otherwise. |
+| `src/bridge/router.rs` (line ~2225) | **Site A** — user message persist in `handle_with_engine_inner`: replaced 13-line `Uuid::parse_str` + `ensure_conversation` + fallback block with single `resolve_v1_conversation_for_message` call. |
+| `src/bridge/router.rs` (line ~2297) | **Site B** — assistant response persist in `write_v1_response` closure: replaced `Uuid::parse_str` + fallback with `get_or_create_scoped_conversation` / `get_or_create_assistant_conversation` branch. |
+
+**Site C (mission notification, line ~2645):** Left unchanged — missions don't carry a conversation scope from a channel; `get_or_create_assistant_conversation` is correct for proactive notifications.
+
+**Regression tests added (5):**
+
+- `db::tests::scoped_conversation_id_uuid_passthrough` — valid UUID string returns the same UUID directly
+- `db::tests::scoped_conversation_id_non_uuid_is_stable` — same inputs produce the same non-nil UUID v5
+- `db::tests::scoped_conversation_id_different_scopes_differ` — different scope strings produce different UUIDs
+- `db::tests::scoped_conversation_id_length_prefix_prevents_collision` — `("a", "b\x1fc", "d")` vs `("a\x1fb", "c", "d")` produce different UUIDs (prevents delimiter confusion)
+- `db::tests::scoped_conversation_creates_separate_v1_history` — DB-backed: two non-UUID scopes on the same channel/user create separate conversations with isolated message histories; idempotent on repeat. Uses `LibSqlBackend::new_local()`.
+
+**Verification:** 5/5 new tests pass. `cargo check` clean for all three feature combos (`--all-features`, `--features postgres`, `--features libsql`). `cargo fmt --check` clean. Pre-existing 2 `dead_code` warnings unchanged.
+
+---
 
 ## Verification
 

@@ -367,11 +367,12 @@ impl Repository {
         chunks: &[(i32, String, Option<Vec<f32>>)],
     ) -> Result<(), WorkspaceError> {
         let mut conn = self.conn().await?;
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::SearchFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         tx.execute(
             "UPDATE memory_documents SET content = $2, updated_at = NOW() WHERE id = $1",
@@ -382,14 +383,11 @@ impl Repository {
             reason: format!("Update failed: {e}"),
         })?;
 
-        tx.execute(
-            "DELETE FROM memory_chunks WHERE document_id = $1",
-            &[&id],
-        )
-        .await
-        .map_err(|e| WorkspaceError::ChunkingFailed {
-            reason: format!("Delete chunks failed: {e}"),
-        })?;
+        tx.execute("DELETE FROM memory_chunks WHERE document_id = $1", &[&id])
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Delete chunks failed: {e}"),
+            })?;
 
         for (chunk_index, chunk_content, embedding) in chunks {
             let chunk_id = Uuid::new_v4();
@@ -400,7 +398,13 @@ impl Repository {
                 INSERT INTO memory_chunks (id, document_id, chunk_index, content, embedding)
                 VALUES ($1, $2, $3, $4, $5)
                 "#,
-                &[&chunk_id, &id, chunk_index, &chunk_content.as_str(), &embedding_vec],
+                &[
+                    &chunk_id,
+                    &id,
+                    chunk_index,
+                    &chunk_content.as_str(),
+                    &embedding_vec,
+                ],
             )
             .await
             .map_err(|e| WorkspaceError::ChunkingFailed {
@@ -408,9 +412,11 @@ impl Repository {
             })?;
         }
 
-        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(())
     }
@@ -422,11 +428,12 @@ impl Repository {
         chunks: &[(i32, String, Option<Vec<f32>>)],
     ) -> Result<Vec<Uuid>, WorkspaceError> {
         let mut conn = self.conn().await?;
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::ChunkingFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         tx.execute(
             "DELETE FROM memory_chunks WHERE document_id = $1",
@@ -447,7 +454,13 @@ impl Repository {
                 INSERT INTO memory_chunks (id, document_id, chunk_index, content, embedding)
                 VALUES ($1, $2, $3, $4, $5)
                 "#,
-                &[&id, &document_id, chunk_index, &content.as_str(), &embedding_vec],
+                &[
+                    &id,
+                    &document_id,
+                    chunk_index,
+                    &content.as_str(),
+                    &embedding_vec,
+                ],
             )
             .await
             .map_err(|e| WorkspaceError::ChunkingFailed {
@@ -456,9 +469,11 @@ impl Repository {
             ids.push(id);
         }
 
-        tx.commit().await.map_err(|e| WorkspaceError::ChunkingFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(ids)
     }

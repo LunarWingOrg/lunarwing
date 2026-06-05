@@ -2831,7 +2831,9 @@ async fn download_oob_file(
 
     if let Some(len) = content_length {
         if len > OOB_MAX_FILE_SIZE {
-            return Err(format!("File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"));
+            return Err(format!(
+                "File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"
+            ));
         }
     }
 
@@ -2847,7 +2849,11 @@ async fn download_oob_file(
         ));
     }
 
-    let mime_type = content_type.split(';').next().unwrap_or("application/octet-stream").trim();
+    let mime_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or("application/octet-stream")
+        .trim();
     let filename = url
         .split('/')
         .last()
