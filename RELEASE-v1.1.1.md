@@ -95,7 +95,6 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
   - docs/bugs/BUG-e2e-tool-execution-timeout.md - echo/time tool tests timeout waiting for assistant response
   - docs/bugs/BUG-e2e-clipboard-copy-test.md - clipboard API permissions in headless Chromium
   - docs/bugs/BUG-e2e-oauth-url-parameter-tests.md - all 6 tests fail during fixture setup due to transient network issues
-  - test_wasm_lifecycle.py errors also due to transient network issues
 - **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
