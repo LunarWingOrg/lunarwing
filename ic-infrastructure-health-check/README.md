@@ -1,5 +1,7 @@
 # LunarWing Infrastructure Health Check System
 
+## Updated June 5 2026
+
 Automated health monitoring and self-healing for LunarWing/IronClaw infrastructure.
 
 ## Architecture
