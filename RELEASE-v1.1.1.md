@@ -1,10 +1,10 @@
-# Release Notes for LunarWing v1.1.1 - Codename Unknown
+# Release Notes for LunarWing v1.1.1 - Codename Freedom
 
 **Release Date:** TBD
 
 ## Overview
 
-LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in v1.1.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and the addition of project funding infrastructure.
+LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and other various minor changes.
 
 ---
 
@@ -63,7 +63,7 @@ Added project funding metadata for potential donors:
 
 ### Self-Healing Improvements
 
-References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (filesystem-level changes).
+References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes).
 
 ### Release Notes Archival
 
@@ -94,7 +94,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
-- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.2.
+- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.1.
 
 ## Upgrade Notes
 
@@ -106,7 +106,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 6. **Proprietary channel removal**: If your deployment previously used the Discord, Feishu/Lark, or Slack WASM channels or the Slack tool, these are no longer available. The relay channel infrastructure has also been removed. Migrate to open-protocol alternatives (XMPP, WeeChat, DarkIRC) before upgrading.
 7. **XMPP bridge compatibility**: The bridge contract now includes an `attachments` field in `BridgeMessage`. The field uses `#[serde(default)]` so older bridge binaries will still work (attachments will be empty), but rebuild the XMPP bridge binary to enable inbound file transfer support.
 
-## Features Deferred to Future Releases
+## Features and changes deferred to future releases
 
 | Feature | Target |
 |---------|--------|
@@ -134,4 +134,6 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 ## Testing
 
-*Testing in progress before final release — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*In accordance with developer guidelines, a brief testing period must begin before each release.*
+
+*Testing before final release not yet commenced — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
