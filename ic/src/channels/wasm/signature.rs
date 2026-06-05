@@ -2,7 +2,7 @@
 //!
 //! Validates request signatures for incoming webhooks:
 //! - Ed25519: `X-Signature-Ed25519` and `X-Signature-Timestamp` headers
-//! - HMAC-SHA256: `X-Slack-Signature` and `X-Slack-Request-Timestamp` headers
+//! - HMAC-SHA256: raw-body HMAC with configurable prefix (e.g., `sha256=`)
 
 /// Verify an Ed25519 webhook signature.
 ///
@@ -47,60 +47,6 @@ pub fn verify_ed25519_signature(
     message.extend_from_slice(timestamp.as_bytes());
     message.extend_from_slice(body);
     verifying_key.verify_strict(&message, &signature).is_ok()
-}
-
-/// Verify a Slack webhook signature using HMAC-SHA256.
-///
-/// Slack signs each webhook request with HMAC-SHA256 using:
-/// - basestring = `"v0:" + timestamp + ":" + body`
-/// - signature = hex-encoded HMAC-SHA256(signing_secret, basestring)
-/// - header = `"v0=" + signature` (in `X-Slack-Signature` header)
-///
-/// Includes staleness check: rejects requests with timestamps older than 5 minutes.
-/// Returns `true` if the signature is valid, `false` on any error
-/// (bad timing, mismatched signature, invalid format, etc.).
-pub fn verify_slack_signature(
-    signing_secret: &str,
-    timestamp: &str,
-    body: &[u8],
-    signature_header: &str,
-    now_secs: i64,
-) -> bool {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
-
-    // 1. Parse and check staleness (5-minute window)
-    let ts: i64 = match timestamp.parse() {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    if (now_secs - ts).abs() > 300 {
-        return false;
-    }
-
-    // 2. Build the basestring: "v0:{timestamp}:{body}"
-    let mut basestring = Vec::with_capacity(3 + timestamp.len() + 1 + body.len());
-    basestring.extend_from_slice(b"v0:");
-    basestring.extend_from_slice(timestamp.as_bytes());
-    basestring.push(b':');
-    basestring.extend_from_slice(body);
-
-    // 3. Compute HMAC-SHA256
-    let mut mac = match Hmac::<Sha256>::new_from_slice(signing_secret.as_bytes()) {
-        Ok(m) => m,
-        Err(_) => return false,
-    };
-    mac.update(&basestring);
-    let computed = mac.finalize().into_bytes();
-    let computed_hex = hex::encode(computed);
-    let expected = format!("v0={}", computed_hex);
-
-    // 4. Constant-time compare (avoids timing side-channels)
-    use subtle::ConstantTimeEq;
-    expected
-        .as_bytes()
-        .ct_eq(signature_header.as_bytes())
-        .into()
 }
 
 /// Verify raw-body HMAC-SHA256 signature with a configurable prefix.
@@ -420,29 +366,10 @@ mod tests {
         );
     }
 
-    // ── Category: HMAC-SHA256 Signature Verification (Slack) ────────────
-
-    /// Helper: compute expected Slack signature for a given secret, timestamp, and body.
-    fn sign_slack_message(signing_secret: &str, timestamp: &str, body: &[u8]) -> String {
-        use hmac::{Hmac, Mac};
-        use sha2::Sha256;
-
-        let mut basestring = Vec::new();
-        basestring.extend_from_slice(b"v0:");
-        basestring.extend_from_slice(timestamp.as_bytes());
-        basestring.push(b':');
-        basestring.extend_from_slice(body);
-
-        let mut mac = Hmac::<Sha256>::new_from_slice(signing_secret.as_bytes()).unwrap();
-        mac.update(&basestring);
-        let computed = mac.finalize().into_bytes();
-        format!("v0={}", hex::encode(computed))
-    }
-
-    const SLACK_TEST_TS: i64 = 1234567890;
+    // ── Category: HMAC-SHA256 Prefixed Signature Verification ────────────
 
     #[test]
-    fn test_slack_valid_signature_succeeds() {
+    fn test_hmac_sha256_prefixed_valid() {
         let signing_secret = "my-signing-secret";
         let timestamp = "1234567890";
         let body = b"token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J";
