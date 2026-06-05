@@ -891,7 +891,7 @@ mod tests {
     #[tokio::test]
     async fn concurrent_resolve_thread_same_user_different_channels() {
         let manager = Arc::new(SessionManager::new());
-        let channels = ["gateway", "telegram", "slack", "cli", "repl"];
+        let channels = ["gateway", "telegram", "xmpp", "cli", "repl"];
 
         let handles: Vec<_> = channels
             .iter()

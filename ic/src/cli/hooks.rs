@@ -100,8 +100,8 @@ async fn discover_hooks(config: &crate::config::Config) -> Vec<HookInfo> {
 /// Uses the same flat-file layout as the real WASM loaders:
 /// ```text
 /// ~/.lunarwing/tools/
-/// ├── slack.wasm
-/// ├── slack.capabilities.json   <- hooks section parsed here
+/// ├── gotify.wasm
+/// ├── gotify.capabilities.json   <- hooks section parsed here
 /// ├── github.wasm
 /// └── github.capabilities.json
 /// ```
@@ -128,7 +128,7 @@ async fn collect_plugin_hooks(hooks: &mut Vec<HookInfo>, dir: &Path, plugin_type
             continue;
         }
 
-        // Extract tool/channel name: "slack.capabilities.json" -> "slack"
+        // Extract tool/channel name: "gotify.capabilities.json" -> "gotify"
         let name = match file_name.strip_suffix(".capabilities.json") {
             Some(n) if !n.is_empty() => n.to_string(),
             _ => continue,
@@ -360,12 +360,12 @@ mod tests {
             }
         });
         let mut f =
-            std::fs::File::create(dir.path().join("slack.capabilities.json")).expect("create file");
+            std::fs::File::create(dir.path().join("gotify.capabilities.json")).expect("create file");
         f.write_all(serde_json::to_string(&caps).unwrap().as_bytes())
             .expect("write");
 
         // Also create a .wasm file (not required for discovery, but realistic)
-        std::fs::File::create(dir.path().join("slack.wasm")).expect("create wasm");
+        std::fs::File::create(dir.path().join("gotify.wasm")).expect("create wasm");
 
         // A capabilities file without hooks should be skipped
         let no_hooks = serde_json::json!({"http": {"allowlist": []}});
@@ -378,9 +378,9 @@ mod tests {
         collect_plugin_hooks(&mut hooks, dir.path(), "tool").await;
 
         assert_eq!(hooks.len(), 2, "should find 1 rule + 1 webhook");
-        assert_eq!(hooks[0].name, "plugin.tool:slack::redact-keys");
+        assert_eq!(hooks[0].name, "plugin.tool:gotify::redact-keys");
         assert_eq!(hooks[0].kind, "rule");
-        assert_eq!(hooks[1].name, "plugin.tool:slack::log-events");
+        assert_eq!(hooks[1].name, "plugin.tool:gotify::log-events");
         assert_eq!(hooks[1].kind, "webhook");
     }
 

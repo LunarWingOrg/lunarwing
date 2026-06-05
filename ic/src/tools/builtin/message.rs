@@ -188,7 +188,6 @@ impl Tool for MessageTool {
          the file path in the attachments array. Images are sent as photos on Telegram. \
          - Signal: target accepts E.164 (+1234567890) or group ID \
          - Telegram: target accepts username or chat ID \
-         - Slack: target accepts channel (#general) or user ID \
          - XMPP: target accepts bare JID (user@domain.tld)"
     }
 
@@ -410,7 +409,7 @@ impl Tool for MessageTool {
 
     fn requires_approval(&self, _params: &serde_json::Value) -> ApprovalRequirement {
         // Message tool only delivers to channels the user has configured
-        // (TUI, Telegram, Slack, web gateway, etc.) via ChannelManager::broadcast.
+        // (TUI, Telegram, XMPP, web gateway, etc.) via ChannelManager::broadcast.
         ApprovalRequirement::Never
     }
 

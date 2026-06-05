@@ -38,8 +38,8 @@ The main agent provides generic infrastructure; tools are self-contained units t
 
 ### What Does NOT Go in Main Agent
 
-- Service-specific auth flows (OAuth for Notion, Slack, etc.)
-- Service-specific CLI commands (`auth notion`, `auth slack`)
+- Service-specific auth flows (OAuth for Notion, GitHub, etc.)
+- Service-specific CLI commands (`auth notion`, `auth github`)
 - Service-specific configuration handling
 - Hardcoded API URLs or token formats
 

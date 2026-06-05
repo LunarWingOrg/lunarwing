@@ -15,10 +15,9 @@
     },
     "messaging": {
       "display_name": "Messaging Channels",
-      "description": "Telegram and Slack channels",
+      "description": "Telegram channel",
       "extensions": [
-        "channels/telegram",
-        "channels/slack"
+        "channels/telegram"
       ],
       "shared_auth": null
     },
@@ -30,9 +29,7 @@
         "tools/gmail",
         "tools/google-calendar",
         "tools/google-drive",
-        "tools/slack-tool",
-        "channels/telegram",
-        "channels/slack"
+        "channels/telegram"
       ],
       "shared_auth": null
     },

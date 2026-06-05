@@ -1,30 +1,32 @@
 # cleanup
 
-## Remove cruft
-
-### dont need these:
+## Proprietary channels
 
 * Telegram
-* Slack
+* Slack (Removed)
 * Discord (Removed)
 * WhatsApp (Removed)
 * Feishu (Removed)
   
-### dont need these:
+## Proprietary Extensions
 
 * gmail
 * google stuff
 
-### Remove unused dir:
+## Remove unused dir:
 
 * customic (done)
 
-### Rename ironclaw references in nanocode bridge:
+## Rename ironclaw references in nanocode bridge:
 
 * WebSocket subprotocol still logs `ironclaw-agent-v1` — rename to `lunarwing-agent-v1`
 * Bridge scripts in `lunarcode4lunarwing/scripts/` reference the old subprotocol name
 * Coordinate with `ic/src/orchestrator/external_worker.rs` which expects the subprotocol string to match
 * **Note:** The subprotocol rename needs to happen on both sides simultaneously — the bridge (`lunarcode4lunarwing/scripts/`) and the daemon (`ic/src/orchestrator/external_worker.rs`) must agree on the string, so it's a coordinated change
+
+## Rename ironclaw_weechat_ws to lunarwing_weechat_ws
+
+## Rename ironclaw-gotify-tool to lunarwing_gotify_tool if necessary
 
 ##### Notes:
 

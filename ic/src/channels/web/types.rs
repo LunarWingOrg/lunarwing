@@ -1559,7 +1559,7 @@ mod tests {
     #[test]
     fn test_ws_server_from_sse_auth_completed() {
         let sse = SseEvent::AuthCompleted {
-            extension_name: "slack".to_string(),
+            extension_name: "weechat".to_string(),
             success: false,
             message: "Invalid token".to_string(),
         };

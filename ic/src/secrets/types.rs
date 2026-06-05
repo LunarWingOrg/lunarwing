@@ -173,7 +173,7 @@ pub struct CreateSecretParams {
 impl CreateSecretParams {
     /// Create new secret params. The name is normalized to lowercase for
     /// case-insensitive matching (capabilities.json uses lowercase names
-    /// like `slack_bot_token`, but UIs may store `SLACK_BOT_TOKEN`).
+    /// like `github_token`, but UIs may store `GITHUB_TOKEN`).
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             name: name.into().to_lowercase(),
@@ -370,8 +370,8 @@ mod tests {
 
     #[test]
     fn test_create_params_name_lowercased() {
-        let params = CreateSecretParams::new("SLACK_BOT_TOKEN", "val");
-        assert_eq!(params.name, "slack_bot_token");
+        let params = CreateSecretParams::new("GITHUB_TOKEN", "val");
+        assert_eq!(params.name, "github_token");
     }
 
     #[test]

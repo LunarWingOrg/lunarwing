@@ -2,7 +2,7 @@
 //! and activation of channels, tools, and MCP servers.
 //!
 //! Extensions are the user-facing abstraction that unifies three runtime kinds:
-//! - **Channels** (Telegram, Slack) — messaging integrations (WASM)
+//! - **Channels** (Telegram, XMPP) — messaging integrations (WASM)
 //! - **Tools** — sandboxed capabilities (WASM)
 //! - **MCP servers** — external API integrations via Model Context Protocol
 //!
@@ -901,13 +901,13 @@ mod tests {
     #[test]
     fn activate_result_serde_roundtrip() {
         let ar = ActivateResult {
-            name: "slack".to_string(),
+            name: "weechat".to_string(),
             kind: ExtensionKind::WasmChannel,
             tools_loaded: vec!["send_message".to_string(), "read_channel".to_string()],
             message: "Activated with 2 tools".to_string(),
         };
         let json = serde_json::to_value(&ar).unwrap();
-        assert_eq!(json["name"], "slack");
+        assert_eq!(json["name"], "weechat");
         assert_eq!(json["kind"], "wasm_channel");
         assert_eq!(json["tools_loaded"].as_array().unwrap().len(), 2);
         let back: ActivateResult = serde_json::from_value(json).unwrap();

@@ -71,7 +71,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username, DM topics, setup-time owner auto-verification, owner-scoped persistence |
 | Signal | ✅ | ✅ | P2 | signal-cli daemonPC, SSE listener HTTP/JSON-R, user/group allowlists, DM pairing |
 | XMPP | ❌ | 🚧 | P3 | Installable WASM channel plus local `xmpp-bridge`; DM/MUC routing and setup-time secrets/fields work, configured rooms are auto-joined on connect with zero-history MUC presence, and `encrypted_rooms` now add fail-closed encrypted-room handling with disco validation (`muc_nonanonymous` + `muc_membersonly`), member/admin/owner list retrieval, occupant real-JID tracking from MUC presence, bridge status reporting for encrypted-room readiness, and outbound/inbound encrypted groupchat on the current legacy-compatible OMEMO path. Bridge-owned DM OMEMO also has in-tree session bootstrap/decrypt/persisted-session coverage, initial availability presence is sent on connect so roster presence reflects online state, outbound OMEMO IQ responses are matched even when peers omit `from`, reply routing preserves the sender OMEMO device ID when an established session exists, device-list/bundle fetches prefer the latest published item, legacy OMEMO prekey bundles now use registration ID `0` for external-client interop, and the bridge can now live-toggle/reset the outbound hourly XMPP message cap via `/v1/outbound-rate-limit` without a restart. Remaining gaps are full OMEMO 2/SCE room interop validation and broader external-client interoperability validation |
-| Slack | ✅ | ✅ | - | WASM tool |
+| Slack | ✅ | ❌ | - | Removed — proprietary, not aligned with fork goals |
 | iMessage | ✅ | ❌ | P3 | BlueBubbles or Linq recommended |
 | Linq | ✅ | ❌ | P3 | Real iMessage via API, no Mac required |
 | LINE | ✅ | ❌ | P3 | |
@@ -95,15 +95,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Cron/heartbeat topic targeting | ✅ | ❌ | Messages land in correct topic |
 | DM topics support | ✅ | ❌ | Agent/topic bindings in DMs and agent-scoped SessionKeys |
 | Persistent ACP topic binding | ✅ | ❌ | ACP harness sessions can pin to Telegram forum or DM topics |
-
-### Slack-Specific Features (since Feb 2025)
-
-| Feature | OpenClaw | LunarWing | Notes |
-|---------|----------|----------|-------|
-| Streaming draft replies | ✅ | ❌ | Partial replies via draft message updates |
-| Configurable stream modes | ✅ | ❌ | Per-channel stream behavior |
-| Thread ownership | ✅ | ❌ | Thread-level ownership tracking plus reply participation memory |
-| Download-file action | ✅ | ❌ | On-demand attachment downloads via message actions |
 
 ### Mattermost-Specific Features (since Mar 2026)
 
@@ -523,7 +514,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 - ✅ Gateway control plane + WebSocket
 - ✅ Web Control UI (chat, memory, jobs, logs, extensions, routines)
 - ✅ WebChat channel (web gateway)
-- ✅ Slack channel (WASM tool)
 - ✅ Telegram channel (WASM tool, MTProto)
 - ✅ Docker sandbox (orchestrator/worker)
 - ✅ Cron job scheduling (routines)
@@ -538,7 +528,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 
 ### P1 - High Priority
 
-- ❌ Slack channel (real implementation)
 - ✅ Telegram channel (WASM, DM pairing, caption, /start)
 - ✅ Multi-provider failover (`FailoverProvider` with retryable error classification)
 - ✅ Hooks system (core lifecycle hooks + bundled/plugin/workspace hooks + outbound webhooks)

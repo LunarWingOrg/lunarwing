@@ -182,8 +182,8 @@ impl WasmChannelLoader {
     ///
     /// ```text
     /// channels/
-    /// ├── slack.wasm                  <- Channel WASM component
-    /// ├── slack.capabilities.json     <- Capabilities (optional)
+    /// ├── weechat.wasm                <- Channel WASM component
+    /// ├── weechat.capabilities.json   <- Capabilities (optional)
     /// ├── telegram.wasm
     /// └── telegram.capabilities.json
     /// ```
@@ -437,13 +437,13 @@ mod tests {
         let dir = TempDir::new().unwrap();
 
         // Create a fake .wasm file
-        let wasm_path = dir.path().join("slack.wasm");
+        let wasm_path = dir.path().join("weechat.wasm");
         std::fs::File::create(&wasm_path).unwrap();
 
         let channels = discover_channels(dir.path()).await.unwrap();
         assert_eq!(channels.len(), 1);
-        assert!(channels.contains_key("slack"));
-        assert!(channels["slack"].capabilities_path.is_none());
+        assert!(channels.contains_key("weechat"));
+        assert!(channels["weechat"].capabilities_path.is_none());
     }
 
     #[tokio::test]

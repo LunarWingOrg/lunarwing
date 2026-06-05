@@ -123,7 +123,7 @@ mod import_integration_tests {
         let conv_id = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO conversations VALUES (?1, ?2, ?3)",
-            libsql::params![conv_id.as_str(), "slack", "2024-01-15T10:00:00Z"],
+            libsql::params![conv_id.as_str(), "weechat", "2024-01-15T10:00:00Z"],
         )
         .await?;
 

@@ -1576,26 +1576,26 @@ mod tests {
     #[test]
     fn test_detect_auth_awaiting_tool_activate() {
         let result: Result<String, Error> = Ok(serde_json::json!({
-            "name": "slack",
+            "name": "gotify",
             "kind": "McpServer",
             "awaiting_token": true,
             "status": "awaiting_token",
-            "instructions": "Provide your Slack Bot token."
+            "instructions": "Provide your Gotify application token."
         })
         .to_string());
 
         let detected = check_auth_required("tool_activate", &result);
         assert!(detected.is_some());
         let (name, instructions) = detected.unwrap();
-        assert_eq!(name, "slack");
-        assert!(instructions.contains("Slack Bot"));
+        assert_eq!(name, "gotify");
+        assert!(instructions.contains("Gotify"));
     }
 
     #[test]
     fn test_detect_auth_awaiting_tool_activate_not_awaiting() {
         let result: Result<String, Error> = Ok(serde_json::json!({
-            "name": "slack",
-            "tools_loaded": ["slack_post_message"],
+            "name": "gotify",
+            "tools_loaded": ["gotify_send"],
             "message": "Activated"
         })
         .to_string());
@@ -2496,7 +2496,7 @@ mod tests {
         use crate::channels::IncomingMessage;
 
         // Case 1: relay channel + non-DM → should auto-deny
-        let msg = IncomingMessage::new("slack-relay", "u1", "hello")
+        let msg = IncomingMessage::new("xmpp-relay", "u1", "hello")
             .with_metadata(serde_json::json!({ "event_type": "message" }));
         let is_relay = msg.channel.ends_with("-relay");
         let is_dm =
@@ -2504,7 +2504,7 @@ mod tests {
         assert!(is_relay && !is_dm, "Should auto-deny in relay non-DM");
 
         // Case 2: relay channel + DM → should NOT auto-deny
-        let msg_dm = IncomingMessage::new("slack-relay", "u1", "hello")
+        let msg_dm = IncomingMessage::new("xmpp-relay", "u1", "hello")
             .with_metadata(serde_json::json!({ "event_type": "direct_message" }));
         let is_dm_2 =
             msg_dm.metadata.get("event_type").and_then(|v| v.as_str()) == Some("direct_message");

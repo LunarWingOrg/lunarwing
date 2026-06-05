@@ -38,7 +38,7 @@ pub struct ChannelCapabilities {
 
     /// Workspace prefix for this channel's storage.
     /// All workspace writes are automatically prefixed.
-    /// Example: "channels/slack/" means writes to "state.json" become "channels/slack/state.json".
+    /// Example: "channels/weechat/" means writes to "state.json" become "channels/weechat/state.json".
     pub workspace_prefix: String,
 
     /// Rate limiting for emit_message calls.
@@ -160,7 +160,7 @@ impl ChannelCapabilities {
 /// Configuration for an HTTP endpoint the channel wants to register.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpEndpointConfig {
-    /// Path to register (e.g., "/webhook/slack").
+    /// Path to register (e.g., "/webhook/weechat").
     pub path: String,
 
     /// HTTP methods to accept (e.g., ["POST"]).
@@ -244,18 +244,18 @@ mod tests {
 
     #[test]
     fn test_for_channel() {
-        let caps = ChannelCapabilities::for_channel("slack");
-        assert_eq!(caps.workspace_prefix, "channels/slack/");
+        let caps = ChannelCapabilities::for_channel("weechat");
+        assert_eq!(caps.workspace_prefix, "channels/weechat/");
     }
 
     #[test]
     fn test_path_allowed() {
         let caps = ChannelCapabilities::default()
-            .with_path("/webhook/slack")
-            .with_path("/webhook/slack/events");
+            .with_path("/webhook/weechat")
+            .with_path("/webhook/weechat/events");
 
-        assert!(caps.is_path_allowed("/webhook/slack"));
-        assert!(caps.is_path_allowed("/webhook/slack/events"));
+        assert!(caps.is_path_allowed("/webhook/weechat"));
+        assert!(caps.is_path_allowed("/webhook/weechat/events"));
         assert!(!caps.is_path_allowed("/webhook/telegram"));
     }
 
@@ -276,15 +276,15 @@ mod tests {
 
     #[test]
     fn test_workspace_path_validation() {
-        let caps = ChannelCapabilities::for_channel("slack");
+        let caps = ChannelCapabilities::for_channel("weechat");
 
         // Valid path
         let result = caps.validate_workspace_path("state.json");
-        assert_eq!(result.unwrap(), "channels/slack/state.json");
+        assert_eq!(result.unwrap(), "channels/weechat/state.json");
 
         // Nested path
         let result = caps.validate_workspace_path("data/users.json");
-        assert_eq!(result.unwrap(), "channels/slack/data/users.json");
+        assert_eq!(result.unwrap(), "channels/weechat/data/users.json");
 
         // Block absolute paths
         let result = caps.validate_workspace_path("/etc/passwd");
@@ -301,8 +301,8 @@ mod tests {
 
     #[test]
     fn test_http_endpoint_config() {
-        let endpoint = HttpEndpointConfig::post_webhook("/webhook/slack");
-        assert_eq!(endpoint.path, "/webhook/slack");
+        let endpoint = HttpEndpointConfig::post_webhook("/webhook/weechat");
+        assert_eq!(endpoint.path, "/webhook/weechat");
         assert_eq!(endpoint.methods, vec!["POST"]);
         assert!(endpoint.require_secret);
     }

@@ -715,8 +715,8 @@ mod tests {
 
     #[test]
     fn test_workspace_write_prefixing() {
-        let caps = ChannelCapabilities::for_channel("slack");
-        let mut state = ChannelHostState::new("slack", caps);
+        let caps = ChannelCapabilities::for_channel("weechat");
+        let mut state = ChannelHostState::new("weechat", caps);
 
         state
             .workspace_write("state.json", "{}".to_string())
@@ -724,13 +724,13 @@ mod tests {
 
         let writes = state.take_pending_writes();
         assert_eq!(writes.len(), 1);
-        assert_eq!(writes[0].path, "channels/slack/state.json");
+        assert_eq!(writes[0].path, "channels/weechat/state.json");
     }
 
     #[test]
     fn test_workspace_write_path_traversal_blocked() {
-        let caps = ChannelCapabilities::for_channel("slack");
-        let mut state = ChannelHostState::new("slack", caps);
+        let caps = ChannelCapabilities::for_channel("weechat");
+        let mut state = ChannelHostState::new("weechat", caps);
 
         // Try to escape namespace
         let result = state.workspace_write("../secrets.json", "{}".to_string());
@@ -876,26 +876,26 @@ mod tests {
         let store = Arc::new(ChannelWorkspaceStore::new());
 
         // Callback 1: write initial value.
-        let caps = ChannelCapabilities::for_channel("slack");
-        let mut state = ChannelHostState::new("slack", caps);
+        let caps = ChannelCapabilities::for_channel("weechat");
+        let mut state = ChannelHostState::new("weechat", caps);
         state.workspace_write("cursor", "100".to_string()).unwrap();
         let writes = state.take_pending_writes();
         store.commit_writes(&writes);
 
         // Callback 2: overwrite the same key.
-        let caps2 = ChannelCapabilities::for_channel("slack");
-        let mut state2 = ChannelHostState::new("slack", caps2);
+        let caps2 = ChannelCapabilities::for_channel("weechat");
+        let mut state2 = ChannelHostState::new("weechat", caps2);
         state2.workspace_write("cursor", "200".to_string()).unwrap();
         let writes2 = state2.take_pending_writes();
         store.commit_writes(&writes2);
 
         // Callback 3: read back -- should see the overwritten value.
-        let mut caps3 = ChannelCapabilities::for_channel("slack");
+        let mut caps3 = ChannelCapabilities::for_channel("weechat");
         caps3.tool_capabilities.workspace_read = Some(WorkspaceCapability {
             allowed_prefixes: vec![],
             reader: Some(Arc::clone(&store) as Arc<dyn WorkspaceReader>),
         });
-        let state3 = ChannelHostState::new("slack", caps3);
+        let state3 = ChannelHostState::new("weechat", caps3);
 
         let value = state3.workspace_read("cursor").unwrap();
         assert_eq!(value, Some("200".to_string()));
@@ -952,13 +952,13 @@ mod tests {
             .unwrap();
         store.commit_writes(&state_tg.take_pending_writes());
 
-        // Slack writes "offset" = "200".
-        let caps_sl = ChannelCapabilities::for_channel("slack");
-        let mut state_sl = ChannelHostState::new("slack", caps_sl);
-        state_sl
+        // WeeChat writes "offset" = "200".
+        let caps_wc = ChannelCapabilities::for_channel("weechat");
+        let mut state_wc = ChannelHostState::new("weechat", caps_wc);
+        state_wc
             .workspace_write("offset", "200".to_string())
             .unwrap();
-        store.commit_writes(&state_sl.take_pending_writes());
+        store.commit_writes(&state_wc.take_pending_writes());
 
         // Reading back: each channel sees its own value.
         let mut caps_tg_read = ChannelCapabilities::for_channel("telegram");
@@ -972,14 +972,14 @@ mod tests {
             Some("100".to_string())
         );
 
-        let mut caps_sl_read = ChannelCapabilities::for_channel("slack");
-        caps_sl_read.tool_capabilities.workspace_read = Some(WorkspaceCapability {
+        let mut caps_wc_read = ChannelCapabilities::for_channel("weechat");
+        caps_wc_read.tool_capabilities.workspace_read = Some(WorkspaceCapability {
             allowed_prefixes: vec![],
             reader: Some(Arc::clone(&store) as Arc<dyn WorkspaceReader>),
         });
-        let sl_reader = ChannelHostState::new("slack", caps_sl_read);
+        let wc_reader = ChannelHostState::new("weechat", caps_wc_read);
         assert_eq!(
-            sl_reader.workspace_read("offset").unwrap(),
+            wc_reader.workspace_read("offset").unwrap(),
             Some("200".to_string())
         );
     }

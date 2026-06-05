@@ -400,7 +400,7 @@ pub struct Reasoning {
     workspace_system_prompt: Option<String>,
     /// Optional skill context block to inject into system prompt.
     skill_context: Option<String>,
-    /// Channel name (e.g. "telegram", "slack") for formatting hints.
+    /// Channel name (e.g. "telegram", "xmpp") for formatting hints.
     channel: Option<String>,
     /// Model name for runtime context.
     model_name: Option<String>,
@@ -1018,7 +1018,7 @@ Example:
 
         "\n\n## Extensions\n\
          You can search, install, and activate extensions to add new capabilities:\n\
-         - **Channels** (Telegram, Slack) — messaging integrations. \
+         - **Channels** (Telegram, XMPP) — messaging integrations. \
          When users ask about connecting a messaging platform, search for it as a channel.\n\
          - **Tools** — sandboxed functions that extend your abilities.\n\
          - **MCP servers** — external API integrations via the Model Context Protocol.\n\n\
@@ -1037,10 +1037,10 @@ Example:
                 "\
 - No markdown tables (Telegram strips them). Bullet lists and bold work well."
             }
-            "slack" => {
+            "xmpp" => {
                 "\
-- No markdown tables. Use Slack formatting: *bold*, _italic_, `code`.\n\
-- Prefer threaded replies when responding to older messages."
+- Keep messages concise. Markdown is generally not rendered.\n\
+- Prefer plain text with minimal formatting."
             }
             "signal" => "",
             _ => {
@@ -1050,10 +1050,10 @@ Example:
 
         let message_tool_hint = "\
 \n\n## Proactive Messaging\n\
-Send messages via Signal, Telegram, Slack, or other connected channels:\n\
+Send messages via Signal, Telegram, XMPP, or other connected channels:\n\
 - `content` (required): the message text\n\
 - `attachments` (optional): array of file paths to send\n\
-- `channel` (optional): which channel to use (signal, telegram, slack, etc.)\n\
+- `channel` (optional): which channel to use (signal, telegram, xmpp, etc.)\n\
 - `target` (optional): who to send to (phone number, group ID, etc.)\n\
 \nOmit both `channel` and `target` to send to the current conversation.\n\
 Examples (tool calls use JSON format):\n\

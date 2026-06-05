@@ -350,7 +350,7 @@ impl near::agent::host::Host for StoreData {
 
         // Leak scan runs on WASM-provided values BEFORE host credential injection.
         // This prevents false positives where the host-injected Bearer token
-        // (e.g., xoxb- Slack token) triggers the leak detector — WASM never saw
+        // (e.g., xoxb- API token) triggers the leak detector — WASM never saw
         // the real value, so scanning the pre-injection state is correct.
         // Inline the scan to avoid allocating a Vec of cloned headers.
         let leak_detector = LeakDetector::new();
@@ -3098,8 +3098,8 @@ mod tests {
 
     /// Regression test: leak scan must run on raw headers (before credential
     /// injection), not after. If it ran post-injection, the host-injected
-    /// Slack bot token (`xoxb-...`) would trigger a Block and reject the
-    /// tool's own legitimate outbound request.
+    /// API token would trigger a Block and reject the tool's own legitimate
+    /// outbound request.
     #[test]
     fn test_leak_scan_runs_before_credential_injection() {
         use crate::safety::LeakDetector;
@@ -3108,7 +3108,7 @@ mod tests {
         let raw_headers: Vec<(String, String)> = vec![
             (
                 "Authorization".to_string(),
-                "Bearer {SLACK_BOT_TOKEN}".to_string(),
+                "Bearer {BOT_TOKEN}".to_string(),
             ),
             ("Content-Type".to_string(), "application/json".to_string()),
         ];
@@ -3117,7 +3117,7 @@ mod tests {
 
         // Pre-injection scan should pass — placeholders are not secrets.
         let pre_result = detector.scan_http_request(
-            "https://slack.com/api/chat.postMessage",
+            "https://api.example.com/send",
             &raw_headers,
             None,
         );
@@ -3127,7 +3127,7 @@ mod tests {
             pre_result
         );
 
-        // Post-injection headers would contain a real Slack token.
+        // Post-injection headers would contain a real API token.
         let post_injection_headers: Vec<(String, String)> = vec![
             (
                 "Authorization".to_string(),
@@ -3139,13 +3139,13 @@ mod tests {
         // Post-injection scan WOULD block — this is the false positive
         // that the pre-injection ordering prevents.
         let post_result = detector.scan_http_request(
-            "https://slack.com/api/chat.postMessage",
+            "https://api.example.com/send",
             &post_injection_headers,
             None,
         );
         assert!(
             post_result.is_err(),
-            "Leak scan on post-injection headers should block the Slack token"
+            "Leak scan on post-injection headers should block the API token"
         );
     }
 

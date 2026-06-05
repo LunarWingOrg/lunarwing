@@ -131,7 +131,7 @@ mod e2e_import_tests {
             let conv_id = Uuid::new_v4().to_string();
             let channel = match conv_num {
                 0 => "telegram",
-                1 => "slack",
+                1 => "weechat",
                 _ => "xmpp",
             };
 
@@ -484,7 +484,7 @@ mod e2e_import_tests {
         let channels: std::collections::HashSet<_> =
             conversations.iter().map(|c| c.channel.as_str()).collect();
         assert!(channels.contains("telegram"));
-        assert!(channels.contains("slack"));
+        assert!(channels.contains("weechat"));
         assert!(channels.contains("xmpp"));
     }
 }

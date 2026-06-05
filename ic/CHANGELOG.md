@@ -31,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - *(cli)* add cron subcommand for managing scheduled routines ([#1017](https://github.com/nearai/ironclaw/pull/1017))
 - adds context-llm tool support ([#616](https://github.com/nearai/ironclaw/pull/616))
 - *(web-chat)* add hover copy button for user/assistant messages ([#948](https://github.com/nearai/ironclaw/pull/948))
-- add Slack approval buttons for tool execution in DMs ([#796](https://github.com/nearai/ironclaw/pull/796))
 - enhance HTTP tool parameter parsing ([#911](https://github.com/nearai/ironclaw/pull/911))
 - *(routines)* enable tool access in lightweight routine execution ([#257](https://github.com/nearai/ironclaw/pull/257)) ([#730](https://github.com/nearai/ironclaw/pull/730))
 - add MiniMax as a built-in LLM provider ([#940](https://github.com/nearai/ironclaw/pull/940))
@@ -257,7 +256,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - *(e2e)* extensions tab tests, CI parallelization, and 3 production bug fixes ([#584](https://github.com/nearai/ironclaw/pull/584))
 - WASM extension versioning with WIT compat checks ([#592](https://github.com/nearai/ironclaw/pull/592))
-- Add HMAC-SHA256 webhook signature validation for Slack ([#588](https://github.com/nearai/ironclaw/pull/588))
 - restart ([#531](https://github.com/nearai/ironclaw/pull/531))
 - merge http/web_fetch tools, add tool output stash for large responses ([#578](https://github.com/nearai/ironclaw/pull/578))
 - integrate 13-dimension complexity scorer into smart routing ([#529](https://github.com/nearai/ironclaw/pull/529))
@@ -340,7 +338,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - *(web)* auto-scroll and Enter key completion for slash command autocomplete ([#475](https://github.com/nearai/ironclaw/pull/475))
-- correct download URLs for telegram-mtproto and slack-tool extensions ([#470](https://github.com/nearai/ironclaw/pull/470))
+- correct download URLs for telegram-mtproto extension ([#470](https://github.com/nearai/ironclaw/pull/470))
 
 ## [0.13.0](https://github.com/nearai/ironclaw/compare/v0.12.0...v0.13.0) - 2026-03-02
 
@@ -397,7 +395,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - correct MCP registry URLs and remove non-existent Google endpoints ([#370](https://github.com/nearai/ironclaw/pull/370))
 - resolve_thread adopts existing session threads by UUID ([#377](https://github.com/nearai/ironclaw/pull/377))
-- resolve telegram/slack name collision between tool and channel registries ([#346](https://github.com/nearai/ironclaw/pull/346))
+- resolve name collision between tool and channel registries ([#346](https://github.com/nearai/ironclaw/pull/346))
 - make onboarding installs prefer release artifacts with source fallback ([#323](https://github.com/nearai/ironclaw/pull/323))
 - copy missing files in Dockerfile to fix build ([#322](https://github.com/nearai/ironclaw/pull/322))
 - fall back to build-from-source when extension download fails ([#312](https://github.com/nearai/ironclaw/pull/312))

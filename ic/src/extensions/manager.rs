@@ -6217,8 +6217,8 @@ mod tests {
         if manager.current_channel_owner_id("telegram").await != Some(12345_i64) {
             return Err("expected runtime owner id fast-path for telegram".to_string());
         }
-        if manager.current_channel_owner_id("slack").await.is_some() {
-            return Err("expected no owner id for slack".to_string());
+        if manager.current_channel_owner_id("weechat").await.is_some() {
+            return Err("expected no owner id for weechat".to_string());
         }
 
         Ok(())

@@ -64,7 +64,7 @@ pub enum Trigger {
     },
     /// Fire when a channel message matches a pattern.
     Event {
-        /// Optional channel filter (e.g. "telegram", "slack").
+        /// Optional channel filter (e.g. "telegram", "xmpp").
         channel: Option<String>,
         /// Regex pattern to match against message content.
         pattern: String,

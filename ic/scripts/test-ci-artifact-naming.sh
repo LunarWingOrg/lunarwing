@@ -31,8 +31,8 @@ assert_parse() {
 }
 
 # Tool and channel with same name must produce different manifest paths
-assert_parse "tool-slack-0.2.1-wasm32-wasip2.tar.gz" "tool" "slack"
-assert_parse "channel-slack-0.2.1-wasm32-wasip2.tar.gz" "channel" "slack"
+assert_parse "tool-gotify-0.2.1-wasm32-wasip2.tar.gz" "tool" "gotify"
+assert_parse "channel-weechat-0.2.1-wasm32-wasip2.tar.gz" "channel" "weechat"
 
 # Same collision case for telegram
 assert_parse "tool-telegram-0.2.2-wasm32-wasip2.tar.gz" "tool" "telegram"
@@ -51,7 +51,7 @@ assert_parse "tool-github-0.2.0-wasm32-wasip2.tar.gz" "tool" "github"
 assert_parse "tool-gmail-0.1.0-wasm32-wasip2.tar.gz" "tool" "gmail"
 
 # Pre-release versions
-assert_parse "tool-slack-0.2.1-alpha.1-wasm32-wasip2.tar.gz" "tool" "slack"
+assert_parse "tool-gotify-0.2.1-alpha.1-wasm32-wasip2.tar.gz" "tool" "gotify"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

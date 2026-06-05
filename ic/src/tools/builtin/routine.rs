@@ -282,7 +282,7 @@ fn routine_request_discovery_schema() -> Value {
         "examples": [
             { "kind": "manual" },
             { "kind": "cron", "schedule": "0 0 9 * * MON-FRI", "timezone": "UTC" },
-            { "kind": "message_event", "pattern": "deploy\\s+prod", "channel": "slack" },
+            { "kind": "message_event", "pattern": "deploy\\s+prod", "channel": "xmpp" },
             { "kind": "system_event", "source": "github", "event_type": "issue.opened", "filters": { "repository": "nearai/ironclaw" } }
         ]
     })
@@ -376,7 +376,7 @@ fn routine_create_examples() -> Vec<Value> {
             "request": {
                 "kind": "message_event",
                 "pattern": "deploy\\s+prod",
-                "channel": "slack"
+                "channel": "xmpp"
             },
             "execution": {
                 "mode": "lightweight",
@@ -1845,7 +1845,7 @@ mod tests {
             "request": {
                 "kind": "message_event",
                 "pattern": "deploy\\s+prod",
-                "channel": "slack"
+                "channel": "xmpp"
             },
             "execution": {
                 "use_tools": true,
@@ -1861,7 +1861,7 @@ mod tests {
             matches!(
                 parsed.trigger,
                 NormalizedTriggerRequest::MessageEvent { ref pattern, ref channel }
-                if pattern == "deploy\\s+prod" && channel.as_deref() == Some("slack")
+                if pattern == "deploy\\s+prod" && channel.as_deref() == Some("xmpp")
             ),
             "expected grouped message_event trigger",
         );

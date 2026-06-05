@@ -9,8 +9,8 @@
 //!
 //! ```text
 //! ~/.lunarwing/tools/
-//! ├── slack.wasm
-//! ├── slack.capabilities.json
+//! ├── gotify.wasm
+//! ├── gotify.capabilities.json
 //! ├── github.wasm
 //! └── github.capabilities.json
 //! ```
@@ -211,8 +211,8 @@ impl WasmToolLoader {
     ///
     /// ```text
     /// tools/
-    /// ├── slack.wasm                  <- Tool WASM component
-    /// ├── slack.capabilities.json     <- Capabilities (optional)
+    /// ├── gotify.wasm                 <- Tool WASM component
+    /// ├── gotify.capabilities.json    <- Capabilities (optional)
     /// ├── github.wasm
     /// └── github.capabilities.json
     /// ```
@@ -512,7 +512,7 @@ pub fn resolve_wasm_target_dir(crate_dir: &Path) -> PathBuf {
 /// Return the expected path to a compiled WASM artifact for a given crate.
 ///
 /// Combines [`resolve_wasm_target_dir`] with the `wasm32-wasip2/release/` subdirectory
-/// and the binary name without extension (e.g. `slack_tool`).
+/// and the binary name without extension (e.g. `gotify_tool`).
 ///
 /// `binary_name` should not include the `.wasm` extension; it is appended automatically.
 ///
@@ -834,14 +834,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
 
         // Create wasm and capabilities files
-        std::fs::File::create(dir.path().join("slack.wasm")).unwrap();
+        std::fs::File::create(dir.path().join("gotify.wasm")).unwrap();
         let mut cap_file =
-            std::fs::File::create(dir.path().join("slack.capabilities.json")).unwrap();
+            std::fs::File::create(dir.path().join("gotify.capabilities.json")).unwrap();
         cap_file.write_all(b"{}").unwrap();
 
         let tools = discover_tools(dir.path()).await.unwrap();
         assert_eq!(tools.len(), 1);
-        assert!(tools["slack"].capabilities_path.is_some());
+        assert!(tools["gotify"].capabilities_path.is_some());
     }
 
     #[tokio::test]
