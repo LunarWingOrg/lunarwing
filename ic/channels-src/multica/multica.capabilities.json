@@ -1,0 +1,83 @@
+{
+    "version": "0.1.0",
+    "wit_version": "0.3.0",
+    "type": "channel",
+    "name": "multica",
+    "description": "Multica/Lunartica task management channel — polls for tasks and routes agent output back to the board",
+    "setup": {
+        "required_secrets": [
+            {
+                "name": "multica_api_token",
+                "prompt": "Enter your Multica/Lunartica Personal Access Token (starts with mul_)",
+                "optional": false
+            }
+        ],
+        "required_fields": [
+            {
+                "name": "multica_url",
+                "prompt": "Multica/Lunartica server URL (e.g. http://localhost:8080)",
+                "optional": false
+            },
+            {
+                "name": "workspace_id",
+                "prompt": "Workspace UUID from Multica/Lunartica",
+                "optional": false
+            },
+            {
+                "name": "daemon_id",
+                "prompt": "Daemon identifier for this LunarWing instance (default: lunarwing)",
+                "optional": true
+            }
+        ],
+        "setup_url": null
+    },
+    "capabilities": {
+        "http": {
+            "allowlist": [
+                {
+                    "host": "*",
+                    "path_prefix": "/api/"
+                }
+            ],
+            "credentials": {
+                "multica_api": {
+                    "secret_name": "multica_api_token",
+                    "location": {
+                        "type": "header",
+                        "name": "Authorization"
+                    },
+                    "format": "Bearer ${secret}",
+                    "host_patterns": ["*"]
+                }
+            },
+            "rate_limit": {
+                "requests_per_minute": 60,
+                "requests_per_hour": 3600
+            }
+        },
+        "secrets": {
+            "allowed_names": [
+                "multica_api_token"
+            ]
+        },
+        "channel": {
+            "allow_polling": true,
+            "min_poll_interval_ms": 30000,
+            "workspace_prefix": "channels/multica/",
+            "emit_rate_limit": {
+                "messages_per_minute": 30,
+                "messages_per_hour": 1800
+            }
+        }
+    },
+    "config": {
+        "display_name": "Multica",
+        "multica_url": null,
+        "workspace_id": null,
+        "runtime_id": null,
+        "daemon_id": "lunarwing",
+        "runtime_type": "lunarwing",
+        "polling_enabled": true,
+        "poll_interval_ms": 30000
+    }
+}

@@ -1,0 +1,16 @@
+# Runtime
+logs/
+results/
+.env
+.env.secrets
+
+# Placeholder mounts
+.ssh-placeholder/
+.gitconfig-placeholder
+
+# Workspace contents (keep .gitkeep only)
+workspace/*
+!workspace/.gitkeep
+
+# Node
+node_modules/

@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "opencode-agent-memory": "github:joshuadavidthomas/opencode-agent-memory",
+    "opencode-agent-skills": "github:joshuadavidthomas/opencode-agent-skills",
+    "oh-my-openagent": "npm:oh-my-opencode@latest"
+  }
+}

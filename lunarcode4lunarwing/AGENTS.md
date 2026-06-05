@@ -1,0 +1,36 @@
+# Agent Rules — lunarcode4lunarwing
+
+## What This Is
+
+Persistent container worker for nanocode, following the same pattern as `codex4ironclaw`. The WebSocket bridge is TypeScript/Bun (not Python) because nanocode has an SDK that can be used in-process.
+
+## Key Files
+
+- `scripts/lunarwing_bridge.ts` — The WebSocket server/client. Changes here affect protocol behavior.
+- `scripts/nanocode_task_executor.ts` — Task execution via nanocode SDK. Controls session creation, permissions, event streaming.
+- `scripts/lunarwing_runtime.ts` — Shared types and envelope helpers. Keep in sync with `agent_comm_protocol.json`.
+- `entrypoint.sh` — Startup orchestration. Three modes: websocket, cli, acp.
+- `config/opencode.json` — Mounted into container; controls LLM provider, plugins, MCP servers.
+
+## Protocol Compatibility
+
+The `ironclaw-agent-v1` WebSocket subprotocol is shared with `codex4ironclaw`. Changes to `agent_comm_protocol.json` or envelope format must stay backward-compatible or be coordinated across both workers.
+
+## Build Notes
+
+The Dockerfile copies the nanocode monorepo source from the build context. The `nanocode/` directory is expected as a sibling or symlink. If it's missing, the build will fail.
+
+Before building, ensure:
+```bash
+# If nanocode source is in nanocode-config/nanocode:
+ln -s ../nanocode-config/nanocode ./nanocode
+# Or copy it
+cp -r ../nanocode-config/nanocode ./nanocode
+```
+
+## Do Not
+
+- Break the `ironclaw-agent-v1` envelope format
+- Expose the internal nanocode serve port (4096) externally
+- Store secrets in config files (use env vars with `{env:VAR}` syntax)
+- Remove the health server — orchestration depends on it

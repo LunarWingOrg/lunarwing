@@ -1,4 +1,6 @@
-
+.k
+.t4s
+.t4g
 .env
 .env.local
 .env.*
@@ -41,3 +43,10 @@ __pycache__/
 *.pyo
 *.pyd
 engine_trace_*.json
+tests/fixtures/llm_traces/live/github_dev_workflow_full_loop.json
+tests/fixtures/llm_traces/live/github_dev_workflow_full_loop.log
+# Pebble local artifacts
+.pebble/settings.local.json
+.pebble/sessions/
+.pebble/agents/
+.pebble/mcp/

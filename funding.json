@@ -1,0 +1,56 @@
+{
+  "version": "v1.1.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Chris McFee",
+    "email": "cmcfee@pm.me",
+    "description": "Creator and maintainer of LunarWing, a self-hostable privacy-first AI agent.",
+    "webpageUrl": {
+      "url": "https://lunarwing.org"
+    }
+  },
+  "projects": [
+    {
+      "guid": "lunarwing",
+      "name": "LunarWing",
+      "description": "Secure, privacy-first AI agent with XMPP/OMEMO, Gotify, scheduled routines, and open-protocol channels. Self-hostable alternative to cloud-dependent AI assistants.",
+      "webpageUrl": {
+        "url": "https://lunarwing.org"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/LunarWingOrg/lunarwing"
+      },
+      "licenses": ["spdx:AGPL-3.0-or-later"],
+      "tags": ["ai-agent", "privacy", "xmpp", "omemo", "self-hosted", "rust", "wasm", "open-source"]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "btc",
+        "type": "other",
+        "address": "TODO_BTC_ADDRESS",
+        "description": "Bitcoin (BTC)"
+      },
+      {
+        "guid": "xmr",
+        "type": "other",
+        "address": "TODO_XMR_ADDRESS",
+        "description": "Monero (XMR)"
+      }
+    ],
+    "plans": [
+      {
+        "guid": "one-time-donation",
+        "status": "active",
+        "name": "One-time donation",
+        "description": "Support LunarWing development with a one-time contribution of any amount.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["btc", "xmr"]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+docker
+websocket-client==1.8.0
+requests==2.32.3
+pyyaml==6.0.1
+pytest==8.3.2
+tenacity==9.0.0

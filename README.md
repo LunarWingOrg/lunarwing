@@ -1,338 +1,326 @@
-<p align="center">
-  <img src="ironclaw.png?v=2" alt="IronClaw" width="200"/>
-</p>
+# LunarWing Introduction
 
-<h1 align="center">IronClaw</h1>
+## Claws are overrated. So, grow your wings and fly...
 
-<p align="center">
-  <strong>Your secure personal AI assistant, always on your side</strong>
-</p>
+### Secure, privacy-focused AI agents you can self-host.
 
-<p align="center">
-  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache%202.0-blue.svg" alt="License: MIT OR Apache-2.0" /></a>
-  <a href="https://t.me/ironclawAI"><img src="https://img.shields.io/badge/Telegram-%40ironclawAI-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Telegram: @ironclawAI" /></a>
-  <a href="https://www.reddit.com/r/ironclawAI/"><img src="https://img.shields.io/badge/Reddit-r%2FironclawAI-FF4500?style=flat&logo=reddit&logoColor=white" alt="Reddit: r/ironclawAI" /></a>
-  <a href="https://gitcgr.com/nearai/ironclaw">
-    <img src="https://gitcgr.com/badge/nearai/ironclaw.svg" alt="gitcgr" />
-  </a>
-</p>
+LunarWing is an agentic software framework built in Rust. It connects AI agents to privacy-respecting communication layers — IRC, DarkIRC, XMPP with OMEMO, and more — with real secret management baked in from the start.
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh-CN.md">简体中文</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.ko.md">한국어</a>
-</p>
+It's a hard fork of NearAI's IronClaw, diverging significantly since February 2026. LunarWing is not affiliated with NearAI.
+
+## Why LunarWing
+
+- **Self-hostable end to end** — runs entirely on your own infrastructure, no third-party dependencies required.
+- **Privacy-first channels** — DarkIRC, XMPP/OMEMO, and WeeChat relay support out of the box. No Slack, Discord, or Telegram — by design.
+- **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
+- **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
+- **Self-healing infrastructure** — advanced healthchecks and automatic recovery for channel bridges, the daemon itself, and scheduled routines.
+- **TensorZero integration** — HTTP proxy with optimized tool_choice routing for local and remote model providers.
+- **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 
 <p align="center">
-  <a href="#philosophy">Philosophy</a> •
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#security">Security</a> •
-  <a href="#architecture">Architecture</a>
+  <img src="./logo_new_black_bg.png" alt="LunarWing" width="400">
 </p>
 
+## Quick Links
+
+- Website: [lunarwing.org](https://lunarwing.org)
+- Source: [github.com/LunarWingOrg/lunarwing](https://github.com/LunarWingOrg/lunarwing)
+- IRC: `#lunarwing` on [irc.libera.chat](https://web.libera.chat/?channel=#lunarwing) (port 6697, TLS)
+- License: [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html)
+
+[LunarWing](https://lunarwing.org/)
+
+##### End of Introduction
 ---
 
-## Philosophy
+# Finer Details
 
-IronClaw is built on a simple principle: **your AI assistant should work for you, not against you**.
+The LunarWing project began in February 2026. Initially a hard fork of the Ironclaw project to support custom tools and channels, the project eventually evolved to introduce deep infrastructural changes over time.
 
-In a world where AI systems are increasingly opaque about data handling and aligned with corporate interests, IronClaw takes a different approach:
+LunarWing is a self-hosted, privacy-first AI agent. The fork prioritizes useful tools, bridges, and channels such as XMPP/OMEMO, Gotify, scheduled routines with fallbacks, systemd deployment, OpenRC, and open-protocol channels. Proprietary service centered channels (Slack, Discord, Telegram) are intentionally unsupported within the monorepo and are gradually being fully removed.
 
-- **Your data stays yours** - All information is stored locally, encrypted, and never leaves your control
-- **Transparency by design** - Open source, auditable, no hidden telemetry or data harvesting
-- **Self-expanding capabilities** - Build new tools on the fly without waiting for vendor updates
-- **Defense in depth** - Multiple security layers protect against prompt injection and data exfiltration
+The LunarWing project strictly maintains the AGPLv3 license on the core project and all extensions, tools, and channels. We will use the same license across our other repositories if legally possible.
 
-IronClaw is the AI assistant you can actually trust with your personal and professional life.
+## Why "LunarWing"?
+
+**Lunar** -- We are firm believers in Lunarpunk.
+
+**Wing** -- Wings are extensions of the body which allow flight. We chose the term `wing` to differentiate ourselves from most open source agentic software which uses the term `claw`. We are not required to remain on the ground.
 
 ## Features
 
-### Security First
+LunarWing adds real privacy-respecting tools and channels, with full secret support, right out of the box:
 
-- **WASM Sandbox** - Untrusted tools run in isolated WebAssembly containers with capability-based permissions
-- **Credential Protection** - Secrets are never exposed to tools; injected at the host boundary with leak detection
-- **Prompt Injection Defense** - Pattern detection, content sanitization, and policy enforcement
-- **Endpoint Allowlisting** - HTTP requests only to explicitly approved hosts and paths
+### Channels & Communication
+* **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group), with XEP-0363 HTTP file upload support
+* **Weechat** -- WASM channel allowing the agent to use Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client
+* **Enjin** -- optional weechat plugin to enable E2E for normal IRC
+* **DarkIRC** -- DarkIRC WASM channel, p2p e2e protocol from DarkFi
 
-### Always Available
+### Tools & Notifications
+* **Gotify** -- WASM tool for agent-initiated push notifications
+* **Vision Service / OCR Sidecar** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, caching, rate limiting, and metrics (`projects/ocr-sidecar/`)
+* **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the Vision Service sidecar (`ic/tools-src/vision-analyze/`)
+* **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (seperate repo)
 
-- **Multi-channel** - REPL, HTTP webhooks, WASM channels (Telegram, Slack), and web gateway
-- **Docker Sandbox** - Isolated container execution with per-job tokens and orchestrator/worker pattern
-- **Web Gateway** - Browser UI with real-time SSE/WebSocket streaming
-- **Routines** - Cron schedules, event triggers, webhook handlers for background automation
-- **Heartbeat System** - Proactive background execution for monitoring and maintenance tasks
-- **Parallel Jobs** - Handle multiple requests concurrently with isolated contexts
-- **Self-repair** - Automatic detection and recovery of stuck operations
+### Worker Containers
+* **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4lunarwing/`)
+* **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
+* **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
+* **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
+* **Re worked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
-### Self-Expanding
+### Infrastructure & Operations
+* Specialized secret management wrapper scripts for both PostgreSQL and libSQL
+* Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
+* Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
+* Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
+* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
+* TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
+* Support for embedded memory search models
+* Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
+* Supervised mode (`--supervised`) for human-gated tool execution — all tool actions require explicit approval regardless of tier
+* Response suppression and future cancellation with soft timeout and secondary hard-kill mechanism
 
-- **Dynamic Tool Building** - Describe what you need, and IronClaw builds it as a WASM tool
-- **MCP Protocol** - Connect to Model Context Protocol servers for additional capabilities
-- **Plugin Architecture** - Drop in new WASM tools and channels without restarting
+### Development & Testing
+* Automated test suite with trace-replay E2E testing (no real LLM required)
+* Worker test harness for all 4+ worker types with Docker Compose isolation (`tests/`)
+* REPLv2 server and client with better output formatting and subagent support, backout and approval support included
+* Support for external agentic coding tools via external worker mode
+* Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support as well as a production-grade developer testing suite
 
-### Persistent Memory
+### Philosophy
 
-- **Hybrid Search** - Full-text + vector search using Reciprocal Rank Fusion
-- **Workspace Filesystem** - Flexible path-based storage for notes, logs, and context
-- **Identity Files** - Maintain consistent personality and preferences across sessions
+LunarWing developers care about your freedom as a user. We do not support proprietary platforms in our official repository. All WASM tools and channels that developers wish to create for proprietary platforms can be maintained elsewhere. We focus on self-hostable communication layers and open protocols.
 
-## Installation
+The LunarWing core development team is not affiliated with NearAI.
 
-### Prerequisites
+Our core team uses a self-hosted Vikunja kanban board to track tasks. Additionally, we use our own LunarWing agents to keep track of project progress.
 
-- Rust 1.85+
-- PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension
-- NEAR AI account (authentication handled via setup wizard)
+#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponserships/grants. This will be updated in the future if it changes.
 
-## Download or Build
+## Instance Setup
 
-Visit [Releases page](https://github.com/nearai/ironclaw/releases/) to see the latest updates.
+LunarWing supports a preseeded instance layout for fresh installs. This means that your agents can have any identity and any pre-seeded memories before you even interact with them for the first time if you wish. 
 
-<details>
-  <summary>Install via Windows Installer (Windows)</summary>
+## Examples: 
 
-Download the [Windows Installer](https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-x86_64-pc-windows-msvc.msi) and run it.
-
-</details>
-
-<details>
-  <summary>Install via powershell script (Windows)</summary>
-
-```sh
-irm https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
-```
-
-</details>
-
-<details>
-  <summary>Install via shell script (macOS, Linux, Windows/WSL)</summary>
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.sh | sh
-```
-</details>
-
-<details>
-  <summary>Install via Homebrew (macOS/Linux)</summary>
-
-```sh
-brew install ironclaw
-```
-
-</details>
-
-<details>
-  <summary>Compile the source code (Cargo on Windows, Linux, macOS)</summary>
-
-Install it with `cargo`, just make sure you have [Rust](https://rustup.rs) installed on your computer.
+### PostgreSQL
 
 ```bash
-# Clone the repository
-git clone https://github.com/nearai/ironclaw.git
-cd ironclaw
-
-# Build
-cargo build --release
-
-# Run tests
-cargo test
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing \
+  --database postgres \
+  --database-url 'postgres://user:pass@db:5432/lunarwing' \
+  --llm-api-key unneeded \
+  --run-onboard
 ```
 
-For **full release** (after modifying channel sources), run `./scripts/build-all.sh` to rebuild channels first.
-
-</details>
-
-### Database Setup
+### libSQL
 
 ```bash
-# Create database
-createdb ironclaw
-
-# Enable pgvector
-psql ironclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing-dev \
+  --database libsql \
+  --libsql-path /srv/lunarwing-dev/lunarwing.db \
+  --run-onboard
 ```
 
-## Configuration
-
-Run the setup wizard to configure IronClaw:
+### With Preseeded Secrets
 
 ```bash
-ironclaw onboard
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing-secure \
+  --database postgres \
+  --database-url 'postgres://user:pass@db:5432/lunarwing' \
+  --agent-name lunarwing \
+  --gateway-token 'replace-me-gateway-token' \
+  --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+  --llm-api-key unneeded \
+  --run-onboard
 ```
 
-The wizard handles database connection, NEAR AI authentication (via browser OAuth),
-and secrets encryption (using your system keychain). Settings are persisted in the
-connected database; bootstrap variables (e.g. `DATABASE_URL`, `LLM_BACKEND`) are
-written to `~/.ironclaw/.env` so they are available before the database connects.
+Setup writes:
+- `$LUNARWING_BASE_DIR/config.toml`
+- `$LUNARWING_BASE_DIR/.env`
+- `$LUNARWING_BASE_DIR/workspace-template/*.md`
 
-### Alternative LLM Providers
+Preferred env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
-IronClaw defaults to NEAR AI but supports many LLM providers out of the box.
-Built-in providers include **Anthropic**, **OpenAI**, **GitHub Copilot**, **Google Gemini**, **MiniMax**,
-**Mistral**, and **Ollama** (local). OpenAI-compatible services like **OpenRouter**
-(300+ models), **Together AI**, **Fireworks AI**, and self-hosted servers (**vLLM**,
-**LiteLLM**) are also supported.
+### Setup Options
 
-Select your provider in the wizard, or set environment variables directly:
+| Flag | Effect |
+|------|--------|
+| `--agent-name` | Writes `[agent].name` to `config.toml` |
+| `--gateway-token` | Writes `GATEWAY_AUTH_TOKEN` to `.env` |
+| `--secrets-master-key` | Writes `SECRETS_MASTER_KEY` to `.env` (64-char hex) |
 
-```env
-# Example: MiniMax (built-in, 204K context)
-LLM_BACKEND=minimax
-MINIMAX_API_KEY=...
+`SECRETS_MASTER_KEY` enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this value automatically when it is missing. macOS prefers keychain storage by default.
 
-# Example: OpenAI-compatible endpoint
-LLM_BACKEND=openai_compatible
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_API_KEY=sk-or-...
-LLM_MODEL=anthropic/claude-sonnet-4
-```
-
-See [docs/capabilities/llm-providers.md](docs/capabilities/llm-providers.md) for a full provider guide.
-
-## Security
-
-IronClaw implements defense in depth to protect your data and prevent misuse.
-
-### WASM Sandbox
-
-All untrusted tools run in isolated WebAssembly containers:
-
-- **Capability-based permissions** - Explicit opt-in for HTTP, secrets, tool invocation
-- **Endpoint allowlisting** - HTTP requests only to approved hosts/paths
-- **Credential injection** - Secrets injected at host boundary, never exposed to WASM code
-- **Leak detection** - Scans requests and responses for secret exfiltration attempts
-- **Rate limiting** - Per-tool request limits to prevent abuse
-- **Resource limits** - Memory, CPU, and execution time constraints
+### Config Defaults
 
 ```
-WASM ──► Allowlist ──► Leak Scan ──► Credential ──► Execute ──► Leak Scan ──► WASM
-         Validator     (request)     Injector       Request     (response)
+llm_backend = "openai_compatible"
+openai_compatible_base_url = "http://127.0.0.1:3002"
+selected_model = "tensorzero::function_name::lunarwing"
+agent.name = "lunarwing"
 ```
 
-### Prompt Injection Defense
+Seed files:
+- Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
+- Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
 
-External content passes through multiple security layers:
+At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and `USER.md` can be customized per instance.
 
-- Pattern-based detection of injection attempts
-- Content sanitization and escaping
-- Policy rules with severity levels (Block/Warn/Review/Sanitize)
-- Tool output wrapping for safe LLM context injection
-
-### Data Protection
-
-- All data stored locally in your PostgreSQL database
-- Secrets encrypted with AES-256-GCM
-- No telemetry, analytics, or data sharing
-- Full audit log of all tool executions
-
-## Architecture
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│                          Channels                              │
-│  ┌──────┐  ┌──────┐   ┌─────────────┐  ┌─────────────┐         │
-│  │ REPL │  │ HTTP │   │WASM Channels│  │ Web Gateway │         │
-│  └──┬───┘  └──┬───┘   └──────┬──────┘  │ (SSE + WS)  │         │
-│     │         │              │         └──────┬──────┘         │
-│     └─────────┴──────────────┴────────────────┘                │
-│                              │                                 │
-│                    ┌─────────▼─────────┐                       │
-│                    │    Agent Loop     │  Intent routing       │
-│                    └────┬──────────┬───┘                       │
-│                         │          │                           │
-│              ┌──────────▼────┐  ┌──▼───────────────┐           │
-│              │  Scheduler    │  │ Routines Engine  │           │
-│              │(parallel jobs)│  │(cron, event, wh) │           │
-│              └──────┬────────┘  └────────┬─────────┘           │
-│                     │                    │                     │
-│       ┌─────────────┼────────────────────┘                     │
-│       │             │                                          │
-│   ┌───▼─────┐  ┌────▼────────────────┐                         │
-│   │ Local   │  │    Orchestrator     │                         │
-│   │Workers  │  │  ┌───────────────┐  │                         │
-│   │(in-proc)│  │  │ Docker Sandbox│  │                         │
-│   └───┬─────┘  │  │   Containers  │  │                         │
-│       │        │  │ ┌───────────┐ │  │                         │
-│       │        │  │ │Worker / CC│ │  │                         │
-│       │        │  │ └───────────┘ │  │                         │
-│       │        │  └───────────────┘  │                         │
-│       │        └─────────┬───────────┘                         │
-│       └──────────────────┤                                     │
-│                          │                                     │
-│              ┌───────────▼──────────┐                          │
-│              │    Tool Registry     │                          │
-│              │  Built-in, MCP, WASM │                          │
-│              └──────────────────────┘                          │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### Core Components
-
-| Component | Purpose |
-|-----------|---------|
-| **Agent Loop** | Main message handling and job coordination |
-| **Router** | Classifies user intent (command, query, task) |
-| **Scheduler** | Manages parallel job execution with priorities |
-| **Worker** | Executes jobs with LLM reasoning and tool calls |
-| **Orchestrator** | Container lifecycle, LLM proxying, per-job auth |
-| **Web Gateway** | Browser UI with chat, memory, jobs, logs, extensions, routines |
-| **Routines Engine** | Scheduled (cron) and reactive (event, webhook) background tasks |
-| **Workspace** | Persistent memory with hybrid search |
-| **Safety Layer** | Prompt injection defense and content sanitization |
-
-## Usage
+## Running Locally
 
 ```bash
-# First-time setup (configures database, auth, etc.)
-ironclaw onboard
-
-# Start interactive REPL
-cargo run
-
-# With debug logging
-RUST_LOG=ironclaw=debug cargo run
+cd ic
+LUNARWING_BASE_DIR=/path/to/instance ./run.sh
 ```
 
-## Development
+`run.sh` defaults `AGENT_NAME=lunarwing` and passes through any explicit `AGENT_NAME`, `LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR` you export. It does not inject LLM URL or model defaults, so fresh instances use `config.toml` unless you override with env vars.
+
+## Testing
+
+### Rust Unit & Integration Tests
 
 ```bash
-# Format code
-cargo fmt
-
-# Lint
-cargo clippy --all --benches --tests --examples --all-features
-
-# Run tests
-createdb ironclaw_test
-cargo test
-
-# Run specific test
-cargo test test_name
+cd ic
+cargo test                          # unit tests
+cargo test --features integration   # + PostgreSQL tests
+cargo test test_name -- --nocapture # single test with output
 ```
 
-- **Channels**: See [docs/channels/overview.mdx](docs/channels/overview.mdx) for setup of Telegram, Discord, and other channels.
-- **Changing channel sources**: Run `./channels-src/telegram/build.sh` before `cargo build` so the updated WASM is bundled.
+### E2E Tests (Python/Playwright)
 
-## OpenClaw Heritage
+Browser-based E2E tests against a live instance with a mock LLM. See [ic/tests/e2e/CLAUDE.md](ic/tests/e2e/CLAUDE.md).
 
-IronClaw is a Rust reimplementation inspired by [OpenClaw](https://github.com/openclaw/openclaw). See [FEATURE_PARITY.md](FEATURE_PARITY.md) for the complete tracking matrix.
+```bash
+cd ic/tests/e2e
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+playwright install chromium
+pytest scenarios/
+```
 
-Key differences:
+### Worker Test Harness
 
-- **Rust vs TypeScript** - Native performance, memory safety, single binary
-- **WASM sandbox vs Docker** - Lightweight, capability-based security
-- **PostgreSQL vs SQLite** - Production-ready persistence
-- **Security-first design** - Multiple defense layers, credential protection
+Matrix test suite for all 4 worker types (Codex, Nanocode, Built-in, Sandbox) running in Docker Compose isolation. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
 
-## License
+```bash
+cd tests
+pip install -r requirements.txt
+python runner.py --mode smoke     # happy paths only (CI)
+python runner.py --mode full      # + chaos scenarios (nightly)
+python runner.py --worker codex   # single worker type
+```
 
-Licensed under either of:
+See [tests/README.md](tests/README.md) for the full test matrix and mock service architecture.
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
+### Integration Test Harness
 
-at your option.
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness for PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon. Works on Linux and macOS.
+
+- Single-tenant quick start: see [docs/ops/HARNESS-SINGLE-TENANT.md](docs/ops/HARNESS-SINGLE-TENANT.md)
+- Multi-tenant quick start: see [docs/ops/MULTITENANCY-HARNESS.md](docs/ops/MULTITENANCY-HARNESS.md)
+- Full single-tenant reference: [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md)
+
+## Watchdog Scheduler
+
+```bash
+sudo ic/scripts/install-lunarwing-watchdog.sh
+```
+
+Behavior depends on the detected service manager:
+
+- **systemd**: installs `lunarwing-watchdog.service` + `lunarwing-watchdog.timer`
+- **OpenRC**: installs `lunarwing-watchdog-openrc` + either an hourly hook or a managed root `fcrontab` entry
+
+The OpenRC default is intentionally conservative:
+- If `cronie`, `crond`, or `dcron` is already present, the installer keeps the cron-hourly path
+- If no cron daemon is present but `fcron` is available, the installer uses `fcron` automatically
+
+Force a specific OpenRC mode:
+
+```bash
+sudo LUNARWING_WATCHDOG_SCHEDULER=fcron ic/scripts/install-lunarwing-watchdog.sh
+sudo LUNARWING_WATCHDOG_SCHEDULER=hourly ic/scripts/install-lunarwing-watchdog.sh
+```
+
+Use `LUNARWING_WATCHDOG_CRON_DIR=/path/to/hourly-dir` for nonstandard directory layouts.
+
+## Fresh Recreate Recipes
+
+### PostgreSQL + XMPP + systemd
+
+See the documented recipe in [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
+
+### libSQL with Custom Gateway Token
+
+```bash
+cd ic
+
+export BASE=/tmp/lunarwing-libsql
+export GATEWAY_TOKEN='replace-me-gateway-token'
+export LLM_API_KEY='unneeded'
+
+rm -rf "$BASE"
+
+scripts/setup-instance.sh \
+  --base-dir "$BASE" \
+  --database libsql \
+  --libsql-path "$BASE/lunarwing.db" \
+  --llm-base-url http://127.0.0.1:3002/openai/v1 \
+  --llm-model tensorzero::function_name::lunarwing \
+  --llm-api-key "$LLM_API_KEY" \
+  --agent-name lunarwing \
+  --run-onboard
+
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["BASE"]) / ".env"
+values = {
+    "LUNARWING_BASE_DIR": os.environ["BASE"],
+    "GATEWAY_ENABLED": "true",
+    "GATEWAY_HOST": "127.0.0.1",
+    "GATEWAY_PORT": "8765",
+    "GATEWAY_AUTH_TOKEN": os.environ["GATEWAY_TOKEN"],
+}
+
+lines = path.read_text().splitlines()
+seen = set()
+out = []
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, _ = line.split("=", 1)
+        if key in values:
+            out.append(f"{key}={values[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+for key, value in values.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+path.write_text("\n".join(out) + "\n")
+PY
+
+LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
+```
+
+## Further Reading
+
+- Architecture docs: see [docs/](docs/)
+- Vision service: see [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
+- Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
+- Release notes: see [docs/releases/](docs/releases/)
+- REPLv2 server and client: see [docs/internal/REPLv2_Client_and_Server.md](docs/internal/REPLv2_Client_and_Server.md)
+
+## Community
+
+### Interested in development or otherwise general discussion of LunarWing?
+
+#### See: COMMUNITY.md for more information

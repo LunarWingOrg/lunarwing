@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lunarwing.watchdog</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__WATCHDOG_SCRIPT__</string>
+  </array>
+
+  <!-- Run once immediately on load (similar to systemd OnBootSec=5min) -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Do not restart on exit — this is a periodic task, not a daemon -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <!-- Fire every hour at the top of the hour (like systemd OnCalendar=hourly) -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/lunarwing-watchdog.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/lunarwing-watchdog.stderr.log</string>
+</dict>
+</plist>

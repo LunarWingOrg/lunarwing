@@ -1,0 +1,48 @@
+{
+  "bundles": {
+    "google": {
+      "display_name": "Google Suite",
+      "description": "Gmail, Calendar, Drive, Docs, Sheets, Slides",
+      "extensions": [
+        "tools/gmail",
+        "tools/google-calendar",
+        "tools/google-docs",
+        "tools/google-drive",
+        "tools/google-sheets",
+        "tools/google-slides"
+      ],
+      "shared_auth": "google_oauth_token"
+    },
+    "messaging": {
+      "display_name": "Messaging Channels",
+      "description": "Telegram channel",
+      "extensions": [
+        "channels/telegram"
+      ],
+      "shared_auth": null
+    },
+    "default": {
+      "display_name": "Recommended Set",
+      "description": "Core tools and channels for a productive setup",
+      "extensions": [
+        "tools/github",
+        "tools/gmail",
+        "tools/google-calendar",
+        "tools/google-drive",
+        "channels/telegram"
+      ],
+      "shared_auth": null
+    },
+    "lunarwing": {
+      "display_name": "LunarWing Extensions",
+      "description": "DarkIRC, WeeChat, XMPP channels and Gotify notifications",
+      "extensions": [
+        "channels/darkirc",
+        "channels/weechat",
+        "channels/xmpp",
+        "tools/gotify"
+      ],
+      "shared_auth": null
+    }
+  }
+}

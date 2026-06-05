@@ -1,0 +1,139 @@
+# Release Notes for LunarWing v1.1.1 - Codename Freedom
+
+**Release Date:** TBD
+
+## Overview
+
+LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and other various minor changes.
+
+---
+
+## Changes
+
+### XMPP Inbound File Transfer Support
+
+LunarWing agents can now receive files sent over XMPP. Previously only outbound file transfers (agent to user via XEP-0363 HTTP File Upload) were supported. This release adds the full inbound pipeline:
+
+- **OOB extraction** (`ic/src/channels/xmpp/mod.rs`) — New `extract_oob_attachments()` function parses `<x xmlns='jabber:x:oob'>` elements from incoming message stanzas, downloads file bytes via HTTP GET with a 30-second timeout and 20MB per-file size limit, infers MIME type from the response `Content-Type` header, and extracts the filename from the URL path.
+- **Body deduplication** — When the message body exactly matches an OOB URL (the common XMPP client pattern where clients send the URL as both body text and a structured OOB element), the body is cleared to avoid the agent seeing a redundant raw URL alongside the structured attachment.
+- **Empty-body acceptance** — Messages with no text body but valid OOB attachments are now accepted rather than silently dropped.
+- **Bridge transport** (`ic/bridges/xmpp-bridge/src/main.rs`) — `enqueue_message()` now serializes inbound attachments as `BridgeAttachment` records with base64-encoded file data. The `attachments` field uses `#[serde(default)]` for backward compatibility with older bridge versions.
+- **WASM channel decoding** (`ic/channels-src/xmpp/src/lib.rs`) — New `decode_inbound_attachments()` function base64-decodes each `BridgeIncomingAttachment`, stores bytes via `channel_host::store_attachment_data()`, and emits `InboundAttachment` records. The host merges stored data into `IncomingAttachment.data` for agent consumption.
+- **Architecture documentation** (`docs/architecture/XMPP_FILE_TRANSFERS.md`) — Comprehensive document covering both outbound and inbound paths, protocol background (XEP-0363, XEP-0066), OMEMO considerations, size/timeout limits, and file listing by component.
+
+| Limit | Value | Enforced at |
+|-------|-------|-------------|
+| Per-file download size | 20 MB | XmppChannel (OOB download) |
+| Download timeout | 30 seconds | XmppChannel (reqwest client) |
+| Per-attachment store | 20 MB | WASM host (`store_attachment_data`) |
+| Total attachment store per callback | 50 MB | WASM host |
+
+### Proprietary Channel Removal (Discord, Feishu/Lark, Slack)
+
+Continuing the initiative started with WhatsApp removal in v1.1.0, three additional proprietary channel and tool sources have been removed from the codebase (~10,300 lines deleted across 96 files):
+
+- **Discord WASM channel** — Removed `ic/channels-src/discord/` (Cargo workspace, capabilities manifest, build script, 1596-line `lib.rs`) and `ic/registry/channels/discord.json`.
+- **Feishu/Lark WASM channel** — Removed `ic/channels-src/feishu/` (Cargo workspace, capabilities manifest, build script, 897-line `lib.rs`) and `ic/registry/channels/feishu.json`.
+- **Slack WASM channel** — Removed `ic/channels-src/slack/` (Cargo workspace, capabilities manifest, build script, 829-line `lib.rs`) and `ic/registry/channels/slack.json`.
+- **Slack WASM tool** — Removed `ic/tools-src/slack/` (Cargo workspace, API client, types, 165-line tool implementation) and `ic/registry/tools/slack.json`.
+- **Relay channel infrastructure** — Removed `ic/src/channels/relay/` (channel, client, webhook, mod — 1,192 lines), `ic/src/config/relay.rs` (180 lines), and `ic/tests/relay_integration.rs` (215 lines). The relay subsystem was the underlying transport for proprietary webhook-based channels.
+- **Web server relay endpoints** — Removed the relay-specific webhook server (`ic/src/channels/web/server.rs` — 457 lines) and extension handler relay routes.
+- **Extension manager simplification** — Removed relay-specific extension lifecycle management, OAuth relay flows, and webhook-relay pairing from `ic/src/extensions/manager.rs` (~500 lines reduced).
+- **Gate approval relay** — Removed `ic/src/gate/approval.rs` (144 lines) which handled relay-based remote approval flows.
+- **WASM signature/schema simplification** — Reduced `ic/src/channels/wasm/signature.rs` by ~250 lines and `ic/src/channels/wasm/schema.rs` by ~60 lines, removing relay-specific signing and validation code.
+- **FEATURE_PARITY.md updated** — Discord, Slack, and Feishu/Lark entries removed from the feature parity matrix. Slack is now marked "Removed — proprietary, not aligned with fork goals."
+- **Bundle registry** — `ic/registry/_bundles.json` updated to remove proprietary channel entries.
+
+Remaining proprietary channel to be addressed in future releases: Telegram.
+
+### Security Port Analysis — IronClaw 0.29.1
+
+New analysis document (`docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`) covering the upstream IronClaw v0.29.1 patch release. Key finding:
+
+- **P0: Cross-conversation history leakage for non-UUID channel scopes** — LunarWing's v1 history persistence in `src/bridge/router.rs` only handles UUID-formatted conversation scopes correctly. When a channel produces a non-UUID scope (as XMPP does for room JIDs like `xmpp:room:dev@conference.example.org` or DM JIDs like `xmpp:dm:alice@example.org`), the `Uuid::parse_str()` call fails silently and all messages fall back to a single shared "assistant conversation" per user+channel. This causes history leakage across conversations and potential multi-tenant privacy violations. A fix plan is documented with specific file/line references.
+
+Previous port analysis documents (`ironclaw-0.28.1`, `ironclaw-0.28.2`, `ironclaw-0.29.0`) were also updated with more specific information.
+
+### Funding Infrastructure
+
+Added project funding metadata for potential donors:
+
+- **`funding.json`** — Machine-readable funding file with project metadata (name, description, license, tags), donation channels (BTC, XMR — addresses TBD), and plan definitions. Follows a structured schema with entity information, project details, and funding channel specifications.
+- **`FUNDING_REQUEST.md`** — Placeholder stub referencing the funding.json file.
+
+### Self-Healing Improvements
+
+References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes).
+
+### Release Notes Archival
+
+- Previous release notes (`RELEASE-v1.1.0.md`) moved from repo root to `docs/ops/RELEASE-v1.1.0.md` for long-term preservation. Going forward, all historical release notes live under `docs/ops/` or `docs/releases/`.
+
+## Bug Fixes
+
+- **XMPP messages with only file attachments were silently dropped** — `handle_message_stanza()` previously returned early when the message body was empty, ignoring messages that contained OOB file attachments but no text. Now checks for OOB payloads before dropping empty-body messages.
+
+## Documentation
+
+- `docs/architecture/XMPP_FILE_TRANSFERS.md` — Full architecture document for bidirectional XMPP file transfer support (outbound XEP-0363 + inbound XEP-0066 OOB)
+- `docs/ops/STATUS_OF_REMOVAL_OF_PROPRIETARY_CHANNELS.md` — Tracks which proprietary channels have been removed (WhatsApp, Discord, Feishu/Lark) and which remain (Telegram)
+- `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` — Security analysis of upstream IronClaw 0.29.1 with P0 conversation isolation fix plan
+- `docs/proposals/MULTICA_LUNARTICA_RESKIN.md` — Plan for reskinning Multica UI for Lunartica
+- `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER` — Proposal to rename remaining ironclaw references in WeeChat channel, ws_adapter, and associated scripts
+- `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md` — Self-healing infrastructure improvements reference
+- `docs/ops/PENDING_CLEANUP.md` — Updated with current removal status (Discord, Feishu, Slack marked as removed)
+- `ic/FEATURE_PARITY.md` — Updated to reflect proprietary channel removals
+- Previous release notes archived to `docs/ops/`
+
+## Known Issues
+
+- **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
+- **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
+- **One test is failing due to env-specific SSRF check.**
+- **Several E2E playwright tests may also need to be updated to account for major code refactoring.**
+- **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
+- **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
+- **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
+- **Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread. Documented in `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`. Fix planned for v1.1.1.
+
+## Upgrade Notes
+
+1. **Database migrations**: V19 (reflex patterns), V20 (reflex embeddings), and V21 (NULL-safe unique constraint on `memory_documents`) will run automatically on startup. V21 deduplicates any existing rows with NULL `agent_id` before adding the constraint. **Back up your database before upgrading.** PostgreSQL 15+ is required for V21's `NULLS NOT DISTINCT` syntax.
+2. **Tenant git remotes**: Tenant repos created before v1.0.8 may have their git origin pointing to a local path (`/home/cmc/lunarwing`) instead of the GitHub remote. Fix with `git remote set-url origin https://github.com/LunarWingOrg/lunarwing.git` before pulling updates.
+3. **Port registry migration**: Existing multi-tenant deployments will auto-migrate the port registry from v4 to v5 on the next `add-tenant` or `ports list` call, renaming `reserved_3` to `weechat_adapter`. For standalone migration, run `ic/scripts/migrate-ports-v5.sh` as root.
+4. **Pebble worker**: Tenants wanting Pebble support can run `configure-pebble <name> --nanogpt-api-key <key>` after building with `--with-pebble` to ensure real functionality.
+5. **Multi-tenant onboarding**: Tenant provisioning now sets `ONBOARD_COMPLETED=true` to skip the setup wizard. Existing tenants that have already completed onboarding are unaffected (the TOML flag is still checked as a fallback).
+6. **Proprietary channel removal**: If your deployment previously used the Discord, Feishu/Lark, or Slack WASM channels or the Slack tool, these are no longer available. The relay channel infrastructure has also been removed. Migrate to open-protocol alternatives (XMPP, WeeChat, DarkIRC) before upgrading.
+7. **XMPP bridge compatibility**: The bridge contract now includes an `attachments` field in `BridgeMessage`. The field uses `#[serde(default)]` so older bridge binaries will still work (attachments will be empty), but rebuild the XMPP bridge binary to enable inbound file transfer support.
+
+## Features and changes deferred to future releases
+
+| Feature | Target |
+|---------|--------|
+| Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis) | v1.1.1 |
+| Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.2 |
+| LunarVoice (Further planning required) | v1.1.4 |
+| Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |
+| XMPP OMEMO MUC fallback fix | v1.1.2 |
+| XMPP File Upload Extensive round of further polishing | v1.1.1 |
+| Server-side WebSocket keepalive adjustment | v1.1.1 |
+| New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4 |
+| List of planned suggested features to pre-emptively improve security via input validation | v1.1.2 |
+| Proprietary channel removal continuation (Telegram) | v1.1.4 |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.1 |
+| LunarWing developer CI/CD Pipeline | v1.1.4 |
+| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.4 |
+| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.4 |
+| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.4 |
+| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.4 |
+| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.2 |
+| Update funding.json with actual payment addresses | v1.1.1 |
+| Rename ironclaw references in WeeChat ws_channel and adapter | v1.1.3 |
+| Multica/Lunartica UI reskin | v1.1.2 |
+| WASM Channel Polishing | v1.1.2 |
+
+## Testing
+
+*In accordance with developer guidelines, a brief testing period must begin before each release.*
+
+*Testing before final release not yet commenced — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*

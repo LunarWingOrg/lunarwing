@@ -1,316 +1,365 @@
-# IronClaw Development Guide
+# CLAUDE.md
 
-**IronClaw** is a secure personal AI assistant — user-first security, self-expanding tools, defense in depth, multi-channel access with proactive background execution.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build & Test
+## What This Repo Is
 
-```bash
-cargo fmt                                                    # format
-cargo clippy --all --benches --tests --examples --all-features  # lint (zero warnings)
-cargo test                                                   # unit tests
-cargo test --features integration                            # + PostgreSQL tests
-RUST_LOG=ironclaw=debug cargo run                            # run with logging
-```
+**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream. License: AGPLv3 (the `license` field in Cargo.toml still says MIT/Apache-2.0 from upstream — the actual LICENSE file is AGPLv3).
 
-E2E tests: see `tests/e2e/CLAUDE.md`.
+This is a self-hostable, privacy-first AI agent. The fork prioritizes true freedom, XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Ironclaw compatibility is NOT a goal moving forward.
+
+## Branching Strategy
+
+`staging` is the integration branch. All feature branches merge here first; releases are tagged from staging.
+
+- **Feature branches**: `staging-<feature>` (e.g., `staging-reflex-compiler`, `staging-xmpp-xep0363-0526`)
+- **Agent branches**: `staging-<agentname>-<n>` (e.g., `staging-ruffles-1`, `staging-kageho-2`)
+- **Release branches**: `release/v<version>` (e.g., `release/v1.0.7`)
+- **Experimental**: `experimental-*` for features not yet targeting a release
+
+### Binary Rename (ironclaw → lunarwing)
+
+The binary, Cargo package, and all four internal crates have been renamed from `ironclaw` to `lunarwing`:
+
+| What | Old name | New name |
+|------|----------|----------|
+| Binary | `target/*/ironclaw` | `target/*/lunarwing` |
+| Cargo package | `name = "ironclaw"` | `name = "lunarwing"` |
+| Internal crates | `ironclaw_common`, `ironclaw_safety`, `ironclaw_skills`, `ironclaw_engine` | `lunarwing_common`, `lunarwing_safety`, `lunarwing_skills`, `lunarwing_engine` |
+| Proxy script | `ironclaw-proxy.py` | `lunarwing-proxy.py` |
+| Default DB name | `ironclaw` | `lunarwing` |
+| Socket file | `ironclaw.sock` | `lunarwing.sock` |
+| Service units | `ExecStart=.../ironclaw` | `ExecStart=.../lunarwing` |
+| RUST_LOG filter | `ironclaw=info` | `lunarwing=info` |
+
+**Preserved for backward compatibility:**
+- `IRONCLAW_BASE_DIR` env var — still accepted as legacy alias for `LUNARWING_BASE_DIR`
+- `IRONCLAW_SOCKET` env var — still accepted as legacy alias
+- Watchdog cleanup markers (detect old `ironclaw-watchdog` installations)
+
+**Intentionally NOT renamed:**
+- `codex4ironclaw/` and `nanocode-config/` directory names
+- WebSocket subprotocol `ironclaw-agent-v1` (shared external protocol)
+- Keyring service identifiers in `ic_sm/`
+- `tensorzero::function_name::ironclaw` TensorZero function name
+- GCP resource names in `ic/deploy/cloud-sql-proxy.service`
+- `ic/CHANGELOG.md` historical entries
+- Shell completion scripts: `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh`
 
 ## Code Style
 
 - Prefer `crate::` for cross-module imports; `super::` is fine in tests and intra-module refs
-- No `pub use` re-exports unless exposing to downstream consumers
 - No `.unwrap()` or `.expect()` in production code (tests are fine)
-- Use `thiserror` for error types in `error.rs`
-- Map errors with context: `.map_err(|e| SomeError::Variant { reason: e.to_string() })?`
-- Prefer strong types over strings (enums, newtypes)
-- Keep functions focused, extract helpers when logic is reused
-- Comments for non-obvious logic only
-- **Prompt templates live in files, not Rust code**: Multi-line prompt strings (mission goals, system prompts, CodeAct preambles) go in `crates/ironclaw_engine/prompts/*.md` and are loaded via `include_str!()`. Never inline large prompt templates as Rust string constants — they're hard to read, review, and iterate on. Single-line format strings are fine inline.
-- **Logging levels matter for REPL/TUI**: `info!` and `warn!` output appears in the REPL and corrupts the terminal UI. Use `debug!` for internal diagnostics (trace analysis, reflection results, engine internals). Reserve `info!` for user-facing status that the REPL intentionally renders. Background tasks (reflection, trace analysis) must NEVER use `info!` — it breaks the interactive display.
-- **Test through the caller, not just the helper**: When a predicate/classifier/transform helper gates a side effect (HTTP, DB write, OAuth, UI mutation, tool execution) and has any wrapper or computed input between it and that side effect, a unit test on the helper alone is *not* sufficient regression coverage. Add a test that drives the call site — typically a `*_handler`, `factory::create_*`, or `manager::*` — at the integration tier (`cargo test --features integration`) or higher. The same applies to test mocks: if you mock a multi-arg runtime API like `window.open(url, target, features)`, the mock must capture every argument the production caller passes. See `.claude/rules/testing.md` ("Test Through the Caller, Not Just the Helper") for the full rule and the bug examples that motivated it.
+- Use `thiserror` for error types; map errors with context: `.map_err(|e| SomeError::Variant { reason: e.to_string() })?`
+- Multi-line prompts go in `.md` files loaded via `include_str!()`, not inline Rust strings
+- New code should import from `lunarwing_safety` directly (not `crate::safety::*`). When touching a file that still uses the old path, migrate its imports.
+- All I/O is async with tokio. `Arc<T>` for shared state, `RwLock` for concurrent access.
 
-## Architecture
+## Build & Test
 
-Prefer generic/extensible architectures over hardcoding specific integrations. Ask clarifying questions about the desired abstraction level before implementing.
+All Rust work happens inside `ic/`. Rust edition 2024, MSRV 1.92. Run from `ic/`:
 
-### Extension/Auth Invariants
-
-Extension and channel onboarding has two distinct identities that must not be conflated:
-
-- `credential_name`: backend secret identity used for storage, injection, and gate resume
-- `extension_name`: user-facing installed extension/channel identity used for setup routing and UI
-
-Examples:
-
-- Telegram:
-  - `credential_name = telegram_bot_token`
-  - `extension_name = telegram`
-- Gmail:
-  - `credential_name = google_oauth_token`
-  - `extension_name = gmail`
-
-Rules:
-
-- Never route web setup/configure UI directly from `credential_name`.
-- Chat and Settings must use the same setup/configure path for installable extensions/channels.
-- Generic auth-card UI is only for non-extension credential prompts or pure OAuth launch prompts.
-- If an auth flow is for an installed extension/channel, resolve the `extension_name` once in shared backend logic and carry it through the wire contract rather than re-deriving it in multiple layers.
-- New auth/onboarding code must reuse the shared resolver/controller path instead of adding channel-specific or frontend-only fallbacks.
-
-Current ownership:
-
-- `src/bridge/auth_manager.rs`: canonical auth-flow extension-name resolver
-- `src/bridge/router.rs`: auth gate display + submit routing
-- `src/channels/web/server.rs`: pending-gate/history rehydration
-- `crates/ironclaw_gateway/static/app.js`: unified onboarding controller and configure-modal routing
-
-Temporary compatibility boundary:
-
-- Web auth prompts with a gate `request_id` are the v2 path and must resolve through `/api/chat/gate/resolve`.
-- Web auth prompts without a `request_id` are legacy engine v1 `pending_auth` compatibility only.
-- Keep that compatibility isolated; do not add new features to it.
-- Once v1 auth mode is removed, delete the legacy `/api/chat/auth-token` and `/api/chat/auth-cancel` shim endpoints and the matching no-`request_id` UI branch.
-
-Key traits for extensibility: `Database`, `Channel`, `Tool`, `LlmProvider`, `SuccessEvaluator`, `EmbeddingProvider`, `NetworkPolicyDecider`, `Hook`, `Observer`, `Tunnel`.
-
-All I/O is async with tokio. Use `Arc<T>` for shared state, `RwLock` for concurrent access.
-
-**LLM data is never deleted.** All LLM output — context fed to the model, reasoning, tool calls, messages, events, steps — is the most valuable data in the system. Never strip, truncate, or delete it from the database. Mark with timestamps, make filterable, but always retain. In-memory HashMaps are caches; the database (via Workspace) is the source of truth. "Cleanup" means evicting from in-memory caches, never deleting database rows.
-
-## Extracted Crates
-
-Safety logic lives in `crates/ironclaw_safety/`, skills in `crates/ironclaw_skills/`. **Import directly from the extracted crate** (e.g. `use ironclaw_safety::SafetyLayer`, `use ironclaw_skills::SkillRegistry`). Do not use `crate::safety::` or `crate::skills::` for types that originate in extracted crates — `src/safety/mod.rs` and `src/skills/mod.rs` no longer glob-re-export. Local items defined in those modules (e.g. `crate::skills::attenuate_tools`) are fine.
-
-## Project Structure
-
-```
-crates/
-└── ironclaw_safety/    # Extracted: prompt injection, validation, leak detection, policy
-
-src/
-├── lib.rs              # Library root, module declarations
-├── main.rs             # Entry point, CLI args, startup
-├── app.rs              # App startup orchestration (channel wiring, DB init)
-├── bootstrap.rs        # Base directory resolution (~/.ironclaw), early .env loading
-├── settings.rs         # User settings persistence (~/.ironclaw/settings.json)
-├── service.rs          # OS service management (launchd/systemd daemon install)
-├── tracing_fmt.rs      # Custom tracing formatter
-├── util.rs             # Shared utilities
-├── config/             # Configuration from env vars (split by subsystem)
-│   ├── mod.rs          # Re-exports all config types; top-level Config struct
-│   ├── agent.rs, llm.rs, channels.rs, database.rs, sandbox.rs, skills.rs
-│   ├── heartbeat.rs, routines.rs, safety.rs, embeddings.rs, wasm.rs
-│   ├── tunnel.rs       # Tunnel provider config (TUNNEL_PROVIDER, TUNNEL_URL, etc.)
-│   └── secrets.rs, hygiene.rs, builder.rs, helpers.rs
-├── error.rs            # Error types (thiserror)
-│
-├── agent/              # Core agent loop, dispatcher, scheduler, sessions — see src/agent/CLAUDE.md
-│
-├── channels/           # Multi-channel input
-│   ├── channel.rs      # Channel trait, IncomingMessage, OutgoingResponse
-│   ├── manager.rs      # ChannelManager merges streams
-│   ├── cli/            # Full TUI with Ratatui
-│   ├── http.rs         # HTTP webhook (axum) with secret validation
-│   ├── webhook_server.rs # Unified HTTP server composing all webhook routes
-│   ├── repl.rs         # Simple REPL (for testing)
-│   ├── web/            # Web gateway (browser UI) — see src/channels/web/CLAUDE.md
-│   └── wasm/           # WASM channel runtime
-│       ├── mod.rs
-│       ├── bundled.rs  # Bundled channel discovery
-│       ├── capabilities.rs # Channel-specific capabilities (HTTP endpoint, emit rate)
-│       ├── error.rs    # WASM channel error types
-│       ├── runtime.rs  # WASM channel execution runtime
-│       ├── setup.rs    # WasmChannelSetup, setup_wasm_channels(), inject_channel_credentials()
-│       └── wrapper.rs  # Channel trait wrapper for WASM modules
-│
-├── cli/                # CLI subcommands (clap)
-│   ├── mod.rs          # Cli struct, Command enum (run/onboard/config/tool/registry/mcp/memory/pairing/service/doctor/status/completion)
-│   └── config.rs, tool.rs, registry.rs, mcp.rs, memory.rs, pairing.rs, service.rs, doctor.rs, status.rs, completion.rs
-│
-├── registry/           # Extension registry catalog
-│   ├── manifest.rs     # ExtensionManifest, ArtifactSpec, BundleDefinition types
-│   ├── catalog.rs      # RegistryCatalog: load from filesystem and embedded JSON
-│   └── installer.rs    # RegistryInstaller: download, verify, install WASM artifacts
-│
-├── hooks/              # Lifecycle hooks (6 points: BeforeInbound, BeforeToolCall, BeforeOutbound, OnSessionStart, OnSessionEnd, TransformResponse)
-│
-├── tunnel/             # Tunnel abstraction for public internet exposure
-│   ├── mod.rs          # Tunnel trait, TunnelProviderConfig, create_tunnel(), start_managed_tunnel()
-│   ├── cloudflare.rs   # CloudflareTunnel (cloudflared binary)
-│   ├── ngrok.rs        # NgrokTunnel
-│   ├── tailscale.rs    # TailscaleTunnel (serve/funnel modes)
-│   ├── custom.rs       # CustomTunnel (arbitrary command with {host}/{port})
-│   └── none.rs         # NoneTunnel (local-only, no exposure)
-│
-├── observability/      # Pluggable event/metric recording (noop, log, multi)
-│
-├── orchestrator/       # Internal HTTP API for sandbox containers
-│   ├── api.rs          # Axum endpoints (LLM proxy, events, prompts)
-│   ├── auth.rs         # Per-job bearer token store
-│   └── job_manager.rs  # Container lifecycle (create, stop, cleanup)
-│
-├── worker/             # Runs inside Docker containers
-│   ├── container.rs    # Container worker runtime (ContainerDelegate + shared agentic loop)
-│   ├── job.rs          # Background job worker (JobDelegate + shared agentic loop)
-│   ├── claude_bridge.rs # Claude Code bridge (spawns claude CLI)
-│   └── proxy_llm.rs    # LlmProvider that proxies through orchestrator
-│
-├── safety/             # Re-export shim for crates/ironclaw_safety (see Extracted Crates)
-│
-├── llm/                # Multi-provider LLM integration — see src/llm/CLAUDE.md
-│
-├── tools/              # Extensible tool system
-│   ├── tool.rs         # Tool trait, ToolOutput, ToolError
-│   ├── registry.rs     # ToolRegistry for discovery
-│   ├── rate_limiter.rs # Shared sliding-window rate limiter
-│   ├── builtin/        # Built-in tools (echo, time, json, http, web_fetch, file, shell, memory, message, job, routine, extension_tools, skill_tools, secrets_tools)
-│   ├── builder/        # Dynamic tool building
-│   │   ├── core.rs     # BuildRequirement, SoftwareType, Language
-│   │   ├── templates.rs # Project scaffolding
-│   │   ├── testing.rs  # Test harness integration
-│   │   └── validation.rs # WASM validation
-│   ├── mcp/            # Model Context Protocol
-│   │   ├── client.rs   # MCP client over HTTP
-│   │   ├── factory.rs  # create_client_from_config() — transport dispatch factory
-│   │   ├── protocol.rs # JSON-RPC types
-│   │   └── session.rs  # MCP session management (Mcp-Session-Id header, per-server state)
-│   └── wasm/           # Full WASM sandbox (wasmtime)
-│       ├── runtime.rs  # Module compilation and caching
-│       ├── wrapper.rs  # Tool trait wrapper for WASM modules
-│       ├── host.rs     # Host functions (logging, time, workspace)
-│       ├── limits.rs   # Fuel metering and memory limiting
-│       ├── allowlist.rs # Network endpoint allowlisting
-│       ├── credential_injector.rs # Safe credential injection
-│       ├── loader.rs   # WASM tool discovery from filesystem
-│       ├── rate_limiter.rs # Per-tool rate limiting
-│       ├── error.rs    # WASM-specific error types
-│       └── storage.rs  # Linear memory persistence
-│
-├── db/                 # Dual-backend persistence (PostgreSQL + libSQL) — see src/db/CLAUDE.md
-│
-├── workspace/          # Persistent memory system — see src/workspace/README.md
-│
-├── context/            # Job context isolation (JobState, JobContext, ContextManager)
-├── estimation/         # Cost/time/value estimation with EMA learning
-├── evaluation/         # Success evaluation (rule-based, LLM-based)
-│
-├── sandbox/            # Docker execution sandbox
-│   ├── config.rs       # SandboxConfig, SandboxPolicy enum (ReadOnly/WorkspaceWrite/FullAccess)
-│   ├── manager.rs      # SandboxManager orchestration
-│   ├── container.rs    # ContainerRunner, Docker lifecycle
-│   └── proxy/          # Network proxy: domain allowlist, credential injection, CONNECT tunnel
-│
-├── secrets/            # Secrets management (AES-256-GCM, OS keychain for master key)
-│
-├── profile.rs          # Psychographic profile types, 9-dimension analysis framework
-│
-├── setup/              # 7-step onboarding wizard — see src/setup/README.md
-│
-├── skills/             # SKILL.md prompt extension system — see .claude/rules/skills.md
-│
-└── history/            # Persistence (PostgreSQL repositories, analytics)
-
-tests/
-├── *.rs                # Integration tests (workspace, heartbeat, WS gateway, pairing, etc.)
-├── test-pages/         # HTML→Markdown conversion fixtures
-└── e2e/                # Python/Playwright E2E scenarios (see tests/e2e/CLAUDE.md)
+```bash
+cargo fmt
+cargo clippy --all --benches --tests --examples --all-features  # zero warnings required
+cargo test                          # unit tests
+cargo test --features integration   # + PostgreSQL tests
+cargo test test_name -- --nocapture # single test
+cargo build --release --bin lunarwing
+RUST_LOG=lunarwing=debug cargo run
 ```
 
-## Database
-
-Dual-backend: PostgreSQL + libSQL/Turso. **All new persistence features must support both backends.** See `src/db/CLAUDE.md` and `.claude/rules/database.md`.
-
-## Module Specs
-
-When modifying a module with a spec, read the spec first. Code follows spec; spec is the tiebreaker.
-
-**Module-owned initialization:** Module-specific initialization logic (database connection, transport creation, channel setup) must live in the owning module as a public factory function — not in `main.rs` or `app.rs`. These entry-point files orchestrate calls to module factories. Feature-flag branching (`#[cfg(feature = ...)]`) must be confined to the module that owns the abstraction.
-
-| Module | Spec |
-|--------|------|
-| `src/agent/` | `src/agent/CLAUDE.md` |
-| `src/channels/web/` | `src/channels/web/CLAUDE.md` |
-| `src/db/` | `src/db/CLAUDE.md` |
-| `src/llm/` | `src/llm/CLAUDE.md` |
-| `src/setup/` | `src/setup/README.md` |
-| `src/tools/` | `src/tools/README.md` |
-| `src/workspace/` | `src/workspace/README.md` |
-| `crates/ironclaw_engine/` | `crates/ironclaw_engine/CLAUDE.md` |
-| `tests/e2e/` | `tests/e2e/CLAUDE.md` |
-
-## Job State Machine
-
-```
-Pending -> InProgress -> Completed -> Submitted -> Accepted
-    \                \-> Failed
-     \-> Failed       \-> Stuck -> InProgress (recovery)
-                              \-> Failed
+Feature-flag compilation (required for dual-backend work):
+```bash
+cargo check                                          # default: postgres + libsql + html-to-markdown
+cargo check --no-default-features --features postgres # postgres only
+cargo check --no-default-features --features libsql  # libsql only
+cargo check --all-features                           # all (same as default + integration)
 ```
 
-## Skills System
+XMPP bridge (separate binary, build before full workspace):
+```bash
+cd ic/bridges/xmpp-bridge && cargo build --release
+```
 
-SKILL.md files extend the agent's prompt with domain-specific instructions. See `.claude/rules/skills.md` for full details.
+WASM channels/tools:
+```bash
+cd ic && scripts/build-wasm-extensions.sh
+```
 
-- **Trust model**: Trusted (user-placed in `~/.ironclaw/skills/` or workspace `skills/`, full tool access) vs Installed (registry, read-only tools)
-- **Selection pipeline**: gating (check bin/env/config requirements) -> scoring (keywords/patterns/tags) -> budget (fit within `SKILLS_MAX_TOKENS`) -> attenuation (trust-based tool ceiling)
-- **Skill tools**: `skill_list`, `skill_search`, `skill_install`, `skill_remove`
+Pre-commit safety checks (catches UTF-8 slicing, hardcoded /tmp, logging leaks):
+```bash
+cd ic && scripts/pre-commit-safety.sh
+```
 
-## Configuration
+## Running Locally
 
-See `.env.example` for all environment variables. LLM backends (`nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `tinfoil`, `bedrock`) documented in `src/llm/CLAUDE.md`.
+Quick launcher from `ic/`:
+```bash
+LUNARWING_BASE_DIR=/path/to/instance ./run.sh
+```
 
-## Adding a New Channel
+`run.sh` defaults `AGENT_NAME=lunarwing`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `HTTP_PORT=9098`. It runs `target/release/lunarwing run`.
 
-1. Create `src/channels/my_channel.rs`
-2. Implement the `Channel` trait
-3. Add config in `src/config/channels.rs`
-4. Wire up in `src/app.rs` channel setup section
+Fresh instance setup:
+```bash
+ic/scripts/setup-instance.sh \
+  --base-dir /srv/lunarwing \
+  --database postgres \
+  --database-url 'postgres://user:pass@db:5432/lunarwing' \
+  --llm-api-key unneeded \
+  --run-onboard
+```
 
-## Everything Goes Through Tools
+Env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
 
-**Core principle**: all actions originating from gateway handlers, CLI
-commands, routine engine, WASM channels, or any other non-agent caller
-MUST go through `ToolDispatcher::dispatch()` — never directly through
-`state.store`, `workspace`, `extension_manager`, `skill_registry`, or
-`session_manager`.
+## Integration Test Harness
 
-This gives every UI-initiated mutation the same audit trail
-(`ActionRecord`), safety pipeline (param validation, sensitive-param
-redaction, output sanitization), and channel-agnostic surface as
-agent-initiated tool calls. Channels are interchangeable extensions;
-routing through one dispatch function means new channels inherit the
-full pipeline for free.
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack test harness. It manages PostgreSQL, TensorZero proxy, XMPP bridge, WASM artifacts, and the daemon in an isolated environment. Works on Linux and macOS.
 
-The pre-commit hook (`scripts/pre-commit-safety.sh`) flags newly-added
-lines in handler/CLI files that touch
-`state.{store,workspace,extension_manager,skill_registry,session_manager}.*`
-directly. Annotate intentional exceptions (rare — usually only read
-aggregation across multiple users) with a trailing
-`// dispatch-exempt: <reason>` comment on the same line. The check only
-sees added lines, so existing untouched code doesn't trip during
-incremental migration.
+Single-tenant quick start — see `docs/ops/HARNESS-SINGLE-TENANT.md`. Multi-tenant quick start — see `docs/ops/MULTITENANCY-HARNESS.md`.
 
-See `.claude/rules/tools.md` for the full pattern, allowed exemptions,
-and migration status. The dispatcher itself lives in
-`src/tools/dispatch.rs`.
+Key difference: `up` (single-tenant) does **not** auto-build; `build --with-wasm` and `install-wasm` must be run first. `mt-up` auto-builds and installs WASM before starting services.
 
-## Workspace & Memory
+Key env vars: `LUNARWING_TEST_ROOT` (default `$TMPDIR/lunarwing-xmpp-test`), `LUNARWING_TEST_DATABASE_KIND` (`postgres`|`libsql`), `LUNARWING_TEST_PROFILE` (`debug`|`release`).
 
-Persistent memory with hybrid search (FTS + vector via RRF). Four tools: `memory_search`, `memory_write`, `memory_read`, `memory_tree`. Identity files (AGENTS.md, SOUL.md, USER.md, IDENTITY.md) injected into system prompt. Heartbeat system runs proactive periodic execution (default: 30 minutes), reading `HEARTBEAT.md` and notifying via channel if findings. See `src/workspace/README.md`.
+Full single-tenant reference: `ic/testing/lunarwing-xmpp/README.md`.
+
+## Repo Structure
+
+```
+ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
+  src/                      # Source tree
+  crates/                   # lunarwing_common, lunarwing_safety, lunarwing_skills, lunarwing_engine
+  channels-src/             # WASM channel sources (xmpp, weechat, darkirc, etc.)
+  tools-src/                # WASM tool sources (gotify, github, google-*, vision-analyze, etc.)
+  bridges/xmpp-bridge/      # Standalone XMPP bridge service (separate process)
+  migrations/               # Refinery DB migrations (PostgreSQL + libSQL)
+  skills/                   # SKILL.md prompt extensions (delegation, github, linear, plan-mode, etc.)
+  registry/                 # Extension registry catalog (manifest, installer, bundled JSON)
+  wit/                      # WebAssembly Interface Type definitions (channel.wit, tool.wit)
+  fuzz/                     # Fuzz testing targets
+  tests/                    # Integration + E2E tests
+  testing/lunarwing-xmpp/   # Full-stack test harness docs
+  systemd/                  # Systemd units, OpenRC init scripts (.openrc, .confd), launchd plists
+  scripts/                  # Operational + build scripts
+codex4lunarwing/             # OpenAI Codex worker container — see codex4lunarwing/CLAUDE.md
+codex4ironclaw/             # Codex worker container (deprecated) — see codex4ironclaw/CLAUDE.md
+nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
+lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
+pebble4lunarwing/           # Pebble worker container — see pebble4lunarwing/CLAUDE.md
+ic-infrastructure-health-check/  # Health check service (auto-detects systemd/OpenRC)
+tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
+replv2git/                  # REPLv2 related tooling
+xmpp_bridge/                # XMPP bridge support resources
+ic_sm/                      # Supporting service resources
+darkirc_channel_for_ironclaw/    # DarkIRC WASM channel source
+gotify-wasm/                # Gotify WASM tool source
+ironclaw-gotify-tool/       # Gotify tool (legacy standalone)
+ironclaw_weechat_wss/       # WeeChat WSS channel source
+git-ironclaw-unix-socket-client-repo/  # REPLv2 Unix socket client
+git-ironclaw-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
+projects/                   # Satellite services
+  ocr-sidecar/              # Vision/OCR sidecar service (Rust/Warp, Tesseract + VL) — see projects/ocr-sidecar/README.md
+tests/                      # Worker test harness (Docker Compose matrix suite for all 4 worker types)
+docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/, proposals/, bugs/)
+```
+
+## Key Guidance Docs
+
+Before modifying complex areas, read the relevant spec. Specs are authoritative.
+
+| Area | Spec |
+|------|------|
+| Agent rules & repo contract | `AGENTS.md` |
+| Fork goals & protected behavior | `docs/internal/FORK_CONTEXT.md` |
+| Main daemon development | `ic/CLAUDE.md` |
+| Engine V2 architecture | `docs/architecture/ENGINE-V2.md` |
+| Engine crate dev guide | `ic/crates/lunarwing_engine/CLAUDE.md` |
+| Semantic memory search | `docs/architecture/SEMANTIC-MEMORY-SEARCH.md` |
+| Agent loop, sessions, routines | `ic/src/agent/CLAUDE.md` |
+| Web gateway / REST / WebSocket | `ic/src/channels/web/CLAUDE.md` |
+| Database dual-backend | `ic/src/db/CLAUDE.md` |
+| LLM providers | `ic/src/llm/CLAUDE.md` |
+| Tools system | `ic/src/tools/README.md` |
+| Workspace / memory | `ic/src/workspace/README.md` |
+| E2E tests | `ic/tests/e2e/CLAUDE.md` |
+| Network security policy | `ic/src/NETWORK_SECURITY.md` |
+| Vision service (OCR sidecar) | `projects/ocr-sidecar/README.md` |
+| Vision service full docs | `projects/ocr-sidecar/DOCUMENTATION.md` |
+| WASM tools catalog | `ic/tools-src/TOOLS.md` |
+| Worker container images | `docs/ops/WORKER-CONTAINERS.md` |
+| Pebble worker ops guide | `docs/ops/PEBBLE-WORKER.md` |
+| Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
+| Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
+| Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
+| Documentation audit | `docs/DOCS_AUDIT.md` |
+| Docs organization | `docs/README.md` |
+| Testing guide | `docs/guides/TESTING_GUIDE.md` |
+
+## Architecture Overview
+
+- **Channels** normalize external input into `IncomingMessage`; `ChannelManager` merges all active streams.
+- **Agent** owns session/turn handling, the LLM↔tool loop, approvals, and routines.
+- **AppBuilder** is the composition root — wires DB, secrets, LLMs, tools, workspace, extensions, hooks before the agent starts.
+- **Web gateway** is a browser-facing API/UI over the same agent/session/tool systems, not a separate product path.
+- **XMPP bridge** runs as a separate service (systemd or OpenRC); OMEMO happens in the bridge, not the main daemon.
+- **WASM sandbox** (wasmtime) provides isolated execution for third-party tools and channels.
+- **Dual DB backend**: PostgreSQL (primary) + libSQL/Turso. All new persistence must support both.
+- **TensorZero proxy** routes LLM calls via `openai_compatible` backend, enabling function-call routing and model training feedback loops. Default local endpoint: `http://192.168.1.157:3002`.
+
+Key extensibility traits: `Database`, `Channel`, `Tool`, `LlmProvider`, `EmbeddingProvider`, `Hook`, `Tunnel`, `Observer`, `SuccessEvaluator`, `NetworkPolicyDecider`.
+
+### Shared Agentic Loop
+
+All three execution paths (chat, job, container) use `run_agentic_loop()` in `src/agent/agentic_loop.rs` with a `LoopDelegate` trait:
+
+- **`ChatDelegate`** (`dispatcher.rs`) — conversational turns, tool approval, skill injection
+- **`JobDelegate`** (`src/worker/job.rs`) — background scheduler jobs, planning support
+- **`ContainerDelegate`** (`src/worker/container.rs`) — Docker container worker, HTTP event streaming
+
+The loop cycles: check signals → pre-LLM hook → LLM call → handle text/tool response → post-iteration hook → repeat until `LoopOutcome` returned. Tools flagged `requires_approval` pause the loop and emit an `approval_needed` SSE event to the web gateway.
+
+## Vision Service (OCR Sidecar)
+
+The OCR sidecar (`projects/ocr-sidecar/`) is a standalone Rust service providing image analysis capabilities via REST API. It runs as a separate container or process on port 8088.
+
+- **Phase 1**: Tesseract OCR — `POST /ocr` for basic text extraction
+- **Phase 2**: Vision-Language integration — `POST /vision/analyze` with smart routing (OCR, VL, or hybrid based on confidence + prompt keywords)
+- **Phase 3**: Production hardening — PaddleOCR fallback, response caching (5min TTL), per-IP rate limiting, `GET /vision/metrics`
+- **Phase 4**: WASM tool — `vision-analyze` tool in `ic/tools-src/vision-analyze/` provides native LunarWing integration via the sandboxed WASM runtime
+
+Environment: `VISION_SERVICE_URL` (default `http://127.0.0.1:8088`), `VISION_AUTH_TOKEN`, `LUNARWING_AUTH_TOKEN`.
+
+See `projects/ocr-sidecar/README.md` for the full API reference and `projects/ocr-sidecar/DOCUMENTATION.md` for the complete technical documentation.
+
+## Embeddings
+
+The embedding system supports four providers: `openai`, `nearai`, `ollama`, and `openai_compatible`.
+
+The `openai_compatible` provider allows connecting to any OpenAI-compatible embedding endpoint (e.g., TensorZero, local models) via a configurable base URL. Set the URL through the `EMBEDDING_BASE_URL` env var or the `base_url` field in `settings.json` under the `embeddings` section. The setup wizard offers this as a provider choice.
+
+## External Workers
+
+External workers are persistent containers that speak the `ironclaw-agent-v1` WebSocket protocol. Unlike Docker sandbox jobs (created/destroyed per task), external workers stay running and accept tasks on demand.
+
+### Configuration
+
+Add to `config.toml` under `LUNARWING_BASE_DIR`:
+
+```toml
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://localhost:9090/ws/agent"
+timeout_ms = 300000
+```
+
+Must be under the existing `[sandbox]` section (TOML doesn't allow duplicate table headers). The agent logs `External workers configured: nanocode` on startup.
+
+### Usage
+
+The agent's `create_job` tool accepts a `mode` parameter matching the worker name:
+
+```
+create_job(title: "...", description: "...", mode: "nanocode")
+```
+
+### Architecture
+
+- `ic/src/orchestrator/external_worker.rs` — `ExternalWorkerManager`: WebSocket client, task dispatch, progress streaming
+- `ic/src/tools/builtin/job.rs` — `execute_external()`: routes `create_job` calls to external workers
+- `ic/src/config/sandbox.rs` — `ExternalWorkerConfig`: resolved from `[[sandbox.external_workers]]` in settings
+- `ic/src/settings.rs` — `ExternalWorkerSettings`: TOML/JSON serialization for worker endpoints
+
+### Available workers
+
+| Worker | Container | Docs |
+|--------|-----------|------|
+| `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
+| `codex` | `codex4lunarwing/` | `codex4lunarwing/CLAUDE.md` |
+| `pebble` | `pebble4lunarwing/` | `pebble4lunarwing/CLAUDE.md` |
+
+## Protected Runtime Behavior
+
+Do not break without explicit approval:
+
+- XMPP bridge operation and OMEMO encrypted chat (1:1 and group)
+- XMPP group chat self-message suppression and live rate-limit control
+- Gotify WASM tool usage
+- WASM channel/tool loading
+- Scheduled routines, manual routine runs, and stuck-run recovery
+- Gateway status/config endpoints
+- Systemd and OpenRC deployment units and watchdog service/timer
+- Infrastructure health check init-system auto-detection
+
+## Service Operations
+
+- `xmpp-bridge.service` has `PartOf=lunarwing.service` — LunarWing restarts can cascade to the bridge. Do not assume the bridge caused a stop just because both restarted.
+- Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes (`status`, `set <n>`, `off`, `reset`). Requires `XMPP_BRIDGE_TOKEN`.
+- Use `scripts/xmpp-configure.sh` for bridge room/configuration checks.
+- Watchdog: `scripts/lunarwing-watchdog.sh` (systemd), `scripts/lunarwing-watchdog-openrc.sh` (OpenRC), or `scripts/lunarwing-watchdog-launchd.sh` (macOS launchd). Install via `scripts/install-lunarwing-watchdog.sh` (auto-detects init system). Launchd plist: `systemd/com.lunarwing.watchdog.plist`.
+- Prefer read-only diagnostics first (`systemctl status`, `journalctl`, gateway endpoints) before restarting services.
+- If harness `verify` only fails the TensorZero proxy check, inspect the upstream `TENSORZERO_URL` before treating the local service install as broken.
+- **Do not restart services or deploy binaries unless explicitly asked.**
+
+## Deployment & Secrets
+
+Secrets may live in `~/.ironclaw/.env` (the default base dir — code still defaults to `.ironclaw`), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
+
+For live DB checks, use read-only SQL unless the user explicitly requests mutation. Stop the service before mutating routine state; back up the DB first.
+
+## Gotify Pattern
+
+Gotify is a WASM tool, not a channel. Routines needing Gotify notifications should call the `gotify` tool in their prompt and return the same message as backup output. See `ic/docs/GOTIFY_ROUTINE_PROMPT.md` for the working prompt pattern.
+
+## XMPP / OMEMO Known Behavior
+
+- Bridge rejects conflicting runtime config with HTTP 409 until restarted.
+- OMEMO encrypted group chat may take several messages after restart before decrypting reliably.
+- Group OMEMO requires the room to be configured as encrypted in both client setup and bridge/runtime config.
 
 ## Debugging
 
 ```bash
-RUST_LOG=ironclaw=trace cargo run           # verbose
-RUST_LOG=ironclaw::agent=debug cargo run    # agent module only
-RUST_LOG=ironclaw=debug,tower_http=debug cargo run  # + HTTP request logging
+RUST_LOG=lunarwing=trace cargo run                        # verbose all modules
+RUST_LOG=lunarwing::agent=debug cargo run                 # agent loop only
+RUST_LOG=lunarwing=debug,tower_http=debug cargo run       # + HTTP request logging
 ```
 
-## Current Limitations
+## Routine System
 
-1. Domain-specific tools (`marketplace.rs`, `restaurant.rs`, etc.) are stubs
-2. Integration tests need testcontainers for PostgreSQL
-3. MCP: no streaming support; stdio/HTTP/Unix transports all use request-response
-4. WIT bindgen: auto-extract tool schema from WASM is stubbed
-5. Built tools get empty capabilities; need UX for granting access
-6. No tool versioning or rollback
-7. Observability: only `log` and `noop` backends (no OpenTelemetry)
+**Retry with backoff:** Failed routines with retryable errors (LLM timeouts, empty responses, execution timeouts) are automatically retried with exponential backoff. The per-routine `RetryPolicy` (stored in `RoutineGuardrails`) controls: `max_retries` (default 3), `initial_delay_secs` (default 60), `backoff_multiplier` (default 2.0), `max_delay_secs` (default 3600). Retries use the existing `next_fire_at` column — no new scheduler loop. After exhausting retries, the routine falls back to its normal cron schedule. Non-retryable errors (auth, config, DB) skip retry entirely. `RoutineError::is_retryable()` classifies errors.
+
+**Stuck-run recovery:** Lightweight routines are wrapped in `tokio::time::timeout` (default 300s, configurable via `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS`). A stuck-run sweeper runs on every cron tick to recover lightweight runs that remain in `running` state beyond the timeout. FullJob runs have separate crash recovery via `sync_dispatched_runs()`. Both mechanisms prevent a single failed run from permanently blocking its routine.
+
+Key config env vars: `ROUTINES_ENABLED`, `ROUTINES_MAX_CONCURRENT` (default 10), `ROUTINES_CRON_INTERVAL` (default 15s), `ROUTINES_DEFAULT_COOLDOWN` (default 300s), `ROUTINES_LIGHTWEIGHT_TIMEOUT_SECS` (default 300s).
+
+DB migration `V18__routine_retry.sql` adds retry policy columns to the `routines` table. Both PostgreSQL and libSQL backends support the new fields.
+
+## Infrastructure Health Checks
+
+`ic-infrastructure-health-check/infrastructure-health-check.sh` orchestrates 8 parallel health checks. It auto-detects the init system and conditionally runs either `health-systemd.sh` or `health-openrc.sh` (never both). On OpenRC, `health-openrc.sh` auto-discovers multi-tenant services by scanning `/etc/init.d/` for tenant-specific init scripts.
+
+Override init system detection with `LUNARWING_SERVICE_MANAGER=systemd` or `LUNARWING_SERVICE_MANAGER=openrc`.
+
+## Multi-Tenancy
+
+Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/ops/docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
+
+The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development and is fully cross-platform. See `docs/ops/MULTITENANCY-HARNESS.md`.
+
+## Test Harness (`lunarwing-xmpp-test-env.sh`)
+
+`ic/scripts/lunarwing-xmpp-test-env.sh` is the full-stack integration test harness. Cross-platform (Linux and macOS):
+
+- **Single-tenant** (`up`/`down`): direct PID-file process management — works on all platforms
+- **Multi-tenant** (`mt-up`/`mt-down`): auto-detects init system (launchd/systemd/OpenRC/fallback)
+- **`doctor`**: reports service status for whichever init system is present
+
+Key cross-platform rule: never call `sed -i` directly — use the `_sed_i()` helper. WASM builds on macOS require `wasm32-wasip1` and `wasm32-wasip2` targets via rustup (Homebrew's rustc lacks them).
+
+Full cross-platform details: `ic/testing/lunarwing-xmpp/README.md`, `docs/ops/HARNESS-SINGLE-TENANT.md`, `docs/ops/MULTITENANCY-HARNESS.md`.
+
+## Harness Environment Defaults
+
+The harness and `run.sh` intentionally set `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless explicitly changing the network or SSL assumptions.

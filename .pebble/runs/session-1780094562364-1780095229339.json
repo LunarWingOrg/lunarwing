@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780095229339,
+  "duration_ms": 29032,
+  "initial_message_count": 38,
+  "final_message_count": 42,
+  "user_input": {
+    "chars": 423,
+    "sha256": "db2ba53ee085a82a680da5bc17c5488b402fd247b3185e00943af92959af383a",
+    "preview": "ah, an error:   Compiling wiggle v28.0.1\n   Compiling wasmtime-wasi v28.0.1\nerror[E0063]: missing fields `supervised_mode` and `supervised_timeout_secs` in initializer of `lunarwing_engine::GateContext<'_>`\n   --> src/gate/approval.rs:354:9\n    |\n354 |         GateContext {\n    |         ^^^^^^^^^^^ missing `supervised_mode` and `supervised_timeout_secs`\n\n    Building [=====================> ] 1003/1004: lunarwing(test)",
+    "truncated": false,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 39,
+      "request_estimated_tokens": 16348,
+      "duration_ms": 6796,
+      "result_event_count": 6,
+      "usage": {
+        "input_tokens": 36432,
+        "output_tokens": 226,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 41,
+      "request_estimated_tokens": 17144,
+      "duration_ms": 12855,
+      "result_event_count": 26,
+      "usage": {
+        "input_tokens": 37759,
+        "output_tokens": 850,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_019h8AK9DJcyfLa3HxjcFGhP",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_019h8AK9DJcyfLa3HxjcFGhP",
+      "tool_name": "bash",
+      "input": {
+        "chars": 241,
+        "sha256": "d81c729357a5920824408cd63bfac5c1fe4c340db0d29f2a0779db74d90128c2",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing-human-delay\\necho \\\"=== context around line 354 in src/gate/approval.rs ===\\\"; sed -n '330,375p' ic/src/gate/approval.rs\",\"description\":\"Inspect the GateContext initializer missing fields\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 2676,
+        "sha256": "a0c22530dea3d9a631a3816c6cd8cc1a8e98ebd100d8f1559b8cff7c473e3438",
+        "preview": "{\n  \"stdout\": \"=== context around line 354 in src/gate/approval.rs ===\\nmod tests {\\n    use super::*;\\n    use lunarwing_engine::gate::ExecutionMode;\\n    use lunarwing_engine::types::capability::{ActionDef, EffectType};\\n    use lunarwing_engine::types::thread::ThreadId;\\n    use std::collections::HashSet;\\n\\n    fn action_def(name: &str, requires_approval: bool) -> ActionDef {\\n        ActionDef {\\n            name: name.into(),\\n            description: String::new(),\\n            parameters_schema: ser",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 124,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

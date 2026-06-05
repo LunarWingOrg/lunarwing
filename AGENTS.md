@@ -15,6 +15,8 @@ Start with these deeper docs as needed:
 - `src/workspace/README.md`
 - `src/NETWORK_SECURITY.md`
 - `tests/e2e/CLAUDE.md`
+- `crates/lunarwing_engine/CLAUDE.md`
+- In this repo, `ic/` contains the core daemon; however, the product name is LunarWing.
 
 ## Architecture Mental Model
 
@@ -32,6 +34,60 @@ Start with these deeper docs as needed:
 - LLM providers and routing: `src/llm/`
 - Workspace, memory, embeddings, search: `src/workspace/`
 - Extensions, tools, channels, MCP, WASM: `src/extensions/`, `src/tools/`, `src/channels/`
+- Docker sandbox and network proxy: `src/sandbox/`
+- Container orchestrator and external workers: `src/orchestrator/`
+- Secrets management: `src/secrets/`
+- Lifecycle hooks: `src/hooks/`
+- Tunnel abstraction (cloudflare, ngrok, tailscale): `src/tunnel/`
+- SKILL.md prompt extensions: `src/skills/`
+- Engine V2 bridge: `src/bridge/`
+- Execution gate and approval pending state: `src/gate/`
+- DM pairing for channels: `src/pairing/`
+- Webhook ingress for tools: `src/webhooks/`
+- Observability: `src/observability/`
+- Extension registry catalog: `src/registry/`
+- OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
+
+## Build, Test, and Lint Commands
+
+Run these from the `ic/` directory:
+
+```bash
+# Build
+cargo build
+cargo build --all-features
+
+# Run all tests
+cargo test -- --nocapture
+
+# Run a single test (exact match)
+cargo test <test_name> -- --exact --nocapture
+
+# Run a specific integration test file
+cargo test --test <file_name> -- --nocapture
+
+# Run tests with specific features
+cargo test --no-default-features --features libsql
+cargo test --all-features
+
+# Format check
+cargo fmt --all -- --check
+
+# Lint (zero warnings policy)
+cargo clippy --all --benches --tests --examples -- -D warnings
+cargo clippy --all --benches --tests --examples --all-features -- -D warnings
+
+# Dependency audit
+cargo deny check
+
+# Compile benchmarks without running
+cargo bench --all-features --no-run
+
+# Build WASM extensions (needed for some integration tests)
+./scripts/build-wasm-extensions.sh             # all (tools + channels)
+./scripts/build-wasm-extensions.sh --tools     # tools only
+./scripts/build-wasm-extensions.sh --channels  # channels only
+```
 
 ## Ownership and Composition Rules
 
@@ -42,10 +98,16 @@ Start with these deeper docs as needed:
 
 ## Repo-Wide Coding Rules
 
-- Avoid `.unwrap()` and `.expect()` in production; prefer proper error handling. They are fine in tests, and in production only for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Edition**: Rust 2024, MSRV 1.92.
+- **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
+- **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
+- **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are allowed only in tests or for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Types**: Use strong types and enums over stringly-typed control flow when the shape is known.
+- **Naming**: Follow standard Rust conventions (`snake_case` for functions/variables, `PascalCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants).
+- **Complexity**: Keep functions under 100 lines, cognitive complexity under 15, and arguments under 7 (see `clippy.toml`).
+- **Secrets**: Use the `secrecy` crate for sensitive values; never log or expose secrets.
+- **Logging**: Use `tracing` macros (`info!`, `warn!`, `error!`) rather than `println!`.
 - Keep clippy clean with zero warnings.
-- Prefer `crate::` imports for cross-module references.
-- Use strong types and enums over stringly-typed control flow when the shape is known.
 
 ## Database, Setup, and Config Rules
 
@@ -71,13 +133,24 @@ Start with these deeper docs as needed:
 - Use MCP for external server integrations when the capability belongs outside the main binary.
 - Preserve extension lifecycle expectations: install, authenticate/configure, activate, remove.
 
+## Local XMPP and Service Operations
+
+- Treat systemd unit environment values as secret-bearing. Do not paste passwords, bearer tokens, or webhook secrets into user-facing output; summarize or redact them.
+- `xmpp-bridge.service` is coupled to `lunarwing.service` with `PartOf=lunarwing.service`, so LunarWing restarts can also restart the bridge. Do not assume the bridge caused a LunarWing stop just because both units restarted together.
+- For install-style harness tests, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; `render-launchd` plus `launchctl` on macOS; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
+- The harness and service path intentionally seed `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless the task explicitly changes the network or SSL assumptions.
+- Use `scripts/xmpp-rate-limit.sh` for live XMPP outbound rate-limit changes. It requires `XMPP_BRIDGE_TOKEN`; `status`, `set <n>`, `off`, and `reset` are the main commands.
+- Use `scripts/xmpp-configure.sh` for bridge room/configuration checks and configure calls when working with the existing XMPP bridge API.
+- The local service watchdog assets are `scripts/lunarwing-watchdog.sh` (systemd), `scripts/lunarwing-watchdog-openrc.sh` (OpenRC), `scripts/lunarwing-watchdog-launchd.sh` (macOS), `scripts/install-lunarwing-watchdog.sh`, `systemd/lunarwing-watchdog.service`, `systemd/lunarwing-watchdog.timer`, `systemd/lunarwing-watchdog.confd`, `systemd/lunarwing-watchdog.cron.hourly`, and `systemd/com.lunarwing.watchdog.plist` (launchd). The installer auto-detects `systemd` vs `OpenRC` vs `launchd`; on OpenRC it also auto-selects the scheduler. `auto` prefers an existing `cronie`/`crond`/`dcron` hourly setup and only falls back to a managed `fcron` entry when that avoids interfering.
+- Prefer read-only diagnostics first for service issues: `systemctl status`, `systemctl show`, `journalctl`, and bridge status endpoints. Only restart services after identifying the unit state or when the user explicitly asks.
+- If harness `verify` only fails the TensorZero proxy check, inspect the upstream `TENSORZERO_URL` before treating the local service install as broken. The local proxy can be bound and healthy while the upstream `/openai/v1/models` probe still returns `500`.
+
 ## Docs, Parity, and Testing
 
 - If behavior changes, update the relevant docs/specs in the same branch.
 - If you change implementation status for any feature tracked in `FEATURE_PARITY.md`, update that file in the same branch.
 - Do not open a PR that changes feature behavior without checking `FEATURE_PARITY.md` for needed status updates (`❌`, `🚧`, `✅`, notes, and priorities).
 - Add the narrowest tests that validate the change: unit tests for local logic, integration tests for runtime/DB/routing behavior, and E2E or trace coverage for gateway, approvals, extensions, or other user-visible flows.
-- **Test through the caller, not just the helper.** When a predicate/classifier/transform helper gates a side effect (HTTP, DB write, OAuth flow, UI mutation, tool execution) and has any wrapper or computed input between it and that side effect, a unit test on the helper alone is not sufficient regression coverage. Add a test that drives the actual call site (`*_handler`, `factory::create_*`, `manager::*`) at the integration tier or higher. Mocks of multi-arg runtime APIs must capture every argument the production caller passes. See `.claude/rules/testing.md` for the full rule and bug examples.
 
 ## Risk and Change Discipline
 

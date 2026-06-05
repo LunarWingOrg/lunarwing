@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780017675069,
+  "duration_ms": 8564,
+  "initial_message_count": 0,
+  "final_message_count": 4,
+  "user_input": {
+    "chars": 19,
+    "sha256": "bad8d3b94fcad2be5653bafbb77e72c84349fe2be82796bd0e348b8a45e91fbf",
+    "preview": "what branch is this",
+    "truncated": false,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 1,
+      "request_estimated_tokens": 5,
+      "duration_ms": 2675,
+      "result_event_count": 9,
+      "usage": {
+        "input_tokens": 8480,
+        "output_tokens": 93,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 3,
+      "request_estimated_tokens": 294,
+      "duration_ms": 1939,
+      "result_event_count": 4,
+      "usage": {
+        "input_tokens": 8993,
+        "output_tokens": 49,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_vrtx_01GTi7roHkT7kEASjVa5giJY",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_vrtx_01GTi7roHkT7kEASjVa5giJY",
+      "tool_name": "bash",
+      "input": {
+        "chars": 79,
+        "sha256": "396bac273a25d57b5a4ba7785407aef9216d7b8594795e19337ab1f8215753ba",
+        "preview": "{\"command\":\"git branch --show-current\",\"description\":\"Show current git branch\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1011,
+        "sha256": "1c09e66528432f6e2543ed908d3fb9866ab6e73cb19d90c7431e30bf884300e4",
+        "preview": "{\n  \"stdout\": \"pebble-integration-phase-1-claude\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation\": null,\n  \"noOutputExpected\": false,\n  \"structuredContent\": null,\n  \"persistedOutputPath\": null,\n  \"persistedOutputSize\": null,\n  \"sandboxStatus\": {\n    \"enabled\": true,\n    \"requested\": {\n      \"enabled\": true,\n   ",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 157,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

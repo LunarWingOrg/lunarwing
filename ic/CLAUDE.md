@@ -1,0 +1,260 @@
+# LunarWing Development Guide
+
+**LunarWing** is a secure personal AI assistant — user-first security, self-expanding tools, defense in depth, multi-channel access with proactive background execution.
+
+## Build & Test
+
+```bash
+cargo fmt                                                    # format
+cargo clippy --all --benches --tests --examples --all-features  # lint (zero warnings)
+cargo test                                                   # unit tests
+cargo test --features integration                            # + PostgreSQL tests
+RUST_LOG=lunarwing=debug cargo run                            # run with logging
+```
+
+E2E tests: see `tests/e2e/CLAUDE.md`.
+
+## Code Style
+
+- Prefer `crate::` for cross-module imports; `super::` is fine in tests and intra-module refs
+- No `pub use` re-exports unless exposing to downstream consumers
+- No `.unwrap()` or `.expect()` in production code (tests are fine)
+- Use `thiserror` for error types in `error.rs`
+- Map errors with context: `.map_err(|e| SomeError::Variant { reason: e.to_string() })?`
+- Prefer strong types over strings (enums, newtypes)
+- Keep functions focused, extract helpers when logic is reused
+- Comments for non-obvious logic only
+
+## Architecture
+
+Prefer generic/extensible architectures over hardcoding specific integrations. Ask clarifying questions about the desired abstraction level before implementing.
+
+Key traits for extensibility: `Database`, `Channel`, `Tool`, `LlmProvider`, `SuccessEvaluator`, `EmbeddingProvider`, `NetworkPolicyDecider`, `Hook`, `Observer`, `Tunnel`.
+
+All I/O is async with tokio. Use `Arc<T>` for shared state, `RwLock` for concurrent access.
+
+## Extracted Crates
+
+Safety logic lives in `crates/lunarwing_safety/`. The `src/safety/mod.rs` shim re-exports everything for backward compatibility, but **new code should import from `lunarwing_safety` directly** (e.g. `use lunarwing_safety::SafetyLayer`). When touching a file that still uses `crate::safety::*`, migrate its imports to `lunarwing_safety::*`.
+
+## Project Structure
+
+```
+crates/
+├── lunarwing_common/    # Shared types and utilities
+├── lunarwing_engine/    # Engine V2 runtime
+├── lunarwing_safety/    # Prompt injection, validation, leak detection, policy
+└── lunarwing_skills/    # Skills system implementation
+
+src/
+├── lib.rs              # Library root, module declarations
+├── main.rs             # Entry point, CLI args, startup
+├── app.rs              # App startup orchestration (channel wiring, DB init)
+├── bootstrap.rs        # Base directory resolution (~/.lunarwing), early .env loading
+├── settings.rs         # User settings persistence (~/.lunarwing/settings.json)
+├── service.rs          # OS service management (launchd/systemd daemon install)
+├── tracing_fmt.rs      # Custom tracing formatter
+├── util.rs             # Shared utilities
+├── config/             # Configuration from env vars (split by subsystem)
+│   ├── mod.rs          # Re-exports all config types; top-level Config struct
+│   ├── agent.rs, llm.rs, channels.rs, database.rs, sandbox.rs, skills.rs
+│   ├── heartbeat.rs, routines.rs, safety.rs, embeddings.rs, wasm.rs
+│   ├── tunnel.rs       # Tunnel provider config (TUNNEL_PROVIDER, TUNNEL_URL, etc.)
+│   └── secrets.rs, hygiene.rs, builder.rs, helpers.rs
+├── error.rs            # Error types (thiserror)
+│
+├── agent/              # Core agent loop, dispatcher, scheduler, sessions — see src/agent/CLAUDE.md
+├── bridge/             # Engine V2 bridge
+│
+├── channels/           # Multi-channel input
+│   ├── channel.rs      # Channel trait, IncomingMessage, OutgoingResponse
+│   ├── manager.rs      # ChannelManager merges streams
+│   ├── cli/            # Full TUI with Ratatui
+│   ├── http.rs         # HTTP webhook (axum) with secret validation
+│   ├── webhook_server.rs # Unified HTTP server composing all webhook routes
+│   ├── repl.rs         # Simple REPL (for testing)
+│   ├── web/            # Web gateway (browser UI) — see src/channels/web/CLAUDE.md
+│   └── wasm/           # WASM channel runtime
+│       ├── mod.rs
+│       ├── bundled.rs  # Bundled channel discovery
+│       ├── capabilities.rs # Channel-specific capabilities (HTTP endpoint, emit rate)
+│       ├── error.rs    # WASM channel error types
+│       ├── runtime.rs  # WASM channel execution runtime
+│       ├── setup.rs    # WasmChannelSetup, setup_wasm_channels(), inject_channel_credentials()
+│       └── wrapper.rs  # Channel trait wrapper for WASM modules
+│
+├── cli/                # CLI subcommands (clap)
+│   ├── mod.rs          # Cli struct, Command enum (run/onboard/config/tool/registry/mcp/memory/pairing/service/doctor/status/completion)
+│   └── config.rs, tool.rs, registry.rs, mcp.rs, memory.rs, pairing.rs, service.rs, doctor.rs, status.rs, completion.rs
+│
+├── registry/           # Extension registry catalog
+│   ├── manifest.rs     # ExtensionManifest, ArtifactSpec, BundleDefinition types
+│   ├── catalog.rs      # RegistryCatalog: load from filesystem and embedded JSON
+│   └── installer.rs    # RegistryInstaller: download, verify, install WASM artifacts
+│
+├── history/            # Persistence (PostgreSQL repositories, analytics)
+│
+├── hooks/              # Lifecycle hooks (6 points: BeforeInbound, BeforeToolCall, BeforeOutbound, OnSessionStart, OnSessionEnd, TransformResponse)
+│
+├── import/             # OpenClaw import
+│
+├── tunnel/             # Tunnel abstraction for public internet exposure
+│   ├── mod.rs          # Tunnel trait, TunnelProviderConfig, create_tunnel(), start_managed_tunnel()
+│   ├── cloudflare.rs   # CloudflareTunnel (cloudflared binary)
+│   ├── ngrok.rs        # NgrokTunnel
+│   ├── tailscale.rs    # TailscaleTunnel (serve/funnel modes)
+│   ├── custom.rs       # CustomTunnel (arbitrary command with {host}/{port})
+│   └── none.rs         # NoneTunnel (local-only, no exposure)
+│
+├── observability/      # Pluggable event/metric recording (noop, log, multi)
+│
+├── orchestrator/       # Internal HTTP API for sandbox containers + external workers
+│   ├── api.rs          # Axum endpoints (LLM proxy, events, prompts)
+│   ├── auth.rs         # Per-job bearer token store
+│   ├── job_manager.rs  # Container lifecycle (create, stop, cleanup)
+│   └── external_worker.rs # ExternalWorkerManager: WebSocket client for persistent worker containers
+│
+├── worker/             # Runs inside Docker containers
+│   ├── container.rs    # Container worker runtime (ContainerDelegate + shared agentic loop)
+│   ├── job.rs          # Background job worker (JobDelegate + shared agentic loop)
+│   └── proxy_llm.rs    # LlmProvider that proxies through orchestrator
+│
+├── pairing/            # DM pairing system
+│
+├── safety/             # Re-export shim for crates/lunarwing_safety (see Extracted Crates)
+│
+├── llm/                # Multi-provider LLM integration — see src/llm/CLAUDE.md
+│
+├── tools/              # Extensible tool system
+│   ├── tool.rs         # Tool trait, ToolOutput, ToolError
+│   ├── registry.rs     # ToolRegistry for discovery
+│   ├── rate_limiter.rs # Shared sliding-window rate limiter
+│   ├── builtin/        # Built-in tools (echo, time, json, http, web_fetch, file, shell, memory, message, job, routine, extension_tools, skill_tools, secrets_tools)
+│   ├── builder/        # Dynamic tool building
+│   │   ├── core.rs     # BuildRequirement, SoftwareType, Language
+│   │   ├── templates.rs # Project scaffolding
+│   │   ├── testing.rs  # Test harness integration
+│   │   └── validation.rs # WASM validation
+│   ├── mcp/            # Model Context Protocol
+│   │   ├── client.rs   # MCP client over HTTP
+│   │   ├── factory.rs  # create_client_from_config() — transport dispatch factory
+│   │   ├── protocol.rs # JSON-RPC types
+│   │   └── session.rs  # MCP session management (Mcp-Session-Id header, per-server state)
+│   └── wasm/           # Full WASM sandbox (wasmtime)
+│       ├── runtime.rs  # Module compilation and caching
+│       ├── wrapper.rs  # Tool trait wrapper for WASM modules
+│       ├── host.rs     # Host functions (logging, time, workspace)
+│       ├── limits.rs   # Fuel metering and memory limiting
+│       ├── allowlist.rs # Network endpoint allowlisting
+│       ├── credential_injector.rs # Safe credential injection
+│       ├── loader.rs   # WASM tool discovery from filesystem
+│       ├── rate_limiter.rs # Per-tool rate limiting
+│       ├── error.rs    # WASM-specific error types
+│       └── storage.rs  # Linear memory persistence
+│
+├── db/                 # Dual-backend persistence (PostgreSQL + libSQL) — see src/db/CLAUDE.md
+│
+├── workspace/          # Persistent memory system — see src/workspace/README.md
+│
+├── context/            # Job context isolation (JobState, JobContext, ContextManager)
+├── document_extraction/ # Document extraction utilities
+├── estimation/         # Cost/time/value estimation with EMA learning
+├── evaluation/         # Success evaluation (rule-based, LLM-based)
+├── extensions/         # Extension management
+│
+├── gate/               # Execution gate / approval system
+│
+├── sandbox/            # Docker execution sandbox
+│   ├── config.rs       # SandboxConfig, SandboxPolicy enum (ReadOnly/WorkspaceWrite/FullAccess)
+│   ├── manager.rs      # SandboxManager orchestration
+│   ├── container.rs    # ContainerRunner, Docker lifecycle
+│   └── proxy/          # Network proxy: domain allowlist, credential injection, CONNECT tunnel
+│
+├── secrets/            # Secrets management (AES-256-GCM, OS keychain for master key)
+│
+├── profile.rs          # Psychographic profile types, 9-dimension analysis framework
+│
+├── setup/              # 7-step onboarding wizard — see src/setup/README.md
+│
+├── skills/             # SKILL.md prompt extension system — see .claude/rules/skills.md
+│
+├── testing/            # Test utilities
+│
+└── webhooks/           # Webhook handling
+
+tests/
+├── *.rs                # Integration tests (workspace, heartbeat, WS gateway, pairing, etc.)
+├── test-pages/         # HTML→Markdown conversion fixtures
+└── e2e/                # Python/Playwright E2E scenarios (see tests/e2e/CLAUDE.md)
+```
+
+## Database
+
+Dual-backend: PostgreSQL + libSQL/Turso. **All new persistence features must support both backends.** See `src/db/CLAUDE.md` and `.claude/rules/database.md`.
+
+## Module Specs
+
+When modifying a module with a spec, read the spec first. Code follows spec; spec is the tiebreaker.
+
+**Module-owned initialization:** Module-specific initialization logic (database connection, transport creation, channel setup) must live in the owning module as a public factory function — not in `main.rs` or `app.rs`. These entry-point files orchestrate calls to module factories. Feature-flag branching (`#[cfg(feature = ...)]`) must be confined to the module that owns the abstraction.
+
+| Module | Spec |
+|--------|------|
+| `src/agent/` | `src/agent/CLAUDE.md` |
+| `src/channels/web/` | `src/channels/web/CLAUDE.md` |
+| `src/db/` | `src/db/CLAUDE.md` |
+| `src/llm/` | `src/llm/CLAUDE.md` |
+| `src/setup/` | `src/setup/README.md` |
+| `src/tools/` | `src/tools/README.md` |
+| `src/workspace/` | `src/workspace/README.md` |
+| `tests/e2e/` | `tests/e2e/CLAUDE.md` |
+
+## Job State Machine
+
+```
+Pending -> InProgress -> Completed -> Submitted -> Accepted
+                     \-> Failed
+                     \-> Stuck -> InProgress (recovery)
+                              \-> Failed
+```
+
+## Skills System
+
+SKILL.md files extend the agent's prompt with domain-specific instructions. See `.claude/rules/skills.md` for full details.
+
+- **Trust model**: Trusted (user-placed in `~/.lunarwing/skills/` or workspace `skills/`, full tool access) vs Installed (registry, read-only tools)
+- **Selection pipeline**: gating (check bin/env/config requirements) -> scoring (keywords/patterns/tags) -> budget (fit within `SKILLS_MAX_TOKENS`) -> attenuation (trust-based tool ceiling)
+- **Skill tools**: `skill_list`, `skill_search`, `skill_install`, `skill_remove`
+
+## Configuration
+
+See `.env.example` for all environment variables. LLM backends (`nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `tinfoil`, `bedrock`) documented in `src/llm/CLAUDE.md`.
+
+## Adding a New Channel
+
+1. Create `src/channels/my_channel.rs`
+2. Implement the `Channel` trait
+3. Add config in `src/config/channels.rs`
+4. Wire up in `src/app.rs` channel setup section
+
+## Workspace & Memory
+
+Persistent memory with hybrid search (FTS + vector via RRF). Four tools: `memory_search`, `memory_write`, `memory_read`, `memory_tree`. Identity files (AGENTS.md, SOUL.md, USER.md, IDENTITY.md) injected into system prompt. Heartbeat system runs proactive periodic execution (default: 30 minutes), reading `HEARTBEAT.md` and notifying via channel if findings. See `src/workspace/README.md`.
+
+## Debugging
+
+```bash
+RUST_LOG=lunarwing=trace cargo run           # verbose
+RUST_LOG=lunarwing::agent=debug cargo run    # agent module only
+RUST_LOG=lunarwing=debug,tower_http=debug cargo run  # + HTTP request logging
+```
+
+## Current Limitations
+
+1. Domain-specific tools (`marketplace.rs`, `restaurant.rs`, etc.) are stubs
+2. Integration tests need testcontainers for PostgreSQL
+3. MCP: no streaming support; stdio/HTTP/Unix transports all use request-response
+4. WIT bindgen: auto-extract tool schema from WASM is stubbed
+5. Built tools get empty capabilities; need UX for granting access
+6. No tool versioning or rollback
+7. Observability: only `log` and `noop` backends (no OpenTelemetry)

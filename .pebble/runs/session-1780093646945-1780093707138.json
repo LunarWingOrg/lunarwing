@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780093707138,
+  "duration_ms": 14606,
+  "initial_message_count": 10,
+  "final_message_count": 14,
+  "user_input": {
+    "chars": 873,
+    "sha256": "6743dea13c4d92f1746d179aa9281f59d60011b2adcd4cc577722b44b5b27648",
+    "preview": "no. you called it     README.md                                                                                                                                                  \n    ...                                                                                                                                                        \n● pebble                                                                                                                                                       \nI’ll write the",
+    "truncated": true,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 11,
+      "request_estimated_tokens": 1843,
+      "duration_ms": 4473,
+      "result_event_count": 6,
+      "usage": {
+        "input_tokens": 13177,
+        "output_tokens": 251,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 13,
+      "request_estimated_tokens": 2229,
+      "duration_ms": 5357,
+      "result_event_count": 10,
+      "usage": {
+        "input_tokens": 13917,
+        "output_tokens": 296,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01GaQFt6xR3CcCWo1fhbmsQX",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_01GaQFt6xR3CcCWo1fhbmsQX",
+      "tool_name": "bash",
+      "input": {
+        "chars": 251,
+        "sha256": "7d2194d3ff0294b4ed03118ae71038f1a25b0ba4728fd08173520b2884c61bc8",
+        "preview": "{\"command\":\"cd /home/sun/lw_new_workspace/lunarwing && ls -la docs/proposals/PEBBLE_EXTERNAL_WORKER.md 2>&1; echo \\\"===\\\"; find . -path ./target -prune -o -type f -iname '*EXTERNAL_WORKER*' -print 2>/dev/null\",\"description\":\"check for the named file\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1112,
+        "sha256": "e4097ef52e8ad9d91bb02ad17df2eaeed84c2c3411c3578714d4c99e926b4f59",
+        "preview": "{\n  \"stdout\": \"ls: cannot access 'docs/proposals/PEBBLE_EXTERNAL_WORKER.md': No such file or directory\\n===\\n./ic/src/orchestrator/external_worker.rs\\n\",\n  \"stderr\": \"\",\n  \"rawOutputPath\": null,\n  \"interrupted\": false,\n  \"isImage\": null,\n  \"backgroundTaskId\": null,\n  \"backgroundedByUser\": null,\n  \"assistantAutoBackgrounded\": null,\n  \"dangerouslyDisableSandbox\": null,\n  \"returnCodeInterpretation\": null,\n  \"noOutputExpected\": false,\n  \"structuredContent\": null,\n  \"persistedOutputPath\": null,\n  \"persistedOutpu",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 242,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

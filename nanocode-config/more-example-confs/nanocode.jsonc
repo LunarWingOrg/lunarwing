@@ -1,0 +1,25 @@
+{
+  "$schema": "https://github.com/nanogpt-community/nanocode/config.json",
+  "provider": {
+    "nanogpt": {
+      "options": {
+        "nanoproxy": true
+      }
+    }
+  },
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "headers": {
+        "CONTEXT7_API_KEY": "REMOVED"
+      }
+    },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp?exaApiKey=REMOVED",
+      "enabled": true
+    }
+  }
+}

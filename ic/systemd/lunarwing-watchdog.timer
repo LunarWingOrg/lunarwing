@@ -1,0 +1,12 @@
+[Unit]
+Description=Run LunarWing service watchdog hourly
+
+[Timer]
+OnBootSec=5min
+OnCalendar=hourly
+AccuracySec=1min
+Persistent=true
+Unit=lunarwing-watchdog.service
+
+[Install]
+WantedBy=timers.target

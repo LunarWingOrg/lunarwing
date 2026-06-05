@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780096487722,
+  "duration_ms": 23008,
+  "initial_message_count": 116,
+  "final_message_count": 122,
+  "user_input": {
+    "chars": 1829,
+    "sha256": "7c0cb31a0f8a121a5b0f2391003b8d740b8f626d872a2bb80e36358ef48f1831",
+    "preview": "running riguourous # 1. Warnings on YOUR branch (current state)                                                                                                                   \ncd /home/sun/lw_new_workspace/lunarwing-human-delay/ic                                                                                                         \ncargo clippy -p lunarwing -p lunarwing_engine -p lunarwing_common -p lunarwing_safety -p lunarwing_skills --all-features 2>&1 \\                                \n  | grep -E '",
+    "truncated": true,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 117,
+      "request_estimated_tokens": 65586,
+      "duration_ms": 12991,
+      "result_event_count": 24,
+      "usage": {
+        "input_tokens": 114532,
+        "output_tokens": 682,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 119,
+      "request_estimated_tokens": 66077,
+      "duration_ms": 4181,
+      "result_event_count": 3,
+      "usage": {
+        "input_tokens": 115284,
+        "output_tokens": 115,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 3,
+      "request_message_count": 121,
+      "request_estimated_tokens": 66574,
+      "duration_ms": 5833,
+      "result_event_count": 11,
+      "usage": {
+        "input_tokens": 116193,
+        "output_tokens": 316,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "call_zm6vhyht",
+      "tool_name": "read_file",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01CEgrQ7WMrofgUTYH6EJa1N",
+      "tool_name": "read_file",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "call_zm6vhyht",
+      "tool_name": "read_file",
+      "input": {
+        "chars": 22,
+        "sha256": "c2a3d22cee9f32ba682269590595938c365c7f1bb6670f51f201fb82c6c6f33f",
+        "preview": "{\"path\":\"gate/mod.rs\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 38,
+        "sha256": "b37255aba48612b113aa15ec569b7d85a0bad4b7618fde7bd1c2195f0b5d8a4d",
+        "preview": "No such file or directory (os error 2)",
+        "truncated": false,
+        "redacted": false
+      },
+      "duration_ms": 0,
+      "permission_outcome": "allow",
+      "is_error": true
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01CEgrQ7WMrofgUTYH6EJa1N",
+      "tool_name": "read_file",
+      "input": {
+        "chars": 77,
+        "sha256": "4a080ba818091c49ffda155350089a1d6bc6f9ed03bfe49df5516dd87987eee7",
+        "preview": "{\"path\":\"ic/crates/lunarwing_engine/src/gate/mod.rs\",\"offset\":120,\"limit\":40}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 1790,
+        "sha256": "7bd9b4f19697abdf15c91f5cbef793de4a2ba0c94c6f83437ad909b9612d20a1",
+        "preview": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"/home/sun/lw_new_workspace/lunarwing-human-delay/ic/crates/lunarwing_engine/src/gate/mod.rs\",\n    \"content\": \"    pub user_id: &'a str,\\n    pub thread_id: ThreadId,\\n    pub source_channel: &'a str,\\n    pub action_name: &'a str,\\n    pub call_id: &'a str,\\n    pub parameters: &'a serde_json::Value,\\n    pub action_def: &'a ActionDef,\\n    pub execution_mode: ExecutionMode,\\n    /// Tools the session has auto-approved (\\\"always\\\" button).\\n    pub auto_appro",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 0,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

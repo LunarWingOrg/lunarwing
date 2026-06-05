@@ -1,0 +1,290 @@
+//! Approval gate — wraps `Tool::requires_approval()`.
+//!
+//! Replaces the inline approval check in `EffectBridgeAdapter::execute_action()`
+//! (steps 1) with a composable gate that handles interactive, autonomous, and
+//! container execution modes.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use lunarwing_engine::gate::{ExecutionGate, ExecutionMode, GateContext, GateDecision, ResumeKind};
+
+use crate::tools::rate_limiter::RateLimiter;
+use crate::tools::{ApprovalRequirement, ToolRegistry};
+
+/// Gate that checks `Tool::requires_approval()` and emits `Pause(Approval)`
+/// or `Deny` depending on execution mode.
+///
+/// Priority: 100 (after rate limiting, after relay channel check).
+pub struct ApprovalGate {
+    tools: Arc<ToolRegistry>,
+}
+
+impl ApprovalGate {
+    pub fn new(tools: Arc<ToolRegistry>) -> Self {
+        Self { tools }
+    }
+}
+
+#[async_trait]
+impl ExecutionGate for ApprovalGate {
+    fn name(&self) -> &str {
+        "approval"
+    }
+
+    fn priority(&self) -> u32 {
+        100
+    }
+
+    async fn evaluate(&self, ctx: &GateContext<'_>) -> GateDecision {
+        let tool = match self.tools.get_resolved(ctx.action_name).await {
+            Some((_, t)) => t,
+            None => return GateDecision::Allow, // unknown tool — let execution handle it
+        };
+
+        // ── Human delay / supervision mode ──
+        // When supervised_mode is enabled on the thread, gate EVERY action
+        // through human approval, regardless of the tool's tier. This is
+        // orthogonal to ExecutionMode and takes precedence over the per-tool
+        // ApprovalRequirement matching below.
+        //
+        // Always-gated tools (ApprovalRequirement::Always) should not offer
+        // the "always approve" option in supervised mode either, so we set
+        // allow_always = false to be conservative.
+        if ctx.supervised_mode {
+            let requirement = tool.requires_approval(ctx.parameters);
+            let allow_always = !matches!(requirement, ApprovalRequirement::Always);
+            return GateDecision::Pause {
+                reason: format!(
+                    "[Supervised mode] Tool '{}' requires human approval before execution.",
+                    ctx.action_name
+                ),
+                resume_kind: ResumeKind::Approval { allow_always },
+            };
+        }
+
+        // Use original parameters for approval check (the adapter normalizes
+        // params before execution, but the approval check should use the
+        // parameters the LLM provided so destructive detection works).
+        let requirement = tool.requires_approval(ctx.parameters);
+
+        match ctx.execution_mode {
+            ExecutionMode::Interactive => match requirement {
+                ApprovalRequirement::Never => GateDecision::Allow,
+                ApprovalRequirement::UnlessAutoApproved => {
+                    if ctx.auto_approved.contains(ctx.action_name) {
+                        GateDecision::Allow
+                    } else {
+                        // Check credential-backed HTTP auto-approve
+                        if (ctx.action_name == "http" || ctx.action_name == "http_request")
+                            && let Some(reg) = self.tools.credential_registry()
+                            && crate::tools::builtin::extract_host_from_params(ctx.parameters)
+                                .is_some_and(|host| reg.has_credentials_for_host(&host))
+                        {
+                            return GateDecision::Allow;
+                        }
+                        GateDecision::Pause {
+                            reason: format!(
+                                "Tool '{}' requires approval to execute.",
+                                ctx.action_name
+                            ),
+                            resume_kind: ResumeKind::Approval { allow_always: true },
+                        }
+                    }
+                }
+                ApprovalRequirement::Always => GateDecision::Pause {
+                    reason: format!(
+                        "Tool '{}' requires explicit approval for this operation.",
+                        ctx.action_name
+                    ),
+                    // Always-gated tools should NOT offer "always" button
+                    // (regression fix: 09e1c97a)
+                    resume_kind: ResumeKind::Approval {
+                        allow_always: false,
+                    },
+                },
+            },
+            ExecutionMode::InteractiveAutoApprove => match requirement {
+                ApprovalRequirement::Never | ApprovalRequirement::UnlessAutoApproved => {
+                    // Auto-approve mode: shell, file_write, http, etc. proceed
+                    // without prompting. Other safeguards (leases, rate limits,
+                    // hooks, auth gates) still apply.
+                    GateDecision::Allow
+                }
+                ApprovalRequirement::Always => {
+                    // Always-gated tools still require explicit approval even
+                    // in auto-approve mode — these are truly destructive operations.
+                    GateDecision::Pause {
+                        reason: format!(
+                            "Tool '{}' requires explicit approval (auto-approve does not cover this operation).",
+                            ctx.action_name
+                        ),
+                        resume_kind: ResumeKind::Approval {
+                            allow_always: false,
+                        },
+                    }
+                }
+            },
+            ExecutionMode::Autonomous => match requirement {
+                ApprovalRequirement::Never | ApprovalRequirement::UnlessAutoApproved => {
+                    // Never and UnlessAutoApproved are allowed in autonomous mode
+                    // (regression fix: 0e5f1b12 — is_blocked was rejecting Never tools)
+                    GateDecision::Allow
+                }
+                ApprovalRequirement::Always => {
+                    // Always-gated tools cannot run autonomously
+                    GateDecision::Deny {
+                        reason: format!(
+                            "Tool '{}' requires explicit approval and cannot run autonomously.",
+                            ctx.action_name
+                        ),
+                    }
+                }
+            },
+            ExecutionMode::Container => GateDecision::Allow,
+        }
+    }
+}
+
+/// Gate that checks `AuthManager::check_action_auth()` for missing credentials.
+///
+/// Priority: 200 (after approval — no point checking credentials for a denied tool).
+///
+/// Currently a pass-through — the actual auth check remains inline in
+/// `effect_adapter.rs` step 1.7 until Phase 4 migration completes.
+pub struct AuthenticationGate;
+
+#[async_trait]
+impl ExecutionGate for AuthenticationGate {
+    fn name(&self) -> &str {
+        "authentication"
+    }
+
+    fn priority(&self) -> u32 {
+        200
+    }
+
+    async fn evaluate(&self, _ctx: &GateContext<'_>) -> GateDecision {
+        // The actual auth check is performed via the EffectBridgeAdapter's
+        // auth_manager — this gate delegates there during Phase 4 migration.
+        // For now, the inline check in effect_adapter.rs step 1.7 remains.
+        GateDecision::Allow
+    }
+}
+
+/// Gate that wraps `HookRegistry::run(BeforeToolCall)`.
+///
+/// Priority: 300 (after approval and auth — hooks can customize behavior
+/// but should not preempt user-facing approval/auth flows).
+pub struct HookGate {
+    hooks: Arc<crate::hooks::HookRegistry>,
+    tools: Arc<ToolRegistry>,
+}
+
+impl HookGate {
+    pub fn new(hooks: Arc<crate::hooks::HookRegistry>, tools: Arc<ToolRegistry>) -> Self {
+        Self { hooks, tools }
+    }
+}
+
+#[async_trait]
+impl ExecutionGate for HookGate {
+    fn name(&self) -> &str {
+        "hook"
+    }
+
+    fn priority(&self) -> u32 {
+        300
+    }
+
+    async fn evaluate(&self, ctx: &GateContext<'_>) -> GateDecision {
+        let redacted_params = if let Some(tool) = self.tools.get(ctx.action_name).await {
+            crate::tools::redact_params(ctx.parameters, tool.sensitive_params())
+        } else {
+            ctx.parameters.clone()
+        };
+
+        let hook_event = crate::hooks::HookEvent::ToolCall {
+            tool_name: ctx.action_name.to_string(),
+            parameters: redacted_params,
+            user_id: ctx.user_id.to_string(),
+            context: format!("gate:{}", ctx.thread_id),
+        };
+
+        match self.hooks.run(&hook_event).await {
+            Ok(crate::hooks::HookOutcome::Reject { reason }) => GateDecision::Deny {
+                reason: format!("Tool '{}' blocked by hook: {reason}", ctx.action_name),
+            },
+            Err(crate::hooks::HookError::Rejected { reason }) => GateDecision::Deny {
+                reason: format!("Tool '{}' blocked by hook: {reason}", ctx.action_name),
+            },
+            Err(e) => {
+                tracing::debug!(
+                    tool = ctx.action_name,
+                    error = %e,
+                    "hook error (fail-open)"
+                );
+                GateDecision::Allow
+            }
+            Ok(crate::hooks::HookOutcome::Continue { .. }) => GateDecision::Allow,
+        }
+    }
+}
+
+/// Gate that wraps the per-user per-tool `RateLimiter`.
+///
+/// Priority: 50 (runs before approval — deny fast for rate-limited tools).
+pub struct RateLimitGate {
+    tools: Arc<ToolRegistry>,
+    rate_limiter: RateLimiter,
+}
+
+impl RateLimitGate {
+    pub fn new(tools: Arc<ToolRegistry>, rate_limiter: RateLimiter) -> Self {
+        Self {
+            tools,
+            rate_limiter,
+        }
+    }
+}
+
+#[async_trait]
+impl ExecutionGate for RateLimitGate {
+    fn name(&self) -> &str {
+        "rate_limit"
+    }
+
+    fn priority(&self) -> u32 {
+        50
+    }
+
+    async fn evaluate(&self, ctx: &GateContext<'_>) -> GateDecision {
+        let tool = match self.tools.get(ctx.action_name).await {
+            Some(t) => t,
+            None => return GateDecision::Allow,
+        };
+
+        let rl_config = match tool.rate_limit_config() {
+            Some(c) => c,
+            None => return GateDecision::Allow,
+        };
+
+        let result = self
+            .rate_limiter
+            .check_and_record(ctx.user_id, ctx.action_name, &rl_config)
+            .await;
+
+        if let crate::tools::rate_limiter::RateLimitResult::Limited { retry_after, .. } = result {
+            GateDecision::Deny {
+                reason: format!(
+                    "Tool '{}' is rate limited. Try again in {:.0}s.",
+                    ctx.action_name,
+                    retry_after.as_secs_f64()
+                ),
+            }
+        } else {
+            GateDecision::Allow
+        }
+    }
+}
+

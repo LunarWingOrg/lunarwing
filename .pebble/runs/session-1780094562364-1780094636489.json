@@ -1,0 +1,212 @@
+{
+  "schema_version": 2,
+  "started_at_unix_ms": 1780094636489,
+  "duration_ms": 35700,
+  "initial_message_count": 0,
+  "final_message_count": 10,
+  "user_input": {
+    "chars": 77,
+    "sha256": "501d8f41bb841a37f1594ed8ee9b858501c12aed9b46f73d45d24a3d8259b66e",
+    "preview": "please chekc docs/proposals for the documents related to the human delay mode",
+    "truncated": false,
+    "redacted": false
+  },
+  "api_calls": [
+    {
+      "iteration": 1,
+      "request_message_count": 1,
+      "request_estimated_tokens": 20,
+      "duration_ms": 4003,
+      "result_event_count": 5,
+      "usage": {
+        "input_tokens": 8639,
+        "output_tokens": 147,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 2,
+      "request_message_count": 3,
+      "request_estimated_tokens": 585,
+      "duration_ms": 3554,
+      "result_event_count": 5,
+      "usage": {
+        "input_tokens": 9825,
+        "output_tokens": 217,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 3,
+      "request_message_count": 5,
+      "request_estimated_tokens": 2068,
+      "duration_ms": 8152,
+      "result_event_count": 3,
+      "usage": {
+        "input_tokens": 12628,
+        "output_tokens": 138,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 4,
+      "request_message_count": 7,
+      "request_estimated_tokens": 3611,
+      "duration_ms": 2690,
+      "result_event_count": 3,
+      "usage": {
+        "input_tokens": 15337,
+        "output_tokens": 72,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    },
+    {
+      "iteration": 5,
+      "request_message_count": 9,
+      "request_estimated_tokens": 4859,
+      "duration_ms": 13923,
+      "result_event_count": 25,
+      "usage": {
+        "input_tokens": 17612,
+        "output_tokens": 929,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+      },
+      "error": null
+    }
+  ],
+  "permissions": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_019zVKtTtbYqGAKuK83bK2tK",
+      "tool_name": "bash",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01EzxsFGW39TLB3TaDMYZfep",
+      "tool_name": "read_file",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 3,
+      "tool_use_id": "toolu_01Pr6GjeajSXTp8KTUFxvgnT",
+      "tool_name": "read_file",
+      "outcome": "allow",
+      "reason": null
+    },
+    {
+      "iteration": 4,
+      "tool_use_id": "toolu_018hv2rJbACdepW9yWkb2PLF",
+      "tool_name": "read_file",
+      "outcome": "allow",
+      "reason": null
+    }
+  ],
+  "tool_calls": [
+    {
+      "iteration": 1,
+      "tool_use_id": "toolu_019zVKtTtbYqGAKuK83bK2tK",
+      "tool_name": "bash",
+      "input": {
+        "chars": 178,
+        "sha256": "5a0435055382c1d6c6263989d4ddab393b963901e9cd4a57759151cc1ec2e88e",
+        "preview": "{\"command\":\"ls -la docs/proposals/ 2>/dev/null && echo \\\"---\\\" && ls docs/proposals/ | grep -i -E \\\"human|delay\\\" \",\"description\":\"List docs/proposals and find human delay docs\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 2014,
+        "sha256": "be361864e1126a879b56ccbc39297f8b30c315118ce10cc70b268ea21e88a1ac",
+        "preview": "{\n  \"stdout\": \"total 60\\ndrwxr-xr-x. 1 root root  498 May 29 18:42 .\\ndrwxr-xr-x. 1 root root  162 May 29 18:42 ..\\n-rw-r--r--. 1 root root   41 May 29 18:42 Bugs.md\\ndrwxr-xr-x. 1 root root   18 May 29 18:42 GITWASM\\n-rw-r--r--. 1 root root   67 May 29 18:42 House.md\\n-rw-r--r--. 1 root root 4530 May 29 18:42 human-delay-mode-phase1-test-checklist.md\\n-rw-r--r--. 1 root root 5703 May 29 18:42 human-delay-mode-phase2-plan.md\\n-rw-r--r--. 1 root root 5309 May 29 18:42 human-delay-mode-testing-guide.md\\n-rw-r",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 129,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 2,
+      "tool_use_id": "toolu_01EzxsFGW39TLB3TaDMYZfep",
+      "tool_name": "read_file",
+      "input": {
+        "chars": 59,
+        "sha256": "1d02dfe344f4be422cf2d9aa637cd571e2dda8444a16779c1fa7c4894bfb71a9",
+        "preview": "{\"path\":\"docs/proposals/human-delay-mode-testing-guide.md\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 5775,
+        "sha256": "77728d7ab260a7073895ea61b899ff5c221777949bf411926fb5a4dc33856733",
+        "preview": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"/home/sun/lw_new_workspace/lunarwing-human-delay/docs/proposals/human-delay-mode-testing-guide.md\",\n    \"content\": \"# Human Delay Mode - Testing Guide\\n\\n## Quick Start\\n\\n### Prerequisites\\n\\nYou need a Rust environment with Cargo. Minimum recommended:\\n\\n```bash\\nrustc >= 1.75\\ncargo >= 1.75\\n```\\n\\nCheck your version:\\n```bash\\nrustc --version\\ncargo --version\\n```\\n\\nIf you need to install Rust: https://rustup.rs\\n\\n---\\n\\n## Running Tests\\n\\n### 1. Navig",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 0,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 3,
+      "tool_use_id": "toolu_01Pr6GjeajSXTp8KTUFxvgnT",
+      "tool_name": "read_file",
+      "input": {
+        "chars": 57,
+        "sha256": "50aea8ca0d06a063ae07b7b338d90260bde173ef059903ffceedbde158151857",
+        "preview": "{\"path\":\"docs/proposals/human-delay-mode-phase2-plan.md\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 6050,
+        "sha256": "aaf2fb590b53fb81d56a1b54ef877cf5b26d00e63d856485648ea767a182b1ff",
+        "preview": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"/home/sun/lw_new_workspace/lunarwing-human-delay/docs/proposals/human-delay-mode-phase2-plan.md\",\n    \"content\": \"# Human Delay Mode - Phase 2 Plan\\n\\n**Status**: Planned, pending Phase 1 verification first.\\n**Goal**: Complete the supervised mode experience with timeout integration, UI options, and robust testing.\\n\\n## Phase 2 Scope\\n\\nPhase 1 introduced the data model and basic approval gating. Phase 2 makes it actually *usable* — timeouts, UI options, and",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 0,
+      "permission_outcome": "allow",
+      "is_error": false
+    },
+    {
+      "iteration": 4,
+      "tool_use_id": "toolu_018hv2rJbACdepW9yWkb2PLF",
+      "tool_name": "read_file",
+      "input": {
+        "chars": 67,
+        "sha256": "4e43c55ff76f9955f4194243a0979edef9052a29ca5e34296e9b5628c7e6ecbc",
+        "preview": "{\"path\":\"docs/proposals/human-delay-mode-phase1-test-checklist.md\"}",
+        "truncated": false,
+        "redacted": false
+      },
+      "effective_input": null,
+      "output": {
+        "chars": 4863,
+        "sha256": "12c40f8e97c43ee5ccfff3b56764904f6ac6d05396f92495adb209dc63843e64",
+        "preview": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"/home/sun/lw_new_workspace/lunarwing-human-delay/docs/proposals/human-delay-mode-phase1-test-checklist.md\",\n    \"content\": \"# Human Delay Mode - Phase 1 Test Checklist\\n\\n**Status**: Implementation complete (branch `human-delay-mode-phase-1-baud`), ready for verification.\\n\\n## Overview\\n\\nPhase 1 introduces `supervised_mode` + `supervised_timeout_secs` fields to:\\n- `ThreadConfig`\\n- `ThreadExecutionContext` \\n- `GateContext`\\n\\nWhen `supervised_mode = true`",
+        "truncated": true,
+        "redacted": false
+      },
+      "duration_ms": 0,
+      "permission_outcome": "allow",
+      "is_error": false
+    }
+  ],
+  "compactions": [],
+  "errors": []
+}

@@ -1,0 +1,118 @@
+{
+    "version": "0.2.0",
+    "wit_version": "0.3.0",
+    "type": "channel",
+    "name": "weechat",
+    "description": "WeeChat Relay protocol bridge to any IRC network via local WeeChat instance",
+    "setup": {
+        "required_secrets": [
+            {
+                "name": "weechat_relay_password",
+                "prompt": "Enter the WeeChat relay password (set via /set relay.network.password in WeeChat)",
+                "optional": false
+            }
+        ],
+        "required_fields": [
+            {
+                "name": "relay_url",
+                "prompt": "WeeChat relay URL (default: http://127.0.0.1:9001, run /relay add api 9001 in WeeChat)",
+                "optional": true
+            },
+            {
+                "name": "connection_mode",
+                "prompt": "Connection mode: auto, websocket, or http (default: auto)",
+                "optional": true
+            },
+            {
+                "name": "ws_adapter_url",
+                "prompt": "WebSocket adapter URL for auto/websocket modes (default: http://127.0.0.1:6681)",
+                "optional": true
+            },
+            {
+                "name": "networks",
+                "prompt": "Allowed networks, comma-separated (empty = all, e.g. libera,oftc,darkirc)",
+                "optional": true
+            },
+            {
+                "name": "dm_policy",
+                "prompt": "DM policy: open, allowlist, or pairing (default: pairing)",
+                "optional": true
+            },
+            {
+                "name": "group_policy",
+                "prompt": "Group channel policy: open, allowlist, or deny (default: allowlist)",
+                "optional": true
+            },
+            {
+                "name": "allow_from",
+                "prompt": "Allowed senders as nicks or nick!user@host patterns (comma-separated, * for all)",
+                "optional": true
+            },
+            {
+                "name": "verbose_drops",
+                "prompt": "Enable verbose drop logging for filtered messages (true or false, default: false)",
+                "optional": true
+            }
+        ]
+    },
+    "capabilities": {
+        "http": {
+            "allowlist": [
+                {
+                    "host": "127.0.0.1",
+                    "path_prefix": "/"
+                },
+                {
+                    "host": "localhost",
+                    "path_prefix": "/"
+                }
+            ],
+            "credentials": {
+                "weechat_relay": {
+                    "secret_name": "weechat_relay_password",
+                    "location": {
+                        "type": "basic",
+                        "username": "plain"
+                    },
+                    "host_patterns": [
+                        "127.0.0.1",
+                        "localhost"
+                    ]
+                }
+            },
+            "rate_limit": {
+                "requests_per_minute": 100,
+                "requests_per_hour": 5000
+            }
+        },
+        "secrets": {
+            "allowed_names": [
+                "weechat_relay_password"
+            ]
+        },
+        "channel": {
+            "allow_polling": true,
+            "min_poll_interval_ms": 3000,
+            "workspace_prefix": "channels/weechat/",
+            "emit_rate_limit": {
+                "messages_per_minute": 100,
+                "messages_per_hour": 5000
+            }
+        }
+    },
+    "config": {
+        "display_name": "WeeChat",
+        "relay_url": "http://127.0.0.1:9001",
+        "connection_mode": "auto",
+        "ws_adapter_url": "http://127.0.0.1:6681",
+        "networks": "",
+        "exclude_networks": "",
+        "dm_policy": "pairing",
+        "group_policy": "allowlist",
+        "allow_from": "",
+        "max_chunk_length": 420,
+        "verbose_drops": false,
+        "polling_enabled": true,
+        "poll_interval_ms": 3000
+    }
+}

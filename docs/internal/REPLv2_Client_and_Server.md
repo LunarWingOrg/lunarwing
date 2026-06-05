@@ -1,0 +1,8 @@
+# Might be worth to mention
+
+## the replv2 server and client exist in seperate repos and they have seperate branches as well...
+
+
+### we have cool helper script now part of setup harness
+
+#### and MT
