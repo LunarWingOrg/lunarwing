@@ -37,6 +37,8 @@ pub struct BridgeMessage {
     pub content: String,
     pub thread_id: Option<String>,
     pub metadata_json: String,
+    #[serde(default)]
+    pub attachments: Vec<BridgeAttachment>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -136,6 +138,35 @@ const fn default_true() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridge_message_without_attachments_deserializes() {
+        let json = r#"{"message_id":"1","user_id":"a@b","content":"hi","metadata_json":"{}"}"#;
+        let msg: BridgeMessage = serde_json::from_str(json).expect("deserializes");
+        assert_eq!(msg.message_id, "1");
+        assert!(msg.attachments.is_empty());
+    }
+
+    #[test]
+    fn bridge_message_with_attachments_round_trips() {
+        let msg = BridgeMessage {
+            message_id: "1".to_string(),
+            user_id: "a@b".to_string(),
+            user_name: None,
+            content: "see file".to_string(),
+            thread_id: None,
+            metadata_json: "{}".to_string(),
+            attachments: vec![BridgeAttachment {
+                filename: "photo.jpg".to_string(),
+                mime_type: "image/jpeg".to_string(),
+                data_base64: "AQID".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&msg).expect("serializes");
+        let decoded: BridgeMessage = serde_json::from_str(&json).expect("deserializes");
+        assert_eq!(decoded.attachments.len(), 1);
+        assert_eq!(decoded.attachments[0].filename, "photo.jpg");
+    }
 
     #[test]
     fn send_request_without_attachments_deserializes() {
