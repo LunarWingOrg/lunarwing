@@ -815,7 +815,7 @@ impl TestRigBuilder {
 
         // 9. Spawn agent in background task.
         let agent_handle = tokio::spawn(async move {
-            if let Err(e) = agent.run().await {
+            if let Err(e) = Arc::new(agent).run().await {
                 eprintln!("[TestRig] Agent exited with error: {e}");
             }
         });

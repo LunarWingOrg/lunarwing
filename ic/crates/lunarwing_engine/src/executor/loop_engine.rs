@@ -906,10 +906,10 @@ mod tests {
             matches!(outcome, ThreadOutcome::Completed { response: Some(r) } if r == "recovered")
         );
         assert_eq!(exec.thread.step_count, 2);
-        // First step should have error in output metadata
+        // First step error should appear in internal orchestrator transcript
         assert!(
             exec.thread
-                .messages
+                .internal_messages
                 .iter()
                 .any(|m| { m.content.contains("NameError") || m.content.contains("Error") })
         );

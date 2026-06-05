@@ -292,7 +292,7 @@ impl GatewayWorkflowHarness {
         *scheduler_slot.write().await = Some(agent.scheduler());
 
         let agent_handle = tokio::spawn(async move {
-            let _ = agent.run().await;
+            let _ = Arc::new(agent).run().await;
         });
 
         if let Some(rx) = test_channel.take_ready_rx().await {
