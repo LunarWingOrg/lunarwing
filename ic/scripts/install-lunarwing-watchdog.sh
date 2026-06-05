@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# IC_DIR points to the ic/ subdirectory (one level up from scripts/)
+# REPO_ROOT is the git checkout root (one more level up).
+IC_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd -- "${IC_DIR}/.." && pwd)"
 WATCHDOG_LOG="/var/log/lunarwing-watchdog.log"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 OPENRC_CONFD="/etc/conf.d/lunarwing-watchdog"
@@ -300,7 +303,7 @@ install_openrc_confd() {
   fi
 
   install -o root -g root -m 0644 \
-    "${REPO_ROOT}/systemd/lunarwing-watchdog.confd" \
+    "${IC_DIR}/systemd/lunarwing-watchdog.confd" \
     "$OPENRC_CONFD"
   say "Installed OpenRC watchdog config: $OPENRC_CONFD"
 }
@@ -311,16 +314,27 @@ install_systemd_watchdog() {
   cleanup_openrc_fcron_entry
 
   install -o root -g root -m 0755 \
-    "${REPO_ROOT}/scripts/lunarwing-watchdog.sh" \
+    "${IC_DIR}/scripts/lunarwing-watchdog.sh" \
     "$SYSTEMD_WRAPPER"
 
   install -o root -g root -m 0644 \
-    "${REPO_ROOT}/systemd/lunarwing-watchdog.service" \
+    "${IC_DIR}/systemd/lunarwing-watchdog.service" \
     "${SYSTEMD_UNIT_DIR}/lunarwing-watchdog.service"
 
   install -o root -g root -m 0644 \
-    "${REPO_ROOT}/systemd/lunarwing-watchdog.timer" \
+    "${IC_DIR}/systemd/lunarwing-watchdog.timer" \
     "${SYSTEMD_UNIT_DIR}/lunarwing-watchdog.timer"
+
+  # Self-healing infrastructure watchdog (D-1)
+  if [[ -f "${REPO_ROOT}/ic-infrastructure-health-check/lunarwing-self-heal.sh" ]]; then
+    install -o root -g root -m 0755 \
+      "${REPO_ROOT}/ic-infrastructure-health-check/lunarwing-self-heal.sh" \
+      /usr/local/sbin/lunarwing-self-heal
+    install -o root -g root -m 0755 \
+      "${REPO_ROOT}/ic-infrastructure-health-check/cron-wrapper.sh" \
+      /usr/local/sbin/lunarwing-health-cron
+    say "Installed self-healing watchdog: /usr/local/sbin/lunarwing-self-heal"
+  fi
 
   ensure_log_file
 
@@ -341,10 +355,21 @@ install_openrc_watchdog() {
   cleanup_openrc_fcron_entry
 
   install -o root -g root -m 0755 \
-    "${REPO_ROOT}/scripts/lunarwing-watchdog-openrc.sh" \
+    "${IC_DIR}/scripts/lunarwing-watchdog-openrc.sh" \
     "$OPENRC_WRAPPER"
 
   install_openrc_confd
+
+  # Self-healing infrastructure watchdog (D-1)
+  if [[ -f "${REPO_ROOT}/ic-infrastructure-health-check/lunarwing-self-heal.sh" ]]; then
+    install -o root -g root -m 0755 \
+      "${REPO_ROOT}/ic-infrastructure-health-check/lunarwing-self-heal.sh" \
+      /usr/local/sbin/lunarwing-self-heal
+    install -o root -g root -m 0755 \
+      "${REPO_ROOT}/ic-infrastructure-health-check/cron-wrapper.sh" \
+      /usr/local/sbin/lunarwing-health-cron
+    say "Installed self-healing watchdog: /usr/local/sbin/lunarwing-self-heal"
+  fi
 
   ensure_log_file
 
@@ -368,7 +393,7 @@ install_openrc_watchdog() {
     scheduler_hook="${scheduler_dir}/lunarwing-watchdog"
 
     install -o root -g root -m 0755 \
-      "${REPO_ROOT}/systemd/lunarwing-watchdog.cron.hourly" \
+      "${IC_DIR}/systemd/lunarwing-watchdog.cron.hourly" \
       "$scheduler_hook"
 
     if scheduler_service="$(openrc_scheduler_service)"; then
@@ -424,7 +449,7 @@ install_launchd_watchdog() {
   mkdir -p "$LAUNCHD_AGENTS_DIR"
 
   install -m 0755 \
-    "${REPO_ROOT}/scripts/lunarwing-watchdog-launchd.sh" \
+    "${IC_DIR}/scripts/lunarwing-watchdog-launchd.sh" \
     "$LAUNCHD_WRAPPER"
 
   install_launchd_confd
@@ -435,7 +460,7 @@ install_launchd_watchdog() {
   sed \
     -e "s|__WATCHDOG_SCRIPT__|${LAUNCHD_WRAPPER}|g" \
     -e "s|__LOG_DIR__|${log_dir}|g" \
-    "${REPO_ROOT}/systemd/com.lunarwing.watchdog.plist" \
+    "${IC_DIR}/systemd/com.lunarwing.watchdog.plist" \
     >"$LAUNCHD_PLIST"
   chmod 0644 "$LAUNCHD_PLIST"
 
@@ -479,3 +504,4 @@ case "$detected_manager" in
     die "unsupported service manager"
     ;;
 esac
+
