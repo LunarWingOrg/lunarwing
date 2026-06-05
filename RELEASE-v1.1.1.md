@@ -133,6 +133,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Update funding.json with actual payment addresses | v1.1.2 |
 | Rename ironclaw references in WeeChat ws_channel and adapter | v1.1.2 |
 | Multica/Lunartica UI reskin | v1.1.2 |
+| WASM Channel Polishing | v1.1.2 |
 
 ## Testing
 
