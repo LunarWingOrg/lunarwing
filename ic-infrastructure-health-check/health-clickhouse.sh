@@ -58,8 +58,13 @@ check_memory() {
     if command -v clickhouse-client &>/dev/null; then
         mem_pct=$(clickhouse-client -q "SELECT round(memory_usage / (SELECT total_memory FROM system.metrics WHERE metric = 'MemoryTotal') * 100, 2) FROM system.metrics WHERE metric = 'MemoryTracking'" 2>/dev/null || echo 0)
     else
-        # Fallback: check system memory
-        mem_pct=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100}')
+        # Fallback: check system memory (portable across Linux and macOS)
+        if command -v free &>/dev/null; then
+            mem_pct=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100}')
+        elif command -v vm_stat &>/dev/null; then
+            # macOS fallback
+            mem_pct=$(vm_stat | awk '/Pages active/ {act=$3} /Pages wired/ {wired=$3} /Pages free/ {free=$3} /Pages inactive/ {inact=$3} /Pages speculative/ {spec=$3} END { total=act+wired+free+inact+spec; used=act+wired; printf "%.0f", used/total*100 }')
+        fi
     fi
     
     echo ${mem_pct:-0}

@@ -58,7 +58,7 @@ else
 fi
 
 # Send to Gotify
-curl -s -X POST "$GOTIFY_URL/message" \
+curl -s --connect-timeout 10 --max-time 15 -X POST "$GOTIFY_URL/message" \
     -H "Content-Type: application/json" \
     -d "{
         \"title\": \"$title\",

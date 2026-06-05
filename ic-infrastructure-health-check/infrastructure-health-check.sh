@@ -2,7 +2,7 @@
 # Infrastructure Health Check - Main Entry Point
 # Runs all component checks and aggregates results
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_DIR="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/workspace/reports/health"
@@ -52,11 +52,15 @@ run_check() {
 
     local start=$(date +%s)
     local output
-    local exit_code
+    local exit_code=0
 
-    # Run the check with timeout
-    output=$(timeout 30 "$SCRIPT_DIR/$script" 2>&1)
-    exit_code=$?
+    # Run the check with timeout, capture stdout (JSON) and stderr (logs) separately
+    local stderr_file
+    stderr_file=$(mktemp /tmp/health-check-stderr.XXXXXX)
+    output=$(timeout 30 "$SCRIPT_DIR/$script" 2>"$stderr_file") || exit_code=$?
+    # Append any stderr from the check to the log
+    [ -s "$stderr_file" ] && cat "$stderr_file" >> "$LOG_FILE"
+    rm -f "$stderr_file"
     local end=$(date +%s)
     local duration=$((end - start))
 
@@ -106,8 +110,8 @@ case "$SERVICE_MANAGER" in
   *)       log "WARNING: unknown service manager '$SERVICE_MANAGER', skipping service health check" ;;
 esac
 
-# Wait for all checks to complete
-wait
+# Wait for all checks to complete (don't let individual failures kill the script)
+wait || true
 
 # Append logs to main log file
 for comp in gateway xmpp omemo ratelimit clickhouse tensorzero models svcmgr; do
@@ -208,6 +212,10 @@ if echo "$report_json" | jq . >/dev/null 2>&1; then
     report_file="$REPORT_DIR/$(date +%Y-%m-%dT%H:%M:%SZ).json"
     echo "$report_json" | jq . > "$report_file"
 
+    # Rotate old reports — keep last 7 days (168 hours)
+    find "$REPORT_DIR" -maxdepth 1 -name '*.json' -mtime +7 -delete 2>/dev/null || true
+    find "$REPORT_DIR" -maxdepth 1 -name '*-summary.md' -mtime +7 -delete 2>/dev/null || true
+
     # Generate human-readable summary
     summary_file="$REPORT_DIR/$(date +%Y-%m-%dT%H:%M:%SZ)-summary.md"
     echo "# Infrastructure Health Check - $(date '+%Y-%m-%d %H:%M UTC')" > "$summary_file"
@@ -254,7 +262,11 @@ fi
 
 # Send notification if degraded or critical
 if [ "$overall_status" != "healthy" ]; then
-    send_notification "$overall_status" "$report_file"
+    if [ -x "$SCRIPT_DIR/send-notification.sh" ]; then
+        "$SCRIPT_DIR/send-notification.sh" "$overall_status" "$report_file" || log "WARNING: Failed to send notification"
+    else
+        log "WARNING: send-notification.sh not found or not executable at $SCRIPT_DIR/send-notification.sh"
+    fi
 fi
 
 exit $overall_exit_code

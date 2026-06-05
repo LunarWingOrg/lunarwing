@@ -75,15 +75,18 @@ else
 fi
 
 # Add issues if thresholds exceeded
-if [ $(echo "$p95_ms > $P95_CRITICAL_MS" | bc -l 2>/dev/null || echo 0) -eq 1 ]; then
+# Use awk for float comparisons (no bc dependency)
+float_gt() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'; }
+
+if float_gt "$p95_ms" "$P95_CRITICAL_MS"; then
     issues+=("P95 latency critical: ${p95_ms}ms")
-elif [ $(echo "$p95_ms > $P95_DEGRADED_MS" | bc -l 2>/dev/null || echo 0) -eq 1 ]; then
+elif float_gt "$p95_ms" "$P95_DEGRADED_MS"; then
     issues+=("P95 latency elevated: ${p95_ms}ms")
 fi
 
-if [ $(echo "$error_rate > $ERROR_CRITICAL_PCT" | bc -l 2>/dev/null || echo 0) -eq 1 ]; then
+if float_gt "$error_rate" "$ERROR_CRITICAL_PCT"; then
     issues+=("Error rate critical: ${error_rate}%")
-elif [ $(echo "$error_rate > $ERROR_DEGRADED_PCT" | bc -l 2>/dev/null || echo 0) -eq 1 ]; then
+elif float_gt "$error_rate" "$ERROR_DEGRADED_PCT"; then
     issues+=("Error rate elevated: ${error_rate}%")
 fi
 
@@ -102,13 +105,13 @@ fi
 status="healthy"
 exit_code=0
 
-if [ $(echo "$p95_ms > $P95_CRITICAL_MS" | bc -l 2>/dev/null || echo 0) -eq 1 ] || \
-   [ $(echo "$error_rate > $ERROR_CRITICAL_PCT" | bc -l 2>/dev/null || echo 0) -eq 1 ] || \
+if float_gt "$p95_ms" "$P95_CRITICAL_MS" || \
+   float_gt "$error_rate" "$ERROR_CRITICAL_PCT" || \
    [ $queue_depth -gt $QUEUE_CRITICAL ]; then
     status="critical"
     exit_code=2
-elif [ $(echo "$p95_ms > $P95_DEGRADED_MS" | bc -l 2>/dev/null || echo 0) -eq 1 ] || \
-     [ $(echo "$error_rate > $ERROR_DEGRADED_PCT" | bc -l 2>/dev/null || echo 0) -eq 1 ] || \
+elif float_gt "$p95_ms" "$P95_DEGRADED_MS" || \
+     float_gt "$error_rate" "$ERROR_DEGRADED_PCT" || \
      [ $queue_depth -gt $QUEUE_DEGRADED ]; then
     status="degraded"
     exit_code=1

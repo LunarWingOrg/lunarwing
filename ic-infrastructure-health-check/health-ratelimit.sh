@@ -52,7 +52,7 @@ cat <<EOF
     "throttled_last_hour": $throttled,
     "queue_depth": $queued
   },
-  "issues": $(printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  "issues": $(if [ ${#issues[@]} -gt 0 ]; then printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]'; else echo '[]'; fi)
 }
 EOF
 
