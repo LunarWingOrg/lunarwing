@@ -1,7 +1,7 @@
 # Port IronClaw 0.28.1 Changes to LunarWing
 
-**Date:** 2026-05-12
-**Status:** Analysis complete, no items selected for immediate implementation
+**Date:** 2026-05-12 (status updated 2026-06-05)
+**Status:** Analysis complete. P1-C partially implemented (fire_on_system_event only). All other items remain open.
 
 ## Context
 
@@ -41,7 +41,7 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ## P1 — Core Architecture
 
 ### P1-A: WASM Selective Channel Activation for Headless Deployments
-**Commit:** `37b62f8b` | **Complexity:** M | **Dependencies:** None
+**Commit:** `37b62f8b` | **Complexity:** M | **Dependencies:** None | **Status:** Not implemented — `discover_channels()` exists in `loader.rs` but is `#[allow(dead_code)]` and not wired into `setup.rs` or `app.rs`. No filtering, reserved-name check, or two-phase loading in the setup path.
 
 **Why:** LunarWing's headless self-hosted deployments (systemd/OpenRC) currently load ALL discovered WASM channels unconditionally, wasting memory, injecting credentials for unconfigured channels, and expanding attack surface.
 
@@ -63,7 +63,7 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ---
 
 ### P1-B: Multi-Tenant Workspace Memory Isolation (`scoped_to_user`)
-**Commit:** `875387fc` | **Complexity:** S-M | **Dependencies:** None
+**Commit:** `875387fc` | **Complexity:** S-M | **Dependencies:** None | **Status:** Not implemented — no `scoped_to_user()` method in `src/workspace/mod.rs`.
 
 **Why:** Multi-tenancy is LunarWing's key differentiator. `scoped_to_user()` enables efficient per-request workspace cloning for a different tenant while preserving shared resources (search config, embeddings, storage backend, shared memory layers). Without it, each tenant workspace must be constructed from scratch.
 
@@ -83,7 +83,7 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ---
 
 ### P1-C: Mission Auto-Resume After Gate Resolution
-**Commit:** `4696a0a5` | **Complexity:** L | **Dependencies:** Benefits from P1-B
+**Commit:** `4696a0a5` | **Complexity:** L | **Dependencies:** Benefits from P1-B | **Status:** Partially implemented — `fire_on_system_event()` exists in `MissionManager` with tests, but `resume_mission()` is still a naive status flip without fire-cooldown, cron recomputation, event dedup, or max-iteration protection. Prerequisites P1-F + P1-G (lease/output guards) are done.
 
 **Prerequisites (updated 2026-05-28):** The lease/output preconditions for safe inline gate retry — [0.28.2 P1-F](./ironclaw-0.28.2-port-analysis.md#p1-f-auth_gate_from_extension_result-should-carry-resume_output) (auth_gate carries `resume_output`) and [0.28.2 P1-G](./ironclaw-0.28.2-port-analysis.md#p1-g-lease-refund-guard-for-resume_output) (lease refund guard) — are now implemented, with a pattern-fix expansion covering all three LunarWing executors (structured, scripting, orchestrator). When P1-C lands, the double-invoke and lease-bypass bugs IronClaw caught in #3559 are pre-emptively closed.
 
@@ -107,7 +107,7 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ---
 
 ### P1-D: LLM Crate Extraction
-**Commit:** `1ecb1690` | **Complexity:** XL (144 files) | **Dependencies:** P1-E
+**Commit:** `1ecb1690` | **Complexity:** XL (144 files) | **Dependencies:** P1-E | **Status:** Not implemented — `crates/lunarwing_llm/` does not exist. LLM code remains in `src/llm/`.
 
 **Why:** The monolithic `src/llm/` module (39 files, all providers + decorators + session management) is tightly coupled to the binary's database, secrets, and bootstrap layers. Extracting it into `lunarwing_llm` creates clean boundaries, enables independent testing with `StubLlm`, and prevents circular dependencies as the engine grows.
 
@@ -137,7 +137,7 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ---
 
 ### P1-E: `lunarwing_common` Expansion
-**Commit:** `1ecb1690` (part of LLM extraction) | **Complexity:** M | **Dependencies:** None (but prerequisite for P1-D)
+**Commit:** `1ecb1690` (part of LLM extraction) | **Complexity:** M | **Dependencies:** None (but prerequisite for P1-D) | **Status:** Not implemented — none of the named files (attachment.rs, env_helpers.rs, paths.rs, platform.rs, identity.rs, timezone.rs) exist in `crates/lunarwing_common/src/`.
 
 **Why:** Shared types needed by both the main binary and the extracted LLM crate. Also enables the `identity.rs` newtypes that prevent identity-confusion bugs.
 
@@ -165,14 +165,14 @@ IronClaw v0.28.1 (tag `ironclaw-v0.28.1`, 14 substantive commits) shipped on ~20
 ## P2 — Nice-to-Have
 
 ### P2-A: Pre-Commit Safety Checks 7-9
-**Commit:** `21e27b22` | **Complexity:** S-M
+**Commit:** `21e27b22` | **Complexity:** S-M | **Status:** Not implemented — checks 7-9 not present in `scripts/pre-commit-safety.sh`.
 
 LunarWing already has checks 1-6. Port checks 7 (dispatch bypass detection) and 9 (SSE broadcast sourcing) with LunarWing-specific names. Skip check 8 (CredentialName) until P1-E identity types land.
 
 **File:** `scripts/pre-commit-safety.sh` (~120 lines of bash additions)
 
 ### P2-B: Approval Gate Clamping Refactor
-**Complexity:** S
+**Complexity:** S | **Status:** Not implemented — no `clamp_always_to_resume_kind()` helper; clamping remains inline.
 
 Extract inline clamping at `src/bridge/router.rs:1343-1347` into a named `clamp_always_to_resume_kind()` helper with unit tests. Pure readability improvement, no behavior change.
 
@@ -181,13 +181,13 @@ Extract inline clamping at `src/bridge/router.rs:1343-1347` into a named `clamp_
 ## Recommended Implementation Order
 
 ```
-1. P1-A  WASM selective activation     [M]   standalone, immediate headless benefit
-2. P1-B  scoped_to_user workspace      [S-M] standalone, enables multi-tenant
-3. P1-C  Mission auto-resume           [L]   benefits from P1-B
-4. P1-E  lunarwing_common expansion    [M]   foundation for P1-D
-5. P1-D  LLM crate extraction         [XL]  largest change, do last
-6. P2-B  Clamp refactor               [S]   quick cleanup
-7. P2-A  Pre-commit checks 7-9        [S-M] after P1-E for check 8
+1. P1-A  WASM selective activation     [M]   standalone, immediate headless benefit        NOT DONE
+2. P1-B  scoped_to_user workspace      [S-M] standalone, enables multi-tenant              NOT DONE
+3. P1-C  Mission auto-resume           [L]   benefits from P1-B                            PARTIAL (fire_on_system_event only)
+4. P1-E  lunarwing_common expansion    [M]   foundation for P1-D                           NOT DONE
+5. P1-D  LLM crate extraction         [XL]  largest change, do last                       NOT DONE
+6. P2-B  Clamp refactor               [S]   quick cleanup                                 NOT DONE
+7. P2-A  Pre-commit checks 7-9        [S-M] after P1-E for check 8                        NOT DONE
 ```
 
 ## Verification

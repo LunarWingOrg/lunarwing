@@ -1,7 +1,7 @@
 # Port IronClaw 0.29.0 Changes to LunarWing
 
-**Date:** 2026-05-27 (audited 2026-05-28)
-**Status:** Analysis complete. Advisory audit run 2026-05-28 via `cargo deny check advisories` — see [Audit Findings](#audit-findings-2026-05-28). P0-A's named simple-bump path turned out to be empty in the current lockfile; the wasmtime exposure (P0-B) accounts for 12 of 19 current advisories.
+**Date:** 2026-05-27 (audited 2026-05-28, status audit 2026-06-05)
+**Status:** Analysis complete. Advisory audit run 2026-05-28 via `cargo deny check advisories` — see [Audit Findings](#audit-findings-2026-05-28). P0-A's named simple-bump path turned out to be empty in the current lockfile; the wasmtime exposure (P0-B) accounts for 12 of 19 current advisories. All actionable items (P0-B, P1-A, P2-A through P2-D) remain open as of 2026-06-05.
 
 ## Context
 
@@ -97,7 +97,7 @@ Specific bumps from 0.29.0 and their relevance:
 ---
 
 ### P0-B: Wasmtime 28 → 44 (Large, Separate Workstream)
-**Commit:** `a91426c50` (the 0.29.0 piece: `43 → 44`) | **Complexity:** L | **Dependencies:** None — but big | **Status (2026-05-28):** 12 current advisories confirmed (11 on `wasmtime`, 1 on `wasmtime-wasi`) — see [Audit Findings](#audit-findings-2026-05-28).
+**Commit:** `a91426c50` (the 0.29.0 piece: `43 → 44`) | **Complexity:** L | **Dependencies:** None — but big | **Status (2026-05-28):** 12 current advisories confirmed (11 on `wasmtime`, 1 on `wasmtime-wasi`) — see [Audit Findings](#audit-findings-2026-05-28). **(2026-06-05):** Still on wasmtime 28.0.1 in `Cargo.toml`. Not started.
 
 **Why this is called out:** The 0.29.0 change itself is small (wasmtime `43.0.2 → 44.0.2`,
 `wasmparser 0.245.1 → 0.246.2`). But auditing it surfaced a much larger pre-existing gap:
@@ -166,7 +166,7 @@ advisories independently.
 ## P1 — Safety / Architecture
 
 ### P1-A: `LUNARWING_DISABLE_CODEACT` — CodeAct Kill-Switch
-**Commit:** `cab708ed3` (#3665) | **Complexity:** M | **Dependencies:** None
+**Commit:** `cab708ed3` (#3665) | **Complexity:** M | **Dependencies:** None | **Status:** Not implemented — no `DISABLE_CODEACT` or `codeact_disabled()` in `executor/prompt.rs` or `bridge/llm_adapter.rs`.
 
 **Why:** IronClaw added `IRONCLAW_DISABLE_CODEACT` (matches `"true"`/`"1"`) to disable the v2 CodeAct
 path — the Python-REPL execution mode — and fall back to provider-native **structured tool calls**.
@@ -209,7 +209,7 @@ opt-in addition.
 ## P2 — Operability / Evaluate
 
 ### P2-A: Logs Download Endpoint + Gateway Button
-**Commit:** `c93c45524` (#3588) | **Complexity:** S | **Dependencies:** None
+**Commit:** `c93c45524` (#3588) | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — no `/api/logs/download` route or `logs_download_handler` in `src/channels/web/`.
 
 **Why:** LunarWing's gateway already streams logs over SSE and replays a recent-history buffer, but
 there is no one-click export. For self-hosted operators (systemd/OpenRC), a "download logs" button is
@@ -232,7 +232,7 @@ operators don't assume it's a complete export; full history still comes from jou
 ---
 
 ### P2-B: Embeddings SSRF Hardening (Adapt — Do NOT Copy Verbatim)
-**Commit:** `f1a8664da` (#3739, the `url_check.rs` portion) | **Complexity:** M | **Dependencies:** None
+**Commit:** `f1a8664da` (#3739, the `url_check.rs` portion) | **Complexity:** M | **Dependencies:** None | **Status:** Not implemented — no `url_check` module, no cloud-metadata or SSRF validation in `src/workspace/embeddings.rs` or `src/config/embeddings.rs`.
 
 **Why:** The 0.29.0 embeddings extraction added a `url_check.rs` baseline that validates provider
 base URLs before any request (rejects cloud-metadata IPs, non-`http(s)` schemes, and literal-IP
@@ -265,7 +265,7 @@ URLs like `{base_url}/v1/embeddings`), `src/config/embeddings.rs`, and the netwo
 ---
 
 ### P2-C: Extract Embeddings into a `lunarwing_embeddings` Crate
-**Commit:** `f1a8664da` (#3739, the crate-extraction portion) | **Complexity:** M–L | **Dependencies:** P2-B (do them together if pursued)
+**Commit:** `f1a8664da` (#3739, the crate-extraction portion) | **Complexity:** M–L | **Dependencies:** P2-B (do them together if pursued) | **Status:** Not implemented — `crates/lunarwing_embeddings/` does not exist. Embeddings remain in `src/workspace/embeddings.rs`.
 
 **Why:** IronClaw moved `src/workspace/embeddings.rs` (≈794 lines) into a dedicated
 `crates/ironclaw_embeddings` crate (sealed provider impls behind a `create_provider(&config, deps)`
@@ -287,7 +287,7 @@ validation into the new crate's `url_check`-equivalent. Lower priority than P0/P
 ---
 
 ### P2-D: WIT `websocket-send-text` Capability — Evaluate for WeeChat-WSS
-**Commit:** part of the 0.28.2→0.29.0 web work | **Complexity:** M | **Dependencies:** wasmtime currency (P0-B context)
+**Commit:** part of the 0.28.2→0.29.0 web work | **Complexity:** M | **Dependencies:** wasmtime currency (P0-B context) | **Status:** Not implemented — `wit/channel.wit` does not contain `websocket-send-text` or reference `@0.3.1`.
 
 **Why:** 0.29.0 bumped `wit/channel.wit` from `near:agent@0.3.0` to `0.3.1`, adding a host-provided
 capability:
@@ -321,13 +321,13 @@ upgrade in P0-B).
 
 ```
 1. P0-A  Targeted advisory bumps                                                [S-M]  AUDITED 2026-05-28 — no actionable bumps (see Audit Findings)
-2. P1-A  LUNARWING_DISABLE_CODEACT kill-switch                                  [M]    safety; best philosophy fit
-3. P2-A  Logs download endpoint + button                                       [S]    clean operability win
-4. P2-B  Embeddings SSRF hardening (via NetworkPolicyDecider)                   [M]    real hardening; verify policy coverage first
+2. P1-A  LUNARWING_DISABLE_CODEACT kill-switch                                  [M]    safety; best philosophy fit                         NOT DONE
+3. P2-A  Logs download endpoint + button                                       [S]    clean operability win                               NOT DONE
+4. P2-B  Embeddings SSRF hardening (via NetworkPolicyDecider)                   [M]    real hardening; verify policy coverage first         NOT DONE
 --- larger / optional, schedule separately ---
-5. P0-B  Wasmtime 28 → 44 sandbox upgrade                                       [L]    biggest security gap (12/19 advisories — see Audit Findings); own staged workstream
-6. P2-C  lunarwing_embeddings crate extraction                                 [M-L]  optional cleanup; bundle with P2-B if done
-7. P2-D  WIT websocket-send-text                                               [M]    evaluate only if WeeChat-WSS needs it
+5. P0-B  Wasmtime 28 → 44 sandbox upgrade                                       [L]    biggest security gap (12/19 advisories); still on 28.0.1  NOT DONE
+6. P2-C  lunarwing_embeddings crate extraction                                 [M-L]  optional cleanup; bundle with P2-B if done           NOT DONE
+7. P2-D  WIT websocket-send-text                                               [M]    evaluate only if WeeChat-WSS needs it                NOT DONE
 ```
 
 P0-A and P2-A can each ship as a standalone PR. P1-A is the headline safety feature and warrants its

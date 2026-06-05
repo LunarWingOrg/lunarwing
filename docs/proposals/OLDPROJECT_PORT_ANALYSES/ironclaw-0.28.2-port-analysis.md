@@ -1,7 +1,7 @@
 # Port IronClaw 0.28.2 Changes to LunarWing
 
-**Date:** 2026-05-15 (updated 2026-05-28)
-**Status:** Analysis complete. P1-F + P1-G implemented 2026-05-28 with pattern-fix expansion — see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion) below.
+**Date:** 2026-05-15 (updated 2026-05-28, status audit 2026-06-05)
+**Status:** Analysis complete. P1-F + P1-G implemented 2026-05-28 with pattern-fix expansion — see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion) below. P0-A, P1-H, P1-I, P2-C, P2-D remain open.
 
 ## Context
 
@@ -49,7 +49,7 @@ The release is smaller than 0.28.1 but contains a high-severity security fix in 
 ## P0 — Security (Port Immediately)
 
 ### P0-A: Ghost-Seeded Tool Permission Rows — Latent Bypass Vector
-**Commit:** `34eeeaf0` (the `#3559` security review portion) | **Complexity:** S | **Dependencies:** None
+**Commit:** `34eeeaf0` (the `#3559` security review portion) | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — `src/app.rs` still calls `seed_tool_permissions()` at line 952; no `cleanup_ghost_seeded_tool_permissions()` exists.
 
 **Why:** LunarWing's `seed_tool_permissions()` in `src/app.rs:977-1034` writes DB rows for every built-in tool's seeded default at startup. These "ghost" rows are indistinguishable from user-explicit overrides because they share the same DB key format (`tool_permissions.<name>`).
 
@@ -110,7 +110,7 @@ fn interrupted_call_needs_refund(result: &Result<ActionResult, EngineError>) -> 
 ---
 
 ### P1-H: Registry `hidden` Field on Extension Manifests
-**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None
+**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — no `hidden` field in `src/registry/manifest.rs`, `src/registry/catalog.rs`, or `src/extensions/manager.rs`.
 
 **Why:** IronClaw added `hidden: bool` to `ExtensionManifest` / `RegistryEntry` and filters hidden entries from the "available-but-not-installed" list and from `tool_search` results. Hidden entries remain installable by explicit name.
 
@@ -129,7 +129,7 @@ LunarWing doesn't have competing entries today, but this is a useful extension p
 ---
 
 ### P1-I: `fetch_models_for` Facade + Model Fetch Privatization
-**Commit:** `cfeae9e6` | **Complexity:** M | **Dependencies:** None (standalone; does NOT require LLM crate extraction)
+**Commit:** `cfeae9e6` | **Complexity:** M | **Dependencies:** None (standalone; does NOT require LLM crate extraction) | **Status:** Not implemented — no `fetch_models_for` or `FetchModelsOptions` in `src/llm/`. Callers still use per-backend model-list functions directly.
 
 **Why:** LunarWing's setup wizard and CLI `models` subcommand both reach into provider-specific modules to list models (`fetch_anthropic_models`, `fetch_openai_models`, `fetch_ollama_models`, etc.). Each caller has a per-backend match arm. A single `fetch_models_for(provider_id, &opts)` facade collapses these to one call, and privatizing the per-provider fetchers removes public surface area from `src/llm/`.
 
@@ -147,7 +147,7 @@ This can be done within `src/llm/models.rs` without extracting the LLM crate (it
 ## P2 — Nice-to-Have
 
 ### P2-C: Bug-Bash Regression-Snapshot Harness
-**Commit:** `cfeae9e6` | **Complexity:** S-M
+**Commit:** `cfeae9e6` | **Complexity:** S-M | **Status:** Not implemented — no `e2e_bug_bash_snapshots.rs` or equivalent snapshot harness in `tests/`.
 
 IronClaw 0.28.2 introduces a recorded-LLM-trace replay harness in `tests/e2e_bug_bash_snapshots.rs`. Bug-bash fixtures pin specific open bugs to a deterministic snapshot. When a bug is fixed, the snapshot diff is reviewable proof; when someone reintroduces the bug, the snapshot drifts and CI blocks the merge.
 
@@ -160,7 +160,7 @@ This is a useful testing pattern for LunarWing's agent behavior regression. Port
 - `git show ironclaw-v0.28.2:tests/fixtures/llm_traces/bug_bash/README.md`
 
 ### P2-D: NearAI Default Model → `auto`
-**Commit:** `cfeae9e6` | **Complexity:** Trivial
+**Commit:** `cfeae9e6` | **Complexity:** Trivial | **Status:** Not applicable — LunarWing doesn't ship a `nearai` entry in `providers.json`.
 
 IronClaw switched the `nearai` registry entry's `default_model` from `claude-sonnet-4-5` to `auto` (NEAR AI's server-side routing alias). LunarWing doesn't currently ship a `nearai` entry in `providers.json`, so this is a no-op unless NearAI support is added.
 
@@ -196,12 +196,12 @@ The two inline refund sites without their own regression tests (`scripting.rs:12
 ## Recommended Implementation Order
 
 ```
-1. P0-A  Ghost-seeded permission cleanup   [S]   proactive security; prevent latent bypass
+1. P0-A  Ghost-seeded permission cleanup   [S]   proactive security; prevent latent bypass       NOT DONE
 2. P1-F  auth_gate resume_output            [S]   DONE 2026-05-28 (see Implementation Note)
 3. P1-G  Lease refund guard                 [S]   DONE 2026-05-28 (expanded to 5 sites)
-4. P1-H  Registry hidden field              [S]   small extension point
-5. P1-I  fetch_models_for facade            [M]   code quality, reduces wizard complexity
-6. P2-C  Bug-bash snapshot harness          [S-M] testing infrastructure
+4. P1-H  Registry hidden field              [S]   small extension point                           NOT DONE
+5. P1-I  fetch_models_for facade            [M]   code quality, reduces wizard complexity          NOT DONE
+6. P2-C  Bug-bash snapshot harness          [S-M] testing infrastructure                           NOT DONE
 ```
 
 Items 1-3 can be done in a single PR. Item 4 is standalone. Item 5 is a nice cleanup but not urgent. Item 6 is a test-infrastructure investment.
