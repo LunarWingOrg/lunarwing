@@ -186,3 +186,10 @@ async def test_waiting_for_approval_message_no_error_prefix(page):
     assert "HTTP requests to external APIs" in msg_text, (
         f"Expected tool description in message. Got: {msg_text!r}"
     )
+
+    # Clean up: deny the pending approval so the agent loop unblocks for
+    # subsequent tests that share this session-scoped server.
+    deny_btn = card.locator("button.deny")
+    if await deny_btn.count() > 0 and await deny_btn.is_enabled():
+        await deny_btn.click()
+        await page.wait_for_timeout(500)
