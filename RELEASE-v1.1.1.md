@@ -91,6 +91,11 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
 - **One test is failing due to env-specific SSRF check.**
 - **Several E2E playwright tests may also need to be updated to account for major code refactoring.**
+- Bug docs created:
+  - docs/bugs/BUG-e2e-tool-execution-timeout.md - echo/time tool tests timeout waiting for assistant response
+  - docs/bugs/BUG-e2e-clipboard-copy-test.md - clipboard API permissions in headless Chromium
+  - docs/bugs/BUG-e2e-oauth-url-parameter-tests.md - all 6 tests fail during fixture setup due to transient network issues
+  - test_wasm_lifecycle.py errors also due to transient network issues
 - **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
