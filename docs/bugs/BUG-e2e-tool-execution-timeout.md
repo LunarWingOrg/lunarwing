@@ -28,6 +28,8 @@ The `_send_and_get_response` helper waits for a new `.message.assistant` DOM ele
 2. **Increase timeout** — The 30s timeout may be insufficient if the agent loop takes longer with tool calls (two LLM round-trips instead of one).
 3. **Check SSE streaming** — Verify that tool result messages are emitted as SSE events and rendered in the chat UI. A change to the SSE event format or the frontend JS rendering could cause the assistant message to never appear.
 
+## Verify fix is in
+
 ## Files
 
 - `ic/tests/e2e/scenarios/test_tool_execution.py` (lines 55-80)
