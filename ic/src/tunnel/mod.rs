@@ -433,6 +433,8 @@ mod tests {
             workspace_read_scopes: Vec::new(),
             memory_layers: Vec::new(),
             user_tokens: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         });
         c
     }
@@ -447,6 +449,8 @@ mod tests {
             workspace_read_scopes: Vec::new(),
             memory_layers: Vec::new(),
             user_tokens: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         });
         c
     }

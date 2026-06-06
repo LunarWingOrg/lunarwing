@@ -561,6 +561,8 @@ fn gateway_state_has_multi_tenant_fields() {
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     };
 
     assert_eq!(state.owner_id, "fallback");
@@ -638,6 +640,8 @@ async fn start_owner_scoped_sender_server() -> (
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     });
 
     let auth = MultiAuthState::multi(tokens);
@@ -1026,6 +1030,8 @@ async fn start_multi_user_server_with_db() -> (
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     });
 
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();

@@ -381,6 +381,10 @@ pub struct GatewayState {
     pub db_auth: Option<Arc<crate::channels::web::auth::DbAuthenticator>>,
     /// Channel manager for health checks.
     pub channel_manager: Option<Arc<crate::channels::manager::ChannelManager>>,
+    /// WebSocket server-side ping interval in seconds.
+    pub ws_ping_interval_secs: u64,
+    /// WebSocket idle timeout in seconds.
+    pub ws_idle_timeout_secs: u64,
 }
 
 /// Start the gateway HTTP server.
@@ -612,6 +616,27 @@ pub async fn start_server(
             tracing::error!("Web gateway server error: {}", e);
         }
     });
+
+    // Background cleanup: remove leaked tracker entries for connections that
+    // exited without unregistering (e.g. due to a panic in the handler).
+    if let Some(ref tracker) = state.ws_tracker {
+        let tracker = Arc::clone(tracker);
+        let idle_timeout = std::time::Duration::from_secs(state.ws_idle_timeout_secs);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let removed = tracker.cleanup_stale(idle_timeout);
+                if removed > 0 {
+                    tracing::info!(
+                        removed,
+                        remaining = tracker.connection_count(),
+                        "Cleaned up stale WebSocket tracker entries"
+                    );
+                }
+            }
+        });
+    }
 
     Ok(bound_addr)
 }
@@ -2771,6 +2796,8 @@ mod tests {
             secrets_store: None,
             db_auth: None,
             channel_manager: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         })
     }
 
