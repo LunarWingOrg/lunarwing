@@ -121,7 +121,6 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.2 |
 | XMPP File Upload Extensive round of further polishing | v1.1.1 |
-| Server-side WebSocket keepalive adjustment | v1.1.1 |
 | New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.2 |
 | Proprietary channel removal continuation (Telegram) | v1.1.4 |
