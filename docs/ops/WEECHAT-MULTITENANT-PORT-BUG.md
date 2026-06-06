@@ -193,6 +193,12 @@ The WASM already pulls `dm_policy`, `group_policy`, `allow_from`, and `networks`
 After deploying the new `lunarwing` binary, each existing tenant needs three things: the updated capabilities file (which now declares the `env` sources), the new `WS_ADAPTER_URL` env var, and a restart so `on_start` re-runs with the injected values.
 
 ```bash
+# 0. Pre-flight (read-only): confirm each tenant's env agrees with its
+#    registry ports BEFORE touching anything. A FAIL means a *wrong existing*
+#    value that patch-env will NOT overwrite — fix it by hand first.
+sudo ic/scripts/lunarwing-weechat-preflight.sh          # all tenants
+sudo ic/scripts/lunarwing-weechat-preflight.sh <name>   # one tenant
+
 # 1. Reinstall the WeeChat channel so the tenant's installed
 #    weechat.capabilities.json gains the new `env` field declarations.
 #    (The .wasm binary is unchanged; only the capabilities sidecar matters.)
