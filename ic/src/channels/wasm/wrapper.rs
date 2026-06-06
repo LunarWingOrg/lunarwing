@@ -1506,7 +1506,7 @@ impl WasmChannel {
 
                 let emitted = host_state.take_emitted_messages();
                 if !emitted.is_empty() {
-                    tracing::warn!(
+                    tracing::debug!(
                         channel = %channel_name,
                         count = emitted.len(),
                         "WASM on_poll emitted {} message(s)",
@@ -2522,10 +2522,10 @@ impl WasmChannel {
                 }
 
                 let emitted = host_state.take_emitted_messages();
-                tracing::warn!(
+                tracing::debug!(
                     channel = %channel_name,
                     emitted_count = emitted.len(),
-                    "on_poll done"
+                    "WASM channel on_poll completed"
                 );
                 Ok(emitted)
             }

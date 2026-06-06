@@ -161,6 +161,13 @@ struct WeechatConfig {
     /// Log the reason every time a message is silently dropped.
     #[serde(default)]
     verbose_drops: bool,
+
+    /// Emit verbose per-poll diagnostic logging (buffer dumps, config reloads,
+    /// per-poll line counts, response metadata). Off by default; this is the
+    /// master switch for the chatty diagnostics used while debugging the
+    /// adapter/port issues. When enabled it also implies `verbose_drops`.
+    #[serde(default)]
+    debug_logging: bool,
 }
 
 fn default_relay_url() -> String {
@@ -256,6 +263,7 @@ const LAST_SEEN_IDS_PATH: &str = "state/last_seen_ids"; // JSON: {buffer: last_l
 const BUFFER_LIST_PATH: &str = "state/buffer_list"; // JSON: [BufferInfo]
 const WS_ADAPTER_URL_PATH: &str = "state/ws_adapter_url";
 const VERBOSE_DROPS_PATH: &str = "state/verbose_drops";
+const DEBUG_LOGGING_PATH: &str = "state/debug_logging";
 
 // ============================================================================
 // Channel Implementation
@@ -302,9 +310,18 @@ impl Guest for WeechatRelayChannel {
             MAX_CHUNK_LENGTH_PATH,
             &config.max_chunk_length.to_string(),
         );
+        // debug_logging is the master switch and implies verbose_drops.
+        let _ = channel_host::workspace_write(
+            DEBUG_LOGGING_PATH,
+            if config.debug_logging {
+                "true"
+            } else {
+                "false"
+            },
+        );
         let _ = channel_host::workspace_write(
             VERBOSE_DROPS_PATH,
-            if config.verbose_drops {
+            if config.verbose_drops || config.debug_logging {
                 "true"
             } else {
                 "false"
@@ -425,10 +442,10 @@ impl Guest for WeechatRelayChannel {
 
     /// Deliver the agent's response back to IRC via WeeChat relay.
     fn on_respond(response: AgentResponse) -> Result<(), String> {
-        channel_host::log(
-            channel_host::LogLevel::Info,
-            &format!("on_respond metadata_json={}", response.metadata_json),
-        );
+        debug_log(&format!(
+            "on_respond metadata_json={}",
+            response.metadata_json
+        ));
         let metadata: WeechatMessageMetadata = serde_json::from_str(&response.metadata_json)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
@@ -568,8 +585,27 @@ impl Guest for WeechatRelayChannel {
 // Drop Logging
 // ============================================================================
 
-fn drop_log(_verbose: bool, reason: &str) {
-    channel_host::log(channel_host::LogLevel::Warn, &format!("[drop] {}", reason));
+fn drop_log(verbose: bool, reason: &str) {
+    if verbose {
+        channel_host::log(channel_host::LogLevel::Warn, &format!("[drop] {}", reason));
+    }
+}
+
+/// Returns true when verbose per-poll diagnostic logging is enabled.
+///
+/// Controlled by the `debug_logging` config flag (persisted to
+/// `DEBUG_LOGGING_PATH`). Off by default so normal operation stays quiet.
+fn debug_logging_enabled() -> bool {
+    channel_host::workspace_read(DEBUG_LOGGING_PATH)
+        .map(|s| s == "true")
+        .unwrap_or(false)
+}
+
+/// Emit an Info-level diagnostic log only when `debug_logging` is enabled.
+fn debug_log(message: &str) {
+    if debug_logging_enabled() {
+        channel_host::log(channel_host::LogLevel::Info, message);
+    }
 }
 
 // ============================================================================
@@ -666,9 +702,10 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
                             let _ = channel_host::workspace_write(NETWORKS_PATH, &json);
                         }
                     }
-                    channel_host::log(channel_host::LogLevel::Info,
-                        &format!("Loaded config from adapter: dm_policy={:?} group_policy={:?} allow_from={:?}",
-                            cfg["dm_policy"], cfg["group_policy"], cfg["allow_from"]));
+                    debug_log(&format!(
+                        "Loaded config from adapter: dm_policy={:?} group_policy={:?} allow_from={:?}",
+                        cfg["dm_policy"], cfg["group_policy"], cfg["allow_from"]
+                    ));
                 }
             }
         }
@@ -687,22 +724,16 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
         // Try to refresh buffer list
         match fetch_buffer_list(poll_url, relay_password) {
             Ok(new_buffers) => {
-                channel_host::log(
-                    channel_host::LogLevel::Info,
-                    &format!(
-                        "Fetched {} total buffers: {:?}",
-                        new_buffers.len(),
-                        new_buffers
-                            .iter()
-                            .filter_map(|b| b.full_name.as_deref())
-                            .collect::<Vec<_>>()
-                    ),
-                );
+                debug_log(&format!(
+                    "Fetched {} total buffers: {:?}",
+                    new_buffers.len(),
+                    new_buffers
+                        .iter()
+                        .filter_map(|b| b.full_name.as_deref())
+                        .collect::<Vec<_>>()
+                ));
                 let irc_buffers = filter_irc_buffers(&new_buffers);
-                channel_host::log(
-                    channel_host::LogLevel::Info,
-                    &format!("Filtered to {} IRC buffers", irc_buffers.len()),
-                );
+                debug_log(&format!("Filtered to {} IRC buffers", irc_buffers.len()));
                 if !irc_buffers.is_empty() {
                     if let Ok(json) = serde_json::to_string(&irc_buffers) {
                         let _ = channel_host::workspace_write(BUFFER_LIST_PATH, &json);
@@ -741,19 +772,16 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
             match poll_buffer(poll_url, relay_password, full_name, &last_seen_ids) {
                 Ok(new_lines) => {
                     if !new_lines.is_empty() {
-                        channel_host::log(
-                            channel_host::LogLevel::Info,
-                            &format!(
-                                "Buffer {}: {} new lines{}",
-                                full_name,
-                                new_lines.len(),
-                                if first_time {
-                                    " (seeding watermark, not emitting)"
-                                } else {
-                                    ""
-                                }
-                            ),
-                        );
+                        debug_log(&format!(
+                            "Buffer {}: {} new lines{}",
+                            full_name,
+                            new_lines.len(),
+                            if first_time {
+                                " (seeding watermark, not emitting)"
+                            } else {
+                                ""
+                            }
+                        ));
                     }
                     for (line, line_id) in new_lines {
                         // Update watermark always
@@ -1219,13 +1247,10 @@ fn send_dm(
             // in the context of a connected server buffer, not core.weechat.
             let server_buffer = format!("irc.server.{}", network);
             let msg_cmd = format!("/msg {} {}", nick, text);
-            channel_host::log(
-                channel_host::LogLevel::Info,
-                &format!(
-                    "DM buffer '{}' not found, routing via '{}'",
-                    buffer_name, server_buffer
-                ),
-            );
+            debug_log(&format!(
+                "DM buffer '{}' not found, routing via '{}'",
+                buffer_name, server_buffer
+            ));
             send_input(relay_url, relay_password, &server_buffer, &msg_cmd)
         }
         other => other,

@@ -52,6 +52,11 @@
                 "name": "verbose_drops",
                 "prompt": "Enable verbose drop logging for filtered messages (true or false, default: false)",
                 "optional": true
+            },
+            {
+                "name": "debug_logging",
+                "prompt": "Enable verbose per-poll diagnostic logging (buffer dumps, config reloads, per-poll line counts). Implies verbose_drops. (true or false, default: false)",
+                "optional": true
             }
         ]
     },
@@ -112,6 +117,7 @@
         "allow_from": "",
         "max_chunk_length": 420,
         "verbose_drops": false,
+        "debug_logging": false,
         "polling_enabled": true,
         "poll_interval_ms": 3000
     }
