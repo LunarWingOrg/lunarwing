@@ -1319,6 +1319,27 @@ pub async fn handle_exec_approval(
     Ok(Some("No matching pending approval found.".into()))
 }
 
+/// Clamp the `always` flag from a user's gate resolution so that
+/// "approve always" is only allowed when the gate's resume kind
+/// explicitly supports it.  This prevents a user from accidentally
+/// auto-approving future invocations of a tool that was designed to
+/// always require explicit confirmation (e.g. `shell` on an
+/// approval-only gate).
+///
+/// The inline clamping at `resolve_gate` was moved here to give the
+/// logic a name and make it testable without exercising the full
+/// engine/gate/SSE stack.
+pub fn clamp_always_to_resume_kind(
+    raw_always: bool,
+    resume_kind: &lunarwing_engine::ResumeKind,
+) -> bool {
+    raw_always
+        && matches!(
+            resume_kind,
+            lunarwing_engine::ResumeKind::Approval { allow_always: true }
+        )
+}
+
 /// Resolve a unified pending gate.
 ///
 /// This is the single entry point for resolving gates stored in the
@@ -1370,11 +1391,7 @@ pub async fn resolve_gate(
 
     match resolution {
         lunarwing_engine::GateResolution::Approved { always: raw_always } => {
-            let always = raw_always
-                && matches!(
-                    pending.resume_kind,
-                    lunarwing_engine::ResumeKind::Approval { allow_always: true }
-                );
+            let always = clamp_always_to_resume_kind(raw_always, &pending.resume_kind);
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
                     &message.user_id,
@@ -4104,5 +4121,55 @@ mod tests {
         let result = find_most_recent_thread(&state, &Some(conv), "alice").await;
         assert!(result.is_some(), "should find thread via entry fallback");
         assert_eq!(result.unwrap().id, tid);
+    }
+
+    // --- clamp_always_to_resume_kind tests ---
+
+    #[test]
+    fn clamp_always_true_when_resume_kind_allows_it() {
+        use lunarwing_engine::ResumeKind;
+        assert!(clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Approval {
+                allow_always: true
+            }
+        ));
+    }
+
+    #[test]
+    fn clamp_always_false_when_resume_kind_disallows() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Approval {
+                allow_always: false
+            }
+        ));
+    }
+
+    #[test]
+    fn clamp_always_false_when_raw_always_is_false() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            false,
+            &ResumeKind::Approval {
+                allow_always: true
+            }
+        ));
+    }
+
+    #[test]
+    fn clamp_rejects_non_approval_resume_kinds() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Authentication {}
+        ));
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::External {
+                callback_id: "abc".to_string()
+            }
+        ));
     }
 }

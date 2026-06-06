@@ -842,6 +842,7 @@ mod tests {
             artifacts,
             auth_summary: None,
             tags: Vec::new(),
+            hidden: None,
             url: None,
             auth: None,
         }

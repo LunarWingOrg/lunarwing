@@ -46,6 +46,12 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub tags: Vec<String>,
 
+    /// When `true`, this extension is hidden from the "available-but-not-installed"
+    /// list and from `tool_search` results.  Hidden entries remain installable by
+    /// explicit name.  Default is `false`.
+    #[serde(default)]
+    pub hidden: Option<bool>,
+
     /// MCP server URL. Only present for `McpServer` manifests.
     #[serde(default)]
     pub url: Option<String>,
@@ -213,6 +219,7 @@ impl ExtensionManifest {
             fallback_source: None,
             auth_hint,
             version: self.version.clone(),
+            hidden: self.hidden,
         })
     }
 
@@ -281,6 +288,7 @@ impl ExtensionManifest {
             fallback_source,
             auth_hint,
             version: self.version.clone(),
+            hidden: self.hidden,
         }
     }
 }

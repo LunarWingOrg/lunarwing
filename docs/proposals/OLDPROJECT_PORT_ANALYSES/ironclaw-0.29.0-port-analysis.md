@@ -1,7 +1,7 @@
 # Port IronClaw 0.29.0 Changes to LunarWing
 
-**Date:** 2026-05-27 (audited 2026-05-28, status audit 2026-06-05)
-**Status:** Analysis complete. Advisory audit run 2026-05-28 via `cargo deny check advisories` — see [Audit Findings](#audit-findings-2026-05-28). P0-A's named simple-bump path turned out to be empty in the current lockfile; the wasmtime exposure (P0-B) accounts for 12 of 19 current advisories. All actionable items (P0-B, P1-A, P2-A through P2-D) remain open as of 2026-06-05.
+**Date:** 2026-05-27 (audited 2026-05-28, status audit 2026-06-05, updated 2026-06-05)
+**Status:** Analysis complete. Advisory audit run 2026-05-28 via `cargo deny check advisories` — see [Audit Findings](#audit-findings-2026-05-28). P0-A's named simple-bump path turned out to be empty in the current lockfile; the wasmtime exposure (P0-B) accounts for 12 of 19 current advisories. P2-A implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. Remaining open: P0-B, P1-A, P2-B through P2-D.
 
 ## Context
 
@@ -209,7 +209,7 @@ opt-in addition.
 ## P2 — Operability / Evaluate
 
 ### P2-A: Logs Download Endpoint + Gateway Button
-**Commit:** `c93c45524` (#3588) | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — no `/api/logs/download` route or `logs_download_handler` in `src/channels/web/`.
+**Commit:** `c93c45524` (#3588) | **Complexity:** S | **Dependencies:** None | **Status:** Implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. `/api/logs/download` route added to `src/channels/web/server.rs`. Handler `logs_download_handler` added inline in `server.rs` — returns `recent_entries()` as NDJSON with `Content-Disposition: attachment; filename="lunarwing-logs.jsonl"`. Requires authentication. Gateway button not yet added (backend only).
 
 **Why:** LunarWing's gateway already streams logs over SSE and replays a recent-history buffer, but
 there is no one-click export. For self-hosted operators (systemd/OpenRC), a "download logs" button is
@@ -322,7 +322,7 @@ upgrade in P0-B).
 ```
 1. P0-A  Targeted advisory bumps                                                [S-M]  AUDITED 2026-05-28 — no actionable bumps (see Audit Findings)
 2. P1-A  LUNARWING_DISABLE_CODEACT kill-switch                                  [M]    safety; best philosophy fit                         NOT DONE
-3. P2-A  Logs download endpoint + button                                       [S]    clean operability win                               NOT DONE
+3. P2-A  Logs download endpoint + button                                       [S]    DONE 2026-06-05 (branch 1.1.1-333-security-improvements-3; backend only, no UI button yet)
 4. P2-B  Embeddings SSRF hardening (via NetworkPolicyDecider)                   [M]    real hardening; verify policy coverage first         NOT DONE
 --- larger / optional, schedule separately ---
 5. P0-B  Wasmtime 28 → 44 sandbox upgrade                                       [L]    biggest security gap (12/19 advisories); still on 28.0.1  NOT DONE
