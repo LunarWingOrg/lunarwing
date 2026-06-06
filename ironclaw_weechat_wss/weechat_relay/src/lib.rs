@@ -1295,28 +1295,38 @@ fn seed_watermarks(relay_url: &str, relay_password: &str, buffers: &[BufferInfo]
     }
 }
 
+fn make_auth_headers(password: &str) -> String {
+    if password.is_empty() {
+        return serde_json::json!({}).to_string();
+    }
+    let token = base64_encode(&format!("plain:{}", password));
+    serde_json::json!({
+        "Authorization": format!("Basic {}", token)
+    })
+    .to_string()
+}
+
 /// Perform HTTP GET request.
 fn http_get(
     url: &str,
-    _password: &str,
+    password: &str,
     timeout_ms: u32,
 ) -> Result<channel_host::HttpResponse, String> {
-    let headers_json = serde_json::json!({}).to_string();
-
+    let headers_json = make_auth_headers(password);
     channel_host::http_request("GET", url, &headers_json, None, Some(timeout_ms))
 }
 
 /// Perform HTTP POST request.
 fn http_post(
     url: &str,
-    _password: &str,
+    password: &str,
     body: &[u8],
     timeout_ms: u32,
 ) -> Result<channel_host::HttpResponse, String> {
-    let headers_json = serde_json::json!({
-        "Content-Type": "application/json"
-    })
-    .to_string();
+    let mut headers: serde_json::Value = serde_json::from_str(&make_auth_headers(password))
+        .unwrap_or_else(|_| serde_json::json!({}));
+    headers["Content-Type"] = serde_json::json!("application/json");
+    let headers_json = headers.to_string();
 
     channel_host::http_request("POST", url, &headers_json, Some(body), Some(timeout_ms))
 }
