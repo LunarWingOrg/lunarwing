@@ -892,10 +892,14 @@ NANOCODE_WSS_PORT=$nanocode_wss_port
 PEBBLE_WSS_PORT=$pebble_wss_port
 
 # WeeChat relay + adapter
+# RELAY_URL / WS_ADAPTER_URL are full URLs consumed by the in-process WASM
+# channel (via the capabilities `env` source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
+# are the bare port consumed by the standalone ws_adapter.py process.
 RELAY_URL=http://127.0.0.1:${weechat_port}
 RELAY_PASSWORD=$relay_password
 ADAPTER_PORT=$weechat_adapter_port
 WEECHAT_ADAPTER_PORT=$weechat_adapter_port
+WS_ADAPTER_URL=http://127.0.0.1:${weechat_adapter_port}
 
 # Daemon mode
 CLI_ENABLED=false
@@ -1021,6 +1025,26 @@ patch_tenant_env() {
     else
       printf '\n# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)\nWEECHAT_ADAPTER_PORT=%s\n' "$weechat_adapter_port" >>"$env_path"
       say "added WEECHAT_ADAPTER_PORT=$weechat_adapter_port to $env_path"
+    fi
+    # WS_ADAPTER_URL is the full adapter URL consumed by the in-process WASM
+    # channel (via the capabilities `env` source). Without it the channel
+    # falls back to the hardcoded :6681 default and silently fails.
+    if grep -q '^WS_ADAPTER_URL=' "$env_path"; then
+      say "WS_ADAPTER_URL already set in $env_path (skipping)"
+    else
+      printf 'WS_ADAPTER_URL=http://127.0.0.1:%s\n' "$weechat_adapter_port" >>"$env_path"
+      say "added WS_ADAPTER_URL=http://127.0.0.1:$weechat_adapter_port to $env_path"
+    fi
+  fi
+
+  local weechat_port
+  weechat_port="$(ports_get "$name" weechat)"
+  if [[ -n "$weechat_port" ]]; then
+    if grep -q '^RELAY_URL=' "$env_path"; then
+      say "RELAY_URL already set in $env_path (skipping)"
+    else
+      printf '\n# WeeChat relay URL consumed by the in-process WASM channel\nRELAY_URL=http://127.0.0.1:%s\n' "$weechat_port" >>"$env_path"
+      say "added RELAY_URL=http://127.0.0.1:$weechat_port to $env_path"
     fi
   fi
 }

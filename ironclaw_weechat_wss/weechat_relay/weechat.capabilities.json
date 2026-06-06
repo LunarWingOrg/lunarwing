@@ -16,7 +16,8 @@
             {
                 "name": "relay_url",
                 "prompt": "WeeChat relay URL (default: http://127.0.0.1:9001, run /relay add api 9001 in WeeChat)",
-                "optional": true
+                "optional": true,
+                "env": "RELAY_URL"
             },
             {
                 "name": "connection_mode",
@@ -26,7 +27,8 @@
             {
                 "name": "ws_adapter_url",
                 "prompt": "WebSocket adapter URL for auto/websocket modes (default: http://127.0.0.1:6681)",
-                "optional": true
+                "optional": true,
+                "env": "WS_ADAPTER_URL"
             },
             {
                 "name": "networks",
