@@ -219,6 +219,7 @@ impl ExtensionManifest {
             fallback_source: None,
             auth_hint,
             version: self.version.clone(),
+            hidden: self.hidden,
         })
     }
 
@@ -287,6 +288,7 @@ impl ExtensionManifest {
             fallback_source,
             auth_hint,
             version: self.version.clone(),
+            hidden: self.hidden,
         }
     }
 }

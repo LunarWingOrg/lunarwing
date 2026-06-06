@@ -840,6 +840,7 @@ mod tests {
             fallback_source: None,
             auth_hint: AuthHint::Dcr,
             version: None,
+            hidden: None,
         };
         let sr = SearchResult {
             entry,
@@ -870,6 +871,7 @@ mod tests {
             fallback_source: None,
             auth_hint: AuthHint::None,
             version: None,
+            hidden: None,
         };
         let sr = SearchResult {
             entry,
