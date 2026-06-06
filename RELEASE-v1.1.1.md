@@ -126,6 +126,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - ~~**Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread.~~ **FIXED** — `scoped_conversation_id()` now derives stable UUID v5 from non-UUID scopes; `resolve_v1_conversation_for_message()` replaces inline `Uuid::parse_str()` fallback. See `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` implementation note.
 - **`test_context_length_recovery_via_compaction_and_retry` failing** — Unit test in `src/agent/dispatcher.rs` asserts `left: 3, right: 2` on LLM call count. Pre-existing on the branch; not introduced by any recent change. Does not affect runtime behavior.
+- **Issue with weechat multitenant setup related to way adapter is configured** - Please see WEECHAT-MULTITENANT-PORT-BUG.md under docs/ops for more information and potential fixes to introduce to address this.
 
 ## Upgrade Notes
 
