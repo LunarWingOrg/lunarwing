@@ -1,7 +1,7 @@
 # Port IronClaw 0.28.2 Changes to LunarWing
 
-**Date:** 2026-05-15 (updated 2026-05-28, status audit 2026-06-05)
-**Status:** Analysis complete. P1-F + P1-G implemented 2026-05-28 with pattern-fix expansion — see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion) below. P0-A, P1-H, P1-I, P2-C, P2-D remain open.
+**Date:** 2026-05-15 (updated 2026-05-28, status audit 2026-06-05, updated 2026-06-05)
+**Status:** Analysis complete. P1-F + P1-G implemented 2026-05-28 with pattern-fix expansion — see [Implementation Note](#implementation-note-2026-05-28-p1-f--p1-g-pattern-fix-expansion) below. P0-A + P1-H implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. P1-I, P2-C, P2-D remain open.
 
 ## Context
 
@@ -49,7 +49,7 @@ The release is smaller than 0.28.1 but contains a high-severity security fix in 
 ## P0 — Security (Port Immediately)
 
 ### P0-A: Ghost-Seeded Tool Permission Rows — Latent Bypass Vector
-**Commit:** `34eeeaf0` (the `#3559` security review portion) | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — `src/app.rs` still calls `seed_tool_permissions()` at line 952; no `cleanup_ghost_seeded_tool_permissions()` exists.
+**Commit:** `34eeeaf0` (the `#3559` security review portion) | **Complexity:** S | **Dependencies:** None | **Status:** Implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. `seed_tool_permissions()` replaced with `cleanup_ghost_seeded_tool_permissions()` in `src/app.rs`. Sentinel-gated one-shot migration deletes ghost rows; no new seed rows created. Test `cleanup_ghost_seeded_tool_permissions_behavior` covers ghost removal, user-override preservation, and idempotency.
 
 **Why:** LunarWing's `seed_tool_permissions()` in `src/app.rs:977-1034` writes DB rows for every built-in tool's seeded default at startup. These "ghost" rows are indistinguishable from user-explicit overrides because they share the same DB key format (`tool_permissions.<name>`).
 
@@ -110,7 +110,7 @@ fn interrupted_call_needs_refund(result: &Result<ActionResult, EngineError>) -> 
 ---
 
 ### P1-H: Registry `hidden` Field on Extension Manifests
-**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None | **Status:** Not implemented — no `hidden` field in `src/registry/manifest.rs`, `src/registry/catalog.rs`, or `src/extensions/manager.rs`.
+**Commit:** `34eeeaf0` | **Complexity:** S | **Dependencies:** None | **Status:** Implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. `hidden: Option<bool>` added to `ExtensionManifest` (`src/registry/manifest.rs`) and `RegistryEntry` (`src/extensions/mod.rs`). Hidden entries filtered from `ExtensionRegistry::all_entries()` (`src/extensions/registry.rs`) and `RegistryCatalog::search()` (`src/registry/catalog.rs`). Hidden entries remain installable by explicit name.
 
 **Why:** IronClaw added `hidden: bool` to `ExtensionManifest` / `RegistryEntry` and filters hidden entries from the "available-but-not-installed" list and from `tool_search` results. Hidden entries remain installable by explicit name.
 
@@ -196,10 +196,10 @@ The two inline refund sites without their own regression tests (`scripting.rs:12
 ## Recommended Implementation Order
 
 ```
-1. P0-A  Ghost-seeded permission cleanup   [S]   proactive security; prevent latent bypass       NOT DONE
+1. P0-A  Ghost-seeded permission cleanup   [S]   DONE 2026-06-05 (branch 1.1.1-333-security-improvements-3)
 2. P1-F  auth_gate resume_output            [S]   DONE 2026-05-28 (see Implementation Note)
 3. P1-G  Lease refund guard                 [S]   DONE 2026-05-28 (expanded to 5 sites)
-4. P1-H  Registry hidden field              [S]   small extension point                           NOT DONE
+4. P1-H  Registry hidden field              [S]   DONE 2026-06-05 (branch 1.1.1-333-security-improvements-3)
 5. P1-I  fetch_models_for facade            [M]   code quality, reduces wizard complexity          NOT DONE
 6. P2-C  Bug-bash snapshot harness          [S-M] testing infrastructure                           NOT DONE
 ```

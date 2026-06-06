@@ -1,7 +1,7 @@
 # Port IronClaw 0.28.1 Changes to LunarWing
 
 **Date:** 2026-05-12 (status updated 2026-06-05)
-**Status:** Analysis complete. P1-C partially implemented (fire_on_system_event only). All other items remain open.
+**Status:** Analysis complete. P1-C partially implemented (fire_on_system_event only). P2-B implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. All other items remain open.
 
 ## Context
 
@@ -172,7 +172,7 @@ LunarWing already has checks 1-6. Port checks 7 (dispatch bypass detection) and 
 **File:** `scripts/pre-commit-safety.sh` (~120 lines of bash additions)
 
 ### P2-B: Approval Gate Clamping Refactor
-**Complexity:** S | **Status:** Not implemented — no `clamp_always_to_resume_kind()` helper; clamping remains inline.
+**Complexity:** S | **Status:** Implemented 2026-06-05 on branch `1.1.1-333-security-improvements-3`. Extracted inline clamping into `clamp_always_to_resume_kind()` helper in `src/bridge/router.rs`. Four unit tests cover: allow_always true, allow_always false, raw_always false, and non-Approval resume kinds (Authentication, External).
 
 Extract inline clamping at `src/bridge/router.rs:1343-1347` into a named `clamp_always_to_resume_kind()` helper with unit tests. Pure readability improvement, no behavior change.
 
@@ -186,7 +186,7 @@ Extract inline clamping at `src/bridge/router.rs:1343-1347` into a named `clamp_
 3. P1-C  Mission auto-resume           [L]   benefits from P1-B                            PARTIAL (fire_on_system_event only)
 4. P1-E  lunarwing_common expansion    [M]   foundation for P1-D                           NOT DONE
 5. P1-D  LLM crate extraction         [XL]  largest change, do last                       NOT DONE
-6. P2-B  Clamp refactor               [S]   quick cleanup                                 NOT DONE
+6. P2-B  Clamp refactor               [S]   DONE 2026-06-05 (branch 1.1.1-333-security-improvements-3)
 7. P2-A  Pre-commit checks 7-9        [S-M] after P1-E for check 8                        NOT DONE
 ```
 
