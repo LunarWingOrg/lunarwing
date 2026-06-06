@@ -4,12 +4,13 @@
 
 | Item | Status |
 |------|--------|
-| Settings (`ws_ping_interval_secs`, `ws_idle_timeout_secs`) | **Done** — added to `settings.rs` with serde defaults |
+| Settings (`ws_ping_interval_secs`, `ws_idle_timeout_secs`) | **Done** — `settings.rs` + `GatewayConfig` + `GatewayState` |
 | Proposal document | **Done** — this file |
-| `WsConnectionTracker` enhancement | **Not started** — needs build environment |
-| Receiver loop idle timeout | **Not started** — needs build environment |
-| Background cleanup task | **Not started** — needs build environment |
-| Unit tests for stale detection | **Not started** — needs build environment |
+| `WsConnectionTracker` enhancement | **Done** — per-connection activity tracking via `register/unregister/update_activity/cleanup_stale` |
+| Server-side ping | **Done** — sender task sends `Message::Ping` at configurable interval |
+| Receiver loop idle timeout | **Done** — `tokio::time::timeout` closes idle connections |
+| Background cleanup task | **Done** — 60s sweeper in `start_server()` removes leaked tracker entries |
+| Unit tests for stale detection | **Done** — 7 tracker tests + 6 message handler tests |
 
 ## Problem
 Current WebSocket implementation relies entirely on client-initiated ping/pong. If a client goes silent (network partition, browser tab suspended, mobile app backgrounded), the server holds onto dead connections indefinitely, consuming resources and potentially hitting connection limits.

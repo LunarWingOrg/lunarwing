@@ -120,6 +120,8 @@ impl GatewayChannel {
             secrets_store: None,
             db_auth: None,
             channel_manager: None,
+            ws_ping_interval_secs: config.ws_ping_interval_secs,
+            ws_idle_timeout_secs: config.ws_idle_timeout_secs,
         });
 
         Self {
@@ -164,6 +166,8 @@ impl GatewayChannel {
             secrets_store: self.state.secrets_store.clone(),
             db_auth: self.state.db_auth.clone(),
             channel_manager: self.state.channel_manager.clone(),
+            ws_ping_interval_secs: self.state.ws_ping_interval_secs,
+            ws_idle_timeout_secs: self.state.ws_idle_timeout_secs,
         };
         mutate(&mut new_state);
         self.state = Arc::new(new_state);

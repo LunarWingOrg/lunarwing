@@ -222,6 +222,8 @@ async fn start_test_server_with_provider(
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     });
 
     let auth = lunarwing::channels::web::auth::MultiAuthState::single(
@@ -724,6 +726,8 @@ async fn test_no_llm_provider_returns_503() {
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     });
 
     let auth = lunarwing::channels::web::auth::MultiAuthState::single(
