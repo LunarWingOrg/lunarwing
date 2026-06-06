@@ -61,6 +61,28 @@ Added project funding metadata for potential donors:
 - **`funding.json`** — Machine-readable funding file with project metadata (name, description, license, tags), donation channels (BTC, XMR — addresses TBD), and plan definitions. Follows a structured schema with entity information, project details, and funding channel specifications.
 - **`FUNDING_REQUEST.md`** — Placeholder stub referencing the funding.json file.
 
+### Security Hardening — IronClaw Port Analysis Implementations
+
+Four security items from the IronClaw 0.28.1 / 0.28.2 / 0.29.0 port analyses were implemented on branch `1.1.1-333-security-improvements-3`:
+
+- **P0-A: Ghost-seeded tool permission cleanup** (`ic/src/app.rs`) — `seed_tool_permissions()` replaced with `cleanup_ghost_seeded_tool_permissions()`. Previous behavior wrote DB rows for every built-in tool's default permissions at startup; these "ghost" rows were indistinguishable from user-explicit overrides, creating a latent permission bypass vector. The new function performs a sentinel-gated one-shot migration that deletes ghost rows while preserving user overrides. Test `cleanup_ghost_seeded_tool_permissions_behavior` covers ghost removal, user-override preservation, and idempotency.
+- **P1-H: Registry `hidden` field** (`ic/src/registry/manifest.rs`, `ic/src/extensions/mod.rs`, `ic/src/extensions/registry.rs`, `ic/src/registry/catalog.rs`) — Added `hidden: Option<bool>` to `ExtensionManifest` and `RegistryEntry`. Hidden entries are filtered from `ExtensionRegistry::all_entries()` and `RegistryCatalog::search()` results but remain installable by explicit name.
+- **P2-A: Logs download endpoint** (`ic/src/channels/web/server.rs`) — New `/api/logs/download` route returns `recent_entries()` from the log broadcaster as NDJSON with `Content-Disposition: attachment; filename="lunarwing-logs.jsonl"`. Requires authentication. Gateway UI button not yet added (backend only).
+- **P2-B: Approval gate clamping refactor** (`ic/src/bridge/router.rs`) — Extracted inline clamping logic into a named `clamp_always_to_resume_kind()` helper. Four unit tests cover: allow_always true, allow_always false, raw_always false, and non-Approval resume kinds (Authentication, External). Pure readability improvement, no behavior change.
+
+Port analysis documents (`ironclaw-0.28.1`, `ironclaw-0.28.2`, `ironclaw-0.29.0`) updated to reflect implementation status.
+
+### WebSocket Server-Side Keepalive
+
+Server-side WebSocket keepalive implemented on branch `1.1.1-111-oof-june5staging-improvements-kestrel-local-1`. Previously, the server relied entirely on client-initiated ping/pong — if a client went silent (network partition, suspended tab, backgrounded app), the server held dead connections indefinitely.
+
+- **Per-connection activity tracking** (`ic/src/channels/web/ws.rs`) — `WsConnectionTracker` upgraded from a simple `AtomicU64` counter to a per-connection `HashMap<Uuid, Instant>`. New API: `register_connection()`, `unregister_connection()`, `update_activity()`, `cleanup_stale()`.
+- **Server-side ping** (`ic/src/channels/web/ws.rs`) — Sender task sends `Message::Ping` frames at configurable intervals (default 30s). Browsers auto-respond with Pong, keeping the idle timer alive.
+- **Idle timeout** (`ic/src/channels/web/ws.rs`) — Receiver loop wrapped in `tokio::time::timeout()`. Any received frame (including Pong) resets the timer. Dead connections are closed after the idle timeout (default 120s).
+- **Background stale cleanup** (`ic/src/channels/web/server.rs`) — 60-second sweeper task spawned in `start_server()` removes leaked tracker entries for connections that exited without unregistering (e.g., panicked handlers).
+- **Configuration** (`ic/src/settings.rs`, `ic/src/config/channels.rs`) — `ws_ping_interval_secs` (default 30) and `ws_idle_timeout_secs` (default 120), configurable via `WS_PING_INTERVAL_SECS` and `WS_IDLE_TIMEOUT_SECS` env vars.
+- **Tests** — 7 new tracker unit tests + 6 existing handler tests passing. Zero clippy warnings.
+
 ### Self-Healing Improvements
 
 References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes).
@@ -78,6 +100,9 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - `docs/architecture/XMPP_FILE_TRANSFERS.md` — Full architecture document for bidirectional XMPP file transfer support (outbound XEP-0363 + inbound XEP-0066 OOB)
 - `docs/ops/STATUS_OF_REMOVAL_OF_PROPRIETARY_CHANNELS.md` — Tracks which proprietary channels have been removed (WhatsApp, Discord, Feishu/Lark) and which remain (Telegram)
 - `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` — Security analysis of upstream IronClaw 0.29.1 with P0 conversation isolation fix plan
+- `docs/architecture/SECURITY_ENHANCEMENTS.md` — Session notes for the P0-A/P1-H security implementation work
+- `docs/architecture/WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` — Summary of the WebSocket keepalive implementation
+- `docs/proposals/WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` — Full design document for WebSocket server-side keepalive (problem statement, solution, configuration, migration notes)
 - `docs/proposals/MULTICA_LUNARTICA_RESKIN.md` — Plan for reskinning Multica UI for Lunartica
 - `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER` — Proposal to rename remaining ironclaw references in WeeChat channel, ws_adapter, and associated scripts
 - `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md` — Self-healing infrastructure improvements reference
@@ -98,6 +123,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
+- **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - ~~**Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread.~~ **FIXED** — `scoped_conversation_id()` now derives stable UUID v5 from non-UUID scopes; `resolve_v1_conversation_for_message()` replaces inline `Uuid::parse_str()` fallback. See `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` implementation note.
 - **`test_context_length_recovery_via_compaction_and_retry` failing** — Unit test in `src/agent/dispatcher.rs` asserts `left: 3, right: 2` on LLM call count. Pre-existing on the branch; not introduced by any recent change. Does not affect runtime behavior.
 
