@@ -160,6 +160,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.5 |
 | Multica/Lunartica UI reskin | v1.1.4 |
 | WASM Channel Polishing | v1.1.4 |
+| Weechat client and relay and ws_adapter service and polishing | v1.1.2 |
 | External Worker enhancements | v1.1.4 |
 
 ## Testing

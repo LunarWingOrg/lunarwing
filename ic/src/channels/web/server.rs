@@ -1753,7 +1753,7 @@ async fn logs_events_handler(
         [("X-Accel-Buffering", "no"), ("Cache-Control", "no-cache")],
         Sse::new(stream).keep_alive(
             KeepAlive::new()
-                .interval(std::time::Duration::from_secs(30))
+                .interval(std::time::Duration::from_secs(15))
                 .text(""),
         ),
     ))
