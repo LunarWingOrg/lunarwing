@@ -2,6 +2,8 @@
 
 **Summary**: WeeChat works for one tenant, silently fails for the rest. The in-process WASM channel ignores per-tenant adapter and relay ports, always polling the hardcoded defaults from `weechat.capabilities.json`.
 
+**Status: FIXED** (branch `1.1.1-222-weechat-mulitenant-port-fix-2`). The fix is a generic, capability-declared env-source mechanism — see [Resolution](#resolution). A second blocker (per-tenant relay password) that the port bug was masking is also fixed; see [The Password Is the Second Blocker](#the-password-is-the-second-blocker). Existing tenants must be backfilled — see [Backfill for Existing Tenants](#backfill-for-existing-tenants).
+
 ## Symptom
 
 - The `ws_adapter.py` process connects to WeeChat and buffers messages successfully. The adapter's `/api/health` endpoint shows `ws_connected: true` and `buffered_buffers > 0` even on broken tenants.
@@ -75,9 +77,20 @@ Per-tenant port allocation (from `WEECHAT-SERVICES.md`):
 | +5 | `weechat` | WeeChat relay API |
 | +9 | `weechat_adapter` | WS adapter HTTP endpoint |
 
-## Why the Password Is a Red Herring
+## The Password Is the Second Blocker
 
-The WASM channel receives `{}` (empty JSON object) as its `config_json` from the host (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:292`). This means `relay_password` deserializes to `""` (empty string). The WASM sends requests with no `Authorization` header to the adapter. The adapter's `check_auth` (`ws_adapter.py:93-99`) allows unauthenticated requests when `relay_password` is empty — but the **blocking failure is the wrong port**, not auth. Even if auth were configured correctly, the WASM would still be polling the wrong port.
+The original analysis called the password a "red herring." That is only true *while the port bug dominates*. Once the port is corrected, the password becomes the next hard failure for every mt-admin tenant.
+
+Here is why. Nothing in the host injects `relay_password` into the WASM config, so it deserializes to `""`. The WASM builds its adapter auth header itself — `make_auth_headers` produces `Authorization: Basic base64("plain:" + relay_password)` (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:1323`). With an empty password it sends `Basic base64("plain:")`.
+
+The adapter uses **one** password (`RELAY_PASSWORD`) for two purposes:
+
+1. Authenticating the adapter → WeeChat relay connection (`make_auth_header`).
+2. Authenticating **incoming** WASM requests (`check_auth`, `ws_adapter.py:93-99`).
+
+`check_auth` returns `True` only when `state.relay_password` is empty *or* the incoming header equals `make_auth_header(RELAY_PASSWORD)`. `mt-admin` generates a non-empty `RELAY_PASSWORD` for **every** tenant (`lunarwing-mt-admin.sh`), so `check_auth` requires a matching header — which the WASM (empty password) cannot produce. Result: once the port is right, the adapter returns `401`/`403` instead of data.
+
+So the complete fix must inject **both** the per-tenant URLs *and* `relay_password`. The URLs flow through the generic env-source mechanism (`RELAY_URL`, `WS_ADAPTER_URL`); the password flows through the secrets-injection path with an env fallback to `RELAY_PASSWORD` (see [Resolution](#resolution)).
 
 ## Diagnosis (Read-Only)
 
@@ -102,7 +115,30 @@ WeeChat Relay channel starting, relay at http://127.0.0.1:9001
 Connection mode: auto (ws_adapter: http://127.0.0.1:6681, poll interval: 3000ms)
 ```
 
-## Fix Options
+## Resolution
+
+The implemented fix is a **generic, capability-declared env-source mechanism** — a generalized form of [Option A](#option-a-inject-env-into-weechat-config-in-core-setup) that avoids hardcoding weechat into core code.
+
+**1. A setup field can declare an env source.** `ToolFieldSetupSchema` gains an optional `env` key (`ic/src/tools/wasm/capabilities_schema.rs`). The weechat capabilities declare it for the two URL fields:
+
+```json
+{ "name": "relay_url",      "optional": true, "env": "RELAY_URL" }
+{ "name": "ws_adapter_url", "optional": true, "env": "WS_ADAPTER_URL" }
+```
+
+**2. The host resolves env-sourced fields at startup.** `load_channel_setup_field_overrides` (`ic/src/channels/wasm/setup.rs`) — already the generic resolver for setup fields — now adds an env tier after the existing DB tiers (saved `setup_fields`, then `setting_path`, then `env`). The resolved values are merged into the channel config via `update_config` before `on_start`, overriding the capabilities defaults.
+
+**3. The env tier is gated to first-party channels.** `channel_env_config_allowed()` restricts env-sourcing to bundled channels (`bundled_channel_names()`). This is a **security boundary**: without it, a malicious third-party capabilities file could declare `"env": "SECRETS_MASTER_KEY"` and exfiltrate host secrets into its own config.
+
+**4. The relay password is injected too** (see [The Password Is the Second Blocker](#the-password-is-the-second-blocker)). `inject_channel_secrets_into_config` gains a weechat arm mapping `relay_password` ← secret `weechat_relay_password`, with an env fallback to `RELAY_PASSWORD`. The password uses the **secrets** path (not `env`-sourced fields, which are non-secret by contract).
+
+**5. `mt-admin` writes a full adapter URL.** `write_tenant_env` now emits `WS_ADAPTER_URL=http://127.0.0.1:<base+9>` so the env-source mechanism receives a complete URL (no port→URL templating needed in core). `RELAY_URL` and `RELAY_PASSWORD` were already written.
+
+Single-tenant and harness deployments do not set these env vars, so the channel cleanly falls back to the capabilities defaults (`:9001`/`:6681`) — no regression.
+
+## Fix Options (Considered)
+
+The implemented Resolution above is the generic form of Option A.
 
 ### Option A: Inject env into weechat config in core setup
 
@@ -154,17 +190,37 @@ The WASM already pulls `dm_policy`, `group_policy`, `allow_from`, and `networks`
 
 ## Backfill for Existing Tenants
 
-Regardless of which fix is chosen, existing tenants need their WASM channel to pick up the correct ports. After applying the fix:
+After deploying the new `lunarwing` binary, each existing tenant needs three things: the updated capabilities file (which now declares the `env` sources), the new `WS_ADAPTER_URL` env var, and a restart so `on_start` re-runs with the injected values.
 
 ```bash
-# Re-render units (picks up any script changes)
-sudo ic/scripts/lunarwing-mt-admin.sh render-units <name>
+# 0. Pre-flight (read-only): confirm each tenant's env agrees with its
+#    registry ports BEFORE touching anything. A FAIL means a *wrong existing*
+#    value that patch-env will NOT overwrite — fix it by hand first.
+sudo ic/scripts/lunarwing-weechat-preflight.sh          # all tenants
+sudo ic/scripts/lunarwing-weechat-preflight.sh <name>   # one tenant
 
-# Restart the tenant (stops and starts all services in dependency order)
+# 1. Reinstall the WeeChat channel so the tenant's installed
+#    weechat.capabilities.json gains the new `env` field declarations.
+#    (The .wasm binary is unchanged; only the capabilities sidecar matters.)
+sudo ic/scripts/lunarwing-mt-admin.sh install-wasm <name>
+
+# 2. Backfill WS_ADAPTER_URL (and RELAY_URL if missing) into lunarwing.env.
+#    Idempotent — skips vars already present.
+sudo ic/scripts/lunarwing-mt-admin.sh patch-env <name>
+
+# 3. Restart the tenant so on_start re-executes with the corrected
+#    relay_url, ws_adapter_url, and relay_password.
 sudo ic/scripts/lunarwing-mt-admin.sh restart-tenant <name>
 ```
 
-This causes `on_start` to re-execute with the corrected `relay_url` and `ws_adapter_url`.
+For the whole fleet, use `install-wasm-all`, `patch-env-all`, then restart each tenant.
+
+**Verify** the channel picked up the right values — the startup log should show the tenant's ports, not `:9001`/`:6681`:
+
+```
+WeeChat Relay channel starting, relay at http://127.0.0.1:<base+5>
+Connection mode: auto (ws_adapter: http://127.0.0.1:<base+9>, poll interval: 3000ms)
+```
 
 ## Cross-References
 

@@ -53,14 +53,23 @@ Both ports bind to `127.0.0.1` only.
 
 The following are written to `lunarwing.env` by the MT admin script:
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `RELAY_URL` | `http://127.0.0.1:<base+5>` | WeeChat relay endpoint for the adapter |
-| `RELAY_PASSWORD` | auto-generated 32-char token | Shared secret between adapter and WeeChat |
-| `ADAPTER_PORT` | `<base+9>` | HTTP port the adapter listens on |
-| `WEECHAT_ADAPTER_PORT` | `<base+9>` | Alias (used by the WASM channel) |
+| Variable | Value | Consumed by | Description |
+|----------|-------|-------------|-------------|
+| `RELAY_URL` | `http://127.0.0.1:<base+5>` | adapter **+ WASM channel** | WeeChat relay endpoint |
+| `WS_ADAPTER_URL` | `http://127.0.0.1:<base+9>` | WASM channel | Full adapter URL the in-process WASM channel polls |
+| `RELAY_PASSWORD` | auto-generated 32-char token | adapter + WeeChat **+ WASM channel** | Shared secret; the WASM authenticates to the adapter with it |
+| `ADAPTER_PORT` | `<base+9>` | adapter | Bare HTTP port the standalone adapter listens on |
+| `WEECHAT_ADAPTER_PORT` | `<base+9>` | adapter | Alias of `ADAPTER_PORT` |
 
 `RELAY_PASSWORD` is generated per tenant during `add-tenant` and must match the password configured inside WeeChat (see [WeeChat Relay Setup](#weechat-relay-setup)).
+
+> **Per-tenant ports & the in-process WASM channel.** The LunarWing daemon
+> (which hosts the WeeChat WASM channel in-process) sources `relay_url`,
+> `ws_adapter_url`, and `relay_password` from `RELAY_URL`, `WS_ADAPTER_URL`, and
+> `RELAY_PASSWORD` at startup. Without these the channel falls back to the
+> hardcoded `:9001`/`:6681` defaults and silently fails for every tenant whose
+> ports differ. See [WEECHAT-MULTITENANT-PORT-BUG.md](WEECHAT-MULTITENANT-PORT-BUG.md).
+> Existing tenants need `WS_ADAPTER_URL` backfilled — run `mt-admin patch-env <name>`.
 
 ## Generated Service Units
 
@@ -262,7 +271,13 @@ RELAY_URL=http://127.0.0.1:<weechat_port>
 RELAY_PASSWORD=<generate-a-token>
 ADAPTER_PORT=<weechat_adapter_port>
 WEECHAT_ADAPTER_PORT=<weechat_adapter_port>
+WS_ADAPTER_URL=http://127.0.0.1:<weechat_adapter_port>
 ```
+
+> `RELAY_URL`, `WS_ADAPTER_URL`, and `RELAY_PASSWORD` are what the in-process
+> WASM channel reads — omitting `WS_ADAPTER_URL` makes the channel poll the
+> hardcoded `:6681` default. `mt-admin patch-env <name>` adds `WS_ADAPTER_URL`
+> (and `RELAY_URL` if missing) idempotently.
 
 Generate a relay password:
 

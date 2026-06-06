@@ -727,6 +727,17 @@ pub struct ToolFieldSetupSchema {
     /// `selected_model`.
     #[serde(default)]
     pub setting_path: Option<String>,
+    /// Optional environment variable to source this field's value from at
+    /// startup. Used for deployment-time configuration such as per-tenant
+    /// ports/URLs in multi-tenant setups, where the value lives in the
+    /// process environment rather than the settings store.
+    ///
+    /// Honored only for first-party (bundled) channels — see
+    /// `channels::wasm::setup::channel_env_config_allowed`. An untrusted
+    /// third-party extension cannot use this to read arbitrary host
+    /// environment variables (e.g. `SECRETS_MASTER_KEY`).
+    #[serde(default)]
+    pub env: Option<String>,
     /// Whether changing this field requires a restart to fully apply.
     #[serde(default)]
     pub restart_required: bool,

@@ -5842,6 +5842,7 @@ mod tests {
             optional: false,
             input_type: crate::tools::wasm::ToolSetupFieldInputType::Text,
             setting_path: Some("nearai.session_token".to_string()),
+            env: None,
             restart_required: false,
         };
 
