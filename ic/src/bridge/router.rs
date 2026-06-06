@@ -4163,7 +4163,11 @@ mod tests {
         use lunarwing_engine::ResumeKind;
         assert!(!clamp_always_to_resume_kind(
             true,
-            &ResumeKind::Authentication {}
+            &ResumeKind::Authentication {
+                credential_name: "test".to_string(),
+                instructions: "test".to_string(),
+                auth_url: None,
+            }
         ));
         assert!(!clamp_always_to_resume_kind(
             true,

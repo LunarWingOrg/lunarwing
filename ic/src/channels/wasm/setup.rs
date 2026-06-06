@@ -471,9 +471,7 @@ async fn load_channel_setup_field_overrides(
 /// value injected into the extension's own config, where the WASM module
 /// could read and exfiltrate it.
 fn channel_env_config_allowed(channel_name: &str) -> bool {
-    crate::channels::wasm::bundled_channel_names()
-        .iter()
-        .any(|name| *name == channel_name)
+    crate::channels::wasm::bundled_channel_names().contains(&channel_name)
 }
 
 fn setting_value_is_present(value: &serde_json::Value) -> bool {
