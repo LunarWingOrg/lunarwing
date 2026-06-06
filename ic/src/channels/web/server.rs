@@ -450,6 +450,7 @@ pub async fn start_server(
             "/api/logs/level",
             axum::routing::put(logs_level_set_handler),
         )
+        .route("/api/logs/download", get(logs_download_handler))
         // Extensions
         .route("/api/extensions", get(extensions_list_handler))
         .route("/api/extensions/tools", get(extensions_tools_handler))
@@ -1765,6 +1766,34 @@ async fn logs_level_set_handler(
 
     tracing::info!(user_id = %user.user_id, "Log level changed to '{}'", handle.current_level());
     Ok(Json(serde_json::json!({ "level": handle.current_level() })))
+}
+
+async fn logs_download_handler(
+    State(state): State<Arc<GatewayState>>,
+    AuthenticatedUser(_user): AuthenticatedUser,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let broadcaster = state.log_broadcaster.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Log broadcaster not available".to_string(),
+    ))?;
+    let entries = broadcaster.recent_entries();
+
+    let body = entries
+        .iter()
+        .map(|e| serde_json::to_string(e).unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/x-ndjson; charset=utf-8"),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"lunarwing-logs.jsonl\"",
+            ),
+        ],
+        body,
+    ))
 }
 
 // --- Extension handlers ---

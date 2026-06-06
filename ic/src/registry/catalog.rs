@@ -384,6 +384,7 @@ impl RegistryCatalog {
         let mut scored: Vec<(&ExtensionManifest, usize)> = self
             .manifests
             .values()
+            .filter(|m| !m.hidden.unwrap_or(false))
             .filter_map(|m| {
                 let score = Self::score_manifest(m, &tokens);
                 if score > 0 { Some((m, score)) } else { None }

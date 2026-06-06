@@ -74,6 +74,11 @@ pub struct RegistryEntry {
     /// Extension version (semver), if known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+
+    /// When `true`, this entry is hidden from "available" listings and
+    /// tool-search results.  Hidden entries remain installable by explicit name.
+    #[serde(default)]
+    pub hidden: Option<bool>,
 }
 
 /// Where the extension binary or server lives.
