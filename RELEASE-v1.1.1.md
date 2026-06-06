@@ -141,26 +141,26 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 | Feature | Target |
 |---------|--------|
-| Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.2 |
-| LunarVoice (Further planning required) | v1.1.4 |
-| Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |
-| XMPP OMEMO MUC fallback fix | v1.1.2 |
-| XMPP File Upload Extensive round of further polishing | v1.1.1 |
-| New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.4 |
-| List of planned suggested features to pre-emptively improve security via input validation | v1.1.2 |
-| Proprietary channel removal continuation (Telegram) | v1.1.4 |
-| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.1 |
-| LunarWing developer CI/CD Pipeline | v1.1.4 |
-| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.4 |
-| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.4 |
-| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.4 |
-| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.4 |
-| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.2 |
-| Update funding.json with actual payment addresses | v1.1.1 |
-| Rename ironclaw references in WeeChat channel and adapter | v1.1.3 |
-| Multica/Lunartica UI reskin | v1.1.2 |
-| WASM Channel Polishing | v1.1.2 |
-| External Worker enhancements | v1.1.2 |
+| Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.4 |
+| LunarVoice (Further planning required) | v1.1.6 |
+| Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.6 |
+| XMPP OMEMO MUC fallback fix | v1.1.4 |
+| XMPP File Upload Extensive round of further polishing | v1.1.4 |
+| New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.6 |
+| List of planned suggested features to pre-emptively improve security via input validation | v1.1.4 |
+| Proprietary channel removal continuation (Telegram) | v1.1.6 |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.4 |
+| LunarWing developer CI/CD Pipeline | v1.1.6 |
+| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.6 |
+| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.6 |
+| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.6 |
+| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.6 |
+| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.4 |
+| Update funding.json with actual payment addresses | v1.1.3 |
+| Rename ironclaw references in WeeChat channel and adapter | v1.1.5 |
+| Multica/Lunartica UI reskin | v1.1.4 |
+| WASM Channel Polishing | v1.1.4 |
+| External Worker enhancements | v1.1.4 |
 
 ## Testing
 
