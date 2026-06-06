@@ -2506,11 +2506,26 @@ impl WasmChannel {
 
         match result {
             Ok(Ok(mut host_state)) => {
+                // Flush WASM-internal logs
+                for entry in host_state.take_logs() {
+                    match entry.level {
+                        crate::tools::wasm::LogLevel::Error => {
+                            tracing::error!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Warn => {
+                            tracing::warn!(channel = %channel_name, "{}", entry.message);
+                        }
+                        _ => {
+                            tracing::debug!(channel = %channel_name, "{}", entry.message);
+                        }
+                    }
+                }
+
                 let emitted = host_state.take_emitted_messages();
-                tracing::debug!(
+                tracing::warn!(
                     channel = %channel_name,
                     emitted_count = emitted.len(),
-                    "WASM channel on_poll completed"
+                    "on_poll done"
                 );
                 Ok(emitted)
             }
