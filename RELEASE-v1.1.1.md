@@ -141,7 +141,6 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 | Feature | Target |
 |---------|--------|
-| ~~Cross-conversation history leakage fix (P0 from IronClaw 0.29.1 port analysis)~~ | ~~v1.1.1~~ **DONE** |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.2 |
 | LunarVoice (Further planning required) | v1.1.4 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.4 |
@@ -158,7 +157,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.4 |
 | Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.2 |
 | Update funding.json with actual payment addresses | v1.1.1 |
-| Rename ironclaw references in WeeChat ws_channel and adapter | v1.1.3 |
+| Rename ironclaw references in WeeChat channel and adapter | v1.1.3 |
 | Multica/Lunartica UI reskin | v1.1.2 |
 | WASM Channel Polishing | v1.1.2 |
 | External Worker enhancements | v1.1.2 |
