@@ -1502,8 +1502,17 @@ impl WasmChannel {
         let channel_name = self.name.clone();
         match result {
             Ok(Ok(((), mut host_state))) => {
-                // Process emitted messages
+                self.log_on_start_host_state(&mut host_state);
+
                 let emitted = host_state.take_emitted_messages();
+                if !emitted.is_empty() {
+                    tracing::warn!(
+                        channel = %channel_name,
+                        count = emitted.len(),
+                        "WASM on_poll emitted {} message(s)",
+                        emitted.len(),
+                    );
+                }
                 self.process_emitted_messages(emitted).await?;
 
                 tracing::debug!(

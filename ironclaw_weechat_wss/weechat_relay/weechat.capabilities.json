@@ -107,7 +107,7 @@
         "ws_adapter_url": "http://127.0.0.1:6681",
         "networks": "",
         "exclude_networks": "",
-        "dm_policy": "pairing",
+        "dm_policy": "open",
         "group_policy": "allowlist",
         "allow_from": "",
         "max_chunk_length": 420,
