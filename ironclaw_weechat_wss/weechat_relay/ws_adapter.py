@@ -221,7 +221,7 @@ async def handle_ws_event(raw: str, session: ClientSession):
     event = msg.get("event_name") or msg.get("event") or msg.get("id")
     data = msg.get("body") or msg.get("data") or {}
     buffer_id = msg.get("buffer_id")
-    log.info(f"WS event: event={event!r} buffer_id={buffer_id!r} body_preview={str(data)[:80]}")
+    log.debug(f"WS event: event={event!r} buffer_id={buffer_id!r} body_preview={str(data)[:80]}")
 
     if event == "buffer_line_added":
         # API v0.4.1: body IS the line object; buffer identified by top-level buffer_id
@@ -236,18 +236,18 @@ async def handle_ws_event(raw: str, session: ClientSession):
             tags = line_info.get("tags_array", line_info.get("tags", []))
             nick = next((t[5:] for t in tags if t.startswith("nick_")), "?")
             preview = str(line_info.get("message", ""))[:40]
-            log.info(f"buffer_line_added: buffer={full_name} nick={nick} msg={preview!r}")
+            log.debug(f"buffer_line_added: buffer={full_name} nick={nick} msg={preview!r}")
             if state.message_delay_s > 0:
                 await asyncio.sleep(state.message_delay_s)
             state.line_buffer[full_name].append(line_info)
         else:
             # Unknown buffer — refresh list so future lines can be resolved
-            log.info(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list")
+            log.debug(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list")
             asyncio.create_task(refresh_buffer_list(session))
 
     elif event == "buffer_opened":
         asyncio.create_task(refresh_buffer_list(session))
-        log.info(f"Buffer opened: {data.get('full_name', data.get('name', '?'))} — refreshing buffer list")
+        log.debug(f"Buffer opened: {data.get('full_name', data.get('name', '?'))} — refreshing buffer list")
 
     elif event == "buffer_title_changed":
         # Fired when a buffer is created or its title changes; body contains full buffer info
@@ -259,7 +259,7 @@ async def handle_ws_event(raw: str, session: ClientSession):
                 existing.update(data)
             else:
                 state.buffer_list.append(data)
-                log.info(f"buffer_title_changed: registered new buffer {buf_name} (id={buf_id})")
+                log.debug(f"buffer_title_changed: registered new buffer {buf_name} (id={buf_id})")
 
     elif event == "buffer_closed":
         full_name = data.get("full_name") or data.get("name")
