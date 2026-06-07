@@ -111,7 +111,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 - `ic/FEATURE_PARITY.md` — Updated to reflect proprietary channel removals
 - Previous release notes archived to `docs/ops/`
 
-## Known Issues
+## Known Issues (not a complete list. see `docs/bugs` for more)
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
@@ -123,7 +123,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
   - docs/bugs/BUG-e2e-oauth-url-parameter-tests.md - all 6 tests skip during fixture setup due to transient network issues (skipped, not a blocker)
 - **XMPP inbound file uploads — implemented, not yet e2e-tested** — inbound OOB parsing (`extract_oob_attachments()`) ships in v1.1.1 (the earlier "silently ignored / not parsed" description is now stale), but the full receive pipeline has not been exercised end-to-end. This is the one real file-transfer caveat for the release. See `docs/ops/XMPP_KNOWN_ISSUES.md` and `docs/architecture/XMPP_FILE_TRANSFERS.md`.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
-- **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
+- **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method. Since the proxy is not necessary, this should be a priority at some point.
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - ~~**Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread.~~ **FIXED** — `scoped_conversation_id()` now derives stable UUID v5 from non-UUID scopes; `resolve_v1_conversation_for_message()` replaces inline `Uuid::parse_str()` fallback. See `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` implementation note.
 - ~~**`test_context_length_recovery_via_compaction_and_retry` failing**~~ **FIXED (2026-06-07)** — the test's stub returned an *empty* success response, which tripped the empty-response retry in `respond_with_tools()` (an extra LLM call → `3 vs 2`). The stub now returns real recovery content via `StubLlm::set_response`, so the path is 1 fail + 1 retry = 2 calls. The default `cargo test` lib suite is green (3921 passed / 0 failed).
@@ -146,12 +146,14 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
+| Healthcheck and Self-Healing Enhancements | v.1.1.2 |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.2 |
 | Update funding.json with actual payment addresses and additional info | v1.1.3 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.4 |
 | Lunartica UI reskin | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.5 |
 | XMPP File Upload Extensive round of further polishing | v1.1.5 |
-| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.5 |
+| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. This would involve disabling the service on existing tenants as well as disabling the service by default on new ones | v1.1.5 |
 | External Worker enhancements | v1.1.6 |
 | Add rootless docker and rootless podman as mechanisms for mt admin setup | v1.1.6 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
@@ -159,7 +161,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
 | Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.8 |
-| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.9 |
 | Proprietary channel removal continuation (Telegram) | v1.1.9 |
 | It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.9 |
 | v2 engine route | v1.2.0 |
@@ -184,4 +185,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 *In accordance with developer guidelines, a brief testing period must begin before each release.*
 
-*Testing before final release not yet commenced — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+*Testing before final release has COMMENCED — see `docs/ops/PRE-RELEASE-TESTING.md` for the full checklist.*
+
+*No new changes besides urgent fixes will be accepted into staging during evaluation period.*
