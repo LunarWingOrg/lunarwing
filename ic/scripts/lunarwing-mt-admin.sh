@@ -1393,10 +1393,12 @@ render_tenant_systemd_units() {
   weechat_port="$(ports_get "$name" weechat)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  # Run from the tenant's own clone (in their home), not the admin's source repo,
+  # so a tenant's services aren't coupled to another user's home directory.
+  proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
 
   # Proxy unit
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
@@ -1580,10 +1582,12 @@ render_tenant_openrc_units() {
   weechat_port="$(ports_get "$name" weechat)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  # Run from the tenant's own clone (in their home), not the admin's source repo,
+  # so a tenant's services aren't coupled to another user's home directory.
+  proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
   local ws_adapter_dir
   ws_adapter_dir="$(dirname "$ws_adapter_path")"
 
@@ -1939,6 +1943,28 @@ uninstall_tenant_openrc() {
 
 # ── Compound commands ────────────────────────────────────────────────────────
 
+# WeeChat's ws_adapter.py needs the `aiohttp` Python package importable by the
+# TENANT user's python3 (system-wide, or in that user's ~/.local — an --user
+# install for a different account, e.g. the admin, is NOT visible). Non-fatal:
+# the adapter is optional, so we only warn with how to fix it.
+warn_if_adapter_deps_missing() {
+  local name="$1"
+  if ! command -v python3 >/dev/null 2>&1; then
+    say "WARNING: python3 not found — the WeeChat adapter cannot run."
+    return 0
+  fi
+  if sudo -u "$name" python3 -c 'import aiohttp' >/dev/null 2>&1; then
+    return 0
+  fi
+  say ""
+  say "WARNING: Python package 'aiohttp' is not importable by user '$name'."
+  say "         lunarwing-weechat-adapter-${name} will exit on start until it is installed:"
+  say "           system-wide (preferred): sudo pacman -S python-aiohttp"
+  say "             (Debian: sudo apt install python3-aiohttp  ·  Fedora: sudo dnf install python3-aiohttp)"
+  say "           per-tenant fallback:     sudo -u ${name} pip install --user --break-system-packages aiohttp"
+  say ""
+}
+
 add_tenant() {
   local name="$1"
   local docker_group="${2:-false}"
@@ -1962,6 +1988,8 @@ add_tenant() {
 
   create_tenant_user "$name" "$docker_group"
   say ""
+
+  warn_if_adapter_deps_missing "$name"
 
   clone_tenant_repo "$name"
   say ""
