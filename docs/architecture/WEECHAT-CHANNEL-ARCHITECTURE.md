@@ -62,12 +62,16 @@ near real-time. In the polling fallback, latency ≈ the poll cadence instead (s
    - **Poll (fallback):** `do_poll` refreshes `GET /api/config` (see §4) and then fetches
      `GET /api/buffers/<buf>/lines?limit=10` for each known buffer; `poll_buffer` keeps only lines
      with id > the per-buffer watermark in `state/last_seen_ids`.
-4. Either path keeps only lines carrying the `irc_privmsg` tag that are **not** `self_msg`/`no_log`.
-5. `handle_inbound_line` applies policy in order: parse `irc.<net>.<target>` → `network_allowed`
-   (allowlist; empty/`all`/`*` = all) → exclude-networks → non-empty text → **DM vs group**
-   (`is_dm` = target not starting with `#`/`&`/`!`) → `dm_policy`/`group_policy` + `allow_from`
-   / pairing store.
-6. Survivors are emitted via `channel_host::emit_message`; the host (`wrapper.rs`) dispatches
+4. `handle_inbound_line` filters and applies policy, in order:
+   - **Tag filter (mirror-loop guard):** require the `irc_privmsg` tag; drop `self_msg`/`no_log`
+     (`tags_allow_ingest`). This lives in `handle_inbound_line` so **both** ingest paths are covered
+     — `do_longpoll` feeds lines straight here, and a `self_msg` slipping through is a mirror loop
+     (the agent answers its own replies, which arrive as new lines, forever). The poll path's
+     `poll_buffer` also pre-filters the same tags. See §5.
+   - parse `irc.<net>.<target>` → `network_allowed` (allowlist; empty/`all`/`*` = all) →
+     exclude-networks → non-empty text → **DM vs group** (`is_dm` = target not starting with
+     `#`/`&`/`!`) → `dm_policy`/`group_policy` + `allow_from` / pairing store.
+5. Survivors are emitted via `channel_host::emit_message`; the host (`wrapper.rs`) dispatches
    them to the agent. `on_poll completed … emitted_count=N` is logged.
 
 ### Outbound (agent → IRC)
@@ -256,7 +260,8 @@ Then restart the daemon so `on_start` re-resolves.
 | **Channel debug logs invisible** | `debug_logging=true` produced nothing in the journal | The host forwarded all guest `Info/Debug/Trace` logs via `tracing::debug!`, dropped by the default `RUST_LOG=lunarwing=info`. | **Fixed** — faithful level mapping (`Info→info!`, `Trace→trace!`); `debug_logging` is now visible at `info`. |
 | **Poll cadence balloons to ~30s** | Long, irregular gaps between polls | `tick` + `poll` sequential ⇒ cadence = `max(3s, cycle)`; cycle could approach the 30s `callback_timeout`; default `Burst` then fired catch-up bursts. | **Fixed** — long-poll (`/api/wait`, §3) removes the per-cycle per-buffer fan-out entirely, so there is no cadence to balloon. The problem only survives on the polling fallback, where `MissedTickBehavior::Skip` + tightened per-call timeouts keep it bounded. |
 | **`poll_interval_ms` ignored** | Configuring the interval did nothing | Caps `config` key was `poll_interval_ms` but the struct field is `poll_interval_seconds` — different name ⇒ value dropped, struct default (3) used. | **Fixed** — caps key renamed to `poll_interval_seconds`. |
-| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message; `do_poll` treated a brand-new buffer as "first sighting" and seeded its watermark **without emitting** that batch — and only discovered the buffer at all on the ~90s buffer-list refresh. The deeper cause was discovery latency, not the emit logic. | **Fixed** — long-poll's global cursor delivers a new buffer's first line immediately as a `seq > cursor` event, with no per-buffer discovery step (§3). The fallback `do_poll` also emits the first batch for new **DM/query** buffers (`is_dm_buffer`); channel buffers still seed-skip to avoid replaying join backlog. |
+| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message. The **adapter** resolves a line's buffer by `buffer_id` against a cached `buffer_list` that doesn't include the new buffer yet, so it **dropped the first line entirely** — never recorded to `line_buffer` *or* the event log. Nothing downstream (neither the long-poll cursor nor the poll path) can deliver a line the adapter never recorded. (The poll path additionally seed-skipped a new buffer's first batch.) | **Fixed** — the adapter now refreshes its buffer list **synchronously and retries** before recording, so a new buffer's first line is captured (`record_event`); the long-poll global cursor then delivers it immediately (§3). `/api/wait` also replays the post-restart backlog so a DM right after an adapter restart isn't skipped. The poll fallback still emits the first batch for new **DM/query** buffers (`is_dm_buffer`). |
+| **Mirror loop (long-poll mode)** | Agent answers its own messages endlessly; `event_cursor` climbs steadily with no human input | The `irc_privmsg`/`self_msg`/`no_log` tag filter lived **only** in `poll_buffer`. `do_longpoll` feeds events straight to `handle_inbound_line`, which had no tag check — so in long-poll mode the agent's own `self_msg` replies were ingested and re-answered, each reply becoming the next event. Shipped in the original long-poll commit; not the adapter work. | **Fixed** — tag filter moved into `handle_inbound_line` (`tags_allow_ingest`), the single choke point **both** ingest paths share; `poll_buffer` keeps its pre-filter. Regression test `test_tags_allow_ingest`. |
 | **Password is the *second* blocker** | After ports are fixed, the adapter returns 401 | The adapter authenticates incoming WASM requests against the per-tenant `RELAY_PASSWORD` (`check_auth`); the WASM must send it. | Handled by the port fix (relay_password injection) — see `WEECHAT-MULTITENANT-PORT-BUG.md`. |
 | **Stale `setup_fields` shadowing** | Caps/env edits "don't take" | Highest-precedence DB layer (§4). | Documented (§4); see §6 for the proposed precedence redesign. |
 
@@ -281,17 +286,22 @@ Then restart the daemon so `on_start` re-resolves.
   polling against old adapters (`ws_adapter.py`, `lib.rs`, with a `parse_wait_response` test).
   This is the former "P2 — real-time push" recommendation, delivered as a long-poll (which the
   sandboxed WASM *can* do) rather than a held socket (which it cannot). Largest latency win, and
-  it subsumes both the first-DM hack and the batched-lines idea below.
+  it subsumes the batched-lines idea below.
 - Faithful guest-log level mapping (`wrapper.rs`).
 - `MissedTickBehavior::Skip` + tightened per-call timeouts (`wrapper.rs`, `lib.rs`) — now govern
   only the **polling fallback**: keep its cadence ≈ 3s and bound a stalled cycle well under the
   30s `callback_timeout`.
 - `network_allowed()` wildcard for `all`/`*` (`lib.rs`, with a regression test).
 - `poll_interval_seconds` caps key fix (`weechat.capabilities.json`).
-- **First-DM delivery:** solved primarily by the global cursor (§3); the fallback `do_poll` also
-  emits the first batch for newly-created **DM/query** buffers (`is_dm_buffer`) instead of
-  seed-skipping it, while channel buffers still seed-skip to avoid replaying join backlog
-  (`lib.rs`, with a regression test).
+- **First-DM delivery (real fix is at the adapter):** the adapter refreshes its buffer list
+  **synchronously and retries** before recording, so a new buffer's first line is captured into the
+  event log instead of dropped (`ws_adapter.py`); the long-poll cursor then delivers it, and
+  `/api/wait` replays the post-restart backlog. The poll fallback still emits the first batch for
+  new **DM/query** buffers (`is_dm_buffer`, `lib.rs`, with a regression test).
+- **Mirror-loop guard:** the `irc_privmsg`/`self_msg`/`no_log` tag filter now lives in
+  `handle_inbound_line` (`tags_allow_ingest`) — the choke point **both** ingest paths share — so the
+  long-poll path can no longer re-ingest the agent's own `self_msg` replies (`lib.rs`, with
+  `test_tags_allow_ingest`).
 
 **Open / recommended next:**
 
@@ -310,11 +320,13 @@ Then restart the daemon so `on_start` re-resolves.
 These changes split across three artifacts:
 
 - **Host** (log mapping, `MissedTickBehavior`): `cargo build --release --bin lunarwing` → deploy binary.
-- **WASM channel** (long-poll consumer, timeouts, `network_allowed`, caps key):
-  `scripts/build-wasm-extensions.sh` → `lunarwing-mt-admin.sh install-wasm <tenant>`.
-- **Adapter** (`ws_adapter.py`: `/api/wait`, global event log, `/api/health` cursor): a plain
-  Python file that runs from the **tenant's own clone**, so it ships with a `git pull` in the
-  tenant home and takes effect when its service restarts.
+- **WASM channel** (long-poll consumer, **mirror-loop tag filter `tags_allow_ingest`**, timeouts,
+  `network_allowed`, caps key): `scripts/build-wasm-extensions.sh` →
+  `lunarwing-mt-admin.sh install-wasm <tenant>`.
+- **Adapter** (`ws_adapter.py`: `/api/wait`, global event log, `/api/health` cursor, **first-line
+  capture for new buffers**, **post-restart replay**): a plain Python file that runs from the
+  **tenant's own clone**, so it ships with a `git pull` in the tenant home and takes effect when
+  its service restarts.
 
 The adapter and WASM must update **together** (the WASM probes `/api/health` for the adapter's
 `event_cursor` and only long-polls if present; otherwise it falls back to polling). Per tenant:
