@@ -2,7 +2,7 @@
 
 **Severity:** High
 **Found:** 2026-05-08 during v1.0.2 pre-release testing
-**Status:** Open
+**Status:** FIXED (verified 2026-06-07) — the job watcher now updates `ContextManager` (`ic/src/orchestrator/job_manager.rs:529`) and WASM polling is supervised with respawn + `health_check()` (`ic/src/channels/wasm/wrapper.rs:2285`). Original report retained below.
 **Affects:** Multi-tenant deployments with sandbox worker containers
 
 ## Symptoms

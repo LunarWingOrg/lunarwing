@@ -2,7 +2,7 @@
 
 **Severity:** High
 **Found:** 2026-05-08 during v1.0.2 pre-release testing
-**Status:** Open
+**Status:** FIXED (verified 2026-06-07) — WASM channel polling now runs under a supervisor that respawns the inner loop with backoff and exposes `health_check()` / `last_poll_epoch_ms` (`ic/src/channels/wasm/wrapper.rs:2285`). Original report retained below.
 **Affects:** Multi-tenant deployments with XMPP/OMEMO
 
 ## Symptoms

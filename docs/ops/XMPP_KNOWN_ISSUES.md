@@ -1,12 +1,14 @@
-# known issues
+# XMPP known issues
 
-* omemo devices may need to be trusted in seperate client
-* for http file uploads:
+Reconciled 2026-06-07.
 
-● So IncomingMessage does have an attachments field. Let me check if the XMPP channel populates it for inbound OOB/file messages:
-● Line 764 is the key — attachments: Vec::new(). That's where incoming messages are constructed:
-● That's the pairing reply, not the incoming message construction. Let me find where actual incoming chat messages are built:
-● That confirms it. Incoming messages are built with IncomingMessage::new(...) but .with_attachments() is never called — no OOB URL extraction from inbound stanzas.
-  The bridge supports sending files (outbound XEP-0363 upload + OOB), but receiving files (parsing OOB URLs from incoming stanzas) isn't implemented. The agent is correct — inbound file uploads aren't compatible
-  because the bridge simply doesn't extract them.
-  This would be a feature to add: parse <x xmlns='jabber:x:oob'> and/or <url> elements from incoming message stanzas, download the file, and attach it to IncomingMessage.
+- **OMEMO device trust** — the agent's OMEMO device may need to be trusted in a separate client
+  before encrypted messages flow. This is XEP-0384 behavior, not a defect.
+- **Inbound file uploads (OOB) — implemented, needs end-to-end testing.** As of v1.1.1 the channel
+  parses `<x xmlns='jabber:x:oob'>` from incoming stanzas, downloads the file (30s timeout, 20 MB
+  cap), and attaches it to the `IncomingMessage` (`extract_oob_attachments()`; see
+  `docs/architecture/XMPP_FILE_TRANSFERS.md`). This pipeline has **not** been exercised end-to-end
+  yet — the one real file-transfer caveat for the release.
+  *(This section previously stated inbound OOB "isn't implemented"; that is now stale.)*
+- **OMEMO MUC fallback spam / rare stuck processing loop** — historically observed; appear resolved
+  (`docs/bugs/XMPP-OMEMO-BUG-TO-DO.md`). Reopen if they recur.

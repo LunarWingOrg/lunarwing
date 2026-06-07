@@ -1,3 +1,5 @@
+> **STATUS: FIXED (verified 2026-06-07)** — channel-originated messages now execute under the owner credential scope (`resolve_message_scope`, `ic/src/channels/wasm/wrapper.rs:768`), so tools like `web_search` resolve secrets over WeeChat. Analysis retained for history.
+
 Answers from the code                                                                                                                                                                            
                                                                                                                                                                                                    
   Q: Is the IRC-facing agent the same process or a separate daemon?                                                                                                                                

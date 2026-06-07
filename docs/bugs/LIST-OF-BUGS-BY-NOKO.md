@@ -1,8 +1,10 @@
 
+> **Reconciled 2026-06-07:** #1 (subagent hang) is **FIXED** — the job watcher updates `ContextManager` (`ic/src/orchestrator/job_manager.rs:529`) and WASM polling is supervised (`wrapper.rs:2285`). #2 (`memory_write` null layer) is **FIXED** — it defaults to `private` (`ic/src/tools/builtin/memory.rs`). Entries retained below for history.
+
 # BUG: Main agent becomes unresponsive after subagent worker container exits
 **Severity:** High
 **Found:** 2026-05-08 during v1.0.2 pre-release testing
-**Status:** Open
+**Status:** FIXED (2026-06-07 — see reconciliation banner at top)
 **Affects:** Multi-tenant deployments with sandbox worker containers
 
 ## Symptoms
@@ -91,7 +93,7 @@ sudo env PATH="${PATH}" scripts/lunarwing-mt-admin.sh restart-tenant <name>
 # BUG: `memory_write` fails when `layer` is omitted (null)
 **Severity:** Low  
 **Found:** 2026-05-08 during v1.0.2 pre-release testing  
-**Status:** Open  
+**Status:** FIXED (2026-06-07 — see reconciliation banner at top)  
 **Component:** Memory Storage API  
 
 ## Symptoms

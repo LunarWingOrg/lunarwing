@@ -94,6 +94,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 ## Bug Fixes
 
 - **XMPP messages with only file attachments were silently dropped** — `handle_message_stanza()` previously returned early when the message body was empty, ignoring messages that contained OOB file attachments but no text. Now checks for OOB payloads before dropping empty-body messages.
+- **`cargo test` failed to compile** — `ic/tests/e2e_telegram_message_routing.rs` still called `Agent::run()` directly after the `self: Arc<Self>` refactor, breaking the whole test build. Wrapped with `Arc::new(agent).run()`. The default suite now compiles and runs (3920 passed / 1 failed — the lone failure is the documented `test_context_length_recovery…` below).
 
 ## Documentation
 
@@ -114,19 +115,19 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native wasm tool functionality.
-- **One test is failing due to env-specific SSRF check.**
+- **SSRF tests** — the named `openai_codex_rejects_ssrf_*` tests pass locally (verified 2026-06-07); the previously-noted env-specific SSRF failure did not reproduce here. Re-confirm in CI.
 - **E2E playwright tests: 172 passing, 5 skipped (network-dependent).** Tool execution timeout bug (BUG-e2e-tool-execution-timeout.md) resolved — root cause was an unresolved tool approval in `test_tool_approval.py` blocking the agent loop for subsequent tests.
 - Bug docs created:
   - ~~docs/bugs/BUG-e2e-tool-execution-timeout.md - echo/time tool tests timeout waiting for assistant response~~ **FIXED** — pending approval cleanup added to `test_tool_approval.py`
   - docs/bugs/BUG-e2e-clipboard-copy-test.md - clipboard API permissions in headless Chromium (skipped in CI, not a blocker)
   - docs/bugs/BUG-e2e-oauth-url-parameter-tests.md - all 6 tests skip during fixture setup due to transient network issues (skipped, not a blocker)
-- **XMPP inbound file uploads not tested** — The bridge supports outbound XEP-0363 HTTP file uploads but does not parse inbound OOB (`<x xmlns='jabber:x:oob'>`) elements from incoming stanzas. Files sent to the agent via XMPP are silently ignored. See `docs/ops/XMPP_KNOWN_ISSUES.md`. This was possibly fixed but not tested yet. So keeping it in this section.
+- **XMPP inbound file uploads — implemented, not yet e2e-tested** — inbound OOB parsing (`extract_oob_attachments()`) ships in v1.1.1 (the earlier "silently ignored / not parsed" description is now stale), but the full receive pipeline has not been exercised end-to-end. This is the one real file-transfer caveat for the release. See `docs/ops/XMPP_KNOWN_ISSUES.md` and `docs/architecture/XMPP_FILE_TRANSFERS.md`.
 - **Multica Bridge** - Multica Bridge may require significant improvements. May also be copied into a new renamed bridge/channel type.
 - **Multitenant Admin Script** - A flag exists to set an api key for a model endpoint, but no such flag exists to set an http url automatically via this method.
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - ~~**Cross-conversation history leakage (P0)** — Non-UUID channel conversation scopes (XMPP room JIDs, DM JIDs, WeeChat buffer names) silently collapse into a shared history thread.~~ **FIXED** — `scoped_conversation_id()` now derives stable UUID v5 from non-UUID scopes; `resolve_v1_conversation_for_message()` replaces inline `Uuid::parse_str()` fallback. See `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` implementation note.
-- **`test_context_length_recovery_via_compaction_and_retry` failing** — Unit test in `src/agent/dispatcher.rs` asserts `left: 3, right: 2` on LLM call count. Pre-existing on the branch; not introduced by any recent change. Does not affect runtime behavior.
-- **Issue with weechat multitenant setup related to way adapter is configured** - Please see WEECHAT-MULTITENANT-PORT-BUG.md under docs/ops for more information and potential fixes to introduce to address this.
+- **`test_context_length_recovery_via_compaction_and_retry` failing** — Unit test in `src/agent/dispatcher.rs` asserts `left: 3, right: 2` on LLM call count. Pre-existing on the branch; not introduced by any recent change. Does not affect runtime behavior. (Re-confirmed still failing 2026-06-07 at `dispatcher.rs:1892`; it is the **only** failure in the default `cargo test` suite.)
+- ~~**Issue with weechat multitenant setup related to way adapter is configured**~~ **FIXED (v1.1.1)** — per-tenant relay/adapter ports and relay password are now injected via a capability-declared env-source mechanism; existing tenants need the documented backfill (`install-wasm` + `patch-env` + restart). See `docs/ops/WEECHAT-MULTITENANT-PORT-BUG.md` and `docs/architecture/WEECHAT-CHANNEL-ARCHITECTURE.md`.
 
 ## Upgrade Notes
 
@@ -166,6 +167,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | External Worker enhancements | v1.1.4 |
 | Add rootless docker and rootless podman as mechanisms for mt admin setup | v1.1.6 |
 | Improved MT tenant scripts | v1.1.2 |
+| v2 engine route | v1.2.0 |
 
 ## Testing
 

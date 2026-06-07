@@ -4,7 +4,9 @@
 //! available is `DATABASE_URL` (chicken-and-egg: can't connect to DB without
 //! it). Everything else is auto-detected or read from env vars.
 //!
-//! File: `~/.lunarwing/.env` (standard dotenvy format)
+//! File: `~/.ironclaw/.env` by default — the base dir defaults to `~/.ironclaw` for backward
+//! compatibility; override with `LUNARWING_BASE_DIR` (or legacy `IRONCLAW_BASE_DIR`). Standard
+//! dotenvy format.
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -53,7 +55,7 @@ pub fn compute_lunarwing_base_dir() -> PathBuf {
         .unwrap_or_else(default_base_dir)
 }
 
-/// Get the default IronClaw base directory (~/.lunarwing).
+/// Get the default base directory (`~/.ironclaw`, kept for backward compatibility).
 ///
 /// Logs a warning if the home directory cannot be determined and falls back to
 /// the current directory.

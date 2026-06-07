@@ -1,3 +1,5 @@
+> **STATUS: FIXED in v1.1.0 (verified 2026-06-07)** — these workspace/memory concurrency bugs were resolved by migration V21 + atomic workspace ops; see `BUG-workspace-concurrency-fixes-v1.1.0.md`. Stress-test report retained for history.
+
 Alright cmc, here's where we stand after 9 batches of stress testing:
 Complete Bug Report for LunarWing 1.1.0
 🔴 HIGH Severity
