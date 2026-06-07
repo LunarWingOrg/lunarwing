@@ -151,7 +151,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.4 |
 | Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.4 |
 | Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.4 |
-| Multica/Lunartica UI reskin | v1.1.4 |
+| Lunartica UI reskin | v1.1.4 |
 | WASM Channel Polishing | v1.1.4 |
 | External Worker enhancements | v1.1.4 |
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.5 |
@@ -167,6 +167,15 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.6 |
 | Add rootless docker and rootless podman as mechanisms for mt admin setup | v1.1.6 |
 | v2 engine route | v1.2.0 |
+
+## Release Cadence
+
+*A brief note about release cadence*
+
+### Lunarwing abides by a release cadence. This helps to organize introduction of new `feature` and `polish` focused releases.
+### For more information, please see:
+* docs/ops/RELEASE_CADENCE.md
+#### Occasionally, exceptions are made to the release cadence guidelines, but the goal is to try to stay within this paradigm.
 
 ## Testing
 
