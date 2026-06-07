@@ -1,6 +1,6 @@
 # BUG: E2E Tool Execution Tests Timeout
 
-**Status:** Open
+**Status:** FIXED — root cause was an unresolved tool approval in `test_tool_approval.py` blocking the agent loop; pending-approval cleanup added (see `RELEASE-v1.1.1.md`). Original report retained below.
 **Severity:** Medium — tests only, no production impact
 **Affected tests:**
 - `test_tool_execution.py::test_builtin_echo_tool`

@@ -1,5 +1,7 @@
 # BUG: Unbounded mpsc recv() in spawned notification tasks
 
+> **STATUS: OPEN (confirmed 2026-06-07)** — the two `ic/src/agent/agent_loop.rs` forwarders remain (now ~lines 613 and 741). The third site (`channels/relay/channel.rs`) no longer exists — the relay subsystem was removed in v1.1.1.
+
 ## Severity: MEDIUM
 
 ## Description

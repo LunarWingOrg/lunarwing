@@ -228,7 +228,7 @@ mod tests {
         );
 
         let agent_handle = tokio::spawn(async move {
-            if let Err(err) = agent.run().await {
+            if let Err(err) = Arc::new(agent).run().await {
                 eprintln!("[telegram routing e2e] Agent exited with error: {err}");
             }
         });

@@ -2,7 +2,7 @@
 
 **Severity:** Low (tests only, no production impact)
 **Found:** 2026-06-02 during v1.1.0 release validation
-**Status:** Open
+**Status:** FIXED (verified 2026-06-07) — `cargo test -p lunarwing_engine` is green (271 passed, 0 failed). Original report retained below.
 **Affects:** `cargo test -p lunarwing_engine`
 
 ## Summary

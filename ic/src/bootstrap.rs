@@ -4,7 +4,15 @@
 //! available is `DATABASE_URL` (chicken-and-egg: can't connect to DB without
 //! it). Everything else is auto-detected or read from env vars.
 //!
-//! File: `~/.lunarwing/.env` (standard dotenvy format)
+//! File: `<base_dir>/.env` (standard dotenvy format), where `<base_dir>` comes from
+//! `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR`); real deployments set it to e.g.
+//! `/home/<user>/lunarwing` (which holds `env/`, `state/`, …), falling back to `~/.ironclaw`
+//! only when neither variable is set.
+//!
+//! Note: systemd/service deployments instead inject env via the `EnvironmentFile`
+//! `<base_dir>/env/lunarwing.env` (e.g. `/home/<user>/lunarwing/env/lunarwing.env`); those vars
+//! take precedence because dotenvy never overwrites an already-set var, so the `<base_dir>/.env`
+//! below is mainly the direct-run / chicken-and-egg path.
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -53,7 +61,8 @@ pub fn compute_lunarwing_base_dir() -> PathBuf {
         .unwrap_or_else(default_base_dir)
 }
 
-/// Get the default IronClaw base directory (~/.lunarwing).
+/// The no-env fallback base directory (`~/.ironclaw`, kept for backward compatibility).
+/// Real deployments set `LUNARWING_BASE_DIR` instead (typically `/home/<user>/lunarwing`).
 ///
 /// Logs a warning if the home directory cannot be determined and falls back to
 /// the current directory.
@@ -72,7 +81,9 @@ fn default_base_dir() -> PathBuf {
 ///
 /// Override with `LUNARWING_BASE_DIR` environment variable.
 /// Legacy `IRONCLAW_BASE_DIR` is still accepted as a fallback.
-/// Defaults to `~/.lunarwing` (or `./.ironclaw` if home directory cannot be determined).
+/// Defaults to `~/.ironclaw` when no base-dir env var is set (or `./.ironclaw` if the home
+/// directory cannot be determined); real deployments set `LUNARWING_BASE_DIR`, e.g.
+/// `/home/<user>/lunarwing`.
 ///
 /// Thread-safe: the value is computed once and cached in a `LazyLock`.
 ///
@@ -90,7 +101,7 @@ pub fn lunarwing_base_dir() -> PathBuf {
     IRONCLAW_BASE_DIR.clone()
 }
 
-/// Path to the IronClaw-specific `.env` file: `~/.lunarwing/.env`.
+/// Path to the IronClaw-specific `.env` file: `<base_dir>/.env`.
 pub fn lunarwing_env_path() -> PathBuf {
     lunarwing_base_dir().join(".env")
 }
@@ -100,20 +111,20 @@ pub fn lunarwing_workspace_template_dir() -> PathBuf {
     lunarwing_base_dir().join("workspace-template")
 }
 
-/// Load env vars from `~/.lunarwing/.env` (in addition to the standard `.env`).
+/// Load env vars from `<base_dir>/.env` (in addition to the standard `.env`).
 ///
 /// Call this **after** `dotenvy::dotenv()` so that the standard `./.env`
-/// takes priority over `~/.lunarwing/.env`. dotenvy never overwrites
+/// takes priority over `<base_dir>/.env`. dotenvy never overwrites
 /// existing env vars, so the effective priority is:
 ///
-///   explicit env vars > `./.env` > `~/.lunarwing/.env` > auto-detect
+///   explicit env vars > `./.env` > `<base_dir>/.env` > auto-detect
 ///
-/// If `~/.lunarwing/.env` doesn't exist but the legacy `bootstrap.json` does,
+/// If `<base_dir>/.env` doesn't exist but the legacy `bootstrap.json` does,
 /// extracts `DATABASE_URL` from it and writes the `.env` file (one-time
 /// upgrade from the old config format).
 ///
 /// After loading the `.env` file, auto-detects the libsql backend: if
-/// `DATABASE_BACKEND` is still unset and `~/.lunarwing/ironclaw.db` exists,
+/// `DATABASE_BACKEND` is still unset and `<base_dir>/ironclaw.db` exists,
 /// defaults to `libsql` so cloud instances work out of the box without any
 /// manual configuration.
 pub fn load_lunarwing_env() {
@@ -192,7 +203,7 @@ fn migrate_bootstrap_json_to_env(env_path: &std::path::Path) {
     }
 }
 
-/// Write database bootstrap vars to `~/.lunarwing/.env`.
+/// Write database bootstrap vars to `<base_dir>/.env`.
 ///
 /// These settings form the chicken-and-egg layer: they must be available
 /// from the filesystem (env vars) BEFORE any database connection, because
@@ -226,7 +237,7 @@ pub fn save_bootstrap_env_to(path: &std::path::Path, vars: &[(&str, &str)]) -> s
     Ok(())
 }
 
-/// Update or add multiple variables in `~/.lunarwing/.env`, preserving existing content.
+/// Update or add multiple variables in `<base_dir>/.env`, preserving existing content.
 ///
 /// Like `upsert_bootstrap_var` but batched — replaces lines for any key in `vars`
 /// and preserves all other existing lines. Use this instead of `save_bootstrap_env`
@@ -278,7 +289,7 @@ pub fn upsert_bootstrap_vars_to(
     Ok(())
 }
 
-/// Update or add a single variable in `~/.lunarwing/.env`, preserving existing content.
+/// Update or add a single variable in `<base_dir>/.env`, preserving existing content.
 ///
 /// Unlike `save_bootstrap_env` (which overwrites the entire file), this
 /// reads the current `.env`, replaces the line for `key` if it exists,
@@ -344,7 +355,7 @@ fn restrict_file_permissions(_path: &std::path::Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Write `DATABASE_URL` to `~/.lunarwing/.env`.
+/// Write `DATABASE_URL` to `<base_dir>/.env`.
 ///
 /// Convenience wrapper around `save_bootstrap_env` for single-value migration
 /// paths. Prefer `save_bootstrap_env` for new code.
@@ -352,7 +363,7 @@ pub fn save_database_url(url: &str) -> std::io::Result<()> {
     save_bootstrap_env(&[("DATABASE_URL", url)])
 }
 
-/// One-time migration of legacy `~/.lunarwing/settings.json` into the database.
+/// One-time migration of legacy `<base_dir>/settings.json` into the database.
 ///
 /// Only runs when a `settings.json` exists on disk AND the DB has no settings
 /// yet. After the wizard writes directly to the DB, this path is only hit by
@@ -397,7 +408,7 @@ pub async fn migrate_disk_to_db(
         tracing::info!("Migrated {} settings to database", db_map.len());
     }
 
-    // 2. Write DATABASE_URL to ~/.lunarwing/.env
+    // 2. Write DATABASE_URL to <base_dir>/.env
     if let Some(ref url) = settings.database_url {
         save_database_url(url)
             .map_err(|e| MigrationError::Io(format!("Failed to write .env: {}", e)))?;
@@ -496,7 +507,7 @@ pub enum MigrationError {
 
 // ── PID Lock ──────────────────────────────────────────────────────────────
 
-/// Path to the PID lock file: `~/.lunarwing/lunarwing.pid`.
+/// Path to the PID lock file: `<base_dir>/lunarwing.pid`.
 pub fn pid_lock_path() -> PathBuf {
     lunarwing_base_dir().join("lunarwing.pid")
 }

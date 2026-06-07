@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream. License: AGPLv3 (the `license` field in Cargo.toml still says MIT/Apache-2.0 from upstream — the actual LICENSE file is AGPLv3).
+**LunarWing** is a hard fork of IronClaw (originally by NearAI), started February 2026. The core daemon lives in `ic/`. The product name is LunarWing; `ic/` is the internal path from upstream. License: AGPLv3 — the `license` field in all Cargo.tomls is `AGPL-3.0-or-later`, matching the LICENSE file. (Reconciled 2026-06-07; the crate manifests previously still carried the upstream MIT/Apache-2.0.)
 
 This is a self-hostable, privacy-first AI agent. The fork prioritizes true freedom, XMPP/OMEMO, Gotify, scheduled routines, systemd deployment, and open-protocol channels. Proprietary channels (Slack, Discord, Telegram) are intentionally unsupported. Ironclaw compatibility is NOT a goal moving forward.
 
@@ -304,7 +304,7 @@ Do not break without explicit approval:
 
 ## Deployment & Secrets
 
-Secrets may live in `~/.ironclaw/.env` (the default base dir — code still defaults to `.ironclaw`), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
+Secrets may live in the base-dir env file (`$LUNARWING_BASE_DIR/.env`, or the systemd `EnvironmentFile` at `$LUNARWING_BASE_DIR/env/lunarwing.env` — deployments typically set the base dir to `/home/<user>/lunarwing`; it falls back to `~/.ironclaw/.env` only when no base dir is set), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
 
 For live DB checks, use read-only SQL unless the user explicitly requests mutation. Stop the service before mutating routine state; back up the DB first.
 
