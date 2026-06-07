@@ -93,17 +93,24 @@ The daemon consumes the adapter in one of two modes, chosen at `on_start` by pro
 
 ### Long-poll mode (default when the adapter supports it) — near real-time
 
-The adapter keeps a **global ordered event log** (`event_seq` + `event_log`, set on every
-`buffer_line_added`) and a blocking endpoint **`GET /api/wait?cursor=<n>&timeout=<s>`**: it
-returns immediately with all events `seq > cursor`, or blocks until a line arrives (or a ~20s
-heartbeat), and resets if `cursor > event_seq` (adapter restart). `on_start` seeds the WASM's
-`state/event_cursor` to the adapter's current cursor so buffered history isn't replayed.
+The adapter keeps a **global ordered event log** (`event_seq` + `event_log`) and records every
+`buffer_line_added` into it. A line names its buffer by `buffer_id`; for a **brand-new** query/DM
+buffer not yet in the adapter's cached buffer list, the adapter refreshes the list
+**synchronously and retries** before recording, so the *first* line in a new buffer is captured
+rather than dropped (see §5 — that drop was the real first-DM bug, below both the cursor and the
+WASM). Its blocking endpoint **`GET /api/wait?cursor=<n>&timeout=<s>`** returns immediately with
+all events `seq > cursor`, or blocks until a line arrives (or a ~20s heartbeat). If
+`cursor > event_seq` (the adapter restarted and its in-memory seq reset below the client) it
+**replays the post-restart backlog** (treats the cursor as 0) instead of reporting "caught up", so
+a line recorded right after a restart isn't skipped. `on_start` seeds the WASM's
+`state/event_cursor` to the adapter's current cursor so buffered history isn't replayed at daemon
+start.
 
 `on_poll → do_longpoll`: issue `GET /api/wait` (HTTP timeout 25s), feed each returned line to
 `handle_inbound_line`, advance the cursor, repeat. Because the call returns the instant a line is
-recorded, **inbound latency ≈ a network round-trip (~ms)**, not the poll interval — and a
-brand-new DM/query buffer's first line arrives through the same stream, so there is **no
-discovery delay**. This is what supersedes the per-buffer first-DM hack.
+recorded, **inbound latency ≈ a network round-trip (~ms)**, not the poll interval — and because
+the adapter now captures a new buffer's first line, a brand-new DM/query buffer's first message
+arrives through the same stream with **no discovery delay**.
 
 **Timeout hierarchy (hard constraint):** `adapter wait ≤20s  <  WASM HTTP 25s  <  host
 callback_timeout 30s`. The host loop below is unchanged; each `on_poll` simply blocks in

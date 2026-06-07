@@ -1103,11 +1103,41 @@ fn is_dm_buffer(full_name: &str) -> bool {
     is_dm_target(&parts[2..].join("."))
 }
 
+/// Whether a line's tags permit ingestion. The line must be a real PRIVMSG and
+/// must not be our own (`self_msg`) or a `no_log` line. Lines with no tags are
+/// permitted (lenient — matches historical poll behavior). Centralized so the
+/// poll and long-poll paths filter identically; a self_msg slipping through to
+/// the agent is a mirror loop.
+fn tags_allow_ingest(tags: Option<&Vec<String>>) -> bool {
+    match tags {
+        Some(tags) => {
+            tags.iter().any(|t| t == "irc_privmsg")
+                && !tags.iter().any(|t| t == "self_msg" || t == "no_log")
+        }
+        None => true,
+    }
+}
+
 /// Process a single inbound IRC line and emit to agent if policy allows.
 fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
     let verbose = channel_host::workspace_read(VERBOSE_DROPS_PATH)
         .map(|s| s == "true")
         .unwrap_or(false);
+
+    // Tag filter — MUST run on every path. poll_buffer also applies this, but
+    // do_longpoll feeds events here directly, so this is the single choke point
+    // that protects both. A self_msg reaching the agent is a mirror loop (it
+    // answers its own replies, which arrive as new lines, forever).
+    if !tags_allow_ingest(line.tags.as_ref()) {
+        drop_log(
+            verbose,
+            &format!(
+                "line dropped (tag filter: not irc_privmsg, or self_msg/no_log): {}",
+                buffer_name
+            ),
+        );
+        return;
+    }
 
     // Parse buffer name: irc.<network>.<target>
     let parts: Vec<&str> = buffer_name.split('.').collect();
@@ -1865,6 +1895,25 @@ mod tests {
         // Missing cursor or bad JSON → None so the caller falls back to polling.
         assert!(parse_wait_response(br#"{"events": []}"#).is_none());
         assert!(parse_wait_response(b"not json").is_none());
+    }
+
+    #[test]
+    fn test_tags_allow_ingest() {
+        let mk = |ts: &[&str]| ts.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // A real inbound PRIVMSG is ingested.
+        assert!(tags_allow_ingest(Some(&mk(&["irc_privmsg", "nick_sun"]))));
+        // Our own reply (self_msg) is blocked — this is the mirror-loop guard.
+        assert!(!tags_allow_ingest(Some(&mk(&[
+            "irc_privmsg",
+            "self_msg",
+            "nick_bore"
+        ]))));
+        // no_log is blocked.
+        assert!(!tags_allow_ingest(Some(&mk(&["irc_privmsg", "no_log"]))));
+        // Non-PRIVMSG (e.g. server notice) is blocked.
+        assert!(!tags_allow_ingest(Some(&mk(&["irc_notice"]))));
+        // Absent tags are lenient (passed through, matching poll_buffer).
+        assert!(tags_allow_ingest(None));
     }
 
     #[test]
