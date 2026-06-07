@@ -202,7 +202,7 @@ Then restart the daemon so `on_start` re-resolves.
 | **Channel debug logs invisible** | `debug_logging=true` produced nothing in the journal | The host forwarded all guest `Info/Debug/Trace` logs via `tracing::debug!`, dropped by the default `RUST_LOG=lunarwing=info`. | **Fixed** — faithful level mapping (`Info→info!`, `Trace→trace!`); `debug_logging` is now visible at `info`. |
 | **Poll cadence balloons to ~30s** | Long, irregular gaps between polls | `tick` + `poll` sequential ⇒ cadence = `max(3s, cycle)`; cycle could approach the 30s `callback_timeout`; default `Burst` then fired catch-up bursts. | **Mitigated** — `MissedTickBehavior::Skip` + tightened per-call timeouts (§3). Real-time push is the deeper fix (§6). |
 | **`poll_interval_ms` ignored** | Configuring the interval did nothing | Caps `config` key was `poll_interval_ms` but the struct field is `poll_interval_seconds` — different name ⇒ value dropped, struct default (3) used. | **Fixed** — caps key renamed to `poll_interval_seconds`. |
-| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message; `do_poll` treats a brand-new buffer as "first sighting" and seeds its watermark **without emitting** that batch. | **Open** — see §6 (seed to `firstNewId-1` instead). |
+| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message; `do_poll` treated a brand-new buffer as "first sighting" and seeded its watermark **without emitting** that batch. | **Fixed** — `do_poll` now emits the first batch for new **DM/query** buffers (`is_dm_buffer`); channel buffers still seed-skip (they may load join backlog). |
 | **Password is the *second* blocker** | After ports are fixed, the adapter returns 401 | The adapter authenticates incoming WASM requests against the per-tenant `RELAY_PASSWORD` (`check_auth`); the WASM must send it. | Handled by the port fix (relay_password injection) — see `WEECHAT-MULTITENANT-PORT-BUG.md`. |
 | **Stale `setup_fields` shadowing** | Caps/env edits "don't take" | Highest-precedence DB layer (§4). | Documented (§4); see §6 for the proposed precedence redesign. |
 
@@ -226,12 +226,12 @@ Then restart the daemon so `on_start` re-resolves.
   cadence ≈ 3s and bound a stalled cycle well under the 30s `callback_timeout`.
 - `network_allowed()` wildcard for `all`/`*` (`lib.rs`, with a regression test).
 - `poll_interval_seconds` caps key fix (`weechat.capabilities.json`).
+- **First-DM delivery:** `do_poll` emits the first batch for newly-created **DM/query**
+  buffers (`is_dm_buffer`) instead of seed-skipping it; channel buffers still seed-skip to
+  avoid replaying join backlog (`lib.rs`, with a regression test).
 
 **Open / recommended next:**
 
-- **P1 — First-DM seeding:** when a buffer first appears, seed its watermark to
-  `firstNewId − 1` (or emit the triggering line) instead of skipping the whole first batch, so
-  the first DM in a freshly-created query buffer is delivered. Small change in `do_poll`.
 - **P2 — Adopt the adapter `/api/sync` push for real-time delivery** instead of 3s polling
   (the adapter already supports it — see `docs/proposals/WEECHAT_WS_ADAPTER_SYNC_PROTOCOL.md`).
   Needs a host-side consumption model, since the sandboxed WASM cannot hold a socket. Largest

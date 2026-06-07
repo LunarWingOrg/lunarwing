@@ -767,22 +767,30 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
     // Poll each buffer
     for buffer in &buffers {
         if let Some(full_name) = &buffer.full_name {
-            // Track whether this buffer has been seen before.
-            // On first poll (watermark = -1), seed the watermark without emitting.
+            // Track whether this buffer has been seen before. On first sighting we
+            // normally seed the watermark WITHOUT emitting, to avoid replaying
+            // history (e.g. channel backlog loaded on join). A DM/query buffer is
+            // the exception: it is created BY its first incoming message, so there
+            // is no history to replay — emit it, otherwise the first DM of a new
+            // conversation is silently swallowed.
             let first_time = !last_seen_ids.contains_key(full_name);
+            let dm_buffer = is_dm_buffer(full_name);
 
             match poll_buffer(poll_url, relay_password, full_name, &last_seen_ids) {
                 Ok(new_lines) => {
                     if !new_lines.is_empty() {
+                        let note = if !first_time {
+                            ""
+                        } else if dm_buffer {
+                            " (new DM buffer: emitting first batch)"
+                        } else {
+                            " (new channel buffer: seeding watermark, not emitting)"
+                        };
                         debug_log(&format!(
                             "Buffer {}: {} new lines{}",
                             full_name,
                             new_lines.len(),
-                            if first_time {
-                                " (seeding watermark, not emitting)"
-                            } else {
-                                ""
-                            }
+                            note
                         ));
                     }
                     for (line, line_id) in new_lines {
@@ -791,8 +799,11 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
                             last_seen_ids.insert(full_name.clone(), line_id);
                             updated = true;
                         }
-                        // Only emit on subsequent polls, not the first time
-                        if !first_time {
+                        // Emit on subsequent polls; on first sighting emit only for
+                        // DM/query buffers (created by the incoming message, so no
+                        // history to replay). Channel buffers may load join backlog,
+                        // so keep seeding those without emitting.
+                        if !first_time || dm_buffer {
                             handle_inbound_line(full_name, &line);
                         }
                     }
@@ -941,6 +952,22 @@ fn network_allowed(networks: &[String], network: &str) -> bool {
         || networks.iter().any(|n| n == network)
 }
 
+/// Whether an IRC `target` (the part after `irc.<network>.`) is a DM/query
+/// rather than a channel — i.e. it does not start with a channel sigil.
+fn is_dm_target(target: &str) -> bool {
+    !target.starts_with('#') && !target.starts_with('&') && !target.starts_with('!')
+}
+
+/// Whether a buffer `full_name` (`irc.<network>.<target>`) is a DM/query buffer.
+/// Non-IRC or malformed names are treated as non-DM (conservative).
+fn is_dm_buffer(full_name: &str) -> bool {
+    let parts: Vec<&str> = full_name.split('.').collect();
+    if parts.len() < 3 || parts[0] != "irc" {
+        return false;
+    }
+    is_dm_target(&parts[2..].join("."))
+}
+
 /// Process a single inbound IRC line and emit to agent if policy allows.
 fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
     let verbose = channel_host::workspace_read(VERBOSE_DROPS_PATH)
@@ -1016,7 +1043,7 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
         return;
     }
 
-    let is_dm = !target.starts_with('#') && !target.starts_with('&') && !target.starts_with('!');
+    let is_dm = is_dm_target(&target);
 
     // Apply DM/group policy
     if is_dm {
@@ -1650,6 +1677,21 @@ mod tests {
             "sobes"
         ));
         assert!(!network_allowed(&["libera".to_string()], "sobes"));
+    }
+
+    #[test]
+    fn test_is_dm_buffer() {
+        // DM/query buffers (no channel sigil) → true. These are created by an
+        // incoming message, so do_poll emits their first batch.
+        assert!(is_dm_buffer("irc.sobes.sun"));
+        assert!(is_dm_buffer("irc.libera.NickServ"));
+        // Channel buffers → false (may load join backlog; first batch seeded only).
+        assert!(!is_dm_buffer("irc.libera.#chan"));
+        assert!(!is_dm_buffer("irc.libera.&local"));
+        assert!(!is_dm_buffer("irc.libera.!chan"));
+        // Non-IRC / malformed → false (conservative).
+        assert!(!is_dm_buffer("core.weechat"));
+        assert!(!is_dm_buffer("irc.libera"));
     }
 
     #[test]
