@@ -144,9 +144,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 | Feature | Target |
 |---------|--------|
-| Weechat client and relay and ws_adapter service and polishing | v1.1.2 |
-| Improved MT tenant scripts | v1.1.2 |
-| Update funding.json with actual payment addresses | v1.1.3 |
+| Update funding.json with actual payment addresses and additional info | v1.1.3 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.4 |
 | XMPP File Upload Extensive round of further polishing | v1.1.4 |
