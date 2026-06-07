@@ -142,31 +142,34 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 ## Features and changes deferred to future releases
 
+Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and the next major (v1.2.0) carries one very large change.
+
 | Feature | Target |
 |---------|--------|
 | Update funding.json with actual payment addresses and additional info | v1.1.3 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.4 |
-| XMPP OMEMO MUC fallback fix | v1.1.4 |
-| XMPP File Upload Extensive round of further polishing | v1.1.4 |
-| List of planned suggested features to pre-emptively improve security via input validation | v1.1.4 |
-| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.4 |
-| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.4 |
 | Lunartica UI reskin | v1.1.4 |
-| WASM Channel Polishing | v1.1.4 |
-| External Worker enhancements | v1.1.4 |
-| Rename ironclaw references in WeeChat channel and adapter | v1.1.5 |
-| LunarVoice (Further planning required) | v1.1.6 |
-| Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.1.6 |
-| New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.1.6 |
-| Proprietary channel removal continuation (Telegram) | v1.1.6 |
-| LunarWing developer CI/CD Pipeline | v1.1.6 |
-| Better githooks for repo | v1.1.6 |
-| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.6 |
-| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.6 |
-| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.6 |
-| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.6 |
+| XMPP OMEMO MUC fallback fix | v1.1.5 |
+| XMPP File Upload Extensive round of further polishing | v1.1.5 |
+| Drop support for custom tensorzero proxy, since it is simply no longer necessary. This has been verified. Local models are able to perform sufficiently and LunarWing agents can utilize all tool calls over Tensorzero directly. | v1.1.5 |
+| External Worker enhancements | v1.1.6 |
 | Add rootless docker and rootless podman as mechanisms for mt admin setup | v1.1.6 |
+| List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
+| WASM Channel Polishing | v1.1.7 |
+| Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
+| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |
+| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.8 |
+| Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.9 |
+| Proprietary channel removal continuation (Telegram) | v1.1.9 |
+| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.9 |
 | v2 engine route | v1.2.0 |
+| Better githooks for repo | v1.2.1 |
+| LunarWing developer CI/CD Pipeline | v1.2.1 |
+| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.2.1 |
+| LunarVoice (Further planning required) | v1.2.2 |
+| Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 1.2.0-1.2.2) | v1.2.3 |
+| Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.2.4 |
+| New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.2.4 |
 
 ## Release Cadence
 
