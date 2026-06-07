@@ -76,6 +76,12 @@ class AdapterState:
         self.relay_password: str = ""
         # Message delay in seconds (0 = disabled)
         self.message_delay_s: float = 0.0
+        # Global ordered event log powering the /api/wait long-poll path.
+        # Each entry: {"seq": int, "full_name": str, "line": dict}
+        self.event_seq: int = 0
+        self.event_log: deque = deque(maxlen=2000)
+        # asyncio.Event signalling new lines; created in run() (needs a loop).
+        self.new_event = None
 
 #ii
 state = AdapterState()
@@ -209,6 +215,14 @@ async def ws_client_loop():
             await asyncio.sleep(5)
 
 
+def record_event(full_name: str, line: dict):
+    """Append a line to the global event log and wake any /api/wait waiter."""
+    state.event_seq += 1
+    state.event_log.append({"seq": state.event_seq, "full_name": full_name, "line": line})
+    if state.new_event is not None:
+        state.new_event.set()
+
+
 async def handle_ws_event(raw: str, session: ClientSession):
     """Parse and dispatch a single WebSocket event from WeeChat."""
     try:
@@ -240,6 +254,7 @@ async def handle_ws_event(raw: str, session: ClientSession):
             if state.message_delay_s > 0:
                 await asyncio.sleep(state.message_delay_s)
             state.line_buffer[full_name].append(line_info)
+            record_event(full_name, line_info)
         else:
             # Unknown buffer — refresh list so future lines can be resolved
             log.debug(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list")
@@ -310,7 +325,54 @@ async def handle_health(request: web.Request) -> web.Response:
         "ws_error": state.ws_error,
         "buffered_buffers": len(state.line_buffer),
         "buffer_list_count": len(state.buffer_list),
+        # Current global event cursor. Its presence also tells the WASM channel
+        # that this adapter supports the /api/wait long-poll path.
+        "event_cursor": state.event_seq,
     })
+
+
+async def handle_wait(request: web.Request) -> web.Response:
+    """GET /api/wait?cursor=<n>&timeout=<s> — long-poll for new lines.
+
+    Returns {"cursor": int, "events": [{"seq","full_name","line"}, ...]}.
+    Blocks until there are events with seq > cursor, or a heartbeat timeout.
+    """
+    if not check_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    try:
+        cursor = int(request.rel_url.query.get("cursor", "0"))
+    except ValueError:
+        cursor = 0
+    try:
+        wait_s = float(request.rel_url.query.get("timeout", "20"))
+    except ValueError:
+        wait_s = 20.0
+    wait_s = max(0.0, min(wait_s, 20.0))  # cap below the host's 30s callback timeout
+
+    # Stale cursor (adapter restarted → seq reset): tell the client to resync.
+    if cursor > state.event_seq:
+        return web.json_response({"cursor": state.event_seq, "events": []})
+
+    def collect():
+        return [e for e in state.event_log if e["seq"] > cursor]
+
+    events = collect()
+    if not events and wait_s > 0 and state.new_event is not None:
+        # Single waiter per tenant adapter: clear, re-check, then wait, so a line
+        # arriving in the gap is never missed. Correctness comes from the cursor
+        # re-scan, not the flag.
+        state.new_event.clear()
+        events = collect()
+        if not events:
+            try:
+                await asyncio.wait_for(state.new_event.wait(), timeout=wait_s)
+            except asyncio.TimeoutError:
+                pass
+            events = collect()
+
+    cursor_out = events[-1]["seq"] if events else state.event_seq
+    return web.json_response({"cursor": cursor_out, "events": events})
 
 
 async def handle_buffers(request: web.Request) -> web.Response:
@@ -425,6 +487,7 @@ def make_app() -> web.Application:
     app.router.add_get("/api/config", handle_config)
     app.router.add_get("/api/version", handle_version)
     app.router.add_get("/api/health", handle_health)
+    app.router.add_get("/api/wait", handle_wait)
     app.router.add_get("/api/buffers", handle_buffers)
     app.router.add_get(r"/api/buffers/{buffer_name:.+}/lines", handle_buffer_lines)
     app.router.add_get(r"/api/buffers/{buffer_name:.+}", handle_single_buffer)
@@ -436,6 +499,7 @@ async def run(relay_url: str, password: str, port: int, message_delay: float = 0
     state.relay_url = relay_url.rstrip("/")
     state.relay_password = password
     state.message_delay_s = message_delay
+    state.new_event = asyncio.Event()  # must be created inside the running loop
 
     app = make_app()
 

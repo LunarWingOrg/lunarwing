@@ -264,6 +264,12 @@ const BUFFER_LIST_PATH: &str = "state/buffer_list"; // JSON: [BufferInfo]
 const WS_ADAPTER_URL_PATH: &str = "state/ws_adapter_url";
 const VERBOSE_DROPS_PATH: &str = "state/verbose_drops";
 const DEBUG_LOGGING_PATH: &str = "state/debug_logging";
+const EVENT_CURSOR_PATH: &str = "state/event_cursor"; // global /api/wait cursor (longpoll mode)
+const INGEST_MODE_PATH: &str = "state/ingest_mode"; // "longpoll" | "poll"
+
+// Long-poll timing — must satisfy: wait < HTTP timeout < host callback_timeout (30s).
+const WAIT_TIMEOUT_SECS: u32 = 20;
+const WAIT_HTTP_TIMEOUT_MS: u32 = 25_000;
 
 // ============================================================================
 // Channel Implementation
@@ -389,6 +395,15 @@ impl Guest for WeechatRelayChannel {
             seed_watermarks(&poll_url, &config.relay_password, &irc_buffers);
         }
 
+        // Choose ingestion path: long-poll (/api/wait) when the adapter supports
+        // it (near real-time), else per-buffer polling. Seeds the event cursor so
+        // buffered history isn't replayed.
+        detect_and_seed_ingest_mode(
+            &config.connection_mode,
+            &config.ws_adapter_url,
+            &config.relay_password,
+        );
+
         // In websocket/auto mode the adapter buffers messages, so we poll it
         // frequently to drain the queue. HTTP mode polls WeeChat directly.
         // All modes use the same interval — the adapter just responds faster.
@@ -435,9 +450,15 @@ impl Guest for WeechatRelayChannel {
         let adapter_url = channel_host::workspace_read(WS_ADAPTER_URL_PATH)
             .unwrap_or_else(default_ws_adapter_url);
 
-        let poll_url =
-            resolve_poll_url(&connection_mode, &relay_url, &adapter_url, &relay_password);
-        do_poll(&poll_url, &relay_url, &relay_password);
+        // Long-poll mode (adapter supports /api/wait) gives near-real-time
+        // delivery; otherwise fall back to per-buffer polling.
+        if channel_host::workspace_read(INGEST_MODE_PATH).as_deref() == Some("longpoll") {
+            do_longpoll(&adapter_url, &relay_password);
+        } else {
+            let poll_url =
+                resolve_poll_url(&connection_mode, &relay_url, &adapter_url, &relay_password);
+            do_poll(&poll_url, &relay_url, &relay_password);
+        }
     }
 
     /// Deliver the agent's response back to IRC via WeeChat relay.
@@ -678,40 +699,43 @@ fn is_adapter_healthy(adapter_url: &str, password: &str) -> bool {
 /// poll_url is either the WeeChat relay URL (HTTP mode) or the ws_adapter URL
 /// (websocket/auto mode). In both cases the HTTP API shape is identical.
 /// relay_url is always used for sending responses (POST /api/input).
-fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
-    // Always fetch config from ws_adapter's /api/config so changes to
-    // weechat_local_config.json are picked up without removing the channel.
-    {
-        let adapter_url = channel_host::workspace_read(WS_ADAPTER_URL_PATH)
-            .unwrap_or_else(default_ws_adapter_url);
-        let cfg_url = format!("{}/api/config", normalize_relay_url(&adapter_url));
-        if let Ok(resp) = http_get(&cfg_url, "", 2_000) {
-            if resp.status == 200 {
-                if let Ok(cfg) = serde_json::from_slice::<serde_json::Value>(&resp.body) {
-                    if let Some(v) = cfg["dm_policy"].as_str() {
-                        let _ = channel_host::workspace_write(DM_POLICY_PATH, v);
-                    }
-                    if let Some(v) = cfg["group_policy"].as_str() {
-                        let _ = channel_host::workspace_write(GROUP_POLICY_PATH, v);
-                    }
-                    if let Some(arr) = cfg["allow_from"].as_array() {
-                        if let Ok(json) = serde_json::to_string(arr) {
-                            let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &json);
-                        }
-                    }
-                    if let Some(arr) = cfg["networks"].as_array() {
-                        if let Ok(json) = serde_json::to_string(arr) {
-                            let _ = channel_host::workspace_write(NETWORKS_PATH, &json);
-                        }
-                    }
-                    debug_log(&format!(
-                        "Loaded config from adapter: dm_policy={:?} group_policy={:?} allow_from={:?}",
-                        cfg["dm_policy"], cfg["group_policy"], cfg["allow_from"]
-                    ));
+/// Refresh dm/group/allow_from/networks policy from the adapter's /api/config.
+/// Shared by the per-buffer poll path and the long-poll path.
+fn refresh_policy_config() {
+    let adapter_url =
+        channel_host::workspace_read(WS_ADAPTER_URL_PATH).unwrap_or_else(default_ws_adapter_url);
+    let cfg_url = format!("{}/api/config", normalize_relay_url(&adapter_url));
+    if let Ok(resp) = http_get(&cfg_url, "", 2_000) {
+        if resp.status == 200 {
+            if let Ok(cfg) = serde_json::from_slice::<serde_json::Value>(&resp.body) {
+                if let Some(v) = cfg["dm_policy"].as_str() {
+                    let _ = channel_host::workspace_write(DM_POLICY_PATH, v);
                 }
+                if let Some(v) = cfg["group_policy"].as_str() {
+                    let _ = channel_host::workspace_write(GROUP_POLICY_PATH, v);
+                }
+                if let Some(arr) = cfg["allow_from"].as_array() {
+                    if let Ok(json) = serde_json::to_string(arr) {
+                        let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &json);
+                    }
+                }
+                if let Some(arr) = cfg["networks"].as_array() {
+                    if let Ok(json) = serde_json::to_string(arr) {
+                        let _ = channel_host::workspace_write(NETWORKS_PATH, &json);
+                    }
+                }
+                debug_log(&format!(
+                    "Loaded config from adapter: dm_policy={:?} group_policy={:?} allow_from={:?}",
+                    cfg["dm_policy"], cfg["group_policy"], cfg["allow_from"]
+                ));
             }
         }
     }
+}
+
+fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
+    // Pick up dm/group/allow_from/networks changes from the adapter each poll.
+    refresh_policy_config();
 
     // Load buffer list
     let buffers: Vec<BufferInfo> = channel_host::workspace_read(BUFFER_LIST_PATH)
@@ -845,6 +869,131 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
 }
 
 /// Poll a single buffer for new lines.
+/// Parse a WeeChat line JSON object into LineInfo. Shared by the per-buffer
+/// poll path and the long-poll path.
+fn line_from_value(v: &serde_json::Value) -> LineInfo {
+    LineInfo {
+        id: v["id"].as_i64(),
+        date: v["date"].as_str().map(String::from),
+        date_printed: v["date_printed"].as_str().map(String::from),
+        tags: v["tags"].as_array().map(|a| {
+            a.iter()
+                .filter_map(|t| t.as_str().map(String::from))
+                .collect()
+        }),
+        prefix: v["prefix"].as_str().map(String::from),
+        message: v["message"].as_str().map(String::from),
+    }
+}
+
+/// Parse an /api/wait response body into `(cursor, [(full_name, line)])`.
+/// Returns `None` if the body isn't a valid response (e.g. missing `cursor`) so
+/// the caller can fall back to per-buffer polling.
+fn parse_wait_response(body: &[u8]) -> Option<(i64, Vec<(String, LineInfo)>)> {
+    let v: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let cursor = v["cursor"].as_i64()?;
+    let mut events = Vec::new();
+    if let Some(arr) = v["events"].as_array() {
+        for ev in arr {
+            let full_name = ev["full_name"].as_str().unwrap_or("");
+            if full_name.is_empty() {
+                continue;
+            }
+            events.push((full_name.to_string(), line_from_value(&ev["line"])));
+        }
+    }
+    Some((cursor, events))
+}
+
+/// Long-poll the adapter's /api/wait for new lines across all buffers and emit
+/// them via handle_inbound_line. Near-real-time delivery; used when the adapter
+/// advertises support (see detect_and_seed_ingest_mode). Falls back to
+/// per-buffer polling if /api/wait turns out to be unavailable.
+fn do_longpoll(adapter_url: &str, relay_password: &str) {
+    // Pick up dm/group/allow_from/networks changes (cheap, ~once per wait).
+    refresh_policy_config();
+
+    let cursor: i64 = channel_host::workspace_read(EVENT_CURSOR_PATH)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let base = normalize_relay_url(adapter_url);
+    let url = format!(
+        "{}/api/wait?cursor={}&timeout={}",
+        base, cursor, WAIT_TIMEOUT_SECS
+    );
+
+    match http_get(&url, relay_password, WAIT_HTTP_TIMEOUT_MS) {
+        Ok(resp) if resp.status == 200 => match parse_wait_response(&resp.body) {
+            Some((new_cursor, events)) => {
+                if !events.is_empty() {
+                    debug_log(&format!("/api/wait: {} new event(s)", events.len()));
+                }
+                for (full_name, line) in &events {
+                    handle_inbound_line(full_name, line);
+                }
+                let _ = channel_host::workspace_write(EVENT_CURSOR_PATH, &new_cursor.to_string());
+            }
+            None => {
+                channel_host::log(
+                    channel_host::LogLevel::Warn,
+                    "/api/wait: unparseable response; falling back to polling",
+                );
+                let _ = channel_host::workspace_write(INGEST_MODE_PATH, "poll");
+            }
+        },
+        Ok(resp) if resp.status == 404 => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                "/api/wait not found; falling back to per-buffer polling",
+            );
+            let _ = channel_host::workspace_write(INGEST_MODE_PATH, "poll");
+        }
+        Ok(resp) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("/api/wait: HTTP {}", resp.status),
+            );
+        }
+        Err(e) => {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("/api/wait request failed: {}", e),
+            );
+        }
+    }
+}
+
+/// Probe the adapter's /api/health for long-poll support. If it advertises an
+/// `event_cursor`, switch to long-poll mode and seed the cursor to the current
+/// value (so buffered history isn't replayed). Otherwise use per-buffer polling.
+fn detect_and_seed_ingest_mode(mode: &str, adapter_url: &str, password: &str) {
+    if mode == "http" || adapter_url.is_empty() {
+        let _ = channel_host::workspace_write(INGEST_MODE_PATH, "poll");
+        return;
+    }
+    let url = format!("{}/api/health", normalize_relay_url(adapter_url));
+    if let Ok(resp) = http_get(&url, password, 3_000) {
+        if resp.status == 200 {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&resp.body) {
+                if let Some(cursor) = v["event_cursor"].as_i64() {
+                    let _ = channel_host::workspace_write(INGEST_MODE_PATH, "longpoll");
+                    let _ = channel_host::workspace_write(EVENT_CURSOR_PATH, &cursor.to_string());
+                    channel_host::log(
+                        channel_host::LogLevel::Info,
+                        &format!("WeeChat ingest mode: longpoll (seeded cursor {})", cursor),
+                    );
+                    return;
+                }
+            }
+        }
+    }
+    let _ = channel_host::workspace_write(INGEST_MODE_PATH, "poll");
+    channel_host::log(
+        channel_host::LogLevel::Info,
+        "WeeChat ingest mode: poll (adapter has no /api/wait)",
+    );
+}
+
 fn poll_buffer(
     relay_url: &str,
     relay_password: &str,
@@ -865,21 +1014,7 @@ fn poll_buffer(
     // Response is a bare JSON array of line objects
     let line_values: Vec<serde_json::Value> =
         serde_json::from_slice(&response.body).unwrap_or_default();
-    let lines: Vec<LineInfo> = line_values
-        .iter()
-        .map(|v| LineInfo {
-            id: v["id"].as_i64(),
-            date: v["date"].as_str().map(String::from),
-            date_printed: v["date_printed"].as_str().map(String::from),
-            tags: v["tags"].as_array().map(|a| {
-                a.iter()
-                    .filter_map(|t| t.as_str().map(String::from))
-                    .collect()
-            }),
-            prefix: v["prefix"].as_str().map(String::from),
-            message: v["message"].as_str().map(String::from),
-        })
-        .collect();
+    let lines: Vec<LineInfo> = line_values.iter().map(line_from_value).collect();
 
     if lines.is_empty() {
         return Ok(vec![]);
@@ -1692,6 +1827,44 @@ mod tests {
         // Non-IRC / malformed → false (conservative).
         assert!(!is_dm_buffer("core.weechat"));
         assert!(!is_dm_buffer("irc.libera"));
+    }
+
+    #[test]
+    fn test_parse_wait_response() {
+        let body = br#"{
+            "cursor": 42,
+            "events": [
+                {"seq": 41, "full_name": "irc.sobes.sun",
+                 "line": {"id": 100, "tags": ["irc_privmsg"], "prefix": "sun", "message": "hi"}},
+                {"seq": 42, "full_name": "irc.sobes.#chan",
+                 "line": {"id": 101, "tags": ["irc_privmsg"], "prefix": "bob", "message": "yo"}},
+                {"seq": 43, "full_name": "",
+                 "line": {"id": 102, "message": "drop: no full_name"}}
+            ]
+        }"#;
+        let (cursor, events) = parse_wait_response(body).expect("valid response");
+        assert_eq!(cursor, 42);
+        // The empty-full_name event is dropped.
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].0, "irc.sobes.sun");
+        assert_eq!(events[0].1.message.as_deref(), Some("hi"));
+        assert!(events[0]
+            .1
+            .tags
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|t| t == "irc_privmsg"));
+        assert_eq!(events[1].0, "irc.sobes.#chan");
+
+        // Empty events list is valid (heartbeat).
+        let (c, e) = parse_wait_response(br#"{"cursor": 7, "events": []}"#).unwrap();
+        assert_eq!(c, 7);
+        assert!(e.is_empty());
+
+        // Missing cursor or bad JSON → None so the caller falls back to polling.
+        assert!(parse_wait_response(br#"{"events": []}"#).is_none());
+        assert!(parse_wait_response(b"not json").is_none());
     }
 
     #[test]
