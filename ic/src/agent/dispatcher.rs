@@ -1883,12 +1883,17 @@ mod tests {
         assert!(compacted.len() < messages.len());
         assert_eq!(compacted.last().unwrap().content, "Current request");
 
-        // Step 3: Switch provider to success and retry.
+        // Step 3: Switch provider to success and retry. Give it real content so the
+        // empty-response retry in respond_with_tools() doesn't fire — a genuine
+        // recovery returns a non-empty answer (an empty "success" would trigger a
+        // second call and is not what this path simulates).
         stub.set_failing(false);
+        stub.set_response("Recovered after compaction.");
         let retry_context = crate::llm::ReasoningContext::new().with_messages(compacted);
 
         let result = reasoning.respond_with_tools(&retry_context).await;
         assert!(result.is_ok(), "Retry after compaction should succeed");
+        // One failed call (step 1) + one successful retry = 2 total.
         assert_eq!(stub.calls(), 2);
     }
 

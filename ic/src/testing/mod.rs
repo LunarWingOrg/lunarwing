@@ -82,7 +82,7 @@ pub enum StubErrorKind {
 /// Use this in tests instead of creating ad-hoc stub implementations.
 pub struct StubLlm {
     model_name: String,
-    response: String,
+    response: std::sync::RwLock<String>,
     call_count: AtomicU32,
     should_fail: AtomicBool,
     error_kind: StubErrorKind,
@@ -96,7 +96,7 @@ impl StubLlm {
     pub fn new(response: impl Into<String>) -> Self {
         Self {
             model_name: "stub-model".to_string(),
-            response: response.into(),
+            response: std::sync::RwLock::new(response.into()),
             call_count: AtomicU32::new(0),
             should_fail: AtomicBool::new(false),
             error_kind: StubErrorKind::Transient,
@@ -108,7 +108,7 @@ impl StubLlm {
     pub fn failing(name: impl Into<String>) -> Self {
         Self {
             model_name: name.into(),
-            response: String::new(),
+            response: std::sync::RwLock::new(String::new()),
             call_count: AtomicU32::new(0),
             should_fail: AtomicBool::new(true),
             error_kind: StubErrorKind::Transient,
@@ -120,7 +120,7 @@ impl StubLlm {
     pub fn failing_non_transient(name: impl Into<String>) -> Self {
         Self {
             model_name: name.into(),
-            response: String::new(),
+            response: std::sync::RwLock::new(String::new()),
             call_count: AtomicU32::new(0),
             should_fail: AtomicBool::new(true),
             error_kind: StubErrorKind::NonTransient,
@@ -151,6 +151,19 @@ impl StubLlm {
     /// Toggle whether calls should fail at runtime.
     pub fn set_failing(&self, fail: bool) {
         self.should_fail.store(fail, Ordering::Relaxed);
+    }
+
+    /// Set the success response at runtime (e.g. to make a flipped-to-success
+    /// stub return non-empty content so the empty-response retry doesn't fire).
+    pub fn set_response(&self, response: impl Into<String>) {
+        if let Ok(mut guard) = self.response.write() {
+            *guard = response.into();
+        }
+    }
+
+    /// Read the configured success response.
+    fn response(&self) -> String {
+        self.response.read().map(|g| g.clone()).unwrap_or_default()
     }
 
     /// Check the fault injector or should_fail flag, returning an error if
@@ -208,7 +221,7 @@ impl LlmProvider for StubLlm {
             return Err(err);
         }
         Ok(CompletionResponse {
-            content: self.response.clone(),
+            content: self.response(),
             input_tokens: 10,
             output_tokens: 5,
             finish_reason: FinishReason::Stop,
@@ -226,7 +239,7 @@ impl LlmProvider for StubLlm {
             return Err(err);
         }
         Ok(ToolCompletionResponse {
-            content: Some(self.response.clone()),
+            content: Some(self.response()),
             tool_calls: Vec::new(),
             input_tokens: 10,
             output_tokens: 5,

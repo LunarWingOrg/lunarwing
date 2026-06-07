@@ -12,7 +12,7 @@ status banner at the top.
 | [BUG-e2e-clipboard-copy-test.md](BUG-e2e-clipboard-copy-test.md) | Headless Chromium clipboard permissions — skipped in CI | Low (env, non-blocker) |
 | [BUG-e2e-oauth-url-parameter-tests.md](BUG-e2e-oauth-url-parameter-tests.md) | Fixture needs network/proxy to fetch WASM — skipped in CI | Low (env, non-blocker) |
 | [MISSING-CONFIG-FOR-NANOCODE.md](MISSING-CONFIG-FOR-NANOCODE.md) | `mt-admin` doesn't auto-generate the nanocode `external_workers` config + token | Low |
-| *(no doc)* `test_context_length_recovery_via_compaction_and_retry` | Unit test still fails (`dispatcher.rs:1892`, LLM call-count 3 vs 2); pre-existing, no runtime impact. Tracked in `RELEASE-v1.1.1.md` Known Issues | Low (test-only) |
+| *(no doc)* `e2e_advanced_traces::bootstrap_greeting_fires` + `bootstrap_onboarding_clears_bootstrap` | Static bootstrap greeting doesn't arrive in the test rig (`tests/e2e_advanced_traces.rs:834/874`). Pre-existing; surfaced once the `cargo test` compile blocker was fixed. Not `StubLlm`/LLM-related. | Med (test-only) |
 
 ## Fixed (retained for history)
 
@@ -26,6 +26,7 @@ status banner at the top.
 | [BUG-workspace-concurrency-fixes-v1.1.0.md](BUG-workspace-concurrency-fixes-v1.1.0.md) / [BUGS-SUNBURST.md](BUGS-SUNBURST.md) | Fixed in v1.1.0 (migration V21 + atomic workspace ops) |
 | [WEECHAT-NO-SECRET-ACCESS.md](WEECHAT-NO-SECRET-ACCESS.md) | Channel messages resolve under the owner credential scope (`resolve_message_scope`, `wrapper.rs:768`) |
 | [XMPP-OMEMO-BUG-TO-DO.md](XMPP-OMEMO-BUG-TO-DO.md) | OMEMO MUC fallback-spam / stuck-loop appear resolved; reopen if they recur |
+| *(no doc)* `test_context_length_recovery_via_compaction_and_retry` | Fixed 2026-06-07 — stub returned empty success → tripped empty-response retry; `StubLlm::set_response` now returns real recovery content. Lib suite green (3921/0). |
 
 ## Proposals / notes (not bug reports)
 
