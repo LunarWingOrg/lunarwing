@@ -12,7 +12,7 @@ status banner at the top.
 | [BUG-e2e-clipboard-copy-test.md](BUG-e2e-clipboard-copy-test.md) | Headless Chromium clipboard permissions — skipped in CI | Low (env, non-blocker) |
 | [BUG-e2e-oauth-url-parameter-tests.md](BUG-e2e-oauth-url-parameter-tests.md) | Fixture needs network/proxy to fetch WASM — skipped in CI | Low (env, non-blocker) |
 | [MISSING-CONFIG-FOR-NANOCODE.md](MISSING-CONFIG-FOR-NANOCODE.md) | `mt-admin` doesn't auto-generate the nanocode `external_workers` config + token | Low |
-| *(no doc)* `e2e_advanced_traces::bootstrap_greeting_fires` + `bootstrap_onboarding_clears_bootstrap` | Static bootstrap greeting doesn't arrive in the test rig (`tests/e2e_advanced_traces.rs:834/874`). Pre-existing; surfaced once the `cargo test` compile blocker was fixed. Not `StubLlm`/LLM-related. | Med (test-only) |
+| [BUG-e2e-bootstrap-greeting-tests.md](BUG-e2e-bootstrap-greeting-tests.md) | `bootstrap_greeting_fires` + `bootstrap_onboarding_clears_bootstrap`: static greeting not observed by the test rig (`e2e_advanced_traces.rs:834/874`). Pre-existing; unmasked by the compile fix. Not `StubLlm`/LLM-related. | Med (test-only) |
 
 ## Fixed (retained for history)
 
