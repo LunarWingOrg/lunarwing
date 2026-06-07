@@ -4,7 +4,7 @@
 
 ## Overview
 
-LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, and other various minor changes.
+LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.0), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, additional polishing of the weechat channel setup and multi-tenant admin script and other various minor changes.
 
 ---
 
