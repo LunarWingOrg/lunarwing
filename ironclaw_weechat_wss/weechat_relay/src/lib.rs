@@ -662,7 +662,9 @@ fn resolve_poll_url(mode: &str, relay_url: &str, adapter_url: &str, password: &s
 /// Quick health check against the adapter's /api/version endpoint.
 fn is_adapter_healthy(adapter_url: &str, password: &str) -> bool {
     let url = format!("{}/api/version", adapter_url);
-    http_get(&url, password, 2_000)
+    // Local adapter: keep this short so a hung adapter can't add seconds to
+    // every poll cycle (the probe runs on each poll in auto/websocket mode).
+    http_get(&url, password, 1_500)
         .map(|r| r.status == 200)
         .unwrap_or(false)
 }
@@ -683,7 +685,7 @@ fn do_poll(poll_url: &str, relay_url: &str, relay_password: &str) {
         let adapter_url = channel_host::workspace_read(WS_ADAPTER_URL_PATH)
             .unwrap_or_else(default_ws_adapter_url);
         let cfg_url = format!("{}/api/config", normalize_relay_url(&adapter_url));
-        if let Ok(resp) = http_get(&cfg_url, "", 3_000) {
+        if let Ok(resp) = http_get(&cfg_url, "", 2_000) {
             if resp.status == 200 {
                 if let Ok(cfg) = serde_json::from_slice::<serde_json::Value>(&resp.body) {
                     if let Some(v) = cfg["dm_policy"].as_str() {
@@ -841,7 +843,9 @@ fn poll_buffer(
     let encoded_name = encode_buffer_name(buffer_name);
     let url = format!("{}/api/buffers/{}/lines?limit=10", relay_url, encoded_name);
 
-    let response = http_get(&url, relay_password, 5_000)?;
+    // Per-buffer fetch against the local adapter; tight timeout so one slow
+    // buffer can't push the whole poll cycle toward the 30s callback timeout.
+    let response = http_get(&url, relay_password, 2_000)?;
 
     if response.status != 200 {
         return Err(format!("HTTP {}", response.status));
@@ -924,6 +928,19 @@ fn poll_buffer(
 // Inbound Message Handling
 // ============================================================================
 
+/// Whether `network` passes the networks allowlist.
+///
+/// An empty list means "allow all" (the documented convention). The literal
+/// entries `"all"` and `"*"` are also treated as wildcards meaning every
+/// network, so an operator who sets `networks=all` (a very natural way to say
+/// "all networks") gets the obvious behavior instead of every message being
+/// dropped because `"all"` matched no real network name.
+fn network_allowed(networks: &[String], network: &str) -> bool {
+    networks.is_empty()
+        || networks.iter().any(|n| n == "all" || n == "*")
+        || networks.iter().any(|n| n == network)
+}
+
 /// Process a single inbound IRC line and emit to agent if policy allows.
 fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
     let verbose = channel_host::workspace_read(VERBOSE_DROPS_PATH)
@@ -948,7 +965,7 @@ fn handle_inbound_line(buffer_name: &str, line: &LineInfo) {
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
 
-    if !networks.is_empty() && !networks.iter().any(|n| n == network) {
+    if !network_allowed(&networks, network) {
         drop_log(
             verbose,
             &format!(
@@ -1617,6 +1634,25 @@ mod tests {
     }
 
     #[test]
+    fn test_network_allowed() {
+        // Empty list = allow all networks (documented convention).
+        let none: Vec<String> = vec![];
+        assert!(network_allowed(&none, "sobes"));
+
+        // Regression: "all"/"*" must be wildcards, not literal network names.
+        // Previously networks=["all"] dropped every message.
+        assert!(network_allowed(&["all".to_string()], "sobes"));
+        assert!(network_allowed(&["*".to_string()], "anything"));
+
+        // Explicit allowlist: match by name, drop otherwise.
+        assert!(network_allowed(
+            &["libera".to_string(), "sobes".to_string()],
+            "sobes"
+        ));
+        assert!(!network_allowed(&["libera".to_string()], "sobes"));
+    }
+
+    #[test]
     fn test_encode_buffer_name() {
         assert_eq!(
             encode_buffer_name("irc.libera.#openclaw"),
@@ -1637,19 +1673,16 @@ mod tests {
                 id: Some(1),
                 full_name: Some("irc.libera.#openclaw".to_string()),
                 short_name: None,
-                name: None,
             },
             BufferInfo {
                 id: Some(2),
                 full_name: Some("irc.server.libera".to_string()),
                 short_name: None,
-                name: None,
             },
             BufferInfo {
                 id: Some(3),
                 full_name: Some("core.weechat".to_string()),
                 short_name: None,
-                name: None,
             },
         ];
 

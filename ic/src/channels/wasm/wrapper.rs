@@ -1188,6 +1188,12 @@ impl WasmChannel {
                 crate::tools::wasm::LogLevel::Warn => {
                     tracing::warn!(channel = %self.name, "{}", entry.message);
                 }
+                crate::tools::wasm::LogLevel::Info => {
+                    tracing::info!(channel = %self.name, "{}", entry.message);
+                }
+                crate::tools::wasm::LogLevel::Trace => {
+                    tracing::trace!(channel = %self.name, "{}", entry.message);
+                }
                 _ => {
                     tracing::debug!(channel = %self.name, "{}", entry.message);
                 }
@@ -2326,6 +2332,12 @@ impl WasmChannel {
 
                     tokio::spawn(async move {
                         let mut interval_timer = tokio::time::interval(interval);
+                        // A slow poll cycle (e.g. an adapter round-trip approaching the
+                        // callback timeout) must not queue up a burst of catch-up ticks.
+                        // Skip missed ticks so cadence stays ~= the configured interval
+                        // instead of firing back-to-back after a slow cycle.
+                        interval_timer
+                            .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
                         loop {
                             interval_timer.tick().await;
@@ -2514,6 +2526,12 @@ impl WasmChannel {
                         }
                         crate::tools::wasm::LogLevel::Warn => {
                             tracing::warn!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Info => {
+                            tracing::info!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Trace => {
+                            tracing::trace!(channel = %channel_name, "{}", entry.message);
                         }
                         _ => {
                             tracing::debug!(channel = %channel_name, "{}", entry.message);

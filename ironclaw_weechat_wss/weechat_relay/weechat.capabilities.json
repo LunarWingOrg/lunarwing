@@ -121,6 +121,6 @@
         "verbose_drops": false,
         "debug_logging": false,
         "polling_enabled": true,
-        "poll_interval_ms": 3000
+        "poll_interval_seconds": 3
     }
 }
