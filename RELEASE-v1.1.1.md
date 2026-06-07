@@ -152,6 +152,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Proprietary channel removal continuation (Telegram) | v1.1.6 |
 | Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.4 |
 | LunarWing developer CI/CD Pipeline | v1.1.6 |
+| Better githooks for repo | v1.1.6 |
 | LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.1.6 |
 | It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.6 |
 | Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.6 |
