@@ -10,3 +10,5 @@ The old note here ("dynamically update port in capabilities.json") is resolved: 
 ports are now sourced from the environment via capability `env` fields — see the
 [Configuration & precedence](WEECHAT-CHANNEL-ARCHITECTURE.md#4-configuration--precedence)
 section and `docs/ops/WEECHAT-MULTITENANT-PORT-BUG.md`.
+
+Next First-DM-in-new-buffer swallow (P1) 
