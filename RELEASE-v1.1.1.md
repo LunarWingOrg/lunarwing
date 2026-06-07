@@ -165,6 +165,7 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 | Weechat client and relay and ws_adapter service and polishing | v1.1.2 |
 | External Worker enhancements | v1.1.4 |
 | Add rootless docker and rootless podman as mechanisms for mt admin setup | v1.1.6 |
+| Improved MT tenant scripts | v1.1.2 |
 
 ## Testing
 
