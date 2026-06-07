@@ -304,7 +304,7 @@ Do not break without explicit approval:
 
 ## Deployment & Secrets
 
-Secrets may live in `~/.ironclaw/.env` (the default base dir — code still defaults to `.ironclaw`), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
+Secrets may live in the base-dir env file (`$LUNARWING_BASE_DIR/.env`, or the systemd `EnvironmentFile` at `$LUNARWING_BASE_DIR/env/lunarwing.env` — deployments typically set the base dir to `/home/<user>/lunarwing`; it falls back to `~/.ironclaw/.env` only when no base dir is set), systemd service environment, DB rows, or WASM auth state. Never print secret values in logs, diffs, or responses.
 
 For live DB checks, use read-only SQL unless the user explicitly requests mutation. Stop the service before mutating routine state; back up the DB first.
 
