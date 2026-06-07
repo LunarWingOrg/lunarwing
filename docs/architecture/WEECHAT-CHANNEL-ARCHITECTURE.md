@@ -1,14 +1,14 @@
 # WeeChat Channel Architecture
 
 How LunarWing connects to IRC through WeeChat: the components, the end-to-end message
-flow, the polling/latency model, the configuration-precedence rules (and the trap they
+flow, the ingestion/latency model, the configuration-precedence rules (and the trap they
 create), and the known issues with their fix status.
 
 > **Why this doc exists.** A multi-hour debugging session upgrading the `sunburst` tenant
 > showed that message delivery through this channel has several independent, *invisible*
-> failure modes, and that the "WebSocket adapter" is actually drained by slow HTTP polling.
-> Every incident re-derived the data flow and config rules from scratch. This is the
-> authoritative reference so that doesn't happen again.
+> failure modes, and that the "WebSocket adapter" was actually drained by slow HTTP polling
+> (since replaced by a long-poll path, §3). Every incident re-derived the data flow and config
+> rules from scratch. This is the authoritative reference so that doesn't happen again.
 
 Line numbers below drift; treat them as hints, not contracts. Source of truth:
 `ironclaw_weechat_wss/weechat_relay/src/lib.rs` (the WASM channel), `…/ws_adapter.py`
@@ -22,24 +22,28 @@ Line numbers below drift; treat them as hints, not contracts. Source of truth:
 |-----------|-------|------|
 | **WeeChat** | per-tenant, runs in `tmux` (`weechat-<tenant>.service`) | The actual IRC client. Exposes the **relay `api`** plugin on the `weechat` port (MT: base+5). |
 | **`ws_adapter.py`** | per-tenant Python process (`lunarwing-weechat-adapter-<tenant>.service`), `ironclaw_weechat_wss/weechat_relay/ws_adapter.py` | Holds a **WebSocket** to WeeChat's relay, subscribes to updates, buffers lines, and re-serves them over a small **HTTP API** on the `weechat_adapter` port (MT: base+9). |
-| **WeeChat WASM channel** | in the LunarWing daemon; source `ironclaw_weechat_wss/weechat_relay/src/lib.rs` → `wasm32-wasip2`; loaded/run by `ic/src/channels/wasm/{loader,wrapper,runtime,setup}.rs` | Sandboxed channel that **polls the adapter over HTTP**, applies policy, and emits `IncomingMessage`s to the agent; sends replies back to WeeChat. |
+| **WeeChat WASM channel** | in the LunarWing daemon; source `ironclaw_weechat_wss/weechat_relay/src/lib.rs` → `wasm32-wasip2`; loaded/run by `ic/src/channels/wasm/{loader,wrapper,runtime,setup}.rs` | Sandboxed channel that **long-polls (or polls) the adapter over HTTP**, applies policy, and emits `IncomingMessage`s to the agent; sends replies back to WeeChat. |
 
 ### The three hops — only one is a WebSocket
 
 ```
-        WebSocket (+ /api/sync push)            HTTP polling (every ~3s)
-WeeChat  ⇇———————————————————————————⇉  ws_adapter.py  ⇇——————————————————⇉  LunarWing daemon
- relay   real-time, adapter-buffered      (:base+9)        request/response       (WASM channel)
-(:base+5)
+        WebSocket (+ /api/sync push)        HTTP long-poll (/api/wait, near real-time;
+WeeChat  ⇇———————————————————————————⇉  ws_adapter.py   3s poll fallback on old adapters)
+ relay   real-time, adapter-buffered      (:base+9)    ⇇——————————————————⇉  LunarWing daemon
+(:base+5)                                                request/response       (WASM channel)
 ```
 
 The **adapter↔WeeChat** hop is a real WebSocket and is real-time; the adapter even holds a
-`/api/sync` subscription (`buffers`, `lines`). The **daemon↔adapter** hop is **HTTP polling** —
-the sandboxed WASM can only make request/response calls (`channel_host::http_request`), so it
-cannot hold a socket open. "ws-adapter" describes the *upstream* link, not the daemon's link.
+`/api/sync` subscription (`buffers`, `lines`). The **daemon↔adapter** hop is **HTTP** — the
+sandboxed WASM can only make request/response calls (`channel_host::http_request`), so it cannot
+hold a socket open. Instead of fixed-interval polling it issues a **blocking long-poll**
+(`GET /api/wait`, §3) that returns the instant a line arrives, falling back to ~3s polling only
+against an adapter that lacks the endpoint. "ws-adapter" describes the *upstream* link, not the
+daemon's link.
 
-**Implication:** IRC messages reach the adapter instantly and are buffered there; the daemon
-only sees them on its next poll. End-to-end inbound latency ≈ the poll cadence (see §3).
+**Implication:** IRC messages reach the adapter instantly and are buffered there; in long-poll
+mode the daemon picks them up within a network round-trip (~ms), so end-to-end inbound latency is
+near real-time. In the polling fallback, latency ≈ the poll cadence instead (see §3).
 
 ---
 
@@ -49,13 +53,16 @@ only sees them on its next poll. End-to-end inbound latency ≈ the poll cadence
 
 1. A message arrives in an IRC buffer in WeeChat (buffer name `irc.<network>.<target>`, e.g.
    `irc.sobes.#chan` or, for a DM/query, `irc.sobes.<nick>`).
-2. The adapter (subscribed via WS/`/api/sync`) captures it and buffers it per-buffer.
-3. The WASM channel's `on_poll` runs (host-driven, §3): `resolve_poll_url` picks the adapter
-   (auto/websocket mode) or the relay directly (http mode), then `do_poll`:
-   - `GET /api/config` — refresh `dm_policy`/`group_policy`/`allow_from`/`networks` (see §4).
-   - For each known buffer, `GET /api/buffers/<buf>/lines?limit=10`.
-4. `poll_buffer` keeps only **new** lines (id > per-buffer watermark in `state/last_seen_ids`)
-   that carry the `irc_privmsg` tag and are **not** `self_msg`/`no_log`.
+2. The adapter (subscribed via WS/`/api/sync`) captures it, buffers it per-buffer, and appends it
+   to a **global event log** with a monotonic `seq` (§3).
+3. The WASM channel's `on_poll` runs (host-driven, §3) and dispatches by ingest mode:
+   - **Long-poll (default):** `do_longpoll` issues `GET /api/wait?cursor=<n>` and receives the new
+     lines across **all** buffers in one response (refreshing `/api/config` policy on heartbeat
+     ticks, see §4).
+   - **Poll (fallback):** `do_poll` refreshes `GET /api/config` (see §4) and then fetches
+     `GET /api/buffers/<buf>/lines?limit=10` for each known buffer; `poll_buffer` keeps only lines
+     with id > the per-buffer watermark in `state/last_seen_ids`.
+4. Either path keeps only lines carrying the `irc_privmsg` tag that are **not** `self_msg`/`no_log`.
 5. `handle_inbound_line` applies policy in order: parse `irc.<net>.<target>` → `network_allowed`
    (allowlist; empty/`all`/`*` = all) → exclude-networks → non-empty text → **DM vs group**
    (`is_dm` = target not starting with `#`/`&`/`!`) → `dm_policy`/`group_policy` + `allow_from`
@@ -69,15 +76,44 @@ only sees them on its next poll. End-to-end inbound latency ≈ the poll cadence
 to `max_chunk_length` (default 420), and `POST`s each chunk to the WeeChat **relay** `/api/input`
 (via `relay_url`, not the adapter). Replies therefore go straight to WeeChat.
 
-### Watermarks & new buffers
+### Watermarks & new buffers (poll mode only)
 
-`do_poll` seeds a per-buffer watermark the **first time** it sees a buffer and does **not**
-emit that first batch (avoids replaying history on startup). See §5 for the consequence on
-freshly-created DM/query buffers.
+In the polling fallback, `do_poll` seeds a per-buffer watermark the **first time** it sees a
+buffer and does **not** emit that first batch (avoids replaying history on startup). See §5 for the
+consequence on freshly-created DM/query buffers. Long-poll mode has no per-buffer watermarks — it
+tracks a single global cursor seeded to the adapter's current `event_cursor` at `on_start`, so it
+neither replays history nor needs per-buffer discovery.
 
 ---
 
-## 3. Polling & latency
+## 3. Ingestion & latency
+
+The daemon consumes the adapter in one of two modes, chosen at `on_start` by probing
+`GET /api/health` for an `event_cursor` field (`detect_and_seed_ingest_mode` in `lib.rs`).
+
+### Long-poll mode (default when the adapter supports it) — near real-time
+
+The adapter keeps a **global ordered event log** (`event_seq` + `event_log`, set on every
+`buffer_line_added`) and a blocking endpoint **`GET /api/wait?cursor=<n>&timeout=<s>`**: it
+returns immediately with all events `seq > cursor`, or blocks until a line arrives (or a ~20s
+heartbeat), and resets if `cursor > event_seq` (adapter restart). `on_start` seeds the WASM's
+`state/event_cursor` to the adapter's current cursor so buffered history isn't replayed.
+
+`on_poll → do_longpoll`: issue `GET /api/wait` (HTTP timeout 25s), feed each returned line to
+`handle_inbound_line`, advance the cursor, repeat. Because the call returns the instant a line is
+recorded, **inbound latency ≈ a network round-trip (~ms)**, not the poll interval — and a
+brand-new DM/query buffer's first line arrives through the same stream, so there is **no
+discovery delay**. This is what supersedes the per-buffer first-DM hack.
+
+**Timeout hierarchy (hard constraint):** `adapter wait ≤20s  <  WASM HTTP 25s  <  host
+callback_timeout 30s`. The host loop below is unchanged; each `on_poll` simply blocks in
+`/api/wait` up to ~20s and re-issues immediately on return. If `/api/wait` is missing (old
+adapter) or returns an unparseable body, the WASM logs it and falls back to **poll mode** for the
+rest of the session.
+
+### Poll mode (fallback / old adapters) — ~3s
+
+Used when the adapter has no `/api/wait`. `on_poll → do_poll` fetches each buffer per cycle.
 
 ### The loop (`ic/src/channels/wasm/wrapper.rs`, `start_polling` / `execute_poll`)
 
@@ -104,7 +140,12 @@ effective cadence  =  max(poll_interval, cycle_duration)
 So a slow cycle stretches the gap between polls all the way to ~30s. (Before the fixes below,
 `MissedTickBehavior` was the default `Burst`, which then fired a burst of catch-up polls.)
 
-### Per-cycle cost
+This same host loop drives **both** modes. In long-poll mode `cycle_duration` is *intentionally*
+the ~20s `/api/wait` block, so `MissedTickBehavior::Skip` just re-issues the wait the instant it
+returns — there is no idle 3s gap, which is exactly what gives near-real-time delivery. In poll
+mode the cycle is short and the 3s tick paces it.
+
+### Per-cycle cost (poll mode)
 
 Everything inside one `on_poll` is **sequential**, each call with its own timeout. A fresh
 WASM instance is also created per poll (`create_store` + `instantiate_component`; the runtime
@@ -120,7 +161,7 @@ WASM instance is also created per poll (`create_store` + `instantiate_component`
 Worst-case cycle ≈ `1.5 + 2 + 2·N` s (was `2 + 3 + 5·N`). In the normal case (responsive local
 adapter) each call returns in milliseconds and the cadence is ~3s.
 
-### Seeing the real cadence
+### Seeing the real cadence (poll mode)
 
 ```bash
 sudo -u <tenant> XDG_RUNTIME_DIR=/run/user/$(id -u <tenant>) \
@@ -130,6 +171,10 @@ sudo -u <tenant> XDG_RUNTIME_DIR=/run/user/$(id -u <tenant>) \
 
 The gap between consecutive lines is the actual cadence. To measure how long a single cycle
 takes, compare `calling on_poll channel=weechat` → `on_poll completed channel=weechat`.
+
+In **long-poll mode** there is no fixed cadence to measure; liveness is the adapter's
+`event_cursor` climbing as lines arrive (`curl -s …/api/health`, §5) and `emitted_count` on the
+`on_poll completed` lines.
 
 > Channel debug logs are gated twice: by the `debug_logging` capability flag **and** by the
 > daemon's `RUST_LOG`. See §5 — they used to be invisible at the default `RUST_LOG`.
@@ -155,12 +200,14 @@ For each capability `required_field`, the effective value is resolved **highest-
 Resolved overrides are merged on top of the caps `config` block and handed to `on_start`,
 which persists them to channel workspace state (`state/relay_url`, `state/dm_policy`, …).
 
-### At runtime (`do_poll` `/api/config`)
+### At runtime (`refresh_policy_config` → `/api/config`)
 
-On **every poll**, `do_poll` fetches `GET /api/config` from the adapter (served from
+On each poll cycle, `refresh_policy_config` fetches `GET /api/config` from the adapter (served from
 `weechat_local_config.json` next to `ws_adapter.py`) and, if present, overwrites the workspace
-state for `dm_policy`, `group_policy`, `allow_from`, and `networks`. Ports
-(`relay_url`/`ws_adapter_url`) are **not** refreshed this way — they are set only at `on_start`.
+state for `dm_policy`, `group_policy`, `allow_from`, and `networks`. Both ingest paths call it —
+`do_poll` every cycle, `do_longpoll` on each `/api/wait` return (event batch or ~20s heartbeat).
+Ports (`relay_url`/`ws_adapter_url`) are **not** refreshed this way — they are set only at
+`on_start`.
 
 So the live precedence is:
 
@@ -200,9 +247,9 @@ Then restart the daemon so `on_start` re-resolves.
 |-------|---------|------------|--------|
 | **`networks="all"` matched literally** | Every message dropped: `line dropped (network not in allowlist): network=…, allowed=["all"]` | The allowlist compared names literally; `"all"` matched no real network. Convention was *empty = all*, but `"all"` is the obvious thing to type. | **Fixed** — `network_allowed()` treats `all`/`*` as wildcards (empty still = all). |
 | **Channel debug logs invisible** | `debug_logging=true` produced nothing in the journal | The host forwarded all guest `Info/Debug/Trace` logs via `tracing::debug!`, dropped by the default `RUST_LOG=lunarwing=info`. | **Fixed** — faithful level mapping (`Info→info!`, `Trace→trace!`); `debug_logging` is now visible at `info`. |
-| **Poll cadence balloons to ~30s** | Long, irregular gaps between polls | `tick` + `poll` sequential ⇒ cadence = `max(3s, cycle)`; cycle could approach the 30s `callback_timeout`; default `Burst` then fired catch-up bursts. | **Mitigated** — `MissedTickBehavior::Skip` + tightened per-call timeouts (§3). Real-time push is the deeper fix (§6). |
+| **Poll cadence balloons to ~30s** | Long, irregular gaps between polls | `tick` + `poll` sequential ⇒ cadence = `max(3s, cycle)`; cycle could approach the 30s `callback_timeout`; default `Burst` then fired catch-up bursts. | **Fixed** — long-poll (`/api/wait`, §3) removes the per-cycle per-buffer fan-out entirely, so there is no cadence to balloon. The problem only survives on the polling fallback, where `MissedTickBehavior::Skip` + tightened per-call timeouts keep it bounded. |
 | **`poll_interval_ms` ignored** | Configuring the interval did nothing | Caps `config` key was `poll_interval_ms` but the struct field is `poll_interval_seconds` — different name ⇒ value dropped, struct default (3) used. | **Fixed** — caps key renamed to `poll_interval_seconds`. |
-| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message; `do_poll` treated a brand-new buffer as "first sighting" and seeded its watermark **without emitting** that batch. | **Fixed** — `do_poll` now emits the first batch for new **DM/query** buffers (`is_dm_buffer`); channel buffers still seed-skip (they may load join backlog). |
+| **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message; `do_poll` treated a brand-new buffer as "first sighting" and seeded its watermark **without emitting** that batch — and only discovered the buffer at all on the ~90s buffer-list refresh. The deeper cause was discovery latency, not the emit logic. | **Fixed** — long-poll's global cursor delivers a new buffer's first line immediately as a `seq > cursor` event, with no per-buffer discovery step (§3). The fallback `do_poll` also emits the first batch for new **DM/query** buffers (`is_dm_buffer`); channel buffers still seed-skip to avoid replaying join backlog. |
 | **Password is the *second* blocker** | After ports are fixed, the adapter returns 401 | The adapter authenticates incoming WASM requests against the per-tenant `RELAY_PASSWORD` (`check_auth`); the WASM must send it. | Handled by the port fix (relay_password injection) — see `WEECHAT-MULTITENANT-PORT-BUG.md`. |
 | **Stale `setup_fields` shadowing** | Caps/env edits "don't take" | Highest-precedence DB layer (§4). | Documented (§4); see §6 for the proposed precedence redesign. |
 
@@ -211,7 +258,8 @@ Then restart the daemon so `on_start` re-resolves.
 - Channel logs: set `debug_logging=true` (caps `config`) — now visible at `RUST_LOG=lunarwing=info`.
   For per-poll `Debug` lines, use `RUST_LOG=lunarwing=info,lunarwing::channels::wasm=debug`.
 - Adapter health: `curl -s http://127.0.0.1:<base+9>/api/health` → `ws_connected: true` means the
-  adapter↔WeeChat WebSocket is live.
+  adapter↔WeeChat WebSocket is live; `event_cursor` is the global long-poll cursor and should climb
+  as IRC lines arrive (its presence is also what makes the WASM choose long-poll over polling).
 - Raw line tags (bypasses channel logging): `curl` `…/api/buffers/<buf>/lines` with
   `Authorization: Basic base64("plain:"+RELAY_PASSWORD)`.
 
@@ -221,22 +269,28 @@ Then restart the daemon so `on_start` re-resolves.
 
 **Applied in this change (P0/P1):**
 
+- **Near real-time ingestion (long-poll):** adapter global event log + blocking `GET /api/wait`;
+  WASM `do_longpoll` consuming it with a capability probe and automatic fallback to per-buffer
+  polling against old adapters (`ws_adapter.py`, `lib.rs`, with a `parse_wait_response` test).
+  This is the former "P2 — real-time push" recommendation, delivered as a long-poll (which the
+  sandboxed WASM *can* do) rather than a held socket (which it cannot). Largest latency win, and
+  it subsumes both the first-DM hack and the batched-lines idea below.
 - Faithful guest-log level mapping (`wrapper.rs`).
-- `MissedTickBehavior::Skip` + tightened per-call timeouts (`wrapper.rs`, `lib.rs`) to keep
-  cadence ≈ 3s and bound a stalled cycle well under the 30s `callback_timeout`.
+- `MissedTickBehavior::Skip` + tightened per-call timeouts (`wrapper.rs`, `lib.rs`) — now govern
+  only the **polling fallback**: keep its cadence ≈ 3s and bound a stalled cycle well under the
+  30s `callback_timeout`.
 - `network_allowed()` wildcard for `all`/`*` (`lib.rs`, with a regression test).
 - `poll_interval_seconds` caps key fix (`weechat.capabilities.json`).
-- **First-DM delivery:** `do_poll` emits the first batch for newly-created **DM/query**
-  buffers (`is_dm_buffer`) instead of seed-skipping it; channel buffers still seed-skip to
-  avoid replaying join backlog (`lib.rs`, with a regression test).
+- **First-DM delivery:** solved primarily by the global cursor (§3); the fallback `do_poll` also
+  emits the first batch for newly-created **DM/query** buffers (`is_dm_buffer`) instead of
+  seed-skipping it, while channel buffers still seed-skip to avoid replaying join backlog
+  (`lib.rs`, with a regression test).
 
 **Open / recommended next:**
 
-- **P2 — Adopt the adapter `/api/sync` push for real-time delivery** instead of 3s polling
-  (the adapter already supports it — see `docs/proposals/WEECHAT_WS_ADAPTER_SYNC_PROTOCOL.md`).
-  Needs a host-side consumption model, since the sandboxed WASM cannot hold a socket. Largest
-  latency win.
-- **P2 — Batched "all new lines" endpoint** to replace N sequential per-buffer `/lines` fetches.
+- **P2 — Batched "all new lines" endpoint for the fallback path.** `/api/wait` already returns all
+  new lines across buffers in one call, so the long-poll path no longer fans out per buffer; only
+  the polling fallback still issues N sequential `/lines` fetches. Low priority now.
 - **P2 — Config-precedence redesign:** make `env`-declared deployment fields win over a stale
   `setup_fields` row (or have `mt-admin patch-env`/upgrade clear stale weechat `setup_fields`),
   and extend `ic/scripts/lunarwing-weechat-preflight.sh` to surface the *effective* value
@@ -246,13 +300,20 @@ Then restart the daemon so `on_start` re-resolves.
 
 ## 7. Rollout note
 
-These changes split across two build artifacts:
+These changes split across three artifacts:
 
 - **Host** (log mapping, `MissedTickBehavior`): `cargo build --release --bin lunarwing` → deploy binary.
-- **WASM channel** (timeouts, `network_allowed`, caps key): `scripts/build-wasm-extensions.sh`
-  → `lunarwing-mt-admin.sh install-wasm <tenant>` → `restart-tenant <tenant>`.
+- **WASM channel** (long-poll consumer, timeouts, `network_allowed`, caps key):
+  `scripts/build-wasm-extensions.sh` → `lunarwing-mt-admin.sh install-wasm <tenant>`.
+- **Adapter** (`ws_adapter.py`: `/api/wait`, global event log, `/api/health` cursor): a plain
+  Python file that runs from the **tenant's own clone**, so it ships with a `git pull` in the
+  tenant home and takes effect when its service restarts.
 
-No behavior changes until both are redeployed per tenant.
+The adapter and WASM must update **together** (the WASM probes `/api/health` for the adapter's
+`event_cursor` and only long-polls if present; otherwise it falls back to polling). Per tenant:
+`git pull` in the tenant home → `build-tenant <t> --with-wasm` → `install-wasm <t>` →
+`restart-tenant <t>` (restarts both the daemon and the adapter service). New tenants created via
+`create-tenant-*` get all three from the start. No behavior changes until they are redeployed.
 
 ---
 
