@@ -256,9 +256,22 @@ async def handle_ws_event(raw: str, session: ClientSession):
             state.line_buffer[full_name].append(line_info)
             record_event(full_name, line_info)
         else:
-            # Unknown buffer — refresh list so future lines can be resolved
-            log.debug(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list")
-            asyncio.create_task(refresh_buffer_list(session))
+            # Unknown buffer — almost always a brand-new query/DM buffer that isn't
+            # in our cached buffer_list yet. Refresh SYNCHRONOUSLY and retry the
+            # lookup so the FIRST line in a new buffer isn't dropped. That drop is
+            # the long-standing "first DM swallowed" bug: the line never reaches
+            # line_buffer OR the event log, so neither polling nor the long-poll
+            # cursor can ever deliver it. record_event must see it here.
+            log.debug(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list inline")
+            await refresh_buffer_list(session)
+            buf = next((b for b in state.buffer_list if b.get("id") == buffer_id), None)
+            full_name = (buf.get("full_name") or buf.get("name")) if buf else None
+            if full_name and line_info:
+                state.line_buffer[full_name].append(line_info)
+                record_event(full_name, line_info)
+                log.info(f"buffer_line_added: captured first line for new buffer {full_name}")
+            else:
+                log.warning(f"buffer_line_added: buffer_id={buffer_id!r} still unknown after refresh — dropping line")
 
     elif event == "buffer_opened":
         asyncio.create_task(refresh_buffer_list(session))
@@ -350,9 +363,16 @@ async def handle_wait(request: web.Request) -> web.Response:
         wait_s = 20.0
     wait_s = max(0.0, min(wait_s, 20.0))  # cap below the host's 30s callback timeout
 
-    # Stale cursor (adapter restarted → seq reset): tell the client to resync.
+    # Stale cursor (cursor > our seq) means the adapter restarted and its in-memory
+    # event_seq reset below the client's saved cursor. Don't tell the client it's
+    # already caught up — that would skip every line recorded since the restart
+    # (e.g. the first DM after a setup restart). Replay from 0 instead; the
+    # post-restart event_log only holds lines the client hasn't seen, so this can't
+    # double-deliver. (Falls through to the normal collect/wait logic below.)
     if cursor > state.event_seq:
-        return web.json_response({"cursor": state.event_seq, "events": []})
+        log.info(f"/api/wait: client cursor {cursor} > event_seq {state.event_seq} "
+                 f"(adapter restarted?) — replaying post-restart backlog")
+        cursor = 0
 
     def collect():
         return [e for e in state.event_log if e["seq"] > cursor]

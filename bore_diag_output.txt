@@ -1,0 +1,68 @@
+tenant=bore  adapter=http://127.0.0.1:10099  relay_password_len=32  uid=1017
+
+===== 1. adapter /api/health  (ws_connected + event_cursor) =====
+{
+  "status": "ok",
+  "ws_connected": true,
+  "ws_error": null,
+  "buffered_buffers": 2,
+  "buffer_list_count": 5,
+  "event_cursor": 13
+}
+  -> no event_cursor field = OLD adapter (won't long-poll). ws_connected:false = WeeChat not reachable.
+
+===== 2. adapter event log  (/api/wait?cursor=0 — are ANY lines recorded?) =====
+total_cursor=13  events_returned=13
+  seq=8 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  seq=9 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  seq=10 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  seq=11 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  seq=12 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  seq=13 buf=irc.server.sobes tags=[] msg=irc: this buffer is not a channel!
+  -> events_returned=0 while ws_connected:true means WeeChat delivered nothing to record.
+
+===== 3. buffers the adapter knows about =====
+core.weechat  (id=1780815594349243)
+irc.server.sobes  (id=1780815777404334)
+irc.sobes.NickServ  (id=1780815778018569)
+irc.sobes.sun  (id=1780815782070773)
+relay.relay.list  (id=1780815788006832)
+  -> no irc.* buffers = WeeChat isn't connected to IRC / relay not set up yet.
+
+===== 4. recent lines + TAGS per irc.* buffer  (does a DM carry irc_privmsg? self_msg?) =====
+--- irc.server.sobes ---
+tags=[]  nick=[0m[38;5;11m[49m=!=  msg=irc: this buffer is not a channel!
+tags=[]  nick=[0m[38;5;11m[49m=!=  msg=irc: this buffer is not a channel!
+tags=[]  nick=[0m[38;5;11m[49m=!=  msg=irc: this buffer is not a channel!
+tags=[]  nick=[0m[38;5;11m[49m=!=  msg=irc: this buffer is not a channel!
+--- irc.sobes.NickServ ---
+--- irc.sobes.sun ---
+tags=["irc_privmsg","irc_tag_account=sun","irc_tag_msgid=bujq9k94apzyc4nbwg3kvw8s7w","irc_tag_time=2026-06-07T07:09:14.288Z","notify_private","prefix_nick_162","nick_sun","host_~u@pxe3aqqxc9c9a.sobe","log1"]  nick=[0m[38;5;162msun  msg=aaaaaaaaaa
+tags=["irc_privmsg","irc_tag_account=bore","irc_tag_msgid=grmtpjq6cagbp78qzry2sjdj72","irc_tag_time=2026-06-07T07:09:09.801Z","self_msg","notify_none","no_highlight","prefix_nick_white","nick_bore","host_~u@fgzyv96ie4b5n.sobe","log1"]  nick=[0m[0m[38;5;15m[49mbore  msg=master
+tags=["irc_privmsg","irc_tag_account=bore","irc_tag_msgid=3dimefkgt8qux369haqpzszwze","irc_tag_time=2026-06-07T07:09:07.800Z","self_msg","notify_none","no_highlight","prefix_nick_white","nick_bore","host_~u@fgzyv96ie4b5n.sobe","log1"]  nick=[0m[0m[38;5;15m[49mbore  msg=master
+
+===== 5. WASM ingest state on disk  (which path did it actually choose?) =====
+ingest_mode = (not on disk — held in DB workspace)
+event_cursor = (not on disk — held in DB workspace)
+dm_policy = (not on disk — held in DB workspace)
+group_policy = (not on disk — held in DB workspace)
+allow_from = (not on disk — held in DB workspace)
+networks = (not on disk — held in DB workspace)
+ws_adapter_url = (not on disk — held in DB workspace)
+relay_url = (not on disk — held in DB workspace)
+  -> ingest_mode=poll means the WASM did NOT see event_cursor at startup (adapter down at daemon start?).
+
+===== 6. daemon channel log  (ingest-mode pick is Info-level => always visible) =====
+Jun 07 03:08:25 cmc-onexplayerx1pro-tab lunarwing[1893514]: 2026-06-07T07:08:25.512059Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10099/api/wait?cursor=113&timeout=20 body_len=0
+Jun 07 03:08:55 cmc-onexplayerx1pro-tab lunarwing[1893514]: 2026-06-07T07:08:55.511746Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10099/api/wait?cursor=117&timeout=20 body_len=0
+Jun 07 03:09:25 cmc-onexplayerx1pro-tab lunarwing[1893514]: 2026-06-07T07:09:25.511492Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10099/api/wait?cursor=121&timeout=20 body_len=0
+Jun 07 03:09:55 cmc-onexplayerx1pro-tab lunarwing[1893514]: 2026-06-07T07:09:55.510599Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10099/api/wait?cursor=6&timeout=20 body_len=0
+  -> want: 'WeeChat ingest mode: longpoll'. emitted_count=0 while events exist => policy is dropping.
+
+===== 7. adapter /api/config  (policy the channel pulls each cycle) =====
+{}
+
+===== 8. DB setup_fields  (OUTRANKS caps config for dm_policy etc.) =====
+(empty above = no stale weechat setup_fields overriding the caps — expected on a fresh tenant)
+
+done — paste this whole block.
