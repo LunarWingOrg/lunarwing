@@ -36,8 +36,33 @@ fn main() {
         return;
     }
 
-    // Build WASM module
+    // Skip rebuild if output is already fresh
+    let wasm_out = channel_dir.join("telegram.wasm");
+    if wasm_out.is_file() {
+        let out_mtime = wasm_out.metadata().unwrap().modified().unwrap();
+        let src_dir = channel_dir.join("src");
+        let toml = channel_dir.join("Cargo.toml");
+        let mut fresh = true;
+        for path in [&src_dir, &toml] {
+            if path.is_dir() || path.is_file() {
+                let mtime = path.metadata().unwrap().modified().unwrap();
+                if mtime > out_mtime {
+                    fresh = false;
+                    break;
+                }
+            }
+        }
+        if fresh {
+            println!("cargo:warning=telegram.wasm is fresh, skipping WASM rebuild");
+            return;
+        }
+    }
+
+    // Build WASM module — use a separate target dir to avoid deadlock
+    // with the parent cargo process that holds the main target lock.
+    let wasm_target_dir = channel_dir.join("target");
     let status = match Command::new("cargo")
+        .env("CARGO_TARGET_DIR", &wasm_target_dir)
         .args([
             "build",
             "--release",
@@ -65,7 +90,7 @@ fn main() {
         return;
     }
 
-    let raw_wasm = channel_dir.join("target/wasm32-wasip2/release/telegram_channel.wasm");
+    let raw_wasm = wasm_target_dir.join("wasm32-wasip2/release/telegram_channel.wasm");
     if !raw_wasm.exists() {
         eprintln!(
             "cargo:warning=Telegram WASM output not found at {:?}",

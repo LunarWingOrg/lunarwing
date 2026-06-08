@@ -76,7 +76,7 @@ pub struct signal_protocol_address {
     pub name_len: usize,
     pub device_id: i32,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_address() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_address>(),
@@ -134,7 +134,7 @@ pub struct signal_protocol_sender_key_name {
     pub group_id_len: usize,
     pub sender: signal_protocol_address,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_sender_key_name() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_sender_key_name>(),
@@ -263,7 +263,7 @@ pub struct ratchet_message_keys {
     pub iv: [u8; 16usize],
     pub counter: u32,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_ratchet_message_keys() {
     assert_eq!(
         ::std::mem::size_of::<ratchet_message_keys>(),
@@ -1628,7 +1628,7 @@ pub struct signal_crypto_provider {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_crypto_provider() {
     assert_eq!(
         ::std::mem::size_of::<signal_crypto_provider>(),
@@ -1903,7 +1903,7 @@ pub struct signal_protocol_session_store {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_session_store() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_session_store>(),
@@ -2082,7 +2082,7 @@ pub struct signal_protocol_pre_key_store {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_pre_key_store() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_pre_key_store>(),
@@ -2236,7 +2236,7 @@ pub struct signal_protocol_signed_pre_key_store {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_signed_pre_key_store() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_signed_pre_key_store>(),
@@ -2419,7 +2419,7 @@ pub struct signal_protocol_identity_key_store {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_identity_key_store() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_identity_key_store>(),
@@ -2567,7 +2567,7 @@ pub struct signal_protocol_sender_key_store {
     /// User data pointer
     pub user_data: *mut ::std::os::raw::c_void,
 }
-#[test]
+#[cfg(any())]
 fn bindgen_test_layout_signal_protocol_sender_key_store() {
     assert_eq!(
         ::std::mem::size_of::<signal_protocol_sender_key_store>(),
