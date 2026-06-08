@@ -23,6 +23,9 @@ SELF_HEAL_STATE_DIR="${SELF_HEAL_STATE_DIR:-$REPORT_DIR/../self-heal}"
 SELF_HEAL_LOG="${SELF_HEAL_LOG:-$SELF_HEAL_STATE_DIR/actions.log}"
 MAX_RETRIES="${SELF_HEAL_MAX_RETRIES:-3}"
 BACKOFF_SECONDS="${SELF_HEAL_BACKOFF_SECONDS:-5}"
+# Number of consecutive unhealthy checks before first restart (flapping guard).
+# Default 2: a service must fail two health checks in a row before remediation.
+GRACE_CHECKS="${SELF_HEAL_GRACE_CHECKS:-2}"
 DRY_RUN=false
 REPORT_FILE=""
 
@@ -52,8 +55,9 @@ while [[ $# -gt 0 ]]; do
         --dry-run|-n)   DRY_RUN=true; shift ;;
         --max-retries)  MAX_RETRIES="$2"; shift 2 ;;
         --backoff)      BACKOFF_SECONDS="$2"; shift 2 ;;
+        --grace-checks) GRACE_CHECKS="$2"; shift 2 ;;
         --help|-h)
-            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N]"
+            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--grace-checks N]"
             exit 0
             ;;
         *) die "unknown arg: $1 (use --help)" ;;
@@ -207,6 +211,31 @@ clear_service_state() {
     echo "$state" | jq --arg svc "$svc" 'del(.[$svc])'
 }
 
+# ── Grace-period (flapping-guard) helpers ───────────────────────────────────
+#
+# `consecutive_unhealthy` counts how many consecutive runs have seen this
+# service unhealthy. We only proceed to restart after the counter reaches
+# `$GRACE_CHECKS`. A single healthy observation resets it to 0 (and clears the
+# service's state entry entirely via `clear_service_state`).
+#
+# `first_unhealthy_at` records when the streak began — useful for debugging
+# flapping services and for downstream tooling to report "down since X".
+
+get_unhealthy_count() {
+    local state="$1" svc="$2"
+    echo "$state" | jq -r ".\"$svc\".consecutive_unhealthy // 0"
+}
+
+increment_unhealthy_count() {
+    local state="$1" svc="$2"
+    echo "$state" | jq --arg svc "$svc" '
+        .[$svc] = (.[$svc] // {})
+        | .[$svc].consecutive_unhealthy = ((.[$svc].consecutive_unhealthy // 0) + 1)
+        | .[$svc].first_unhealthy_at = (.[$svc].first_unhealthy_at // now)
+        | .[$svc].last_unhealthy_at = now
+    '
+}
+
 # ── Notification escalation ─────────────────────────────────────────────────
 
 _send_notification() {
@@ -265,7 +294,23 @@ remediate_component() {
             continue
         fi
 
-        log "RESTART: $svc (component=$comp, retries so far=$retries)"
+        # Grace-period (flapping-guard): only restart once this service has
+        # been observed unhealthy for $GRACE_CHECKS consecutive checks. The
+        # first observation just bumps the counter and exits quietly, so
+        # transient flakes no longer cause an immediate restart. The
+        # counter is cleared by the "all healthy" branch in main() when
+        # the service comes back, or by set_retry_count/clear_service_state
+        # once a restart is actually attempted.
+        local unhealthy_count
+        unhealthy_count="$(get_unhealthy_count "$state" "$svc")"
+        state="$(increment_unhealthy_count "$state" "$svc")"
+        if [[ $unhealthy_count -lt $((GRACE_CHECKS - 1)) ]]; then
+            log "GRACE: $svc unhealthy streak=$((unhealthy_count + 1))/$GRACE_CHECKS — observing, not restarting yet"
+            log_action "GRACE_HOLD target=$svc streak=$((unhealthy_count + 1)) threshold=$GRACE_CHECKS"
+            continue
+        fi
+
+        log "RESTART: $svc (component=$comp, retries so far=$retries, unhealthy streak=$((unhealthy_count + 1)))"
         log_action "RESTART_BEGIN target=$svc component=$comp retries=$retries"
 
         if restart_service "$svc"; then
@@ -329,7 +374,7 @@ main() {
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
-    log "max retries: $MAX_RETRIES | backoff: ${BACKOFF_SECONDS}s | dry-run: $DRY_RUN"
+    log "max retries: $MAX_RETRIES | backoff: ${BACKOFF_SECONDS}s | grace-checks: $GRACE_CHECKS | dry-run: $DRY_RUN"
 
     if ! jq . "$report" >/dev/null 2>&1; then
         die "report is not valid JSON: $report"
@@ -406,15 +451,17 @@ main() {
 
     if [[ ${#targets[@]} -eq 0 ]]; then
         log "all components healthy; no action needed"
-        # Reset any stale state entries that are now healthy
+        # Reset any stale state entries — the report itself is the source of
+        # truth for "all healthy", so we don't round-trip through
+        # check_service_active (which can be flaky in the seconds after a
+        # restart and would cause the grace-period counter to stick). This
+        # also makes the grace period self-healing: a transient flake that
+        # resolves before the streak hits $GRACE_CHECKS leaves no residue.
         local stale
         stale="$(echo "$state" | jq -r 'keys[]')"
         for svc in $stale; do
-            # Check if this service is now healthy
-            if check_service_active "$svc" 2>/dev/null; then
-                state="$(clear_service_state "$state" "$svc")"
-                log "CLEARED stale state for $svc (now healthy)"
-            fi
+            state="$(clear_service_state "$state" "$svc")"
+            log "CLEARED stale state for $svc (report says all healthy)"
         done
         save_state "$state"
         log "=== Self-Healing complete (nothing to do) ==="

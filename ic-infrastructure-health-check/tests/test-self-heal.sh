@@ -61,21 +61,107 @@ out="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
        SELF_HEAL_STATE_DIR="$TMP/self-heal" \
        "$SELF_HEAL" --dry-run --report "$REPORT" --backoff 0 2>&1)"
 
-# Core regression: the unhealthy systemd sub-unit MUST be selected for restart.
-assert_contains "$out" "systemctl restart clickhouse-server.service" \
-    "unhealthy systemd sub-unit is targeted for remediation"
-# The standard degraded component still maps via SERVICE_MAP.
-assert_contains "$out" "systemctl restart lunarwing" \
-    "degraded gateway component maps to lunarwing service"
+# Pass 1 with the grace period (default 2) is held — the report lists
+# clickhouse and gateway as unhealthy once, so they sit in the grace
+# counter. The regression we're guarding is the jq filter producing the
+# right TARGETS, not whether the restart fires on this first pass.
+assert_contains "$out" "GRACE: lunarwing unhealthy streak=1/2" \
+    "degraded gateway component enters grace period on first observation"
+assert_contains "$out" "GRACE: clickhouse-server.service unhealthy streak=1/2" \
+    "unhealthy systemd sub-unit enters grace period on first observation"
 # Healthy sub-units must be left alone.
-assert_absent "$out" "restart lunarwing-watchdog.service" \
-    "healthy systemd sub-unit is NOT restarted"
+assert_absent "$out" "GRACE: lunarwing-watchdog.service" \
+    "healthy systemd sub-unit does NOT enter grace period"
 # No-remedy components are skipped, never restarted.
-assert_absent "$out" "restart omemo" \
-    "no-remedy component (omemo) is not restarted"
+assert_absent "$out" "GRACE: omemo" \
+    "no-remedy component (omemo) is not held in grace or restarted"
 # The jq filter must not have aborted (would print a jq error to the captured output).
 assert_absent "$out" "Cannot index string" \
     "pass-2 jq filter does not abort with a precedence error"
+
+# Pass 2 (same state dir, same report) — grace period elapses, restart fires.
+out2="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$TMP/self-heal" \
+       "$SELF_HEAL" --dry-run --report "$REPORT" --backoff 0 2>&1)"
+assert_contains "$out2" "systemctl restart clickhouse-server.service" \
+    "unhealthy systemd sub-unit is targeted for remediation on second consecutive check"
+assert_contains "$out2" "systemctl restart lunarwing" \
+    "degraded gateway component maps to lunarwing service on second consecutive check"
+assert_absent "$out2" "restart lunarwing-watchdog.service" \
+    "healthy systemd sub-unit is NOT restarted"
+
+# ── Grace-period (flapping guard) tests ──────────────────────────────────────
+# The default GRACE_CHECKS is 2: a service must be unhealthy on two
+# consecutive runs before restart. We simulate this by re-using the same
+# state directory across two --dry-run invocations.
+
+STATEDIR2="$TMP/self-heal-grace"
+mkdir -p "$STATEDIR2"
+
+# Build a report with a single degraded standard component.
+jq -n '{
+  timestamp: "2026-06-08T00:00:00Z",
+  overall_status: "critical",
+  components: [
+    {component:"gateway", status:"critical", metrics:{}}
+  ],
+  alerts: []
+}' > "$TMP/grace-report.json"
+
+# Pass 1: first unhealthy observation → grace hold, no restart.
+out1="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR2" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out1" "GRACE: lunarwing unhealthy streak=1/2" \
+    "first unhealthy check is held in grace period"
+assert_absent  "$out1" "RESTART: lunarwing" \
+    "first unhealthy check does not trigger a restart"
+
+# Pass 2: second consecutive unhealthy observation → restart now.
+out2="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR2" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out2" "RESTART: lunarwing" \
+    "second consecutive unhealthy check triggers restart"
+assert_absent  "$out2" "GRACE:" \
+    "second consecutive unhealthy check is not held"
+
+# Pass 3: send a fully-healthy report; the stale-state loop should clear
+# the counter so a subsequent unhealthy report goes back to streak=1.
+jq -n '{
+  timestamp: "2026-06-08T00:00:00Z",
+  overall_status: "healthy",
+  components: [
+    {component:"gateway", status:"healthy", metrics:{}}
+  ],
+  alerts: []
+}' > "$TMP/grace-healthy.json"
+
+out3="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR2" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-healthy.json" --backoff 0 2>&1)"
+assert_contains "$out3" "all components healthy" \
+    "healthy report clears state"
+
+# Pass 4: fresh unhealthy after healthy → streak resets to 1.
+out4="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR2" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out4" "GRACE: lunarwing unhealthy streak=1/2" \
+    "unhealthy after healthy resets grace counter"
+assert_absent  "$out4" "RESTART: lunarwing" \
+    "unhealthy after healthy does not restart immediately"
+
+# Override GRACE_CHECKS=1 (via env) → first unhealthy should restart immediately.
+STATEDIR3="$TMP/self-heal-grace1"
+mkdir -p "$STATEDIR3"
+out5="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR3" SELF_HEAL_GRACE_CHECKS=1 \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out5" "RESTART: lunarwing" \
+    "GRACE_CHECKS=1 restarts on first unhealthy observation"
+assert_absent  "$out5" "GRACE:" \
+    "GRACE_CHECKS=1 does not emit grace hold"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
