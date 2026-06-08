@@ -70,8 +70,14 @@ while [[ $# -gt 0 ]]; do
         --backoff-max)   BACKOFF_MAX="$2"; shift 2 ;;
         --backoff-strategy) BACKOFF_STRATEGY="$2"; shift 2 ;;
         --grace-checks)  GRACE_CHECKS="$2"; shift 2 ;;
+        --verify-health)
+            case "${2:-}" in
+                0|false|no|off) VERIFY_HEALTH="false"; shift 2 ;;
+                *) VERIFY_HEALTH="true"; shift 2 ;;  # explicit enable or missing arg
+            esac
+            ;;
         --help|-h)
-            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N]"
+            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N] [--verify-health true|false]"
             exit 0
             ;;
         *) die "unknown arg: $1 (use --help)" ;;
@@ -167,6 +173,63 @@ check_service_active() {
     esac
 }
 
+# ── Post-restart health verification ────────────────────
+# verify_service_healthy <svc>
+#   Returns 0 if the service appears healthy. Stops at the init-system check
+#   when VERIFY_HEALTH is false or no SERVICE_VERIFY_MAP entry exists.
+#   Otherwise runs a second-stage functional probe after the init check passes.
+#   Strategies:
+#     "http://..." -- curl with 5s timeout, expects HTTP 200
+#     "tcp://..."  -- bash /dev/tcp, expects connection success
+verify_service_healthy() {
+    local svc="$1"
+
+    # Gate 1: init-system says it's active.
+    # When running in a container/CI without an init system, the check tools
+    # (systemctl, rc-service, launchctl) are absent — skip this gate so the
+    # second-stage probe can still run in tests.
+    if command -v systemctl >/dev/null 2>&1 || command -v rc-service >/dev/null 2>&1 || command -v launchctl >/dev/null 2>&1; then
+        if ! check_service_active "$svc"; then
+            return 1
+        fi
+    fi
+
+    # Gate 2: second-stage probe (only if enabled)
+    if [[ "$VERIFY_HEALTH" == "false" ]] || [[ "$VERIFY_HEALTH" == "0" ]]; then
+        return 0
+    fi
+
+    local strategy="${SERVICE_VERIFY_MAP[$svc]:-}"
+    if [[ -z "$strategy" ]]; then
+        return 0  # no verify map entry → init_only is sufficient
+    fi
+
+    case "$strategy" in
+        http://*)
+            local http_code
+            http_code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$strategy" 2>/dev/null || true)"
+            if [[ "$http_code" == "200" ]] || [[ "$http_code" == "204" ]]; then
+                return 0
+            fi
+            log "VERIFY: $svc HTTP $strategy returned $http_code (expected 200)"
+            return 1
+            ;;
+        tcp://*)
+            local host_port="${strategy#tcp://}"
+            local host="${host_port%:*}"
+            local port="${host_port##*:}"
+            if timeout 3 bash -c "echo >/dev/tcp/$host/$port" 2>/dev/null; then
+                return 0
+            fi
+            log "VERIFY: $svc TCP $strategy connection failed"
+            return 1
+            ;;
+        *)
+            return 0  # unknown strategy — treated as init_only
+            ;;
+    esac
+}
+
 # ── Component → service mapping ─────────────────────────────────────────────
 #
 # Maps logical health-check component names to service/unit names.
@@ -189,6 +252,25 @@ declare -A NO_REMEDY=(
     [ratelimit]=1
     [models]=1
 )
+
+# ── Post-restart verification map ────────────────────
+# Maps service names to verification strategies. After rest_mode=restart and the
+# init-system says the service is active, an optional second-stage probe confirms
+# the service actually responds. Strategies:
+#   "init_only" — the default; stops at check_service_active()
+#   "http://HOST:PORT/PATH" — curl the URL, expect HTTP 200
+#   "tcp://HOST:PORT" — connect via bash /dev/tcp, expect success
+# All verification is gated on SELF_HEAL_VERIFY_HEALTH (default true).
+declare -A SERVICE_VERIFY_MAP=(
+    [lunarwing]="http://127.0.0.1:8080/api/health"
+    [xmpp-bridge]="http://127.0.0.1:5280"
+    [tensorzero-gateway]="http://127.0.0.1:8081/health"
+    # clickhouse-server has no HTTP endpoint; init_only is the correct default
+)
+
+# Whether post-restart verification is enabled. Set to "0" or "false" to
+# disable the second-stage probe (init-system check only).
+VERIFY_HEALTH="${SELF_HEAL_VERIFY_HEALTH:-true}"
 
 # ── State management ────────────────────────────────────────────────────────
 
@@ -402,13 +484,13 @@ remediate_component() {
             wait_s="$(compute_backoff "$attempt")"
             log "BACKOFF: waiting ${wait_s}s for $svc (attempt $attempt, base=$BACKOFF_BASE, max=$BACKOFF_MAX, strategy=$BACKOFF_STRATEGY)"
             sleep "$wait_s"
-            if check_service_active "$svc"; then
+            if verify_service_healthy "$svc"; then
                 log "SUCCESS: $svc is active after restart"
                 log_action "RESTART_OK target=$svc"
                 state="$(clear_service_state "$state" "$svc")"
             else
                 retries=$((retries + 1))
-                log "WARNING: $svc restart command succeeded but service not active (retries=$retries)"
+                log "WARNING: $svc restart command succeeded but service not healthy (retries=$retries)"
                 log_action "RESTART_PARTIAL target=$svc retries=$retries"
                 state="$(set_retry_count "$state" "$svc" "$retries")"
             fi
@@ -460,7 +542,7 @@ main() {
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
-    log "max retries: $MAX_RETRIES | backoff: strategy=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s | grace-checks: $GRACE_CHECKS | dry-run: $DRY_RUN"
+    log "config: max-retries=$MAX_RETRIES backoff=strategy=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s grace-checks=$GRACE_CHECKS verify-health=$VERIFY_HEALTH dry-run=$DRY_RUN"
 
     if ! jq . "$report" >/dev/null 2>&1; then
         die "report is not valid JSON: $report"
