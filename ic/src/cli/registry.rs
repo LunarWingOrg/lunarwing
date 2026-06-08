@@ -14,7 +14,7 @@ pub enum RegistryCommand {
         #[arg(short, long)]
         kind: Option<String>,
 
-        /// Filter by tag (e.g. "default", "google", "messaging")
+        /// Filter by tag (e.g. "default", "messaging", "lunarwing")
         #[arg(short, long)]
         tag: Option<String>,
 
@@ -25,13 +25,13 @@ pub enum RegistryCommand {
 
     /// Show detailed information about an extension or bundle
     Info {
-        /// Extension or bundle name (e.g. "gotify", "google", "tools/gmail")
+        /// Extension or bundle name (e.g. "gotify", "default", "tools/github")
         name: String,
     },
 
     /// Install an extension or bundle from the registry
     Install {
-        /// Extension or bundle name (e.g. "gotify", "google", "default")
+        /// Extension or bundle name (e.g. "gotify", "lunarwing", "default")
         name: String,
 
         /// Force overwrite if already installed
