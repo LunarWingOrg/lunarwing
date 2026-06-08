@@ -22,7 +22,18 @@ REPORT_DIR="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/worksp
 SELF_HEAL_STATE_DIR="${SELF_HEAL_STATE_DIR:-$REPORT_DIR/../self-heal}"
 SELF_HEAL_LOG="${SELF_HEAL_LOG:-$SELF_HEAL_STATE_DIR/actions.log}"
 MAX_RETRIES="${SELF_HEAL_MAX_RETRIES:-3}"
-BACKOFF_SECONDS="${SELF_HEAL_BACKOFF_SECONDS:-5}"
+# Linear backoff (legacy). Kept as a fallback for callers that still set
+# SELF_HEAL_BACKOFF_SECONDS / --backoff. When BACKOFF_BASE is at its default,
+# the legacy value (if set) wins; otherwise exponential backoff with jitter
+# is used. See compute_backoff().
+BACKOFF_SECONDS="${SELF_HEAL_BACKOFF_SECONDS:-}"
+BACKOFF_BASE="${SELF_HEAL_BACKOFF_BASE:-5}"
+BACKOFF_MAX="${SELF_HEAL_BACKOFF_MAX:-300}"
+# Backoff strategy. "linear" preserves the historical fixed-delay behavior
+# (one number, no jitter). "exponential" uses compute_backoff(): each
+# attempt's wait is BASE * 2^(attempt-1), capped at MAX, with full jitter
+# (uniform random in [0, capped]). Default exponential.
+BACKOFF_STRATEGY="${SELF_HEAL_BACKOFF_STRATEGY:-exponential}"
 # Number of consecutive unhealthy checks before first restart (flapping guard).
 # Default 2: a service must fail two health checks in a row before remediation.
 GRACE_CHECKS="${SELF_HEAL_GRACE_CHECKS:-2}"
@@ -51,13 +62,16 @@ die() { log "FATAL: $*"; exit 1; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --report)       REPORT_FILE="$2"; shift 2 ;;
-        --dry-run|-n)   DRY_RUN=true; shift ;;
-        --max-retries)  MAX_RETRIES="$2"; shift 2 ;;
-        --backoff)      BACKOFF_SECONDS="$2"; shift 2 ;;
-        --grace-checks) GRACE_CHECKS="$2"; shift 2 ;;
+        --report)        REPORT_FILE="$2"; shift 2 ;;
+        --dry-run|-n)    DRY_RUN=true; shift ;;
+        --max-retries)   MAX_RETRIES="$2"; shift 2 ;;
+        --backoff)       BACKOFF_SECONDS="$2"; shift 2 ;;
+        --backoff-base)  BACKOFF_BASE="$2"; shift 2 ;;
+        --backoff-max)   BACKOFF_MAX="$2"; shift 2 ;;
+        --backoff-strategy) BACKOFF_STRATEGY="$2"; shift 2 ;;
+        --grace-checks)  GRACE_CHECKS="$2"; shift 2 ;;
         --help|-h)
-            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--grace-checks N]"
+            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N]"
             exit 0
             ;;
         *) die "unknown arg: $1 (use --help)" ;;
@@ -65,6 +79,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Init system detection ──────────────────────────────────────────────────
+
+# Legacy promotion: if SELF_HEAL_BACKOFF_SECONDS or --backoff was used,
+# honour it as a fixed linear delay for full backward compatibility.
+# New callers should use --backoff-base / --backoff-max / --backoff-strategy.
+if [[ -n "$BACKOFF_SECONDS" ]]; then
+    BACKOFF_BASE="$BACKOFF_SECONDS"
+    BACKOFF_STRATEGY="linear"
+fi
 
 # Same logic as health-check and watchdog installers
 detect_service_manager() {
@@ -236,6 +258,66 @@ increment_unhealthy_count() {
     '
 }
 
+# ── Notification escalation ─────────────────
+
+# ── Exponential backoff with jitter ─────────────────
+#
+# compute_backoff <attempt-number>
+#   attempt-number: 1-based restart attempt within the current remediation
+#   cycle (1 = first restart, 2 = second restart after first failed, etc.).
+#
+# Linear mode (--backoff used, or SELF_HEAL_BACKOFF_STRATEGY=linear):
+#   returns $BACKOFF_BASE as-is. No jitter. Preserves historical behaviour.
+#
+# Exponential mode (default):
+#   delay = BASE * 2^(attempt-1), capped at MAX, then full jitter:
+#   actual = $RANDOM % (delay + 1), so result is in [0, delay].
+#   With the defaults (BASE=5s, MAX=300s) the scale is:
+#     attempt 1: 0–5s
+#     attempt 2: 0–10s
+#     attempt 3: 0–20s
+#   Output: integer seconds to stdout.
+#   Edge cases: attempt <= 0 → 0. BASE or MAX not numeric → 0 (logged).
+
+compute_backoff() {
+    local attempt="${1:-1}"
+
+    if [[ "$BACKOFF_STRATEGY" == "linear" ]]; then
+        printf '%s' "${BACKOFF_BASE:-5}"
+        return 0
+    fi
+
+    # Validate inputs
+    if ! [[ "$attempt" =~ ^[0-9]+$ ]] || [[ "$attempt" -le 0 ]]; then
+        printf '0'
+        return 0
+    fi
+    local base="${BACKOFF_BASE:-5}"
+    local max="${BACKOFF_MAX:-300}"
+    if ! [[ "$base" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
+        log "WARNING: invalid backoff config base=$base max=$max; falling back to 0"
+        printf '0'
+        return 0
+    fi
+
+    # BASE * 2^(attempt-1), capped at MAX
+    local delay="$base"
+    local i
+    for ((i = 1; i < attempt; i++)); do
+        delay=$((delay * 2))
+    done
+    if [[ "$delay" -gt "$max" ]]; then
+        delay="$max"
+    fi
+
+    # Full jitter: uniform random [0, delay]
+    if [[ "$delay" -le 0 ]]; then
+        printf '0'
+        return 0
+    fi
+    printf '%s' "$(( RANDOM % (delay + 1) ))"
+}
+
 # ── Notification escalation ─────────────────────────────────────────────────
 
 _send_notification() {
@@ -314,8 +396,12 @@ remediate_component() {
         log_action "RESTART_BEGIN target=$svc component=$comp retries=$retries"
 
         if restart_service "$svc"; then
-            # Wait for service to come back
-            sleep "$BACKOFF_SECONDS"
+            # Wait for service to come back, using exponential backoff + jitter
+            local attempt=$((retries + 1))
+            local wait_s
+            wait_s="$(compute_backoff "$attempt")"
+            log "BACKOFF: waiting ${wait_s}s for $svc (attempt $attempt, base=$BACKOFF_BASE, max=$BACKOFF_MAX, strategy=$BACKOFF_STRATEGY)"
+            sleep "$wait_s"
             if check_service_active "$svc"; then
                 log "SUCCESS: $svc is active after restart"
                 log_action "RESTART_OK target=$svc"
@@ -374,7 +460,7 @@ main() {
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
-    log "max retries: $MAX_RETRIES | backoff: ${BACKOFF_SECONDS}s | grace-checks: $GRACE_CHECKS | dry-run: $DRY_RUN"
+    log "max retries: $MAX_RETRIES | backoff: strategy=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s | grace-checks: $GRACE_CHECKS | dry-run: $DRY_RUN"
 
     if ! jq . "$report" >/dev/null 2>&1; then
         die "report is not valid JSON: $report"

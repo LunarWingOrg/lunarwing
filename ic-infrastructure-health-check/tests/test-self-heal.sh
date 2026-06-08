@@ -163,5 +163,69 @@ assert_contains "$out5" "RESTART: lunarwing" \
 assert_absent  "$out5" "GRACE:" \
     "GRACE_CHECKS=1 does not emit grace hold"
 
+# ── Exponential backoff + jitter tests ──────────────────────────────────────
+# The compute_backoff function is tested indirectly via dry-run output.
+# We verify the BACKOFF log line appears with the right strategy and config.
+
+# Test 1: --backoff 0 (legacy linear mode) → strategy=linear, base=0
+STATEDIR4="$TMP/self-heal-backoff-linear"
+mkdir -p "$STATEDIR4"
+out_b1="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR4" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out_b1" "strategy=linear" \
+    "legacy --backoff 0 sets linear strategy"
+assert_contains "$out_b1" "base=0s" \
+    "legacy --backoff 0 sets base=0"
+
+# Test 2: default exponential → strategy=exponential, base=5, max=300
+STATEDIR5="$TMP/self-heal-backoff-exp"
+mkdir -p "$STATEDIR5"
+out_b2="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR5" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff-base 5 --backoff-max 300 2>&1)"
+assert_contains "$out_b2" "strategy=exponential" \
+    "default backoff strategy is exponential"
+assert_contains "$out_b2" "base=5s" \
+    "default backoff base is 5s"
+assert_contains "$out_b2" "max=300s" \
+    "default backoff max is 300s"
+
+# Test 3: custom backoff-base and backoff-max
+STATEDIR6="$TMP/self-heal-backoff-custom"
+mkdir -p "$STATEDIR6"
+out_b3="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR6" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff-base 10 --backoff-max 60 2>&1)"
+assert_contains "$out_b3" "base=10s" \
+    "custom backoff-base=10 is reflected in log"
+assert_contains "$out_b3" "max=60s" \
+    "custom backoff-max=60 is reflected in log"
+
+# Test 4: explicit --backoff-strategy linear
+STATEDIR7="$TMP/self-heal-backoff-explicit-linear"
+mkdir -p "$STATEDIR7"
+out_b4="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR7" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff-strategy linear --backoff-base 3 2>&1)"
+assert_contains "$out_b4" "strategy=linear" \
+    "explicit --backoff-strategy linear works"
+assert_contains "$out_b4" "base=3s" \
+    "explicit --backoff-strategy linear with base=3"
+
+# Test 5: BACKOFF log line appears when a restart fires (second pass)
+# Use GRACE_CHECKS=1 so first pass restarts, and check for BACKOFF: line.
+STATEDIR8="$TMP/self-heal-backoff-log"
+mkdir -p "$STATEDIR8"
+out_b5="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR8" SELF_HEAL_GRACE_CHECKS=1 \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff-base 5 --backoff-max 300 2>&1)"
+assert_contains "$out_b5" "BACKOFF: waiting" \
+    "BACKOFF log line appears when restart fires"
+assert_contains "$out_b5" "attempt 1" \
+    "BACKOFF log shows attempt number"
+assert_contains "$out_b5" "strategy=exponential" \
+    "BACKOFF log shows strategy"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
