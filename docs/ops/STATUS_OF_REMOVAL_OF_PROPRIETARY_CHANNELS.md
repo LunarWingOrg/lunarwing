@@ -3,3 +3,5 @@
 * Whatsapp
 * Discord
 * Feishu/Lark
+* Slack
+* google extensions

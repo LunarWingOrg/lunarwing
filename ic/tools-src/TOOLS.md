@@ -10,18 +10,6 @@ Status of all WASM tool sources in `ic/tools-src/`.
 
 - [x] Gotify (`gotify/`) - push notifications via self-hosted Gotify server
 
-## Google
-
-All Google tools share `google_oauth_token` for authentication.
-
-- [x] Gmail (`gmail/`) - search, read, send, draft, reply to emails
-- [x] Google Calendar (`google-calendar/`) - list, create, update, delete events
-- [x] Google Drive (`google-drive/`) - search, access, upload, share files; supports org and personal drives
-- [x] Google Sheets (`google-sheets/`) - create spreadsheets, read/write/append values, manage sheets, format cells
-- [x] Google Docs (`google-docs/`) - create, read, edit documents; text formatting, paragraphs, tables, lists
-- [x] Google Slides (`google-slides/`) - create, read, edit presentations; shapes, images, text formatting, thumbnails, templates
-- [ ] Google Cloud - work with cloud instances, storage, allow to spin up and configure new instances, shut them down
-
 ## Code & Development
 
 - [x] GitHub (`github/`) - repository management, issues, PRs, commits, branches
