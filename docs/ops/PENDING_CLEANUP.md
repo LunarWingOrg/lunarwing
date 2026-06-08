@@ -1,33 +1,48 @@
-# cleanup
+# Pending Cleanup
+
+> **Reconciled 2026-06-08.** Forward-looking cleanup list; the version targets below come from
+> the deferred-items roadmap in `RELEASE-v1.1.1.md`. Slack/Discord/WhatsApp/Feishu channels and
+> the gmail/google-calendar tool sources are already removed.
 
 ## Proprietary channels
 
-* Telegram
-* Slack (Removed)
-* Discord (Removed)
-* WhatsApp (Removed)
-* Feishu (Removed)
-  
-## Proprietary Extensions
+| Channel | Status |
+|---------|--------|
+| Slack | Removed |
+| Discord | Removed |
+| WhatsApp | Removed |
+| Feishu | Removed |
+| Telegram | Present — removal targeted **v1.1.9** (still in `channels-src/` + `tools-src/`) |
 
-* gmail
-* google stuff
+## Proprietary extensions (Google) — targeted v1.1.2
 
-## Remove unused dir:
+The `gmail` and `google-calendar` **tool sources are removed** (no `tools-src/` dirs, no registry
+catalog entries under `ic/registry/`). The remaining cleanup is residual google references in the
+codebase:
 
-* customic (done)
+- Google OAuth/provider plumbing (`ic/src/config/oauth.rs`, `ic/src/bridge/auth_manager.rs`)
+- Web UI OAuth elements (`ic/src/channels/web/`)
+- A `google` bundle in registry test fixtures (`ic/src/registry/manifest.rs` `test_parse_bundles`)
 
-## Rename ironclaw references in nanocode bridge:
+## Remove unused dir
 
-* WebSocket subprotocol still logs `ironclaw-agent-v1` — rename to `lunarwing-agent-v1`
-* Bridge scripts in `lunarcode4lunarwing/scripts/` reference the old subprotocol name
-* Coordinate with `ic/src/orchestrator/external_worker.rs` which expects the subprotocol string to match
-* **Note:** The subprotocol rename needs to happen on both sides simultaneously — the bridge (`lunarcode4lunarwing/scripts/`) and the daemon (`ic/src/orchestrator/external_worker.rs`) must agree on the string, so it's a coordinated change
+- `customic` — done.
 
-## Rename ironclaw_weechat_ws to lunarwing_weechat_ws
+## Rename ironclaw references in nanocode bridge
 
-## Rename ironclaw-gotify-tool to lunarwing_gotify_tool if necessary
+> **Conflict (2026-06-07):** root `CLAUDE.md` lists the `ironclaw-agent-v1` WebSocket subprotocol
+> as **intentionally NOT renamed** (shared external protocol). Reconcile project intent before
+> acting — a rename is a coordinated breaking change across the bridge
+> (`lunarcode4lunarwing/scripts/`) and `ic/src/orchestrator/external_worker.rs` (which expects the
+> subprotocol string to match), and `CLAUDE.md` must be updated to match.
 
-##### Notes:
+## Other source renames
 
-1. can keep github for now but its not a great extension tbh. can eventually replace with my custom git tool that should be an added feature in 1.0.8+
+- `ironclaw_weechat_wss` → `lunarwing_weechat_wss` (channel + adapter source) — targeted **v1.1.7**
+  (`docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`).
+- `ironclaw-gotify-tool` → `lunarwing_gotify_tool` if needed (low priority).
+
+## Notes
+
+- The GitHub tool can stay for now; a removal decision is targeted **v1.1.9**, and it may be
+  replaced by the custom Git WASM tool (targeted v1.1.8).

@@ -842,6 +842,7 @@ mod tests {
             artifacts,
             auth_summary: None,
             tags: Vec::new(),
+            hidden: None,
             url: None,
             auth: None,
         }
@@ -1241,8 +1242,7 @@ mod tests {
     #[test]
     fn test_extract_correct_wasm_from_tool_bundle() {
         // Tool bundle contains notify-tool.wasm — extraction by name="notify-tool" succeeds.
-        let gz_bytes =
-            build_test_tar_gz("notify-tool.wasm", Some("notify-tool.capabilities.json"));
+        let gz_bytes = build_test_tar_gz("notify-tool.wasm", Some("notify-tool.capabilities.json"));
 
         let tmp = tempfile::tempdir().unwrap();
         let wasm_path = tmp.path().join("notify-tool.wasm");

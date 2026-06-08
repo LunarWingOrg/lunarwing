@@ -3116,11 +3116,8 @@ mod tests {
         let detector = LeakDetector::new();
 
         // Pre-injection scan should pass — placeholders are not secrets.
-        let pre_result = detector.scan_http_request(
-            "https://api.example.com/send",
-            &raw_headers,
-            None,
-        );
+        let pre_result =
+            detector.scan_http_request("https://api.example.com/send", &raw_headers, None);
         assert!(
             pre_result.is_ok(),
             "Leak scan on pre-injection headers should pass, but got: {:?}",

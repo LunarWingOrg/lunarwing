@@ -76,6 +76,12 @@ class AdapterState:
         self.relay_password: str = ""
         # Message delay in seconds (0 = disabled)
         self.message_delay_s: float = 0.0
+        # Global ordered event log powering the /api/wait long-poll path.
+        # Each entry: {"seq": int, "full_name": str, "line": dict}
+        self.event_seq: int = 0
+        self.event_log: deque = deque(maxlen=2000)
+        # asyncio.Event signalling new lines; created in run() (needs a loop).
+        self.new_event = None
 
 #ii
 state = AdapterState()
@@ -209,6 +215,14 @@ async def ws_client_loop():
             await asyncio.sleep(5)
 
 
+def record_event(full_name: str, line: dict):
+    """Append a line to the global event log and wake any /api/wait waiter."""
+    state.event_seq += 1
+    state.event_log.append({"seq": state.event_seq, "full_name": full_name, "line": line})
+    if state.new_event is not None:
+        state.new_event.set()
+
+
 async def handle_ws_event(raw: str, session: ClientSession):
     """Parse and dispatch a single WebSocket event from WeeChat."""
     try:
@@ -221,7 +235,7 @@ async def handle_ws_event(raw: str, session: ClientSession):
     event = msg.get("event_name") or msg.get("event") or msg.get("id")
     data = msg.get("body") or msg.get("data") or {}
     buffer_id = msg.get("buffer_id")
-    log.info(f"WS event: event={event!r} buffer_id={buffer_id!r} body_preview={str(data)[:80]}")
+    log.debug(f"WS event: event={event!r} buffer_id={buffer_id!r} body_preview={str(data)[:80]}")
 
     if event == "buffer_line_added":
         # API v0.4.1: body IS the line object; buffer identified by top-level buffer_id
@@ -236,18 +250,32 @@ async def handle_ws_event(raw: str, session: ClientSession):
             tags = line_info.get("tags_array", line_info.get("tags", []))
             nick = next((t[5:] for t in tags if t.startswith("nick_")), "?")
             preview = str(line_info.get("message", ""))[:40]
-            log.info(f"buffer_line_added: buffer={full_name} nick={nick} msg={preview!r}")
+            log.debug(f"buffer_line_added: buffer={full_name} nick={nick} msg={preview!r}")
             if state.message_delay_s > 0:
                 await asyncio.sleep(state.message_delay_s)
             state.line_buffer[full_name].append(line_info)
+            record_event(full_name, line_info)
         else:
-            # Unknown buffer — refresh list so future lines can be resolved
-            log.info(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list")
-            asyncio.create_task(refresh_buffer_list(session))
+            # Unknown buffer — almost always a brand-new query/DM buffer that isn't
+            # in our cached buffer_list yet. Refresh SYNCHRONOUSLY and retry the
+            # lookup so the FIRST line in a new buffer isn't dropped. That drop is
+            # the long-standing "first DM swallowed" bug: the line never reaches
+            # line_buffer OR the event log, so neither polling nor the long-poll
+            # cursor can ever deliver it. record_event must see it here.
+            log.debug(f"buffer_line_added: unknown buffer_id={buffer_id!r} — refreshing buffer list inline")
+            await refresh_buffer_list(session)
+            buf = next((b for b in state.buffer_list if b.get("id") == buffer_id), None)
+            full_name = (buf.get("full_name") or buf.get("name")) if buf else None
+            if full_name and line_info:
+                state.line_buffer[full_name].append(line_info)
+                record_event(full_name, line_info)
+                log.info(f"buffer_line_added: captured first line for new buffer {full_name}")
+            else:
+                log.warning(f"buffer_line_added: buffer_id={buffer_id!r} still unknown after refresh — dropping line")
 
     elif event == "buffer_opened":
         asyncio.create_task(refresh_buffer_list(session))
-        log.info(f"Buffer opened: {data.get('full_name', data.get('name', '?'))} — refreshing buffer list")
+        log.debug(f"Buffer opened: {data.get('full_name', data.get('name', '?'))} — refreshing buffer list")
 
     elif event == "buffer_title_changed":
         # Fired when a buffer is created or its title changes; body contains full buffer info
@@ -259,7 +287,7 @@ async def handle_ws_event(raw: str, session: ClientSession):
                 existing.update(data)
             else:
                 state.buffer_list.append(data)
-                log.info(f"buffer_title_changed: registered new buffer {buf_name} (id={buf_id})")
+                log.debug(f"buffer_title_changed: registered new buffer {buf_name} (id={buf_id})")
 
     elif event == "buffer_closed":
         full_name = data.get("full_name") or data.get("name")
@@ -310,7 +338,61 @@ async def handle_health(request: web.Request) -> web.Response:
         "ws_error": state.ws_error,
         "buffered_buffers": len(state.line_buffer),
         "buffer_list_count": len(state.buffer_list),
+        # Current global event cursor. Its presence also tells the WASM channel
+        # that this adapter supports the /api/wait long-poll path.
+        "event_cursor": state.event_seq,
     })
+
+
+async def handle_wait(request: web.Request) -> web.Response:
+    """GET /api/wait?cursor=<n>&timeout=<s> — long-poll for new lines.
+
+    Returns {"cursor": int, "events": [{"seq","full_name","line"}, ...]}.
+    Blocks until there are events with seq > cursor, or a heartbeat timeout.
+    """
+    if not check_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    try:
+        cursor = int(request.rel_url.query.get("cursor", "0"))
+    except ValueError:
+        cursor = 0
+    try:
+        wait_s = float(request.rel_url.query.get("timeout", "20"))
+    except ValueError:
+        wait_s = 20.0
+    wait_s = max(0.0, min(wait_s, 20.0))  # cap below the host's 30s callback timeout
+
+    # Stale cursor (cursor > our seq) means the adapter restarted and its in-memory
+    # event_seq reset below the client's saved cursor. Don't tell the client it's
+    # already caught up — that would skip every line recorded since the restart
+    # (e.g. the first DM after a setup restart). Replay from 0 instead; the
+    # post-restart event_log only holds lines the client hasn't seen, so this can't
+    # double-deliver. (Falls through to the normal collect/wait logic below.)
+    if cursor > state.event_seq:
+        log.info(f"/api/wait: client cursor {cursor} > event_seq {state.event_seq} "
+                 f"(adapter restarted?) — replaying post-restart backlog")
+        cursor = 0
+
+    def collect():
+        return [e for e in state.event_log if e["seq"] > cursor]
+
+    events = collect()
+    if not events and wait_s > 0 and state.new_event is not None:
+        # Single waiter per tenant adapter: clear, re-check, then wait, so a line
+        # arriving in the gap is never missed. Correctness comes from the cursor
+        # re-scan, not the flag.
+        state.new_event.clear()
+        events = collect()
+        if not events:
+            try:
+                await asyncio.wait_for(state.new_event.wait(), timeout=wait_s)
+            except asyncio.TimeoutError:
+                pass
+            events = collect()
+
+    cursor_out = events[-1]["seq"] if events else state.event_seq
+    return web.json_response({"cursor": cursor_out, "events": events})
 
 
 async def handle_buffers(request: web.Request) -> web.Response:
@@ -425,6 +507,7 @@ def make_app() -> web.Application:
     app.router.add_get("/api/config", handle_config)
     app.router.add_get("/api/version", handle_version)
     app.router.add_get("/api/health", handle_health)
+    app.router.add_get("/api/wait", handle_wait)
     app.router.add_get("/api/buffers", handle_buffers)
     app.router.add_get(r"/api/buffers/{buffer_name:.+}/lines", handle_buffer_lines)
     app.router.add_get(r"/api/buffers/{buffer_name:.+}", handle_single_buffer)
@@ -436,6 +519,7 @@ async def run(relay_url: str, password: str, port: int, message_delay: float = 0
     state.relay_url = relay_url.rstrip("/")
     state.relay_password = password
     state.message_delay_s = message_delay
+    state.new_event = asyncio.Event()  # must be created inside the running loop
 
     app = make_app()
 

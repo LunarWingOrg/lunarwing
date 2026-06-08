@@ -525,6 +525,34 @@ fn parse_scope_uuid(scope: Option<&str>) -> Option<uuid::Uuid> {
     scope.and_then(|s| uuid::Uuid::parse_str(s).ok())
 }
 
+/// Resolve the v1 conversation ID for a message, handling both UUID and
+/// non-UUID scopes (XMPP room JIDs, WeeChat buffers, etc.).
+async fn resolve_v1_conversation_for_message(
+    db: &dyn Database,
+    message: &IncomingMessage,
+) -> Option<uuid::Uuid> {
+    if let Some(scope) = message.conversation_scope() {
+        match db
+            .get_or_create_scoped_conversation(&message.channel, &message.user_id, scope)
+            .await
+        {
+            Ok(id) => Some(id),
+            Err(e) => {
+                tracing::warn!(
+                    channel = %message.channel,
+                    user_id = %message.user_id,
+                    "failed to resolve scoped conversation: {e}"
+                );
+                None
+            }
+        }
+    } else {
+        db.get_or_create_assistant_conversation(&message.user_id, &message.channel)
+            .await
+            .ok()
+    }
+}
+
 async fn reconcile_pending_gate_state(
     store: &Arc<dyn Store>,
     pending_gates: &crate::gate::store::PendingGateStore,
@@ -1291,6 +1319,27 @@ pub async fn handle_exec_approval(
     Ok(Some("No matching pending approval found.".into()))
 }
 
+/// Clamp the `always` flag from a user's gate resolution so that
+/// "approve always" is only allowed when the gate's resume kind
+/// explicitly supports it.  This prevents a user from accidentally
+/// auto-approving future invocations of a tool that was designed to
+/// always require explicit confirmation (e.g. `shell` on an
+/// approval-only gate).
+///
+/// The inline clamping at `resolve_gate` was moved here to give the
+/// logic a name and make it testable without exercising the full
+/// engine/gate/SSE stack.
+pub fn clamp_always_to_resume_kind(
+    raw_always: bool,
+    resume_kind: &lunarwing_engine::ResumeKind,
+) -> bool {
+    raw_always
+        && matches!(
+            resume_kind,
+            lunarwing_engine::ResumeKind::Approval { allow_always: true }
+        )
+}
+
 /// Resolve a unified pending gate.
 ///
 /// This is the single entry point for resolving gates stored in the
@@ -1342,11 +1391,7 @@ pub async fn resolve_gate(
 
     match resolution {
         lunarwing_engine::GateResolution::Approved { always: raw_always } => {
-            let always = raw_always
-                && matches!(
-                    pending.resume_kind,
-                    lunarwing_engine::ResumeKind::Approval { allow_always: true }
-                );
+            let always = clamp_always_to_resume_kind(raw_always, &pending.resume_kind);
             if let Some(ref sse) = state.sse {
                 sse.broadcast_for_user(
                     &message.user_id,
@@ -2192,29 +2237,8 @@ async fn handle_with_engine_inner(
         .map_err(|e| engine_err("thread error", e))?;
 
     // Dual-write to v1 database so the gateway history API shows messages.
-    // Use the thread-scoped conversation (from thread_id) when available,
-    // falling back to the default assistant conversation.
     if let Some(ref db) = state.db {
-        let v1_conv_id = if let Some(tid) = scope
-            && let Ok(uuid) = uuid::Uuid::parse_str(tid)
-        {
-            // Ensure the v1 conversation exists for this thread
-            let _ = db
-                .ensure_conversation(
-                    uuid,
-                    &message.channel,
-                    &message.user_id,
-                    Some(tid),
-                    Some(&message.channel),
-                )
-                .await;
-            Some(uuid)
-        } else {
-            db.get_or_create_assistant_conversation(&message.user_id, &message.channel)
-                .await
-                .ok()
-        };
-        if let Some(cid) = v1_conv_id {
+        if let Some(cid) = resolve_v1_conversation_for_message(db.as_ref(), message).await {
             let _ = db.add_conversation_message(cid, "user", content).await;
         }
     }
@@ -2294,10 +2318,10 @@ async fn await_thread_outcome(
         let channel = message.channel.clone();
         let text = text.to_string();
         async move {
-            let v1_conv_id = if let Some(tid) = scope
-                && let Ok(uuid) = uuid::Uuid::parse_str(&tid)
-            {
-                Some(uuid)
+            let v1_conv_id = if let Some(ref scope) = scope {
+                db.get_or_create_scoped_conversation(&channel, &user_id, scope)
+                    .await
+                    .ok()
             } else {
                 db.get_or_create_assistant_conversation(&user_id, &channel)
                     .await
@@ -4097,5 +4121,55 @@ mod tests {
         let result = find_most_recent_thread(&state, &Some(conv), "alice").await;
         assert!(result.is_some(), "should find thread via entry fallback");
         assert_eq!(result.unwrap().id, tid);
+    }
+
+    // --- clamp_always_to_resume_kind tests ---
+
+    #[test]
+    fn clamp_always_true_when_resume_kind_allows_it() {
+        use lunarwing_engine::ResumeKind;
+        assert!(clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Approval { allow_always: true }
+        ));
+    }
+
+    #[test]
+    fn clamp_always_false_when_resume_kind_disallows() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Approval {
+                allow_always: false
+            }
+        ));
+    }
+
+    #[test]
+    fn clamp_always_false_when_raw_always_is_false() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            false,
+            &ResumeKind::Approval { allow_always: true }
+        ));
+    }
+
+    #[test]
+    fn clamp_rejects_non_approval_resume_kinds() {
+        use lunarwing_engine::ResumeKind;
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::Authentication {
+                credential_name: "test".to_string(),
+                instructions: "test".to_string(),
+                auth_url: None,
+            }
+        ));
+        assert!(!clamp_always_to_resume_kind(
+            true,
+            &ResumeKind::External {
+                callback_id: "abc".to_string()
+            }
+        ));
     }
 }

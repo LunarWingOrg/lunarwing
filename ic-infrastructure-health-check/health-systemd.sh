@@ -8,8 +8,8 @@ set -euo pipefail
 
 # Units to check (override via env)
 UNITS_DEFAULT=(
-  "ironclaw-xmpp-bridge.service"
-  "ironclaw-xmpp-bridge.timer"
+  "lunarwing.service"
+  "xmpp-bridge.service"
   "tensorzero-gateway.service"
 )
 
@@ -80,6 +80,43 @@ for unit in "${UNITS_ARR[@]}"; do
 
   unit_results+=("$(unit_json "$unit" "$active" "$sub" "$restarts" "$extra" "$status")")
 done
+
+# ── Per-tenant systemd USER units (multi-tenant) ────────────────────────────
+# When a tenant registry exists, also probe each tenant's systemd *user* units
+# (lunarwing-<t>, xmpp-bridge-<t>) on the tenant user's bus, and surface them so
+# self-heal can remediate them. No-op on single-instance hosts (no registry
+# file) — existing behavior is unchanged. Requires root to reach other users'
+# --user buses; any unit we cannot positively load is skipped (no false
+# criticals). Parallels the tenant discovery in health-openrc.sh.
+TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-${LUNARWING_TENANTS_FILE:-/etc/lunarwing/ports.json}}"
+if [ -r "$TENANTS_FILE" ] && command -v jq >/dev/null 2>&1; then
+  _tenant_uctl() {  # <user> <uid> <args...> -> systemctl --user output (empty on failure)
+    local u="$1" uid="$2"; shift 2
+    sudo -n -u "$u" env XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user "$@" 2>/dev/null || true
+  }
+  while IFS=$'\t' read -r tname tuser; do
+    [ -n "$tname" ] && [ -n "$tuser" ] || continue
+    tuid=$(id -u "$tuser" 2>/dev/null || echo "")
+    [ -n "$tuid" ] || continue
+    for tunit in "lunarwing-$tname.service" "xmpp-bridge-$tname.service"; do
+      [ "$(_tenant_uctl "$tuser" "$tuid" show -p LoadState --value "$tunit")" = "loaded" ] || continue
+      uactive=$(_tenant_uctl "$tuser" "$tuid" show -p ActiveState --value "$tunit"); uactive=${uactive:-unknown}
+      usub=$(_tenant_uctl "$tuser" "$tuid" show -p SubState --value "$tunit"); usub=${usub:-unknown}
+      urestarts=$(_tenant_uctl "$tuser" "$tuid" show -p NRestarts --value "$tunit"); urestarts=${urestarts:-0}
+      ustatus="healthy"; uexit=0
+      if [ "$uactive" != "active" ]; then
+        ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub")
+      elif [ "$urestarts" -ge 3 ]; then
+        ustatus="degraded"; uexit=1; issues+=("$tunit ($tuser) restart count elevated: $urestarts")
+      fi
+      if [ $uexit -gt $overall_exit ]; then
+        overall_exit=$uexit
+        overall_status=$([ $overall_exit -eq 2 ] && echo critical || echo degraded)
+      fi
+      unit_results+=("$(unit_json "$tunit" "$uactive" "$usub" "$urestarts" "$(jq -n --arg u "$tuser" '{tenant_user:$u}')" "$ustatus")")
+    done
+  done < <(jq -r '.tenants // {} | to_entries[] | "\(.key)\t\(.value.user)"' "$TENANTS_FILE" 2>/dev/null || true)
+fi
 
 issues_json="[]"
 if [ ${#issues[@]} -gt 0 ]; then

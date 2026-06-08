@@ -34,15 +34,6 @@ TOOL_CALL_PATTERNS = [
             "body": {"label": m.group("label")},
         },
     ),
-    (
-        re.compile(r"check gmail unread|gmail unread", re.IGNORECASE),
-        "gmail",
-        lambda _: {
-            "action": "list_messages",
-            "query": "is:unread",
-            "max_results": 1,
-        },
-    ),
     (re.compile(r"what time|current time", re.IGNORECASE), "time", lambda _: {"operation": "now"}),
     (
         re.compile(

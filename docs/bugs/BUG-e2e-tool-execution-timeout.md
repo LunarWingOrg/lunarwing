@@ -1,6 +1,6 @@
 # BUG: E2E Tool Execution Tests Timeout
 
-**Status:** Open
+**Status:** FIXED — root cause was an unresolved tool approval in `test_tool_approval.py` blocking the agent loop; pending-approval cleanup added (see `docs/ops/RELEASE-v1.1.1.md`). Original report retained below.
 **Severity:** Medium — tests only, no production impact
 **Affected tests:**
 - `test_tool_execution.py::test_builtin_echo_tool`
@@ -27,6 +27,8 @@ The `_send_and_get_response` helper waits for a new `.message.assistant` DOM ele
 1. **Check mock LLM follow-up responses** — After tool execution, the daemon sends a second LLM request with the tool result. Verify that `CANNED_RESPONSES` in `mock_llm.py` has a pattern that matches this follow-up and returns text containing the expected fragments.
 2. **Increase timeout** — The 30s timeout may be insufficient if the agent loop takes longer with tool calls (two LLM round-trips instead of one).
 3. **Check SSE streaming** — Verify that tool result messages are emitted as SSE events and rendered in the chat UI. A change to the SSE event format or the frontend JS rendering could cause the assistant message to never appear.
+
+## Verify fix is in
 
 ## Files
 

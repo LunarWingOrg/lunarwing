@@ -124,12 +124,12 @@ Single-tenant `up`/`down` uses direct PID management on all platforms — no lau
 
 ## Production Multi-Tenancy
 
-For production per-user multi-tenancy with OS-level isolation, see `docs/MULTITENANCY-PRODUCTION.md` and the admin script `ic/scripts/lunarwing-mt-admin.sh`. The production system provides dedicated OS users, registry-allocated port blocks, flock-serialized builds, and per-tenant PostgreSQL containers. It supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon).
+For production per-user multi-tenancy with OS-level isolation, see `MULTITENANCY-PRODUCTION.md` and the admin script `ic/scripts/lunarwing-mt-admin.sh`. The production system provides dedicated OS users, registry-allocated port blocks, flock-serialized builds, and per-tenant PostgreSQL containers. It supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon).
 
-The test harness documented here is for development/testing only. See the comparison table in `docs/MULTITENANCY-PRODUCTION.md` for the full list of differences.
+The test harness documented here is for development/testing only. See the comparison table in `MULTITENANCY-PRODUCTION.md` for the full list of differences.
 
 ## Future Work
 
 - Weechat relay port integration (currently reserved, no harness plumbing yet)
-- Per-instance worker container ports (lunarcode4lunarwing, codex4ironclaw)
+- Per-instance worker container ports (lunarcode4lunarwing, codex4lunarwing)
 - Automatic port conflict detection in `doctor` command

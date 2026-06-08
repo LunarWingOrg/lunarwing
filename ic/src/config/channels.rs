@@ -59,6 +59,10 @@ pub struct GatewayConfig {
     /// Parsed from `GATEWAY_USER_TOKENS` (JSON string). When absent, falls back
     /// to single-user mode via `auth_token` + `user_id`.
     pub user_tokens: Option<HashMap<String, UserTokenConfig>>,
+    /// WebSocket ping interval in seconds (default: 30).
+    pub ws_ping_interval_secs: u64,
+    /// WebSocket idle timeout in seconds (default: 120).
+    pub ws_idle_timeout_secs: u64,
 }
 
 /// Per-user token configuration for multi-user mode.
@@ -288,6 +292,14 @@ impl ChannelsConfig {
                 workspace_read_scopes,
                 memory_layers,
                 user_tokens,
+                ws_ping_interval_secs: parse_optional_env(
+                    "WS_PING_INTERVAL_SECS",
+                    settings.agent.ws_ping_interval_secs,
+                )?,
+                ws_idle_timeout_secs: parse_optional_env(
+                    "WS_IDLE_TIMEOUT_SECS",
+                    settings.agent.ws_idle_timeout_secs,
+                )?,
             })
         } else {
             None
@@ -525,6 +537,8 @@ mod tests {
             workspace_read_scopes: vec![],
             memory_layers: vec![],
             user_tokens: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         };
         assert_eq!(cfg.host, "127.0.0.1");
         assert_eq!(cfg.port, 3000);
@@ -542,6 +556,8 @@ mod tests {
             workspace_read_scopes: vec![],
             memory_layers: vec![],
             user_tokens: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         };
         assert!(cfg.auth_token.is_none());
     }

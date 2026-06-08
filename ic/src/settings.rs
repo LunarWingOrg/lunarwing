@@ -580,6 +580,16 @@ pub struct AgentSettings {
     #[serde(default = "default_session_idle_timeout")]
     pub session_idle_timeout_secs: u64,
 
+    /// WebSocket ping interval in seconds (default: 30). Server sends ping
+    /// frames at this interval to detect dead connections.
+    #[serde(default = "default_ws_ping_interval")]
+    pub ws_ping_interval_secs: u64,
+
+    /// WebSocket idle timeout in seconds (default: 120). Connections with no
+    /// activity (including pong responses) longer than this are closed.
+    #[serde(default = "default_ws_idle_timeout")]
+    pub ws_idle_timeout_secs: u64,
+
     /// Maximum tool-call iterations per agentic loop invocation (default: 50).
     #[serde(default = "default_max_tool_iterations")]
     pub max_tool_iterations: usize,
@@ -633,6 +643,14 @@ fn default_session_idle_timeout() -> u64 {
     7 * 24 * 3600 // 7 days
 }
 
+fn default_ws_ping_interval() -> u64 {
+    30
+}
+
+fn default_ws_idle_timeout() -> u64 {
+    120
+}
+
 fn default_max_repair_attempts() -> u32 {
     3
 }
@@ -679,6 +697,8 @@ impl Default for AgentSettings {
             handle_message_timeout_secs: default_handle_message_timeout(),
             self_repair_op_timeout_secs: default_self_repair_op_timeout(),
             session_prune_timeout_secs: default_session_prune_timeout(),
+            ws_ping_interval_secs: default_ws_ping_interval(),
+            ws_idle_timeout_secs: default_ws_idle_timeout(),
         }
     }
 }

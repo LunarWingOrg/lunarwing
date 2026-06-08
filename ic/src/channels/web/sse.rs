@@ -227,7 +227,7 @@ impl SseManager {
 
         Some(
             Sse::new(counted_stream)
-                .keep_alive(KeepAlive::new().interval(Duration::from_secs(30)).text("")),
+                .keep_alive(KeepAlive::new().interval(Duration::from_secs(15)).text("")),
         )
     }
 }

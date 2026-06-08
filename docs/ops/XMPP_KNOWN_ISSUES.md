@@ -1,12 +1,21 @@
-# known issues
+# XMPP known issues
 
-* omemo devices may need to be trusted in seperate client
-* for http file uploads:
+Reconciled 2026-06-07.
 
-● So IncomingMessage does have an attachments field. Let me check if the XMPP channel populates it for inbound OOB/file messages:
-● Line 764 is the key — attachments: Vec::new(). That's where incoming messages are constructed:
-● That's the pairing reply, not the incoming message construction. Let me find where actual incoming chat messages are built:
-● That confirms it. Incoming messages are built with IncomingMessage::new(...) but .with_attachments() is never called — no OOB URL extraction from inbound stanzas.
-  The bridge supports sending files (outbound XEP-0363 upload + OOB), but receiving files (parsing OOB URLs from incoming stanzas) isn't implemented. The agent is correct — inbound file uploads aren't compatible
-  because the bridge simply doesn't extract them.
-  This would be a feature to add: parse <x xmlns='jabber:x:oob'> and/or <url> elements from incoming message stanzas, download the file, and attach it to IncomingMessage.
+- **OMEMO device trust** — the agent's OMEMO device may need to be trusted in a separate client
+  before encrypted messages flow. This is XEP-0384 behavior, not a defect.
+- **Inbound file uploads — implemented (incl. encrypted media), live e2e validation pending.** The
+  channel answers `disco#info` + advertises entity caps (so clients recognize the agent as a valid
+  recipient), extracts OOB (`<x xmlns='jabber:x:oob'>`) and `aesgcm://` (XEP-0454) URLs — the latter
+  also from decrypted OMEMO bodies — and downloads them with bounded concurrency, a per-stanza URL
+  cap, and a streamed 20 MB size cap; `aesgcm://` media is AES-256-GCM-decrypted locally. This is
+  unit-tested and the bridge builds, but the full pipeline has **not** yet been exercised end-to-end
+  against a live server (Conversations/Gajim → agent). See `docs/architecture/XMPP_FILE_TRANSFERS.md`.
+  *(Earlier notes said inbound OOB "isn't implemented" / "needs e2e testing"; the implementation is
+  now in place — only the live e2e run remains.)*
+- **Inbound downloads have no SSRF guard (deferred).** The bridge fetches sender-supplied OOB /
+  `aesgcm://` URLs without blocking private/loopback/metadata IPs. Deployments rely on the network
+  boundary and the `ALLOW_PRIVATE_IPS` model; a future phase can reuse
+  `config/helpers.rs::validate_base_url`.
+- **OMEMO MUC fallback spam / rare stuck processing loop** — historically observed; appear resolved
+  (`docs/bugs/XMPP-OMEMO-BUG-TO-DO.md`). Reopen if they recur.

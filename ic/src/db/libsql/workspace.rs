@@ -336,11 +336,12 @@ impl WorkspaceStore for LibSqlBackend {
 
         // Single transaction: insert-if-absent then select. Uses one
         // connection and is immune to TOCTOU races between concurrent writers.
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::SearchFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         // Use the expression index (user_id, COALESCE(agent_id, ''), path)
         // as the conflict target because the column-list form does not match
@@ -351,12 +352,7 @@ impl WorkspaceStore for LibSqlBackend {
             VALUES (?1, ?2, ?3, ?4, '', '{}')
             ON CONFLICT (user_id, COALESCE(agent_id, ''), path) DO NOTHING
             "#,
-            params![
-                id.to_string(),
-                user_id,
-                agent_id_str.as_deref(),
-                path
-            ],
+            params![id.to_string(), user_id, agent_id_str.as_deref(), path],
         )
         .await
         .map_err(|e| WorkspaceError::SearchFailed {
@@ -394,9 +390,11 @@ impl WorkspaceStore for LibSqlBackend {
         };
         drop(rows);
 
-        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(doc)
     }
@@ -434,11 +432,12 @@ impl WorkspaceStore for LibSqlBackend {
             })?;
         let now = fmt_ts(&Utc::now());
 
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::SearchFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         tx.execute(
             r#"
@@ -465,29 +464,32 @@ impl WorkspaceStore for LibSqlBackend {
                 reason: format!("Read-back failed: {e}"),
             })?;
 
-        let new_content: String = match rows
-            .next()
-            .await
-            .map_err(|e| WorkspaceError::SearchFailed {
-                reason: format!("Row fetch failed: {e}"),
-            })? {
-            Some(row) => row
-                .get::<String>(0)
+        let new_content: String =
+            match rows
+                .next()
+                .await
                 .map_err(|e| WorkspaceError::SearchFailed {
-                    reason: format!("Column read failed: {e}"),
-                })?,
-            None => {
-                return Err(WorkspaceError::DocumentNotFound {
-                    doc_type: "unknown".to_string(),
-                    user_id: "unknown".to_string(),
-                });
-            }
-        };
+                    reason: format!("Row fetch failed: {e}"),
+                })? {
+                Some(row) => row
+                    .get::<String>(0)
+                    .map_err(|e| WorkspaceError::SearchFailed {
+                        reason: format!("Column read failed: {e}"),
+                    })?,
+                None => {
+                    return Err(WorkspaceError::DocumentNotFound {
+                        doc_type: "unknown".to_string(),
+                        user_id: "unknown".to_string(),
+                    });
+                }
+            };
         drop(rows);
 
-        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(new_content)
     }
@@ -774,11 +776,12 @@ impl WorkspaceStore for LibSqlBackend {
             })?;
         let now = fmt_ts(&Utc::now());
 
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::SearchFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         tx.execute(
             "UPDATE memory_documents SET content = ?2, updated_at = ?3 WHERE id = ?1",
@@ -824,9 +827,11 @@ impl WorkspaceStore for LibSqlBackend {
             })?;
         }
 
-        tx.commit().await.map_err(|e| WorkspaceError::SearchFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::SearchFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(())
     }
@@ -843,11 +848,12 @@ impl WorkspaceStore for LibSqlBackend {
                 reason: e.to_string(),
             })?;
 
-        let tx = conn.transaction().await.map_err(|e| {
-            WorkspaceError::ChunkingFailed {
+        let tx = conn
+            .transaction()
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
                 reason: format!("Failed to start transaction: {e}"),
-            }
-        })?;
+            })?;
 
         tx.execute(
             "DELETE FROM memory_chunks WHERE document_id = ?1",
@@ -886,9 +892,11 @@ impl WorkspaceStore for LibSqlBackend {
             ids.push(id);
         }
 
-        tx.commit().await.map_err(|e| WorkspaceError::ChunkingFailed {
-            reason: format!("Commit failed: {e}"),
-        })?;
+        tx.commit()
+            .await
+            .map_err(|e| WorkspaceError::ChunkingFailed {
+                reason: format!("Commit failed: {e}"),
+            })?;
 
         Ok(ids)
     }

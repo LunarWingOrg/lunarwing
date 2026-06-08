@@ -1188,6 +1188,12 @@ impl WasmChannel {
                 crate::tools::wasm::LogLevel::Warn => {
                     tracing::warn!(channel = %self.name, "{}", entry.message);
                 }
+                crate::tools::wasm::LogLevel::Info => {
+                    tracing::info!(channel = %self.name, "{}", entry.message);
+                }
+                crate::tools::wasm::LogLevel::Trace => {
+                    tracing::trace!(channel = %self.name, "{}", entry.message);
+                }
                 _ => {
                     tracing::debug!(channel = %self.name, "{}", entry.message);
                 }
@@ -1502,8 +1508,17 @@ impl WasmChannel {
         let channel_name = self.name.clone();
         match result {
             Ok(Ok(((), mut host_state))) => {
-                // Process emitted messages
+                self.log_on_start_host_state(&mut host_state);
+
                 let emitted = host_state.take_emitted_messages();
+                if !emitted.is_empty() {
+                    tracing::debug!(
+                        channel = %channel_name,
+                        count = emitted.len(),
+                        "WASM on_poll emitted {} message(s)",
+                        emitted.len(),
+                    );
+                }
                 self.process_emitted_messages(emitted).await?;
 
                 tracing::debug!(
@@ -2317,6 +2332,12 @@ impl WasmChannel {
 
                     tokio::spawn(async move {
                         let mut interval_timer = tokio::time::interval(interval);
+                        // A slow poll cycle (e.g. an adapter round-trip approaching the
+                        // callback timeout) must not queue up a burst of catch-up ticks.
+                        // Skip missed ticks so cadence stays ~= the configured interval
+                        // instead of firing back-to-back after a slow cycle.
+                        interval_timer
+                            .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
                         loop {
                             interval_timer.tick().await;
@@ -2497,6 +2518,27 @@ impl WasmChannel {
 
         match result {
             Ok(Ok(mut host_state)) => {
+                // Flush WASM-internal logs
+                for entry in host_state.take_logs() {
+                    match entry.level {
+                        crate::tools::wasm::LogLevel::Error => {
+                            tracing::error!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Warn => {
+                            tracing::warn!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Info => {
+                            tracing::info!(channel = %channel_name, "{}", entry.message);
+                        }
+                        crate::tools::wasm::LogLevel::Trace => {
+                            tracing::trace!(channel = %channel_name, "{}", entry.message);
+                        }
+                        _ => {
+                            tracing::debug!(channel = %channel_name, "{}", entry.message);
+                        }
+                    }
+                }
+
                 let emitted = host_state.take_emitted_messages();
                 tracing::debug!(
                     channel = %channel_name,

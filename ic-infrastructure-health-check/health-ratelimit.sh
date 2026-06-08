@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Config
-RATELIMIT_DIR="${RATELIMIT_DIR:-$HOME/.ironclaw/ratelimit}"
+RATELIMIT_DIR="${RATELIMIT_DIR:-${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/ratelimit}"
 THROTTLED_DEGRADED=10
 THROTTLED_CRITICAL=50
 
@@ -52,7 +52,7 @@ cat <<EOF
     "throttled_last_hour": $throttled,
     "queue_depth": $queued
   },
-  "issues": $(printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  "issues": $(if [ ${#issues[@]} -gt 0 ]; then printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]'; else echo '[]'; fi)
 }
 EOF
 

@@ -804,13 +804,14 @@ write_tenant_lunarwing_env() {
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
   bridge_port="$(ports_get "$name" bridge)"
   pg_port="$(ports_get "$name" postgres)"
   proxy_port="$(ports_get "$name" proxy)"
+  weechat_port="$(ports_get "$name" weechat)"
   weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
@@ -821,9 +822,10 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token secrets_key
+  local gateway_token bridge_token relay_password secrets_key
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
+  relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
 
   (
@@ -889,8 +891,15 @@ NANOCODE_WSS_PORT=$nanocode_wss_port
 # Pebble worker (WebSocket port for agent communication)
 PEBBLE_WSS_PORT=$pebble_wss_port
 
-# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)
+# WeeChat relay + adapter
+# RELAY_URL / WS_ADAPTER_URL are full URLs consumed by the in-process WASM
+# channel (via the capabilities `env` source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
+# are the bare port consumed by the standalone ws_adapter.py process.
+RELAY_URL=http://127.0.0.1:${weechat_port}
+RELAY_PASSWORD=$relay_password
+ADAPTER_PORT=$weechat_adapter_port
 WEECHAT_ADAPTER_PORT=$weechat_adapter_port
+WS_ADAPTER_URL=http://127.0.0.1:${weechat_adapter_port}
 
 # Daemon mode
 CLI_ENABLED=false
@@ -1016,6 +1025,26 @@ patch_tenant_env() {
     else
       printf '\n# WeeChat adapter (local HTTP adapter bridging WeeChat WS relay to WASM)\nWEECHAT_ADAPTER_PORT=%s\n' "$weechat_adapter_port" >>"$env_path"
       say "added WEECHAT_ADAPTER_PORT=$weechat_adapter_port to $env_path"
+    fi
+    # WS_ADAPTER_URL is the full adapter URL consumed by the in-process WASM
+    # channel (via the capabilities `env` source). Without it the channel
+    # falls back to the hardcoded :6681 default and silently fails.
+    if grep -q '^WS_ADAPTER_URL=' "$env_path"; then
+      say "WS_ADAPTER_URL already set in $env_path (skipping)"
+    else
+      printf 'WS_ADAPTER_URL=http://127.0.0.1:%s\n' "$weechat_adapter_port" >>"$env_path"
+      say "added WS_ADAPTER_URL=http://127.0.0.1:$weechat_adapter_port to $env_path"
+    fi
+  fi
+
+  local weechat_port
+  weechat_port="$(ports_get "$name" weechat)"
+  if [[ -n "$weechat_port" ]]; then
+    if grep -q '^RELAY_URL=' "$env_path"; then
+      say "RELAY_URL already set in $env_path (skipping)"
+    else
+      printf '\n# WeeChat relay URL consumed by the in-process WASM channel\nRELAY_URL=http://127.0.0.1:%s\n' "$weechat_port" >>"$env_path"
+      say "added RELAY_URL=http://127.0.0.1:$weechat_port to $env_path"
     fi
   fi
 }
@@ -1355,18 +1384,21 @@ render_tenant_systemd_units() {
   mkdir -p "$user_unit_dir"
   chown -R "$name:$name" "$(tenant_home "$name")/.config"
 
-  local repo env_dir state_dir proxy_port bridge_port
+  local repo env_dir state_dir proxy_port bridge_port weechat_port
   repo="$(tenant_repo "$name")"
   env_dir="$(tenant_env_dir "$name")"
   state_dir="$(tenant_state_dir "$name")"
   proxy_port="$(ports_get "$name" proxy)"
   bridge_port="$(ports_get "$name" bridge)"
+  weechat_port="$(ports_get "$name" weechat)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  # Run from the tenant's own clone (in their home), not the admin's source repo,
+  # so a tenant's services aren't coupled to another user's home directory.
+  proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
 
   # Proxy unit
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
@@ -1386,11 +1418,34 @@ NoNewPrivileges=true
 WantedBy=default.target
 EOF
 
+  # WeeChat unit (runs in tmux so you can attach: tmux -L weechat-${name} attach)
+  local weechat_home
+  weechat_home="$(tenant_home "$name")/.config/weechat"
+  mkdir -p "$weechat_home"
+  chown "$name:$name" "$weechat_home"
+
+  cat >"$user_unit_dir/weechat-${name}.service" <<EOF
+[Unit]
+Description=WeeChat IRC client ($name)
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=$(command -v tmux) -L weechat-${name} new-session -d -s weechat '$(command -v weechat) --dir ${weechat_home}'
+ExecStop=$(command -v tmux) -L weechat-${name} kill-session -t weechat
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+
   # WeeChat WS adapter unit
   cat >"$user_unit_dir/lunarwing-weechat-adapter-${name}.service" <<EOF
 [Unit]
 Description=LunarWing WeeChat WS adapter ($name)
-After=network.target
+After=network.target weechat-${name}.service
+Requires=weechat-${name}.service
 PartOf=lunarwing-${name}.service
 
 [Service]
@@ -1430,8 +1485,8 @@ EOF
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-adapter-${name}.service
+After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service weechat-${name}.service lunarwing-weechat-adapter-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service weechat-${name}.service lunarwing-weechat-adapter-${name}.service
 
 [Service]
 Type=simple
@@ -1470,7 +1525,9 @@ start_tenant_systemd() {
   _systemctl_user "$name" enable \
     "lunarwing-${name}.service" \
     "xmpp-bridge-${name}.service" \
-    "lunarwing-proxy-${name}.service"
+    "lunarwing-proxy-${name}.service" \
+    "weechat-${name}.service" \
+    "lunarwing-weechat-adapter-${name}.service"
   _systemctl_user "$name" start "lunarwing-${name}.service"
   sleep 2
   if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service"; then
@@ -1487,7 +1544,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "weechat-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -1500,7 +1557,7 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "weechat-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
 
@@ -1519,17 +1576,23 @@ render_tenant_openrc_units() {
   log_dir="$(tenant_log_dir "$name")"
   run_dir="$(tenant_run_dir "$name")"
 
-  local proxy_port bridge_port
+  local proxy_port bridge_port weechat_port
   proxy_port="$(ports_get "$name" proxy)"
   bridge_port="$(ports_get "$name" bridge)"
+  weechat_port="$(ports_get "$name" weechat)"
 
   local proxy_bin
-  proxy_bin="$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  # Run from the tenant's own clone (in their home), not the admin's source repo,
+  # so a tenant's services aren't coupled to another user's home directory.
+  proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$SOURCE_REPO/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
   local ws_adapter_dir
   ws_adapter_dir="$(dirname "$ws_adapter_path")"
+
+  local weechat_home
+  weechat_home="$(tenant_home "$name")/.config/weechat"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -1572,7 +1635,7 @@ required_files="\${command}"
 depend() {
     need net localmount
     use dns logger
-    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}
+    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
 }
 
 load_env() {
@@ -1718,6 +1781,50 @@ start_pre() {
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
 
+  # ── WeeChat init script (tmux-based) ──
+  cat >"/etc/init.d/weechat-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="WeeChat IRC client ($name)"
+
+: "\${weechat_user:=$name}"
+: "\${weechat_group:=$name}"
+: "\${weechat_home:=$weechat_home}"
+: "\${weechat_pidfile:=$run_dir/weechat.pid}"
+: "\${weechat_runtime_dir:=$run_dir}"
+: "\${weechat_log_dir:=$log_dir}"
+: "\${weechat_output_log:=\${weechat_log_dir}/weechat.log}"
+: "\${weechat_error_log:=\${weechat_log_dir}/weechat.err}"
+: "\${weechat_retry:=SIGTERM/30/KILL/5}"
+
+command="$(command -v tmux)"
+command_args="-L weechat-${name} new-session -d -s weechat '$(command -v weechat) --dir \${weechat_home}'"
+command_user="\${weechat_user}:\${weechat_group}"
+
+depend() {
+    need net
+    use dns
+    after firewall
+    before lunarwing-weechat-adapter-${name} lunarwing-${name}
+}
+
+start() {
+    ebegin "Starting WeeChat ($name)"
+    checkpath -d -m 0750 -o "\${weechat_user}:\${weechat_group}" "\${weechat_home}"
+    checkpath -d -m 0750 -o "\${weechat_user}:\${weechat_group}" "\${weechat_runtime_dir}"
+    start-stop-daemon --start --user "\${weechat_user}" \\
+        --exec $(command -v tmux) -- -L weechat-${name} new-session -d -s weechat "$(command -v weechat) --dir \${weechat_home}"
+    eend \$?
+}
+
+stop() {
+    ebegin "Stopping WeeChat ($name)"
+    su -s /bin/sh "\${weechat_user}" -c "$(command -v tmux) -L weechat-${name} kill-session -t weechat 2>/dev/null" || true
+    eend 0
+}
+INITEOF
+  chmod 0755 "/etc/init.d/weechat-${name}"
+
   # WeeChat WS adapter init script
   cat >"/etc/init.d/lunarwing-weechat-adapter-${name}" <<INITEOF
 #!/sbin/openrc-run
@@ -1754,9 +1861,9 @@ output_log="\${adapter_output_log}"
 error_log="\${adapter_error_log}"
 
 depend() {
-    need net
+    need net weechat-${name}
     use dns
-    after firewall
+    after firewall weechat-${name}
     before lunarwing-${name}
 }
 
@@ -1782,7 +1889,7 @@ INITEOF
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-adapter-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -1791,6 +1898,10 @@ xmpp_bridge_rc_before="lunarwing-${name}"
 CONFD
 
   cat >"/etc/conf.d/lunarwing-proxy-${name}" <<CONFD
+# Auto-generated by lunarwing-mt-admin.sh for tenant: $name
+CONFD
+
+  cat >"/etc/conf.d/weechat-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
@@ -1803,6 +1914,7 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
+  rc-service "weechat-${name}" start
   rc-service "lunarwing-weechat-adapter-${name}" start
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
@@ -1816,12 +1928,13 @@ stop_tenant_openrc() {
   rc-service "xmpp-bridge-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
+  rc-service "weechat-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -1829,6 +1942,28 @@ uninstall_tenant_openrc() {
 }
 
 # ── Compound commands ────────────────────────────────────────────────────────
+
+# WeeChat's ws_adapter.py needs the `aiohttp` Python package importable by the
+# TENANT user's python3 (system-wide, or in that user's ~/.local — an --user
+# install for a different account, e.g. the admin, is NOT visible). Non-fatal:
+# the adapter is optional, so we only warn with how to fix it.
+warn_if_adapter_deps_missing() {
+  local name="$1"
+  if ! command -v python3 >/dev/null 2>&1; then
+    say "WARNING: python3 not found — the WeeChat adapter cannot run."
+    return 0
+  fi
+  if sudo -u "$name" python3 -c 'import aiohttp' >/dev/null 2>&1; then
+    return 0
+  fi
+  say ""
+  say "WARNING: Python package 'aiohttp' is not importable by user '$name'."
+  say "         lunarwing-weechat-adapter-${name} will exit on start until it is installed:"
+  say "           system-wide (preferred): sudo pacman -S python-aiohttp"
+  say "             (Debian: sudo apt install python3-aiohttp  ·  Fedora: sudo dnf install python3-aiohttp)"
+  say "           per-tenant fallback:     sudo -u ${name} pip install --user --break-system-packages aiohttp"
+  say ""
+}
 
 add_tenant() {
   local name="$1"
@@ -1853,6 +1988,8 @@ add_tenant() {
 
   create_tenant_user "$name" "$docker_group"
   say ""
+
+  warn_if_adapter_deps_missing "$name"
 
   clone_tenant_repo "$name"
   say ""

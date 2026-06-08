@@ -800,7 +800,10 @@ mod tests {
         router
             .register(channel2, vec![], Some("secret456".to_string()), None)
             .await;
-        assert_eq!(router.get_secret_header("weechat").await, "X-Webhook-Secret");
+        assert_eq!(
+            router.get_secret_header("weechat").await,
+            "X-Webhook-Secret"
+        );
     }
 
     // ── Category 3: Router HMAC Secret Management ───────────────────────
@@ -843,7 +846,9 @@ mod tests {
         }];
 
         router.register(channel, endpoints, None, None).await;
-        router.register_hmac_secret("weechat", "signing-secret").await;
+        router
+            .register_hmac_secret("weechat", "signing-secret")
+            .await;
 
         // Secret should exist
         assert!(router.get_hmac_secret("weechat").await.is_some());
@@ -925,7 +930,9 @@ mod tests {
 
         // Valid 32-byte Ed25519 public key (from test keypair)
         let valid_key = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b7e8c7ac6602";
-        let result = router.register_signature_key("test_channel", valid_key).await;
+        let result = router
+            .register_signature_key("test_channel", valid_key)
+            .await;
         assert!(result.is_ok(), "Valid Ed25519 key should be accepted");
     }
 
@@ -949,7 +956,9 @@ mod tests {
 
         // 16 bytes instead of 32
         let short_key = hex::encode([0u8; 16]);
-        let result = router.register_signature_key("test_channel", &short_key).await;
+        let result = router
+            .register_signature_key("test_channel", &short_key)
+            .await;
         assert!(result.is_err(), "Wrong-length key should be rejected");
     }
 

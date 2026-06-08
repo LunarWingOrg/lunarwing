@@ -55,7 +55,7 @@ cat <<EOF
     "sessions": $sessions,
     "recent_sessions": $recent_sessions
   },
-  "issues": $(printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  "issues": $(if [ ${#issues[@]} -gt 0 ]; then printf '%s\n' "${issues[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]'; else echo '[]'; fi)
 }
 EOF
 

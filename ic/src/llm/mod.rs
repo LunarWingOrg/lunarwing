@@ -181,9 +181,7 @@ fn create_registry_provider(
         ProviderProtocol::OpenAiCompletions => {
             create_openai_compat_from_registry(config, request_timeout_secs)
         }
-        ProviderProtocol::Anthropic => {
-            create_anthropic_from_registry(config, request_timeout_secs)
-        }
+        ProviderProtocol::Anthropic => create_anthropic_from_registry(config, request_timeout_secs),
         ProviderProtocol::Ollama => create_ollama_from_registry(config, request_timeout_secs),
         ProviderProtocol::GithubCopilot => {
             let provider =

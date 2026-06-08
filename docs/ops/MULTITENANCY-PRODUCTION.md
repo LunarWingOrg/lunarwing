@@ -240,7 +240,7 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 
 ```json
 {
-  "version": 1,
+  "version": 5,
   "range": { "start": 10000, "end": 19999 },
   "block_size": 10,
   "tenants": {
@@ -255,10 +255,10 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
         "postgres": 10003,
         "proxy": 10004,
         "weechat": 10005,
-        "reserved_0": 10006,
-        "reserved_1": 10007,
-        "reserved_2": 10008,
-        "reserved_3": 10009
+        "orchestrator": 10006,
+        "nanocode_wss": 10007,
+        "pebble_wss": 10008,
+        "weechat_adapter": 10009
       }
     }
   }
@@ -299,7 +299,7 @@ Each tenant gets 3 user-level systemd units installed to `~/.config/systemd/user
 |------|-------------|
 | `lunarwing-<name>.service` | Main daemon (Wants bridge + proxy) |
 | `xmpp-bridge-<name>.service` | XMPP bridge (PartOf main) |
-| `ironclaw-proxy-<name>.service` | TensorZero proxy |
+| `lunarwing-proxy-<name>.service` | TensorZero proxy |
 
 The main unit has `Wants=` on the bridge and proxy, so starting it pulls in the sidecars. `loginctl enable-linger` keeps services running after the user logs out.
 
@@ -322,7 +322,7 @@ Each tenant gets 3 init scripts in `/etc/init.d/` with corresponding `/etc/conf.
 |-------------|--------|
 | `/etc/init.d/lunarwing-<name>` | `/etc/conf.d/lunarwing-<name>` |
 | `/etc/init.d/xmpp-bridge-<name>` | `/etc/conf.d/xmpp-bridge-<name>` |
-| `/etc/init.d/ironclaw-proxy-<name>` | `/etc/conf.d/ironclaw-proxy-<name>` |
+| `/etc/init.d/lunarwing-proxy-<name>` | `/etc/conf.d/lunarwing-proxy-<name>` |
 
 All use `supervise-daemon` with `command_user` set to the tenant. Dependency wiring ensures proxy and bridge start before the main daemon.
 
@@ -461,7 +461,7 @@ The infrastructure health check suite (`ic-infrastructure-health-check/`) auto-d
 - **systemd**: runs `health-systemd.sh` (checks unit active state, restart count, timer metadata)
 - **OpenRC**: runs `health-openrc.sh` (checks `rc-service` status, PID liveness)
 
-On OpenRC, `health-openrc.sh` auto-discovers multi-tenant services by scanning `/etc/init.d/` for `lunarwing-*`, `xmpp-bridge-*`, and `ironclaw-proxy-*` patterns. No configuration needed — all tenants are automatically monitored. Override with `SERVICES="svc1 svc2"` if needed.
+On OpenRC, `health-openrc.sh` auto-discovers multi-tenant services by scanning `/etc/init.d/` for `lunarwing-*`, `xmpp-bridge-*`, and `lunarwing-proxy-*` patterns. No configuration needed — all tenants are automatically monitored. Override with `SERVICES="svc1 svc2"` if needed.
 
 The init system detection can be forced via `LUNARWING_SERVICE_MANAGER=systemd` or `LUNARWING_SERVICE_MANAGER=openrc`.
 

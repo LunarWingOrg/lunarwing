@@ -373,6 +373,26 @@ pub struct UserIdentityRecord {
 // combines them all, so existing `Arc<dyn Database>` consumers keep working.
 // Leaf consumers can depend on a specific sub-trait instead.
 
+/// Derive a stable conversation UUID from a channel-specific scope string.
+///
+/// If `scope` is already a valid UUID, returns it directly. Otherwise
+/// generates a deterministic UUID v5 from a length-prefixed seed of
+/// `(channel, user_id, scope)`. The length prefix prevents collisions
+/// between inputs that share a delimiter.
+pub fn scoped_conversation_id(channel: &str, user_id: &str, scope: &str) -> Uuid {
+    if let Ok(uuid) = Uuid::parse_str(scope) {
+        return uuid;
+    }
+    let mut seed = Vec::new();
+    seed.extend_from_slice(&(channel.len() as u32).to_le_bytes());
+    seed.extend_from_slice(channel.as_bytes());
+    seed.extend_from_slice(&(user_id.len() as u32).to_le_bytes());
+    seed.extend_from_slice(user_id.as_bytes());
+    seed.extend_from_slice(&(scope.len() as u32).to_le_bytes());
+    seed.extend_from_slice(scope.as_bytes());
+    Uuid::new_v5(&Uuid::NAMESPACE_OID, &seed)
+}
+
 #[async_trait]
 pub trait ConversationStore: Send + Sync {
     async fn create_conversation(
@@ -473,6 +493,25 @@ pub trait ConversationStore: Send + Sync {
         &self,
         conversation_id: Uuid,
     ) -> Result<Option<String>, DatabaseError>;
+
+    /// Get or create a conversation scoped to a channel-specific identifier.
+    ///
+    /// When the scope is a valid UUID, it is used directly (passthrough).
+    /// Otherwise a stable UUID v5 is derived from `(channel, user_id, scope)`
+    /// so that non-UUID scopes (XMPP room JIDs, WeeChat buffers, etc.) get
+    /// their own persistent conversation. The original scope string is stored
+    /// in the `thread_id` column for traceability.
+    async fn get_or_create_scoped_conversation(
+        &self,
+        channel: &str,
+        user_id: &str,
+        scope: &str,
+    ) -> Result<Uuid, DatabaseError> {
+        let conv_id = scoped_conversation_id(channel, user_id, scope);
+        self.ensure_conversation(conv_id, channel, user_id, Some(scope), Some(channel))
+            .await?;
+        Ok(conv_id)
+    }
 }
 
 #[async_trait]
@@ -1277,5 +1316,87 @@ mod tests {
         let exists = store.exists("test_user", "nonexistent_secret").await;
         assert!(exists.is_ok());
         assert!(!exists.unwrap());
+    }
+
+    #[test]
+    fn scoped_conversation_id_uuid_passthrough() {
+        let uuid = uuid::Uuid::new_v4();
+        let result = scoped_conversation_id("xmpp", "user1", &uuid.to_string());
+        assert_eq!(result, uuid);
+    }
+
+    #[test]
+    fn scoped_conversation_id_non_uuid_is_stable() {
+        let a = scoped_conversation_id("xmpp", "user1", "room@conference.example.org");
+        let b = scoped_conversation_id("xmpp", "user1", "room@conference.example.org");
+        assert_eq!(a, b);
+        assert!(!a.is_nil());
+    }
+
+    #[test]
+    fn scoped_conversation_id_different_scopes_differ() {
+        let a = scoped_conversation_id("xmpp", "user1", "room-a@conference.example.org");
+        let b = scoped_conversation_id("xmpp", "user1", "room-b@conference.example.org");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn scoped_conversation_id_length_prefix_prevents_collision() {
+        let a = scoped_conversation_id("a", "b\x1fc", "d");
+        let b = scoped_conversation_id("a\x1fb", "c", "d");
+        assert_ne!(a, b);
+    }
+
+    /// Regression: non-UUID conversation scopes (XMPP room JIDs, WeeChat
+    /// buffers) must create separate v1 conversations, not collapse into a
+    /// shared assistant conversation.
+    #[cfg(feature = "libsql")]
+    #[tokio::test]
+    async fn scoped_conversation_creates_separate_v1_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("test.db");
+        let backend = crate::db::libsql::LibSqlBackend::new_local(&db_path)
+            .await
+            .unwrap();
+        Database::run_migrations(&backend).await.unwrap();
+        let db: &dyn ConversationStore = &backend;
+
+        let scope_a = "room-a@conference.example.org";
+        let scope_b = "room-b@conference.example.org";
+
+        let conv_a = db
+            .get_or_create_scoped_conversation("xmpp", "user1", scope_a)
+            .await
+            .unwrap();
+        let conv_b = db
+            .get_or_create_scoped_conversation("xmpp", "user1", scope_b)
+            .await
+            .unwrap();
+
+        assert_ne!(
+            conv_a, conv_b,
+            "different scopes must map to different conversations"
+        );
+
+        db.add_conversation_message(conv_a, "user", "hello room A")
+            .await
+            .unwrap();
+        db.add_conversation_message(conv_b, "user", "hello room B")
+            .await
+            .unwrap();
+
+        let msgs_a = db.list_conversation_messages(conv_a).await.unwrap();
+        let msgs_b = db.list_conversation_messages(conv_b).await.unwrap();
+        assert_eq!(msgs_a.len(), 1);
+        assert_eq!(msgs_b.len(), 1);
+        assert_eq!(msgs_a[0].content, "hello room A");
+        assert_eq!(msgs_b[0].content, "hello room B");
+
+        // Idempotent: same scope returns the same conversation
+        let conv_a2 = db
+            .get_or_create_scoped_conversation("xmpp", "user1", scope_a)
+            .await
+            .unwrap();
+        assert_eq!(conv_a, conv_a2);
     }
 }

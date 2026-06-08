@@ -16,7 +16,8 @@
             {
                 "name": "relay_url",
                 "prompt": "WeeChat relay URL (default: http://127.0.0.1:9001, run /relay add api 9001 in WeeChat)",
-                "optional": true
+                "optional": true,
+                "env": "RELAY_URL"
             },
             {
                 "name": "connection_mode",
@@ -26,7 +27,8 @@
             {
                 "name": "ws_adapter_url",
                 "prompt": "WebSocket adapter URL for auto/websocket modes (default: http://127.0.0.1:6681)",
-                "optional": true
+                "optional": true,
+                "env": "WS_ADAPTER_URL"
             },
             {
                 "name": "networks",
@@ -51,6 +53,11 @@
             {
                 "name": "verbose_drops",
                 "prompt": "Enable verbose drop logging for filtered messages (true or false, default: false)",
+                "optional": true
+            },
+            {
+                "name": "debug_logging",
+                "prompt": "Enable verbose per-poll diagnostic logging (buffer dumps, config reloads, per-poll line counts). Implies verbose_drops. (true or false, default: false)",
                 "optional": true
             }
         ]
@@ -107,12 +114,13 @@
         "ws_adapter_url": "http://127.0.0.1:6681",
         "networks": "",
         "exclude_networks": "",
-        "dm_policy": "pairing",
+        "dm_policy": "open",
         "group_policy": "allowlist",
         "allow_from": "",
         "max_chunk_length": 420,
         "verbose_drops": false,
+        "debug_logging": false,
         "polling_enabled": true,
-        "poll_interval_ms": 3000
+        "poll_interval_seconds": 3
     }
 }

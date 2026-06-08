@@ -615,7 +615,6 @@ impl ExtensionManager {
             })
     }
 
-
     /// Inject a registry entry for testing. The entry is added to the discovery
     /// cache so it appears in search results alongside built-in entries.
     pub async fn inject_registry_entry(&self, entry: crate::extensions::RegistryEntry) {
@@ -813,7 +812,6 @@ impl ExtensionManager {
             ),
         })
     }
-
 
     /// Access the secrets store (used by OAuth callback handlers).
     pub fn secrets(&self) -> &Arc<dyn SecretsStore + Send + Sync> {
@@ -5844,6 +5842,7 @@ mod tests {
             optional: false,
             input_type: crate::tools::wasm::ToolSetupFieldInputType::Text,
             setting_path: Some("nearai.session_token".to_string()),
+            env: None,
             restart_required: false,
         };
 
@@ -6777,7 +6776,6 @@ mod tests {
         unsafe { std::env::remove_var("_TOKEN") };
         unsafe { std::env::remove_var("ICTEST6_TOKEN") };
     }
-
 
     #[tokio::test]
     async fn test_remove_wasm_tool_clears_pending_oauth_state_and_activation_error() {

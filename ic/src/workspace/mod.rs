@@ -706,10 +706,7 @@ impl Workspace {
             .get_or_create_document_by_path(&self.user_id, self.agent_id, &path)
             .await?;
 
-        let new_content = self
-            .storage
-            .append_document(doc.id, content, "\n")
-            .await?;
+        let new_content = self.storage.append_document(doc.id, content, "\n").await?;
 
         // Scan the combined content so that injection patterns split
         // across multiple appends are caught.
@@ -1587,9 +1584,7 @@ impl Workspace {
     async fn reindex_document(&self, document_id: Uuid) -> Result<(), WorkspaceError> {
         let doc = self.storage.get_document_by_id(document_id).await?;
         let prepared = self.prepare_chunks(&doc.content).await;
-        self.storage
-            .replace_chunks(document_id, &prepared)
-            .await?;
+        self.storage.replace_chunks(document_id, &prepared).await?;
         Ok(())
     }
 
@@ -2209,8 +2204,7 @@ mod seed_tests {
             for i in 0..n {
                 let ws = ws.clone();
                 handles.push(tokio::spawn(async move {
-                    ws.append("append_target.md", &format!("line-{i}"))
-                        .await
+                    ws.append("append_target.md", &format!("line-{i}")).await
                 }));
             }
 

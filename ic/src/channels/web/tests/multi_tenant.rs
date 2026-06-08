@@ -85,6 +85,8 @@ fn build_state(
         secrets_store: None,
         db_auth: None,
         channel_manager: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     })
 }
 
@@ -97,6 +99,8 @@ fn gateway_config() -> GatewayConfig {
         workspace_read_scopes: Vec::new(),
         memory_layers: Vec::new(),
         user_tokens: None,
+        ws_ping_interval_secs: 30,
+        ws_idle_timeout_secs: 120,
     }
 }
 

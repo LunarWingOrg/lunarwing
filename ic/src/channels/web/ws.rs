@@ -10,8 +10,10 @@
 //!        ◄─── WS frame: {"type":"pong"} ──────────────────────────────────────
 //! ```
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use axum::extract::ws::{Message, WebSocket};
 use futures::{SinkExt, StreamExt};
@@ -23,15 +25,17 @@ use crate::channels::IncomingMessage;
 use crate::channels::web::server::GatewayState;
 use crate::channels::web::types::{WsClientMessage, WsServerMessage};
 
-/// Tracks active WebSocket connections.
+/// Tracks active WebSocket connections with per-connection activity timestamps.
 pub struct WsConnectionTracker {
     count: AtomicU64,
+    connections: std::sync::RwLock<HashMap<Uuid, Instant>>,
 }
 
 impl WsConnectionTracker {
     pub fn new() -> Self {
         Self {
             count: AtomicU64::new(0),
+            connections: std::sync::RwLock::new(HashMap::new()),
         }
     }
 
@@ -39,12 +43,45 @@ impl WsConnectionTracker {
         self.count.load(Ordering::Relaxed)
     }
 
-    fn increment(&self) {
+    /// Register a new connection. Returns the assigned connection ID.
+    pub fn register_connection(&self) -> Uuid {
+        let id = Uuid::new_v4();
         self.count.fetch_add(1, Ordering::Relaxed);
+        let mut map = self.connections.write().unwrap_or_else(|e| e.into_inner());
+        map.insert(id, Instant::now());
+        id
     }
 
-    fn decrement(&self) {
-        self.count.fetch_sub(1, Ordering::Relaxed);
+    /// Remove a connection from tracking.
+    pub fn unregister_connection(&self, conn_id: &Uuid) {
+        let mut map = self.connections.write().unwrap_or_else(|e| e.into_inner());
+        if map.remove(conn_id).is_some() {
+            self.count.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Record activity for a connection (called on every received frame).
+    pub fn update_activity(&self, conn_id: &Uuid) {
+        let mut map = self.connections.write().unwrap_or_else(|e| e.into_inner());
+        if let Some(instant) = map.get_mut(conn_id) {
+            *instant = Instant::now();
+        }
+    }
+
+    /// Remove tracker entries idle longer than `timeout`. Returns the number removed.
+    ///
+    /// This is a safety net for leaked entries — the per-connection idle timeout
+    /// in `handle_ws_connection` is the primary disconnect mechanism.
+    pub fn cleanup_stale(&self, timeout: Duration) -> usize {
+        let cutoff = Instant::now() - timeout;
+        let mut map = self.connections.write().unwrap_or_else(|e| e.into_inner());
+        let before = map.len();
+        map.retain(|_, last_activity| *last_activity > cutoff);
+        let removed = before - map.len();
+        if removed > 0 {
+            self.count.fetch_sub(removed as u64, Ordering::Relaxed);
+        }
+        removed
     }
 }
 
@@ -57,8 +94,10 @@ impl Default for WsConnectionTracker {
 /// Handle an upgraded WebSocket connection.
 ///
 /// Spawns two tasks:
-/// - **sender**: forwards broadcast events to the WebSocket client
-/// - **receiver**: reads client frames and routes them to the agent
+/// - **sender**: forwards broadcast events to the WebSocket client and sends
+///   periodic protocol-level ping frames
+/// - **receiver**: reads client frames and routes them to the agent, with an
+///   idle timeout that closes silent connections
 ///
 /// When either task ends (client disconnect or broadcast closed), both are
 /// cleaned up.
@@ -69,19 +108,15 @@ pub async fn handle_ws_connection(
 ) {
     let (mut ws_sink, mut ws_stream) = socket.split();
 
-    // Track connection
-    if let Some(ref tracker) = state.ws_tracker {
-        tracker.increment();
-    }
-    let tracker_for_drop = state.ws_tracker.clone();
+    // Register connection with tracker
+    let conn_id = state.ws_tracker.as_ref().map(|t| t.register_connection());
 
     // Subscribe to broadcast events (same source as SSE), scoped to this user.
     // Reject if we've hit the connection limit.
     let Some(raw_stream) = state.sse.subscribe_raw(Some(user.user_id.clone())) else {
         tracing::warn!("WebSocket rejected: too many connections");
-        // Decrement the WS tracker we already incremented above.
-        if let Some(ref tracker) = tracker_for_drop {
-            tracker.decrement();
+        if let (Some(tracker), Some(id)) = (&state.ws_tracker, conn_id) {
+            tracker.unregister_connection(&id);
         }
         return;
     };
@@ -91,38 +126,76 @@ pub async fn handle_ws_connection(
     // the broadcast stream and any direct sends (like Pong)
     let (direct_tx, mut direct_rx) = mpsc::channel::<WsServerMessage>(64);
 
-    // Sender task: forward broadcast events + direct messages to WS client
+    let ping_interval_secs = state.ws_ping_interval_secs;
+
+    // Sender task: forward broadcast events + direct messages to WS client,
+    // and send periodic protocol-level pings to detect dead connections.
     let sender_handle = tokio::spawn(async move {
+        let mut ping_interval =
+            tokio::time::interval(Duration::from_secs(ping_interval_secs.max(1)));
+        ping_interval.tick().await; // consume the immediate first tick
         loop {
-            let msg = tokio::select! {
+            let ws_msg = tokio::select! {
                 event = event_stream.next() => {
                     match event {
-                        Some(sse_event) => WsServerMessage::from_sse_event(&sse_event),
-                        None => break, // Broadcast channel closed
+                        Some(sse_event) => {
+                            let msg = WsServerMessage::from_sse_event(&sse_event);
+                            match serde_json::to_string(&msg) {
+                                Ok(json) => Message::Text(json.into()),
+                                Err(_) => continue,
+                            }
+                        }
+                        None => break,
                     }
                 }
                 direct = direct_rx.recv() => {
                     match direct {
-                        Some(msg) => msg,
-                        None => break, // Direct channel closed
+                        Some(msg) => {
+                            match serde_json::to_string(&msg) {
+                                Ok(json) => Message::Text(json.into()),
+                                Err(_) => continue,
+                            }
+                        }
+                        None => break,
                     }
+                }
+                _ = ping_interval.tick() => {
+                    Message::Ping(Vec::new().into())
                 }
             };
 
-            let json = match serde_json::to_string(&msg) {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
-
-            if ws_sink.send(Message::Text(json.into())).await.is_err() {
+            if ws_sink.send(ws_msg).await.is_err() {
                 break; // Client disconnected
             }
         }
     });
 
-    // Receiver task: read client frames and route to agent
+    // Receiver task: read client frames and route to agent.
+    // Uses tokio::time::timeout so connections idle longer than the configured
+    // threshold are closed (the server-side pings trigger client pongs, so a
+    // healthy client will always reset this timer).
     let user_id = user.user_id;
-    while let Some(Ok(frame)) = ws_stream.next().await {
+    let idle_timeout = Duration::from_secs(if state.ws_idle_timeout_secs > 0 {
+        state.ws_idle_timeout_secs
+    } else {
+        86400 // 24h fallback if set to 0
+    });
+
+    loop {
+        let frame = match tokio::time::timeout(idle_timeout, ws_stream.next()).await {
+            Ok(Some(Ok(frame))) => frame,
+            Ok(Some(Err(_))) | Ok(None) => break,
+            Err(_) => {
+                tracing::debug!("WebSocket idle timeout, closing connection");
+                break;
+            }
+        };
+
+        // Any received frame (including Pong responses) counts as activity.
+        if let (Some(tracker), Some(id)) = (&state.ws_tracker, &conn_id) {
+            tracker.update_activity(id);
+        }
+
         match frame {
             Message::Text(text) => {
                 let parsed: Result<WsClientMessage, _> = serde_json::from_str(&text);
@@ -140,15 +213,15 @@ pub async fn handle_ws_connection(
                 }
             }
             Message::Close(_) => break,
-            // Ignore binary, ping/pong (axum handles protocol-level pings)
+            // Pong, Ping, Binary — activity already tracked above
             _ => {}
         }
     }
 
-    // Clean up: abort sender, decrement counter
+    // Clean up: abort sender, unregister from tracker
     sender_handle.abort();
-    if let Some(ref tracker) = tracker_for_drop {
-        tracker.decrement();
+    if let (Some(tracker), Some(id)) = (&state.ws_tracker, conn_id) {
+        tracker.unregister_connection(&id);
     }
 }
 
@@ -333,29 +406,115 @@ async fn handle_client_message(
 mod tests {
     use super::*;
 
+    // --- WsConnectionTracker tests ---
+
     #[test]
-    fn test_ws_connection_tracker() {
+    fn test_tracker_register_unregister() {
         let tracker = WsConnectionTracker::new();
         assert_eq!(tracker.connection_count(), 0);
 
-        tracker.increment();
+        let id1 = tracker.register_connection();
         assert_eq!(tracker.connection_count(), 1);
 
-        tracker.increment();
+        let id2 = tracker.register_connection();
         assert_eq!(tracker.connection_count(), 2);
 
-        tracker.decrement();
+        tracker.unregister_connection(&id1);
         assert_eq!(tracker.connection_count(), 1);
 
-        tracker.decrement();
+        tracker.unregister_connection(&id2);
         assert_eq!(tracker.connection_count(), 0);
     }
 
     #[test]
-    fn test_ws_connection_tracker_default() {
+    fn test_tracker_default() {
         let tracker = WsConnectionTracker::default();
         assert_eq!(tracker.connection_count(), 0);
     }
+
+    #[test]
+    fn test_tracker_unregister_idempotent() {
+        let tracker = WsConnectionTracker::new();
+        let id = tracker.register_connection();
+        assert_eq!(tracker.connection_count(), 1);
+
+        tracker.unregister_connection(&id);
+        assert_eq!(tracker.connection_count(), 0);
+
+        // Second unregister should be a no-op
+        tracker.unregister_connection(&id);
+        assert_eq!(tracker.connection_count(), 0);
+    }
+
+    #[test]
+    fn test_tracker_update_activity() {
+        let tracker = WsConnectionTracker::new();
+        let id = tracker.register_connection();
+
+        // update_activity should not affect count
+        tracker.update_activity(&id);
+        assert_eq!(tracker.connection_count(), 1);
+
+        // update_activity with unknown ID should be a no-op
+        let unknown = Uuid::new_v4();
+        tracker.update_activity(&unknown);
+        assert_eq!(tracker.connection_count(), 1);
+
+        tracker.unregister_connection(&id);
+        assert_eq!(tracker.connection_count(), 0);
+    }
+
+    #[test]
+    fn test_tracker_cleanup_stale() {
+        let tracker = WsConnectionTracker::new();
+        let id1 = tracker.register_connection();
+        let _id2 = tracker.register_connection();
+        assert_eq!(tracker.connection_count(), 2);
+
+        // Backdate id1's activity to make it stale
+        {
+            let mut map = tracker.connections.write().unwrap();
+            map.insert(id1, Instant::now() - Duration::from_secs(200));
+        }
+
+        let removed = tracker.cleanup_stale(Duration::from_secs(120));
+        assert_eq!(removed, 1);
+        assert_eq!(tracker.connection_count(), 1);
+    }
+
+    #[test]
+    fn test_tracker_cleanup_no_stale() {
+        let tracker = WsConnectionTracker::new();
+        let _id1 = tracker.register_connection();
+        let _id2 = tracker.register_connection();
+
+        let removed = tracker.cleanup_stale(Duration::from_secs(120));
+        assert_eq!(removed, 0);
+        assert_eq!(tracker.connection_count(), 2);
+    }
+
+    #[test]
+    fn test_tracker_cleanup_mixed() {
+        let tracker = WsConnectionTracker::new();
+        let stale1 = tracker.register_connection();
+        let _active = tracker.register_connection();
+        let stale2 = tracker.register_connection();
+        assert_eq!(tracker.connection_count(), 3);
+
+        // Backdate two connections
+        {
+            let mut map = tracker.connections.write().unwrap();
+            let old = Instant::now() - Duration::from_secs(300);
+            map.insert(stale1, old);
+            map.insert(stale2, old);
+        }
+
+        let removed = tracker.cleanup_stale(Duration::from_secs(120));
+        assert_eq!(removed, 2);
+        assert_eq!(tracker.connection_count(), 1);
+    }
+
+    // --- Message handler tests ---
 
     #[tokio::test]
     async fn test_handle_client_message_ping() {
@@ -538,6 +697,8 @@ mod tests {
             secrets_store: None,
             db_auth: None,
             channel_manager: None,
+            ws_ping_interval_secs: 30,
+            ws_idle_timeout_secs: 120,
         }
     }
 }

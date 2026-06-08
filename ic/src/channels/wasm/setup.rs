@@ -405,23 +405,30 @@ async fn load_channel_setup_field_overrides(
     capabilities_file: Option<&crate::channels::wasm::ChannelCapabilitiesFile>,
 ) -> std::collections::HashMap<String, serde_json::Value> {
     let mut overrides = std::collections::HashMap::new();
-    let Some(store) = settings_store else {
-        return overrides;
-    };
     let Some(cap_file) = capabilities_file else {
         return overrides;
     };
 
-    let key = format!("extensions.{channel_name}.setup_fields");
-    let saved_fields = match store.get_setting(owner_id, &key).await {
-        Ok(Some(value)) => {
-            serde_json::from_value::<std::collections::HashMap<String, String>>(value)
-                .unwrap_or_default()
+    // Explicit per-channel setup fields saved in the settings store (if a
+    // store is configured). Env-sourcing below works even without a store.
+    let saved_fields = match settings_store {
+        Some(store) => {
+            let key = format!("extensions.{channel_name}.setup_fields");
+            match store.get_setting(owner_id, &key).await {
+                Ok(Some(value)) => {
+                    serde_json::from_value::<std::collections::HashMap<String, String>>(value)
+                        .unwrap_or_default()
+                }
+                _ => std::collections::HashMap::new(),
+            }
         }
-        _ => std::collections::HashMap::new(),
+        None => std::collections::HashMap::new(),
     };
 
+    let env_config_allowed = channel_env_config_allowed(channel_name);
+
     for field in &cap_file.setup.required_fields {
+        // 1. Explicit saved setup field (highest precedence).
         if let Some(value) = saved_fields.get(&field.name)
             && !value.trim().is_empty()
         {
@@ -429,15 +436,42 @@ async fn load_channel_setup_field_overrides(
             continue;
         }
 
-        if let Some(setting_path) = field.setting_path.as_deref()
+        // 2. A value persisted at an approved setting path.
+        if let Some(store) = settings_store
+            && let Some(setting_path) = field.setting_path.as_deref()
             && let Ok(Some(value)) = store.get_setting(owner_id, setting_path).await
             && setting_value_is_present(&value)
         {
             overrides.insert(field.name.clone(), value);
+            continue;
+        }
+
+        // 3. An environment variable, for deployment-time config such as
+        //    per-tenant ports/URLs in multi-tenant setups. Restricted to
+        //    first-party (bundled) channels so an untrusted extension cannot
+        //    exfiltrate arbitrary host environment variables into its config.
+        if env_config_allowed
+            && let Some(env_var) = field.env.as_deref()
+            && let Ok(value) = std::env::var(env_var)
+            && !value.trim().is_empty()
+        {
+            overrides.insert(field.name.clone(), serde_json::Value::String(value));
         }
     }
 
     overrides
+}
+
+/// Whether a channel may source setup-field values from the process
+/// environment (via the `env` field in its capabilities).
+///
+/// Only first-party (bundled) channels are trusted to do this. A malicious
+/// third-party capabilities file could otherwise declare `"env":
+/// "SECRETS_MASTER_KEY"` (or any other sensitive host variable) and have its
+/// value injected into the extension's own config, where the WASM module
+/// could read and exfiltrate it.
+fn channel_env_config_allowed(channel_name: &str) -> bool {
+    crate::channels::wasm::bundled_channel_names().contains(&channel_name)
 }
 
 fn setting_value_is_present(value: &serde_json::Value) -> bool {
@@ -461,43 +495,196 @@ async fn inject_channel_secrets_into_config(
     owner_id: &str,
     config_updates: &mut std::collections::HashMap<String, serde_json::Value>,
 ) {
-    // Map of (config_key, secret_name) pairs per channel.
-    let secret_config_mappings: &[(&str, &str)] = match channel_name {
-        "xmpp" => &[("xmpp_password", "xmpp_password")],
+    // Map of (config_key, secret_name, env_var) tuples per channel. The
+    // env var is the deployment-time fallback when the secret is not in the
+    // store — e.g. multi-tenant setups inject the WeeChat relay password via
+    // `RELAY_PASSWORD` rather than the per-owner secrets store.
+    let secret_config_mappings: &[(&str, &str, &str)] = match channel_name {
+        "xmpp" => &[("xmpp_password", "xmpp_password", "XMPP_PASSWORD")],
+        "weechat" => &[("relay_password", "weechat_relay_password", "RELAY_PASSWORD")],
         _ => return,
     };
 
-    let Some(secrets) = secrets_store else {
-        return;
-    };
-
-    for &(config_key, secret_name) in secret_config_mappings {
-        match secrets.get_decrypted(owner_id, secret_name).await {
-            Ok(decrypted) => {
-                config_updates.insert(
-                    config_key.to_string(),
-                    serde_json::Value::String(decrypted.expose().to_string()),
-                );
-                tracing::debug!(
-                    channel = %channel_name,
-                    config_key = %config_key,
-                    "Injected secret into channel config"
-                );
-            }
-            Err(_) => {
-                // Also try environment variable fallback.
-                let env_name = secret_name.to_uppercase();
-                if let Ok(val) = std::env::var(&env_name)
-                    && !val.is_empty()
-                {
-                    config_updates.insert(config_key.to_string(), serde_json::Value::String(val));
-                    tracing::debug!(
-                        channel = %channel_name,
-                        config_key = %config_key,
-                        "Injected secret from env into channel config"
-                    );
-                }
-            }
+    for &(config_key, secret_name, env_var) in secret_config_mappings {
+        // Prefer the per-owner secrets store when available.
+        if let Some(secrets) = secrets_store
+            && let Ok(decrypted) = secrets.get_decrypted(owner_id, secret_name).await
+        {
+            config_updates.insert(
+                config_key.to_string(),
+                serde_json::Value::String(decrypted.expose().to_string()),
+            );
+            tracing::debug!(
+                channel = %channel_name,
+                config_key = %config_key,
+                "Injected secret into channel config"
+            );
+            continue;
         }
+
+        // Fall back to the environment variable (works without a store).
+        if let Ok(val) = std::env::var(env_var)
+            && !val.is_empty()
+        {
+            config_updates.insert(config_key.to_string(), serde_json::Value::String(val));
+            tracing::debug!(
+                channel = %channel_name,
+                config_key = %config_key,
+                "Injected secret from env into channel config"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::channels::wasm::ChannelCapabilitiesFile;
+
+    fn caps_with_env_fields() -> ChannelCapabilitiesFile {
+        // Two env-sourced fields plus one without `env` (must be ignored).
+        ChannelCapabilitiesFile::from_json(
+            r#"{
+                "name": "weechat",
+                "setup": {
+                    "required_fields": [
+                        { "name": "relay_url", "prompt": "WeeChat relay URL", "optional": true, "env": "LW_TEST_RELAY_URL" },
+                        { "name": "ws_adapter_url", "prompt": "WS adapter URL", "optional": true, "env": "LW_TEST_WS_ADAPTER_URL" },
+                        { "name": "connection_mode", "prompt": "Connection mode", "optional": true }
+                    ]
+                }
+            }"#,
+        )
+        .expect("valid capabilities JSON")
+    }
+
+    #[test]
+    fn env_config_gate_allows_only_bundled_channels() {
+        // First-party (bundled) channels are trusted.
+        assert!(channel_env_config_allowed("weechat"));
+        assert!(channel_env_config_allowed("xmpp"));
+        // Anything not in the bundled set is rejected (security boundary).
+        assert!(!channel_env_config_allowed("totally-not-a-real-channel"));
+        assert!(!channel_env_config_allowed(""));
+    }
+
+    #[tokio::test]
+    async fn env_sourced_fields_inject_for_bundled_channel() {
+        // Regression: the WeeChat WASM channel polled hardcoded ports because
+        // per-tenant relay/adapter URLs were never injected. With `env`
+        // declared on the fields, the values must flow from the environment.
+        unsafe {
+            std::env::set_var("LW_TEST_RELAY_URL", "http://127.0.0.1:10005");
+            std::env::set_var("LW_TEST_WS_ADAPTER_URL", "http://127.0.0.1:10009");
+        }
+
+        let caps = caps_with_env_fields();
+        let overrides =
+            load_channel_setup_field_overrides(None, "test-owner", "weechat", Some(&caps)).await;
+
+        unsafe {
+            std::env::remove_var("LW_TEST_RELAY_URL");
+            std::env::remove_var("LW_TEST_WS_ADAPTER_URL");
+        }
+
+        assert_eq!(
+            overrides.get("relay_url"),
+            Some(&serde_json::Value::String(
+                "http://127.0.0.1:10005".to_string()
+            ))
+        );
+        assert_eq!(
+            overrides.get("ws_adapter_url"),
+            Some(&serde_json::Value::String(
+                "http://127.0.0.1:10009".to_string()
+            ))
+        );
+        // Fields without an `env` declaration are not touched.
+        assert!(!overrides.contains_key("connection_mode"));
+    }
+
+    #[tokio::test]
+    async fn env_sourced_fields_blocked_for_untrusted_channel() {
+        // Security: a non-bundled channel must not be able to pull host env
+        // vars into its config even if its capabilities declare `env`.
+        unsafe {
+            std::env::set_var("LW_TEST_UNTRUSTED_RELAY_URL", "http://127.0.0.1:10005");
+        }
+
+        let caps = ChannelCapabilitiesFile::from_json(
+            r#"{
+                "name": "evil",
+                "setup": {
+                    "required_fields": [
+                        { "name": "relay_url", "prompt": "x", "optional": true, "env": "LW_TEST_UNTRUSTED_RELAY_URL" }
+                    ]
+                }
+            }"#,
+        )
+        .expect("valid capabilities JSON");
+
+        let overrides = load_channel_setup_field_overrides(
+            None,
+            "test-owner",
+            "evil-third-party-channel",
+            Some(&caps),
+        )
+        .await;
+
+        unsafe {
+            std::env::remove_var("LW_TEST_UNTRUSTED_RELAY_URL");
+        }
+
+        assert!(
+            overrides.is_empty(),
+            "untrusted channel must not source config from env"
+        );
+    }
+
+    #[tokio::test]
+    async fn weechat_relay_password_injected_from_env() {
+        // Regression: once the port is correct, the adapter's auth becomes the
+        // next blocker. mt-admin sets a per-tenant RELAY_PASSWORD that must be
+        // injected as `relay_password` so the WASM authenticates to the adapter.
+        unsafe {
+            std::env::set_var("RELAY_PASSWORD", "tenant-secret-pw");
+        }
+
+        let no_store: Option<Arc<dyn SecretsStore + Send + Sync>> = None;
+        let mut updates = std::collections::HashMap::new();
+        inject_channel_secrets_into_config("weechat", &no_store, "test-owner", &mut updates).await;
+
+        unsafe {
+            std::env::remove_var("RELAY_PASSWORD");
+        }
+
+        assert_eq!(
+            updates.get("relay_password"),
+            Some(&serde_json::Value::String("tenant-secret-pw".to_string()))
+        );
+    }
+
+    #[tokio::test]
+    async fn xmpp_secret_env_fallback_preserved() {
+        // Guard the pre-existing XMPP behavior while generalizing the mapping.
+        unsafe {
+            std::env::set_var("XMPP_PASSWORD", "xmpp-pw");
+        }
+
+        let no_store: Option<Arc<dyn SecretsStore + Send + Sync>> = None;
+        let mut updates = std::collections::HashMap::new();
+        inject_channel_secrets_into_config("xmpp", &no_store, "test-owner", &mut updates).await;
+        // Unknown channels are a no-op.
+        inject_channel_secrets_into_config("telegram", &no_store, "test-owner", &mut updates).await;
+
+        unsafe {
+            std::env::remove_var("XMPP_PASSWORD");
+        }
+
+        assert_eq!(
+            updates.get("xmpp_password"),
+            Some(&serde_json::Value::String("xmpp-pw".to_string()))
+        );
+        assert_eq!(updates.len(), 1, "telegram has no secret mapping");
     }
 }

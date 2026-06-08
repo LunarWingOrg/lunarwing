@@ -8,7 +8,7 @@
 //! registry/
 //! ├── tools/          <- One JSON manifest per tool
 //! ├── channels/       <- One JSON manifest per channel
-//! └── _bundles.json   <- Bundle definitions (google, messaging, default)
+//! └── _bundles.json   <- Bundle definitions (messaging, default, lunarwing)
 //! ```
 
 pub mod artifacts;

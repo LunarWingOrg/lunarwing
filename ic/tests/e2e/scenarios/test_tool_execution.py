@@ -5,6 +5,8 @@ executes -> result displayed in chat.  Requires the enhanced mock_llm.py
 with TOOL_CALL_PATTERNS support.
 """
 
+from playwright.async_api import TimeoutError as PlaywrightTimeout
+
 from helpers import SEL
 
 
@@ -34,20 +36,39 @@ async def _send_and_get_response(
     # Wait for the final assistant message to exist and include the expected
     # text fragment rather than returning on the first streamed chunk.
     expected = before_count + 1
-    await page.wait_for_function(
-        """({ assistantSelector, expectedCount, expectedFragment }) => {
-            const messages = document.querySelectorAll(assistantSelector);
-            if (messages.length < expectedCount) return false;
-            const text = (messages[messages.length - 1].innerText || '').trim().toLowerCase();
-            return text.includes(expectedFragment.toLowerCase());
-        }""",
-        arg={
-            "assistantSelector": assistant_sel,
-            "expectedCount": expected,
-            "expectedFragment": expected_fragment,
-        },
-        timeout=timeout,
-    )
+    try:
+        await page.wait_for_function(
+            """({ assistantSelector, expectedCount, expectedFragment }) => {
+                const messages = document.querySelectorAll(assistantSelector);
+                if (messages.length < expectedCount) return false;
+                const text = (messages[messages.length - 1].innerText || '').trim().toLowerCase();
+                return text.includes(expectedFragment.toLowerCase());
+            }""",
+            arg={
+                "assistantSelector": assistant_sel,
+                "expectedCount": expected,
+                "expectedFragment": expected_fragment,
+            },
+            timeout=timeout,
+        )
+    except PlaywrightTimeout:
+        after_count = await page.locator(assistant_sel).count()
+        last_text = ""
+        if after_count > 0:
+            last_text = await page.locator(assistant_sel).last.inner_text()
+        last_msgs = await page.evaluate("""() => {
+            const msgs = document.querySelectorAll('#chat-messages .message');
+            return Array.from(msgs).slice(-6).map(m => ({
+                role: m.classList.contains('user') ? 'user' : 'assistant',
+                text: (m.innerText || '').substring(0, 200),
+            }));
+        }""")
+        raise AssertionError(
+            f"Timeout waiting for response containing {expected_fragment!r}.\n"
+            f"  sent: {message!r}, before={before_count}, after={after_count}\n"
+            f"  last_assistant: {last_text[:200]!r}\n"
+            f"  recent_messages: {last_msgs}"
+        ) from None
 
     return await page.locator(assistant_sel).last.inner_text()
 

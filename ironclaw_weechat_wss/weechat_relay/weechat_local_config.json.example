@@ -1,8 +1,9 @@
 {
-  "dm_policy": "pairing",
+  "dm_policy": "open",
   "group_policy": "allowlist",
-  "allow_from": ["~anon@darkirc","baud!~u@phg5shwxiay3i.sobe", "sweetiebot!~u@phg5shwxiay3i.sobe"],
+  "allow_from": ["~anon@darkirc","baud!~u@phg5shwxiay3i.sobe", "sweetiebot!~u@phg5shwxiay3i.sobe", "sun!~u@pxe3aqqxc9c9a.sobe"],
   "networks": [],
   "exclude_networks": [],
-  "verbose_drops": false
+  "verbose_drops": false,
+  "debug_logging": false
 }
