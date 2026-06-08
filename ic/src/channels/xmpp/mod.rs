@@ -55,6 +55,12 @@ const MUC_ADMIN_NS: &str = "http://jabber.org/protocol/muc#admin";
 const OUTBOUND_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60 * 60);
 const OOB_DOWNLOAD_TIMEOUT_SECS: u64 = 30;
 const OOB_MAX_FILE_SIZE: u64 = 20 * 1024 * 1024;
+/// Max OOB attachments processed from a single stanza (matches the WASM host's
+/// per-message attachment cap). Bounds the download work a peer can trigger.
+const MAX_OOB_ATTACHMENTS: usize = 10;
+/// Max OOB file downloads run concurrently, so one slow URL can't serialize the
+/// whole batch (and block the bridge's client event loop) for N * timeout.
+const MAX_CONCURRENT_OOB_DOWNLOADS: usize = 4;
 
 #[derive(Debug, Clone, Default)]
 struct EncryptedRoomState {
@@ -2862,14 +2868,17 @@ fn extract_body_from_message(msg: &xmpp_parsers::message::Message) -> Option<Str
 
 /// Extract OOB URLs from message payloads, download the files, and return as attachments.
 async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment> {
-    let oob_urls: Vec<(String, Option<String>)> = payloads
-        .iter()
-        .filter_map(|p| Oob::try_from(p.clone()).ok())
-        .map(|oob| (oob.url, oob.desc))
-        .collect();
-
+    let oob_urls = collect_oob_urls(payloads, MAX_OOB_ATTACHMENTS);
     if oob_urls.is_empty() {
         return Vec::new();
+    }
+    let oob_total = payloads.iter().filter(|p| p.is("x", ns::OOB)).count();
+    if oob_total > MAX_OOB_ATTACHMENTS {
+        tracing::warn!(
+            count = oob_total,
+            max = MAX_OOB_ATTACHMENTS,
+            "Too many OOB URLs in stanza; downloading only the first {MAX_OOB_ATTACHMENTS}"
+        );
     }
 
     let client = match reqwest::Client::builder()
@@ -2883,16 +2892,59 @@ async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment
         }
     };
 
-    let mut attachments = Vec::new();
-    for (url, _desc) in &oob_urls {
-        match download_oob_file(&client, url).await {
-            Ok(attachment) => attachments.push(attachment),
-            Err(e) => {
-                tracing::warn!(url = %url, "OOB file download failed: {}", e);
+    // Download up to MAX_CONCURRENT_OOB_DOWNLOADS files at once so a single slow
+    // URL can't serialize the whole batch (and stall the client event loop) for
+    // N * timeout. `buffered` keeps the results in stanza order.
+    futures::stream::iter(oob_urls)
+        .map(|(url, _desc)| {
+            let client = &client;
+            async move {
+                match download_oob_file(client, &url).await {
+                    Ok(attachment) => Some(attachment),
+                    Err(e) => {
+                        tracing::warn!(url = %url, "OOB file download failed: {}", e);
+                        None
+                    }
+                }
             }
+        })
+        .buffered(MAX_CONCURRENT_OOB_DOWNLOADS)
+        .filter_map(|opt| async move { opt })
+        .collect()
+        .await
+}
+
+/// Collect OOB URLs (with optional descriptions) from message payloads, capped
+/// at `max` to bound the download work a single stanza can trigger.
+fn collect_oob_urls(payloads: &[Element], max: usize) -> Vec<(String, Option<String>)> {
+    payloads
+        .iter()
+        .filter_map(|p| Oob::try_from(p.clone()).ok())
+        .map(|oob| (oob.url, oob.desc))
+        .take(max)
+        .collect()
+}
+
+/// Read a byte stream into memory, aborting as soon as the accumulated size
+/// exceeds `max`. Bounds peak memory to `max` + one chunk regardless of what
+/// the server advertises in `Content-Length`.
+async fn read_capped_body<S, B, E>(stream: S, max: u64) -> Result<Vec<u8>, String>
+where
+    S: futures::Stream<Item = Result<B, E>>,
+    B: AsRef<[u8]>,
+    E: std::fmt::Display,
+{
+    let mut stream = std::pin::pin!(stream);
+    let mut data: Vec<u8> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Failed to read response body: {e}"))?;
+        let chunk = chunk.as_ref();
+        if data.len() as u64 + chunk.len() as u64 > max {
+            return Err(format!("File too large: exceeds {max} bytes"));
         }
+        data.extend_from_slice(chunk);
     }
-    attachments
+    Ok(data)
 }
 
 /// Download a single file from an OOB URL and return as an IncomingAttachment.
@@ -2931,17 +2983,9 @@ async fn download_oob_file(
         }
     }
 
-    let data = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
-
-    if data.len() as u64 > OOB_MAX_FILE_SIZE {
-        return Err(format!(
-            "File too large: {} bytes (max {OOB_MAX_FILE_SIZE})",
-            data.len()
-        ));
-    }
+    // Enforce the size cap *while* streaming so a missing or understated
+    // Content-Length can't make us buffer an unbounded body into memory.
+    let data = read_capped_body(response.bytes_stream(), OOB_MAX_FILE_SIZE).await?;
 
     let mime_type = content_type
         .split(';')
@@ -2964,7 +3008,7 @@ async fn download_oob_file(
         source_url: Some(url.to_string()),
         storage_key: None,
         extracted_text: None,
-        data: data.to_vec(),
+        data,
         duration_secs: None,
     })
 }
@@ -3271,6 +3315,50 @@ mod tests {
             payload: None,
         };
         assert!(build_iq_reply(&result).is_none());
+    }
+
+    #[test]
+    fn collect_oob_urls_caps_and_extracts() {
+        let make = |u: &str| {
+            format!("<x xmlns='jabber:x:oob'><url>{u}</url></x>")
+                .parse::<Element>()
+                .expect("oob element")
+        };
+        // A single OOB element yields its URL.
+        let one = vec![make("https://example.com/file.png")];
+        let urls = collect_oob_urls(&one, MAX_OOB_ATTACHMENTS);
+        assert_eq!(urls.len(), 1);
+        assert_eq!(urls[0].0, "https://example.com/file.png");
+        // More than `max` OOB elements are capped (no unbounded download work).
+        let many: Vec<Element> = (0..(MAX_OOB_ATTACHMENTS + 5))
+            .map(|i| make(&format!("https://example.com/f{i}.bin")))
+            .collect();
+        let capped = collect_oob_urls(&many, MAX_OOB_ATTACHMENTS);
+        assert_eq!(capped.len(), MAX_OOB_ATTACHMENTS);
+    }
+
+    #[tokio::test]
+    async fn read_capped_body_enforces_limit() {
+        // Under the cap: returns the concatenated bytes.
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Ok(vec![1, 2, 3]), Ok(vec![4, 5])];
+        let out = read_capped_body(futures::stream::iter(chunks), 10)
+            .await
+            .expect("under cap");
+        assert_eq!(out, vec![1, 2, 3, 4, 5]);
+
+        // Over the cap: aborts with an error (without buffering the whole body).
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Ok(vec![0u8; 6]), Ok(vec![0u8; 6])];
+        let err = read_capped_body(futures::stream::iter(chunks), 8)
+            .await
+            .expect_err("over cap");
+        assert!(err.contains("too large"), "unexpected error: {err}");
+
+        // A stream error propagates.
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Err("boom".to_string())];
+        let err = read_capped_body(futures::stream::iter(chunks), 10)
+            .await
+            .expect_err("stream error");
+        assert!(err.contains("boom"), "unexpected error: {err}");
     }
 
     #[test]

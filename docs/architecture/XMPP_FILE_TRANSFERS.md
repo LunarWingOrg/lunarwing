@@ -110,3 +110,7 @@ In practice:
 ## Implementation
 
 ### Began first phase
+
+### Began second phase
+
+### Apply patch []
