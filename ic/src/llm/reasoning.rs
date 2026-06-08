@@ -1482,6 +1482,105 @@ fn recover_tool_calls_from_content(
         }
     }
 
+    // <function=NAME><parameter=KEY>value</parameter></function> dialect
+    // (GLM/Qwen-style), optionally wrapped in <tool_call>. Scanned over the raw
+    // content so it matches whether or not a wrapper is present. Without this,
+    // these well-formed tool calls were stripped to empty and misreported as
+    // empty responses, triggering the "I'm not sure how to respond" fallback.
+    let fn_calls = recover_function_xml_calls(content, &tool_names, calls.len());
+    calls.extend(fn_calls);
+
+    calls
+}
+
+/// Recover tool calls emitted in the `<function=NAME>...</function>` XML dialect
+/// used by some GLM/Qwen-style models, e.g.:
+///
+/// ```text
+/// <tool_call>
+/// <function=tool_search>
+/// <parameter=discover>true</parameter>
+/// <parameter=query>nanocode</parameter>
+/// </function>
+/// </tool_call>
+/// ```
+///
+/// The surrounding `<tool_call>` wrapper is optional — this scans the raw
+/// content directly for `<function=NAME>` blocks. Each `<parameter=KEY>VALUE
+/// </parameter>` becomes an entry in the arguments object; VALUE is parsed as
+/// JSON when valid (so `true` and numbers keep their type) and otherwise kept
+/// as a trimmed string. Only calls whose NAME is a known tool are returned.
+///
+/// `seed_offset` continues the caller's ID numbering so recovered IDs stay
+/// unique across the different recovery formats.
+fn recover_function_xml_calls(
+    content: &str,
+    tool_names: &std::collections::HashSet<&str>,
+    seed_offset: usize,
+) -> Vec<ToolCall> {
+    const FN_OPEN: &str = "<function=";
+    const FN_CLOSE: &str = "</function>";
+    const PARAM_OPEN: &str = "<parameter=";
+    const PARAM_CLOSE: &str = "</parameter>";
+
+    let mut calls: Vec<ToolCall> = Vec::new();
+    let mut remaining = content;
+
+    while let Some(start) = remaining.find(FN_OPEN) {
+        let after_open = &remaining[start + FN_OPEN.len()..];
+        // Name runs from `<function=` to the `>` that closes the opening tag.
+        let Some(name_end) = after_open.find('>') else {
+            break;
+        };
+        let name = after_open[..name_end].trim().to_string();
+        let body_and_rest = &after_open[name_end + 1..];
+        // Body runs to the matching `</function>`.
+        let Some(body_end) = body_and_rest.find(FN_CLOSE) else {
+            break;
+        };
+        let body = &body_and_rest[..body_end];
+        remaining = &body_and_rest[body_end + FN_CLOSE.len()..];
+
+        if name.is_empty() || !tool_names.contains(name.as_str()) {
+            continue;
+        }
+
+        let mut args = serde_json::Map::new();
+        let mut param_rest = body;
+        while let Some(p_start) = param_rest.find(PARAM_OPEN) {
+            let after_key = &param_rest[p_start + PARAM_OPEN.len()..];
+            let Some(key_end) = after_key.find('>') else {
+                break;
+            };
+            let key = after_key[..key_end].trim().to_string();
+            let val_and_rest = &after_key[key_end + 1..];
+            let Some(val_end) = val_and_rest.find(PARAM_CLOSE) else {
+                break;
+            };
+            let raw_val = val_and_rest[..val_end].trim();
+            param_rest = &val_and_rest[val_end + PARAM_CLOSE.len()..];
+
+            if key.is_empty() {
+                continue;
+            }
+            // Preserve JSON-typed values (bool/number/array/object); fall back
+            // to the raw string for plain text such as a search query.
+            let value = serde_json::from_str::<serde_json::Value>(raw_val)
+                .unwrap_or_else(|_| serde_json::Value::String(raw_val.to_string()));
+            args.insert(key, value);
+        }
+
+        calls.push(ToolCall {
+            id: super::provider::generate_tool_call_id(
+                seed_offset + calls.len(),
+                RECOVERED_TOOL_CALL_SEED,
+            ),
+            name,
+            arguments: serde_json::Value::Object(args),
+            reasoning: None,
+        });
+    }
+
     calls
 }
 
@@ -1542,6 +1641,10 @@ fn clean_response(text: &str) -> String {
     // 6b. Strip bracket-format inline tool calls: [Called tool `name` with arguments: {...}]
     result = strip_bracket_tool_calls(&result);
 
+    // 6c. Strip <function=NAME>...</function> tool-call XML (GLM/Qwen dialect)
+    //     so any that weren't recovered as calls don't leak to the user.
+    result = strip_function_xml_tags(&result);
+
     // 7. Collapse triple+ newlines, trim
     collapse_newlines(&result)
 }
@@ -1566,6 +1669,27 @@ fn strip_bracket_tool_calls(text: &str) -> String {
             // Malformed — keep the rest
             result.push_str(after);
             return result;
+        }
+    }
+    result.push_str(remaining);
+    result
+}
+
+/// Strip `<function=NAME>...</function>` tool-call blocks (GLM/Qwen XML dialect)
+/// so any that weren't recovered as structured calls don't reach the user. An
+/// unclosed `<function=` drops the trailing partial XML, mirroring the strict
+/// handling of unclosed thinking tags.
+fn strip_function_xml_tags(text: &str) -> String {
+    const OPEN: &str = "<function=";
+    const CLOSE: &str = "</function>";
+    let mut result = String::with_capacity(text.len());
+    let mut remaining = text;
+    while let Some(start) = remaining.find(OPEN) {
+        result.push_str(&remaining[..start]);
+        let after = &remaining[start..];
+        match after.find(CLOSE) {
+            Some(i) => remaining = &after[i + CLOSE.len()..],
+            None => return result,
         }
     }
     result.push_str(remaining);
@@ -2436,6 +2560,85 @@ That's my plan."#;
         assert!(calls.is_empty());
     }
 
+    // ---- <function=NAME>/<parameter=KEY> dialect (lapse bug, v1.1.2) ----
+    // Payloads mirror the exact content captured in summer's logs that cleaned
+    // to empty and triggered the "I'm not sure how to respond to that." fallback.
+
+    #[test]
+    fn test_recover_function_xml_with_parameters() {
+        let tools = make_tools(&["tool_search"]);
+        let content = "<tool_call>\n<function=tool_search>\n<parameter=discover>\ntrue\n</parameter>\n<parameter=query>\nnanocode\n</parameter>\n</function>\n</tool_call>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "tool_search");
+        // `true` keeps its boolean type; `nanocode` stays a string.
+        assert_eq!(calls[0].arguments["discover"], serde_json::json!(true));
+        assert_eq!(calls[0].arguments["query"], serde_json::json!("nanocode"));
+    }
+
+    #[test]
+    fn test_recover_function_xml_no_parameters() {
+        let tools = make_tools(&["routine_list", "secret_list"]);
+        let content = "<tool_call>\n<function=routine_list>\n</function>\n</tool_call>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "routine_list");
+        assert_eq!(calls[0].arguments, serde_json::json!({}));
+    }
+
+    #[test]
+    fn test_recover_function_xml_unwrapped() {
+        // Same dialect without the <tool_call> wrapper.
+        let tools = make_tools(&["secret_list"]);
+        let content = "<function=secret_list>\n</function>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "secret_list");
+    }
+
+    #[test]
+    fn test_recover_function_xml_unknown_tool_ignored() {
+        let tools = make_tools(&["tool_search"]);
+        let content = "<tool_call>\n<function=definitely_not_a_tool>\n</function>\n</tool_call>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_recover_function_xml_string_value_not_coerced() {
+        // A multi-word value isn't valid JSON, so it stays a string.
+        let tools = make_tools(&["memory_search"]);
+        let content =
+            "<function=memory_search>\n<parameter=query>\nhello world\n</parameter>\n</function>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(
+            calls[0].arguments["query"],
+            serde_json::json!("hello world")
+        );
+    }
+
+    #[test]
+    fn test_recover_function_xml_unique_ids() {
+        // Two recovered calls must not collide on ID.
+        let tools = make_tools(&["routine_list", "secret_list"]);
+        let content = "<function=routine_list></function>\n<function=secret_list></function>";
+        let calls = recover_tool_calls_from_content(content, &tools);
+        assert_eq!(calls.len(), 2);
+        assert_ne!(calls[0].id, calls[1].id);
+    }
+
+    #[test]
+    fn test_clean_response_strips_function_xml_tags() {
+        // An unrecovered <function=...> block must not leak into user-facing text.
+        let input =
+            "Here you go.\n<function=tool_search>\n<parameter=query>\nx\n</parameter>\n</function>";
+        let cleaned = clean_response(input);
+        assert!(!cleaned.contains("<function="));
+        assert!(!cleaned.contains("<parameter="));
+        assert!(cleaned.contains("Here you go."));
+    }
+
     #[test]
     fn test_clean_response_strips_bracket_tool_calls() {
         let input = "Let me fetch that.\n[Called tool `http` with arguments: {\"method\":\"GET\",\"url\":\"https://example.com\"}]\nHere are the results.";
@@ -3142,6 +3345,40 @@ That's my plan."#;
             RespondResult::Text(_) => {
                 panic!("Expected recovered tool calls, got text");
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_respond_with_tools_recovers_function_xml_dialect() {
+        use crate::testing::StubLlm;
+        // Regression for the v1.1.2 lapse: the model emits a <function=...> tool
+        // call as content with empty structured tool_calls. Before the fix this
+        // cleaned to empty and returned "I'm not sure how to respond to that.";
+        // now it must be recovered and executed. Payload matches summer's logs.
+        let response = "<tool_call>\n<function=tool_search>\n<parameter=discover>\ntrue\n</parameter>\n<parameter=query>\nnanocode\n</parameter>\n</function>\n</tool_call>";
+        let llm = Arc::new(StubLlm::new(response));
+        let reasoning = Reasoning::new(llm);
+
+        let context = ReasoningContext::new()
+            .with_message(ChatMessage::user("tell me about the nanocode worker"))
+            .with_tools(vec![ToolDefinition {
+                name: "tool_search".to_string(),
+                description: "Search for tools".to_string(),
+                parameters: serde_json::json!({}),
+            }]);
+
+        let output = reasoning.respond_with_tools(&context).await.unwrap();
+        match output.result {
+            RespondResult::ToolCalls { tool_calls, .. } => {
+                assert_eq!(tool_calls.len(), 1);
+                assert_eq!(tool_calls[0].name, "tool_search");
+                assert_eq!(
+                    tool_calls[0].arguments["query"],
+                    serde_json::json!("nanocode")
+                );
+                assert_eq!(tool_calls[0].arguments["discover"], serde_json::json!(true));
+            }
+            RespondResult::Text(t) => panic!("Expected recovered tool calls, got text: {t}"),
         }
     }
 

@@ -131,6 +131,8 @@ Configure via `NearAiConfig.max_retries` (env: `NEARAI_MAX_RETRIES`; default: 3)
 
 **Empty-response retry (reasoning.rs):** A separate retry mechanism in `Reasoning::respond_with_tools()` handles the case where the LLM returns a valid HTTP response but the content cleans to empty (e.g. reasoning models returning only `<think>` tags). This retries up to `MAX_EMPTY_RESPONSE_RETRIES` (default 1) before returning the "I'm not sure how to respond to that." fallback. It is independent of `RetryProvider` — `RetryProvider` handles transport-level errors, while this handles content-level cleaning artifacts.
 
+**Tool-call recovery (`recover_tool_calls_from_content`):** Before the empty-response path gives up, `respond_with_tools()` tries to rescue tool calls that the model emitted as text instead of in the structured `tool_calls` field. Recognized dialects: JSON inside `<tool_call>`/`<function_call>` (incl. pipe-delimited), bare tool name inside `<tool_call>`, the `[Called tool \`name\` with arguments: {...}]` bracket form, and the `<function=NAME><parameter=KEY>value</parameter></function>` XML form (GLM/Qwen-style, with or without a `<tool_call>` wrapper; parameter values are JSON-parsed when valid, else kept as strings). The `<function=...>` form was the root cause of the v1.1.2 "lapse" recurrence — those calls were being stripped to empty and misreported as empty responses. `clean_response()` also strips any leftover `<function=...>` blocks so unrecovered ones never leak to users.
+
 ## LlmProvider Trait
 
 The full trait (all methods must be implemented or rely on defaults):
