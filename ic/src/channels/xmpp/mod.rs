@@ -1530,7 +1530,7 @@ async fn handle_message_stanza(
             .or_insert_with(HashSet::new);
     }
 
-    let attachments = extract_oob_attachments(&msg.payloads).await;
+    let attachments = extract_inbound_attachments(&msg.payloads, &content).await;
     let content = if !attachments.is_empty()
         && attachments
             .iter()
@@ -2866,12 +2866,13 @@ fn extract_body_from_message(msg: &xmpp_parsers::message::Message) -> Option<Str
     msg.bodies.values().find(|b| !b.is_empty()).cloned()
 }
 
-/// Extract OOB URLs from message payloads, download the files, and return as attachments.
-async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment> {
-    let oob_urls = collect_oob_urls(payloads, MAX_OOB_ATTACHMENTS);
-    if oob_urls.is_empty() {
-        return Vec::new();
-    }
+/// Extract downloadable attachments referenced by an incoming message: OOB URLs
+/// from the stanza payloads (XEP-0066) plus any `aesgcm://` (XEP-0454) URLs that
+/// appear only in the decrypted body — some clients omit the cleartext OOB
+/// element for encrypted files. Downloads (and decrypts) them and returns the
+/// resulting attachments.
+async fn extract_inbound_attachments(payloads: &[Element], body: &str) -> Vec<IncomingAttachment> {
+    let mut urls = collect_oob_urls(payloads, MAX_OOB_ATTACHMENTS);
     let oob_total = payloads.iter().filter(|p| p.is("x", ns::OOB)).count();
     if oob_total > MAX_OOB_ATTACHMENTS {
         tracing::warn!(
@@ -2879,6 +2880,22 @@ async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment
             max = MAX_OOB_ATTACHMENTS,
             "Too many OOB URLs in stanza; downloading only the first {MAX_OOB_ATTACHMENTS}"
         );
+    }
+
+    // Add encrypted-media URLs found only in the (decrypted) body, deduped
+    // against the OOB elements and bounded by the same per-stanza cap.
+    let known: HashSet<String> = urls.iter().map(|(u, _)| u.clone()).collect();
+    for url in collect_aesgcm_urls(body, MAX_OOB_ATTACHMENTS) {
+        if urls.len() >= MAX_OOB_ATTACHMENTS {
+            break;
+        }
+        if !known.contains(&url) {
+            urls.push((url, None));
+        }
+    }
+
+    if urls.is_empty() {
+        return Vec::new();
     }
 
     let client = match reqwest::Client::builder()
@@ -2895,7 +2912,7 @@ async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment
     // Download up to MAX_CONCURRENT_OOB_DOWNLOADS files at once so a single slow
     // URL can't serialize the whole batch (and stall the client event loop) for
     // N * timeout. `buffered` keeps the results in stanza order.
-    futures::stream::iter(oob_urls)
+    futures::stream::iter(urls)
         .map(|(url, _desc)| {
             let client = &client;
             async move {
@@ -2925,6 +2942,18 @@ fn collect_oob_urls(payloads: &[Element], max: usize) -> Vec<(String, Option<Str
         .collect()
 }
 
+/// Extract `aesgcm://` (XEP-0454) URLs from message text, capped at `max`.
+///
+/// Only the explicit encrypted-media scheme is collected — plain `https://`
+/// links in a body are intentionally not auto-downloaded.
+fn collect_aesgcm_urls(text: &str, max: usize) -> Vec<String> {
+    text.split_whitespace()
+        .filter(|tok| tok.starts_with("aesgcm://"))
+        .map(|tok| tok.to_string())
+        .take(max)
+        .collect()
+}
+
 /// Read a byte stream into memory, aborting as soon as the accumulated size
 /// exceeds `max`. Bounds peak memory to `max` + one chunk regardless of what
 /// the server advertises in `Content-Length`.
@@ -2948,10 +2977,17 @@ where
 }
 
 /// Download a single file from an OOB URL and return as an IncomingAttachment.
+///
+/// `aesgcm://` (XEP-0454) URLs are fetched over https and AES-256-GCM-decrypted;
+/// every other http(s) URL is downloaded as-is.
 async fn download_oob_file(
     client: &reqwest::Client,
     url: &str,
 ) -> Result<IncomingAttachment, String> {
+    if url.starts_with("aesgcm://") {
+        return download_aesgcm_file(client, url).await;
+    }
+
     let response = client
         .get(url)
         .send()
@@ -3011,6 +3047,126 @@ async fn download_oob_file(
         data,
         duration_secs: None,
     })
+}
+
+/// Download and AES-256-GCM-decrypt an `aesgcm://` (XEP-0454) media URL.
+async fn download_aesgcm_file(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<IncomingAttachment, String> {
+    let (https_url, iv, key) = parse_aesgcm_url(url)?;
+
+    let response = client
+        .get(&https_url)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP GET failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {} from aesgcm URL", response.status()));
+    }
+    if let Some(len) = response
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        && len > OOB_MAX_FILE_SIZE
+    {
+        return Err(format!(
+            "File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"
+        ));
+    }
+
+    let ciphertext = read_capped_body(response.bytes_stream(), OOB_MAX_FILE_SIZE).await?;
+    let data = decrypt_aesgcm(&ciphertext, &iv, &key)?;
+
+    // The server stores ciphertext, so its Content-Type is unreliable — infer
+    // the type from the filename in the URL path instead.
+    let filename = https_url
+        .rsplit('/')
+        .next()
+        .and_then(|s| s.split('?').next())
+        .filter(|s| !s.is_empty() && s.contains('.'))
+        .map(|s| s.to_string());
+    let mime_type = mime_guess::from_path(filename.as_deref().unwrap_or(""))
+        .first_or_octet_stream()
+        .essence_str()
+        .to_string();
+
+    Ok(IncomingAttachment {
+        id: Uuid::new_v4().to_string(),
+        kind: AttachmentKind::from_mime_type(&mime_type),
+        mime_type,
+        filename,
+        size_bytes: Some(data.len() as u64),
+        // Keep the original aesgcm:// URL so body deduplication matches.
+        source_url: Some(url.to_string()),
+        storage_key: None,
+        extracted_text: None,
+        data,
+        duration_secs: None,
+    })
+}
+
+/// Parse an `aesgcm://` (XEP-0454) URL into its https fetch URL, IV, and key.
+///
+/// Format: `aesgcm://<host>/<path>#<hex(IV ‖ key)>` where the key is the last
+/// 32 bytes and the IV is the remainder (12 or 16 bytes).
+fn parse_aesgcm_url(url: &str) -> Result<(String, Vec<u8>, Vec<u8>), String> {
+    let rest = url
+        .strip_prefix("aesgcm://")
+        .ok_or_else(|| "not an aesgcm:// URL".to_string())?;
+    let (location, fragment) = rest
+        .split_once('#')
+        .ok_or_else(|| "aesgcm:// URL missing key fragment".to_string())?;
+    if location.is_empty() {
+        return Err("aesgcm:// URL missing host/path".to_string());
+    }
+    let key_material =
+        hex::decode(fragment).map_err(|e| format!("invalid aesgcm key fragment: {e}"))?;
+    let iv_len = key_material
+        .len()
+        .checked_sub(32)
+        .ok_or_else(|| "aesgcm key material shorter than the 32-byte key".to_string())?;
+    if iv_len != 12 && iv_len != 16 {
+        return Err(format!(
+            "unexpected aesgcm IV length {iv_len} (expected 12 or 16)"
+        ));
+    }
+    let (iv, key) = key_material.split_at(iv_len);
+    Ok((format!("https://{location}"), iv.to_vec(), key.to_vec()))
+}
+
+/// AES-256-GCM-decrypt XEP-0454 media. Supports the standard 12-byte IV and the
+/// legacy 16-byte IV; the ciphertext carries the 16-byte GCM tag appended.
+fn decrypt_aesgcm(ciphertext: &[u8], iv: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::aead::generic_array::GenericArray;
+    use aes_gcm::{Aes256Gcm, KeyInit};
+
+    if key.len() != 32 {
+        return Err(format!("aesgcm key must be 32 bytes, got {}", key.len()));
+    }
+    let failed = || "aesgcm decryption failed (bad key/IV or corrupt data)".to_string();
+    match iv.len() {
+        12 => {
+            let cipher =
+                Aes256Gcm::new_from_slice(key).map_err(|e| format!("aesgcm init failed: {e}"))?;
+            cipher
+                .decrypt(GenericArray::from_slice(iv), ciphertext)
+                .map_err(|_| failed())
+        }
+        16 => {
+            type Aes256GcmIv16 = aes_gcm::AesGcm<aes_gcm::aes::Aes256, aes_gcm::aead::consts::U16>;
+            let cipher = Aes256GcmIv16::new_from_slice(key)
+                .map_err(|e| format!("aesgcm init failed: {e}"))?;
+            cipher
+                .decrypt(GenericArray::from_slice(iv), ciphertext)
+                .map_err(|_| failed())
+        }
+        n => Err(format!(
+            "unsupported aesgcm IV length {n} (expected 12 or 16)"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -3359,6 +3515,96 @@ mod tests {
             .await
             .expect_err("stream error");
         assert!(err.contains("boom"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn parse_aesgcm_url_extracts_https_iv_key() {
+        // 12-byte IV (24 hex) + 32-byte key (64 hex).
+        let url = format!(
+            "aesgcm://up.example.com/abc/photo.jpg#{}{}",
+            "0".repeat(24),
+            "a".repeat(64)
+        );
+        let (https, iv, key) = parse_aesgcm_url(&url).expect("valid 12-byte IV url");
+        assert_eq!(https, "https://up.example.com/abc/photo.jpg");
+        assert_eq!(iv.len(), 12);
+        assert_eq!(key.len(), 32);
+
+        // 16-byte IV (32 hex) + key.
+        let url16 = format!("aesgcm://h/p.bin#{}{}", "0".repeat(32), "a".repeat(64));
+        let (_h, iv16, key16) = parse_aesgcm_url(&url16).expect("valid 16-byte IV url");
+        assert_eq!(iv16.len(), 16);
+        assert_eq!(key16.len(), 32);
+
+        // Rejections: wrong scheme, missing fragment, bad hex, too-short material.
+        assert!(parse_aesgcm_url("https://x/y.jpg#deadbeef").is_err());
+        assert!(parse_aesgcm_url("aesgcm://h/p.jpg").is_err());
+        assert!(parse_aesgcm_url("aesgcm://h/p.jpg#zzzz").is_err());
+        assert!(parse_aesgcm_url(&format!("aesgcm://h/p#{}", "a".repeat(60))).is_err());
+    }
+
+    #[test]
+    fn decrypt_aesgcm_roundtrip() {
+        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{Aes256Gcm, KeyInit};
+
+        let key = [7u8; 32];
+        let iv = [3u8; 12];
+        let plaintext = b"hello encrypted media";
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+        let ciphertext = cipher
+            .encrypt(GenericArray::from_slice(&iv), plaintext.as_ref())
+            .unwrap();
+
+        let decrypted = decrypt_aesgcm(&ciphertext, &iv, &key).expect("decrypts");
+        assert_eq!(decrypted, plaintext);
+
+        // Tampered ciphertext fails the GCM tag check.
+        let mut bad = ciphertext.clone();
+        *bad.last_mut().unwrap() ^= 0xff;
+        assert!(decrypt_aesgcm(&bad, &iv, &key).is_err());
+
+        // Wrong key length is rejected.
+        assert!(decrypt_aesgcm(&ciphertext, &iv, &[0u8; 16]).is_err());
+    }
+
+    #[test]
+    fn collect_aesgcm_urls_filters_and_caps() {
+        let text = "look aesgcm://h/a.jpg#aa and https://h/b.jpg then aesgcm://h/c.png#bb";
+        assert_eq!(
+            collect_aesgcm_urls(text, 10),
+            vec![
+                "aesgcm://h/a.jpg#aa".to_string(),
+                "aesgcm://h/c.png#bb".to_string()
+            ]
+        );
+        let many: String = (0..5).map(|i| format!("aesgcm://h/{i}.bin#xx ")).collect();
+        assert_eq!(collect_aesgcm_urls(&many, 2).len(), 2);
+    }
+
+    #[test]
+    fn aesgcm_url_parse_then_decrypt_roundtrip() {
+        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{Aes256Gcm, KeyInit};
+
+        let key = [9u8; 32];
+        let iv = [1u8; 12];
+        let plaintext = b"file bytes over the wire";
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+        let ciphertext = cipher
+            .encrypt(GenericArray::from_slice(&iv), plaintext.as_ref())
+            .unwrap();
+
+        let fragment = format!("{}{}", hex::encode(iv), hex::encode(key));
+        let url = format!("aesgcm://up.example.com/x/file.bin#{fragment}");
+        let (https, iv_p, key_p) = parse_aesgcm_url(&url).unwrap();
+        assert_eq!(https, "https://up.example.com/x/file.bin");
+        assert_eq!(
+            decrypt_aesgcm(&ciphertext, &iv_p, &key_p).unwrap(),
+            plaintext
+        );
     }
 
     #[test]

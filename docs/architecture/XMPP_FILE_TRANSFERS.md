@@ -109,8 +109,10 @@ In practice:
 
 ## Implementation
 
-### Began first phase
+### Finished phase 1
 
-### Began second phase
+### Finished phase 2
+
+### Finished phase 3
 
 ### Apply patch [X] Now
