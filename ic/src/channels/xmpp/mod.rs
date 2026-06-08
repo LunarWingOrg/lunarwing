@@ -2954,6 +2954,19 @@ fn collect_aesgcm_urls(text: &str, max: usize) -> Vec<String> {
         .collect()
 }
 
+/// Derive a display filename from a URL's last path segment, stripping any query
+/// or fragment. A missing extension is fine — the segment (e.g. an opaque
+/// XEP-0363 UUID) is still a unique, useful name, which keeps distinct files
+/// from colliding on a shared `oob-{filename}` storage key downstream.
+fn filename_from_url(url: &str) -> Option<String> {
+    url.rsplit('/')
+        .next()
+        .and_then(|s| s.split(['?', '#']).next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
 /// Read a byte stream into memory, aborting as soon as the accumulated size
 /// exceeds `max`. Bounds peak memory to `max` + one chunk regardless of what
 /// the server advertises in `Content-Length`.
@@ -3028,12 +3041,7 @@ async fn download_oob_file(
         .next()
         .unwrap_or("application/octet-stream")
         .trim();
-    let filename = url
-        .split('/')
-        .last()
-        .and_then(|s| s.split('?').next())
-        .filter(|s| !s.is_empty() && s.contains('.'))
-        .map(|s| s.to_string());
+    let filename = filename_from_url(url);
 
     Ok(IncomingAttachment {
         id: Uuid::new_v4().to_string(),
@@ -3081,12 +3089,7 @@ async fn download_aesgcm_file(
 
     // The server stores ciphertext, so its Content-Type is unreliable — infer
     // the type from the filename in the URL path instead.
-    let filename = https_url
-        .rsplit('/')
-        .next()
-        .and_then(|s| s.split('?').next())
-        .filter(|s| !s.is_empty() && s.contains('.'))
-        .map(|s| s.to_string());
+    let filename = filename_from_url(&https_url);
     let mime_type = mime_guess::from_path(filename.as_deref().unwrap_or(""))
         .first_or_octet_stream()
         .essence_str()
@@ -3605,6 +3608,32 @@ mod tests {
             decrypt_aesgcm(&ciphertext, &iv_p, &key_p).unwrap(),
             plaintext
         );
+    }
+
+    #[test]
+    fn filename_from_url_handles_extension_query_and_opaque_segments() {
+        assert_eq!(
+            filename_from_url("https://up.example.com/abc/photo.png").as_deref(),
+            Some("photo.png")
+        );
+        // Query and fragment are stripped.
+        assert_eq!(
+            filename_from_url("https://up.example.com/x/doc.pdf?token=1#frag").as_deref(),
+            Some("doc.pdf")
+        );
+        // Opaque, extensionless segment is kept (was previously dropped to None,
+        // which collapsed to a shared "file" downstream).
+        assert_eq!(
+            filename_from_url("https://up.example.com/9f2c1a7b").as_deref(),
+            Some("9f2c1a7b")
+        );
+        // Distinct opaque URLs yield distinct names (no collision).
+        assert_ne!(
+            filename_from_url("https://up/aaaa"),
+            filename_from_url("https://up/bbbb")
+        );
+        // Trailing slash / empty final segment → None.
+        assert_eq!(filename_from_url("https://up.example.com/"), None);
     }
 
     #[test]
