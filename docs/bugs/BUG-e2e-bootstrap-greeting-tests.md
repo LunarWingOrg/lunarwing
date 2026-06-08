@@ -84,4 +84,4 @@ what's stale.
 
 - Test-only; no evidence the production bootstrap greeting is broken (the assertion concerns the test
   rig's observation channel).
-- Tracked in `RELEASE-v1.1.1.md` Known Issues and `docs/bugs/README.md`.
+- Tracked in `docs/ops/RELEASE-v1.1.1.md` Known Issues and `docs/bugs/README.md`.
