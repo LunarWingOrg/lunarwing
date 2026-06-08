@@ -589,11 +589,15 @@ mod tests {
 
         assert_eq!(
             overrides.get("relay_url"),
-            Some(&serde_json::Value::String("http://127.0.0.1:10005".to_string()))
+            Some(&serde_json::Value::String(
+                "http://127.0.0.1:10005".to_string()
+            ))
         );
         assert_eq!(
             overrides.get("ws_adapter_url"),
-            Some(&serde_json::Value::String("http://127.0.0.1:10009".to_string()))
+            Some(&serde_json::Value::String(
+                "http://127.0.0.1:10009".to_string()
+            ))
         );
         // Fields without an `env` declaration are not touched.
         assert!(!overrides.contains_key("connection_mode"));

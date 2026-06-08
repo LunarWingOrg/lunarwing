@@ -952,7 +952,8 @@ impl AppBuilder {
         // back to seeded_default_permission_canonical() at runtime, eliminating
         // the latent bypass vector where ghost rows could be mistaken for
         // user-explicit overrides (see port analysis P0-A in IronClaw 0.28.2).
-        cleanup_ghost_seeded_tool_permissions(&tools, self.db.as_ref(), &self.config.owner_id).await;
+        cleanup_ghost_seeded_tool_permissions(&tools, self.db.as_ref(), &self.config.owner_id)
+            .await;
 
         Ok(AppComponents {
             config: self.config,
@@ -1014,7 +1015,10 @@ async fn cleanup_ghost_seeded_tool_permissions(
     };
 
     // Sentinel gate: skip if already done.
-    match db.get_setting(owner_id, "_internal.ghost_seed_cleanup_done").await {
+    match db
+        .get_setting(owner_id, "_internal.ghost_seed_cleanup_done")
+        .await
+    {
         Ok(Some(_)) => {
             tracing::debug!("cleanup_ghost_seeded: already completed, skipping");
             return;
@@ -1071,7 +1075,11 @@ async fn cleanup_ghost_seeded_tool_permissions(
     // Record sentinel regardless of outcome — we don't want to retry on
     // transient errors and risk partial re-cleanup on next startup.
     if let Err(e) = db
-        .set_setting(owner_id, "_internal.ghost_seed_cleanup_done", &serde_json::json!(true))
+        .set_setting(
+            owner_id,
+            "_internal.ghost_seed_cleanup_done",
+            &serde_json::json!(true),
+        )
         .await
     {
         tracing::warn!(

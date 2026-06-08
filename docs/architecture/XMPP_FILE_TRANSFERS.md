@@ -113,4 +113,4 @@ In practice:
 
 ### Began second phase
 
-### Apply patch [] Now
+### Apply patch [X] Now
