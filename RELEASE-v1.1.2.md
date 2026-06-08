@@ -151,7 +151,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | WASM Channel Polishing | v1.1.7 |
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
 | Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |
-| Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.8 |
+| Upgrade version of tensorzero, plus optional tighter integration across deployments, plus expansion of healthcheck tests for Clickhouse Database | v1.1.8 |
 | Proprietary channel removal continuation (Telegram) | v1.1.9 |
 | Decision to remove GitHub extension | v1.1.9 |
 | v2 engine route, LunarWing UI Performance Overhaul | v1.2.0 |
