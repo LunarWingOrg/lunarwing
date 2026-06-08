@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Config
-RATELIMIT_DIR="${RATELIMIT_DIR:-${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/ratelimit}"
+RATELIMIT_DIR="${RATELIMIT_DIR:-$HOME/.ironclaw/ratelimit}"
 THROTTLED_DEGRADED=10
 THROTTLED_CRITICAL=50
 

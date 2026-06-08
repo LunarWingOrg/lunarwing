@@ -6,6 +6,7 @@ set -euo pipefail
 # Configuration
 GOTIFY_URL="${GOTIFY_URL:-http://localhost:3000}"
 GOTIFY_TOKEN="${GOTIFY_TOKEN:-}"
+REPORT_DIR="$HOME/.ironclaw/workspace/reports/health"
 
 # Arguments
 status="${1:-unknown}"

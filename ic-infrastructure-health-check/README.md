@@ -61,7 +61,9 @@ cd ic-infrastructure-health-check
 ./infrastructure-health-check.sh
 ./lunarwing-self-heal.sh --dry-run
 
-# 3. Schedule recurring runs — see "Cron / Timer Setup" below
+# 3. Install via systemd timer (Linux)
+cd icscripts
+sudo ./install-ironclaw-watchdog.sh
 ```
 
 ## Environment Variables
@@ -110,40 +112,13 @@ The self-heal script reads the latest health report and:
 
 ### systemd (recommended for Linux)
 
-Run `cron-wrapper.sh` on a user-level timer (adjust the path to where this
-directory lives):
-
 ```bash
-DIR="$(pwd)"   # run from inside ic-infrastructure-health-check/
-mkdir -p ~/.config/systemd/user
+# Install timer + service + watchdog
+sudo ./icscripts/install-ironclaw-watchdog.sh
 
-cat > ~/.config/systemd/user/lunarwing-health-check.service <<EOF
-[Unit]
-Description=LunarWing infrastructure health check
-[Service]
-Type=oneshot
-ExecStart=$DIR/cron-wrapper.sh
-EOF
-
-cat > ~/.config/systemd/user/lunarwing-health-check.timer <<EOF
-[Unit]
-Description=Run LunarWing health check every 30 min
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
-Persistent=true
-[Install]
-WantedBy=timers.target
-EOF
-
-systemctl --user daemon-reload
-systemctl --user enable --now lunarwing-health-check.timer
+# Check timer status
 systemctl --user list-timers lunarwing-health-check.timer
 ```
-
-> The separate **service-level** watchdog that restarts `lunarwing.service`
-> itself lives in the main repo: `ic/scripts/install-lunarwing-watchdog.sh`
-> (auto-detects systemd/OpenRC/launchd).
 
 ### crontab (fallback)
 

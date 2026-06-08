@@ -8,8 +8,8 @@ set -euo pipefail
 
 # Units to check (override via env)
 UNITS_DEFAULT=(
-  "lunarwing.service"
-  "xmpp-bridge.service"
+  "ironclaw-xmpp-bridge.service"
+  "ironclaw-xmpp-bridge.timer"
   "tensorzero-gateway.service"
 )
 

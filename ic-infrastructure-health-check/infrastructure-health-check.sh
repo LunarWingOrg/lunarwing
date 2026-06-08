@@ -12,14 +12,6 @@ TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Ensure report directory exists
 mkdir -p "$REPORT_DIR"
 
-# Private per-run scratch dir for the parallel check output. Using a unique
-# mktemp -d (instead of fixed /tmp/check-*.tmp paths) avoids collisions between
-# concurrent instances — e.g. multiple tenants running the check at once — and
-# satisfies the repo's "never hardcode /tmp" rule.
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/lunarwing-health.XXXXXX")"
-cleanup_workdir() { rm -rf "$WORKDIR"; }
-trap cleanup_workdir EXIT
-
 # Initialize results
 components=()
 overall_status="healthy"
@@ -64,7 +56,7 @@ run_check() {
 
     # Run the check with timeout, capture stdout (JSON) and stderr (logs) separately
     local stderr_file
-    stderr_file=$(mktemp "$WORKDIR/check-stderr.XXXXXX")
+    stderr_file=$(mktemp /tmp/health-check-stderr.XXXXXX)
     output=$(timeout 30 "$SCRIPT_DIR/$script" 2>"$stderr_file") || exit_code=$?
     # Append any stderr from the check to the log
     [ -s "$stderr_file" ] && cat "$stderr_file" >> "$LOG_FILE"
@@ -104,17 +96,17 @@ SERVICE_MANAGER=$(detect_service_manager)
 log "Detected service manager: $SERVICE_MANAGER"
 
 # Run checks in parallel for speed using temp files (stdout only for JSON)
-run_check "health-gateway.sh" "gateway" > "$WORKDIR/check-gateway.tmp" 2> "$WORKDIR/log-gateway.tmp" &
-run_check "health-xmpp.sh" "xmpp" > "$WORKDIR/check-xmpp.tmp" 2> "$WORKDIR/log-xmpp.tmp" &
-run_check "health-omemo.sh" "omemo" > "$WORKDIR/check-omemo.tmp" 2> "$WORKDIR/log-omemo.tmp" &
-run_check "health-ratelimit.sh" "ratelimit" > "$WORKDIR/check-ratelimit.tmp" 2> "$WORKDIR/log-ratelimit.tmp" &
-run_check "health-clickhouse.sh" "clickhouse" > "$WORKDIR/check-clickhouse.tmp" 2> "$WORKDIR/log-clickhouse.tmp" &
-run_check "health-tensorzero.sh" "tensorzero" > "$WORKDIR/check-tensorzero.tmp" 2> "$WORKDIR/log-tensorzero.tmp" &
-run_check "health-models.sh" "models" > "$WORKDIR/check-models.tmp" 2> "$WORKDIR/log-models.tmp" &
+run_check "health-gateway.sh" "gateway" > /tmp/check-gateway.tmp 2> /tmp/log-gateway.tmp &
+run_check "health-xmpp.sh" "xmpp" > /tmp/check-xmpp.tmp 2> /tmp/log-xmpp.tmp &
+run_check "health-omemo.sh" "omemo" > /tmp/check-omemo.tmp 2> /tmp/log-omemo.tmp &
+run_check "health-ratelimit.sh" "ratelimit" > /tmp/check-ratelimit.tmp 2> /tmp/log-ratelimit.tmp &
+run_check "health-clickhouse.sh" "clickhouse" > /tmp/check-clickhouse.tmp 2> /tmp/log-clickhouse.tmp &
+run_check "health-tensorzero.sh" "tensorzero" > /tmp/check-tensorzero.tmp 2> /tmp/log-tensorzero.tmp &
+run_check "health-models.sh" "models" > /tmp/check-models.tmp 2> /tmp/log-models.tmp &
 case "$SERVICE_MANAGER" in
-  systemd) run_check "health-systemd.sh" "systemd" > "$WORKDIR/check-svcmgr.tmp" 2> "$WORKDIR/log-svcmgr.tmp" & ;;
-  openrc)  run_check "health-openrc.sh"  "openrc"  > "$WORKDIR/check-svcmgr.tmp" 2> "$WORKDIR/log-svcmgr.tmp" & ;;
-  launchd) run_check "health-launchd.sh" "launchd" > "$WORKDIR/check-svcmgr.tmp" 2> "$WORKDIR/log-svcmgr.tmp" & ;;
+  systemd) run_check "health-systemd.sh" "systemd" > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
+  openrc)  run_check "health-openrc.sh"  "openrc"  > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
+  launchd) run_check "health-launchd.sh" "launchd" > /tmp/check-svcmgr.tmp 2> /tmp/log-svcmgr.tmp & ;;
   *)       log "WARNING: unknown service manager '$SERVICE_MANAGER', skipping service health check" ;;
 esac
 
@@ -123,21 +115,21 @@ wait || true
 
 # Append logs to main log file
 for comp in gateway xmpp omemo ratelimit clickhouse tensorzero models svcmgr; do
-    [ -f "$WORKDIR/log-${comp}.tmp" ] && cat "$WORKDIR/log-${comp}.tmp" >> "$LOG_FILE" && rm -f "$WORKDIR/log-${comp}.tmp"
+    [ -f "/tmp/log-${comp}.tmp" ] && cat "/tmp/log-${comp}.tmp" >> "$LOG_FILE" && rm -f "/tmp/log-${comp}.tmp"
 done
 
 # Read results from temp files
-check_gateway=$(cat "$WORKDIR/check-gateway.tmp" 2>/dev/null || echo)
-check_xmpp=$(cat "$WORKDIR/check-xmpp.tmp" 2>/dev/null || echo)
-check_omemo=$(cat "$WORKDIR/check-omemo.tmp" 2>/dev/null || echo)
-check_ratelimit=$(cat "$WORKDIR/check-ratelimit.tmp" 2>/dev/null || echo)
-check_clickhouse=$(cat "$WORKDIR/check-clickhouse.tmp" 2>/dev/null || echo)
-check_tensorzero=$(cat "$WORKDIR/check-tensorzero.tmp" 2>/dev/null || echo)
-check_models=$(cat "$WORKDIR/check-models.tmp" 2>/dev/null || echo)
-check_svcmgr=$(cat "$WORKDIR/check-svcmgr.tmp" 2>/dev/null || echo)
+check_gateway=$(cat /tmp/check-gateway.tmp 2>/dev/null || echo)
+check_xmpp=$(cat /tmp/check-xmpp.tmp 2>/dev/null || echo)
+check_omemo=$(cat /tmp/check-omemo.tmp 2>/dev/null || echo)
+check_ratelimit=$(cat /tmp/check-ratelimit.tmp 2>/dev/null || echo)
+check_clickhouse=$(cat /tmp/check-clickhouse.tmp 2>/dev/null || echo)
+check_tensorzero=$(cat /tmp/check-tensorzero.tmp 2>/dev/null || echo)
+check_models=$(cat /tmp/check-models.tmp 2>/dev/null || echo)
+check_svcmgr=$(cat /tmp/check-svcmgr.tmp 2>/dev/null || echo)
 
-# Cleanup temp files (the WORKDIR itself is removed by the EXIT trap)
-rm -f "$WORKDIR"/check-*.tmp
+# Cleanup temp files
+rm -f /tmp/check-*.tmp
 
 # Collect results
 components=(
