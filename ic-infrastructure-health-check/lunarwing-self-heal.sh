@@ -390,16 +390,18 @@ main() {
 
             targets+=("$init_comp:$svc")
         done < <(echo "$init_svc_line")
+    # NOTE: each init-system alternative MUST be fully parenthesized. jq's `|`
+    # binds looser than `,`, so without the wrapping parens the trailing
+    # "systemd:\(.name)" string of one alternative is piped into the next
+    # alternative's `.metrics` index, which aborts the whole filter with
+    # "Cannot index string with string" and silently yields zero targets.
     done < <(jq -r '
-        (.components[] | select(.component == "systemd" and .status != "healthy")) |
-        (.metrics.units // []) | map(select(.status != "healthy")) | .[].name |
-        "systemd:\(.)",
-        (.components[] | select(.component == "openrc" and .status != "healthy")) |
-        (.metrics.services // []) | map(select(.status != "healthy")) | .[].name |
-        "openrc:\(.)",
-        (.components[] | select(.component == "launchd" and .status != "healthy")) |
-        (.metrics.agents // []) | map(select(.status != "healthy")) | .[].name |
-        "launchd:\(.)"
+        ( .components[] | select(.component == "systemd" and .status != "healthy")
+          | (.metrics.units // [])[]    | select(.status != "healthy") | "systemd:\(.name)" ),
+        ( .components[] | select(.component == "openrc"  and .status != "healthy")
+          | (.metrics.services // [])[] | select(.status != "healthy") | "openrc:\(.name)" ),
+        ( .components[] | select(.component == "launchd" and .status != "healthy")
+          | (.metrics.agents // [])[]   | select(.status != "healthy") | "launchd:\(.name)" )
     ' "$report" 2>/dev/null || true)
 
     if [[ ${#targets[@]} -eq 0 ]]; then
