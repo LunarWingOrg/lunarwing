@@ -1,4 +1,4 @@
-# Testing Guide for b4 release checklist start
+# Pre-Release Testing
 
 ## Current `cargo test` status (reconciled 2026-06-07)
 
@@ -30,7 +30,6 @@ cargo test	Rust unit + integration tests
 ic/scripts/check-boundaries.sh	Architecture boundary violations (no direct DB driver usage outside src/db/, etc.)
 ic/scripts/coverage.sh	Generates HTML coverage report via cargo-llvm-cov
 If you want "60%+ of everything" in one shot:
-If you want "60%+ of everything" in one shot:
 # 1. Full integration harness (XMPP + daemon + WASM)
 ic/scripts/lunarwing-xmpp-test-env.sh up
 
@@ -43,4 +42,3 @@ cd ic && cargo test --all-features
 # 4. Gateway smoke (you already have this)
 ic/scripts/release-test.sh
 The lunarwing-xmpp-test-env.sh is the big one — it spins up the whole stack. That + release-test.sh + cargo test gives you the widest net before a release.
-* 

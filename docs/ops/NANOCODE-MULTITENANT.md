@@ -6,7 +6,7 @@ Guide for deploying the nanocode external worker in a multi-tenant LunarWing env
 
 - Multi-tenant deployment via `lunarwing-mt-admin.sh` (tenant already created)
 - Docker or Podman available
-- Port registry at v3 (`nanocode_wss` port allocated per tenant)
+- Port registry at v3 or later (current is v5); `nanocode_wss` allocated per tenant at offset +7
 
 Verify port allocation:
 
@@ -16,7 +16,8 @@ jq '.tenants.<TENANT>.ports.nanocode_wss' /etc/lunarwing/ports.json
 
 ## Step 1: Build the Image
 
-The nanocode worker image is shared across all tenants. Build once:
+The nanocode worker image is shared across all tenants. Build once (re-run the same command
+to **rebuild** after a nanocode or source update):
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh build-nanocode-worker
@@ -182,12 +183,16 @@ This usually means the job went to the **built-in sandbox worker** (not nanocode
 
 Docker containers may not resolve DNS inside builds. Fix by adding DNS to the Docker daemon config (see Step 1).
 
-### Port registry not at v3
+### `nanocode_wss` port not allocated
 
-The `nanocode_wss` port is only allocated in v3 of the port registry. Migrate:
+The `nanocode_wss` port (offset +7) is allocated from port-registry **v3 onward** (current is
+v5). The admin script auto-migrates on `add-tenant`/`build-tenant`. To migrate a standalone
+registry to the current version, run the migration scripts in order:
 
 ```bash
 sudo ic/scripts/migrate-ports-v3.sh
+sudo ic/scripts/migrate-ports-v4.sh
+sudo ic/scripts/migrate-ports-v5.sh
 ```
 
 ### Known nanocode startup warning

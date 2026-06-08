@@ -51,19 +51,28 @@ Deployment, operations, multitenancy, and production guides.
 
 | File | Description |
 |------|-------------|
-| [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant setup harness guide |
-| [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multitenancy setup harness guide |
-| [`docs/MULTITENANCY-PRODUCTION.md`](ops/docs/MULTITENANCY-PRODUCTION.md) | Production multitenancy configuration |
-| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (Codex, Nanocode, Built-in, Sandbox) |
-| [`GOALS_1.0.6.md`](ops/GOALS_1.0.6.md) | v1.0.6 release goals |
-| [`GOALS_1.0.7.md`](ops/GOALS_1.0.7.md) | v1.0.7 release goals |
-| [`GOALS_1.0.8.md`](ops/GOALS_1.0.8.md) | v1.0.8 release goals |
-| [`FUTURE_RELEASE_ITEMS.md`](ops/FUTURE_RELEASE_ITEMS.md) | Future release roadmap |
-| [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Technical debt and cleanup checklist |
-| [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode multi-tenant setup |
-| [`REBUILD-NANOCODE-WORKER.md`](ops/REBUILD-NANOCODE-WORKER.md) | Nanocode worker rebuild guide |
+| [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant test harness guide |
+| [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multi-tenant test harness guide |
+| [`MULTITENANCY-PRODUCTION.md`](ops/MULTITENANCY-PRODUCTION.md) | Production multi-tenancy configuration |
+| [`TENANT-CONFIGURATION.md`](ops/TENANT-CONFIGURATION.md) | Per-tenant configuration reference (env, LLM, XMPP, ports) |
+| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (LunarWing, Codex, Nanocode) |
+| [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode external worker, multi-tenant setup |
+| [`PEBBLE-WORKER.md`](ops/PEBBLE-WORKER.md) | Pebble external worker operational guide |
+| [`WEECHAT-SERVICES.md`](ops/WEECHAT-SERVICES.md) | WeeChat services, ports, env vars, day-to-day ops |
+| [`WEECHAT-MULTITENANT-PORT-BUG.md`](ops/WEECHAT-MULTITENANT-PORT-BUG.md) | Per-tenant WeeChat port/password fix |
+| [`XMPP_KNOWN_ISSUES.md`](ops/XMPP_KNOWN_ISSUES.md) | XMPP/OMEMO known issues |
+| [`KNOWN_ISSUES_TO_ADDRESS.md`](ops/KNOWN_ISSUES_TO_ADDRESS.md) | Ops known-issues scratchpad |
+| [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Forward-looking cleanup checklist |
+| [`FUTURE_RELEASE_ITEMS.md`](ops/FUTURE_RELEASE_ITEMS.md) | Longer-horizon / unscheduled ideas |
+| [`PRE-RELEASE-TESTING.md`](ops/PRE-RELEASE-TESTING.md) | Pre-release test status + test landscape |
 | [`RELEASE_CADENCE.md`](ops/RELEASE_CADENCE.md) | Release cadence policy |
-| [`KNOWN_ISSUES_TO_ADDRESS.md`](ops/KNOWN_ISSUES_TO_ADDRESS.md) | Known issues tracker |
+| [`RELEASE-COMMANDS.md`](ops/RELEASE-COMMANDS.md) | Release git/GitHub command template |
+| [`GOALS_1.1.2.md`](ops/GOALS_1.1.2.md) | v1.1.2 release checklist (current) |
+| [`GOALS_1.1.2_INFRA_HEALTH_CHECK.md`](ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md) | v1.1.2 infra health-check + self-heal notes |
+| [`RELEASE-v1.1.0.md`](ops/RELEASE-v1.1.0.md) | v1.1.0 release notes |
+| [`RELEASE-v1.1.1.md`](ops/RELEASE-v1.1.1.md) | v1.1.1 release notes |
+
+Historical per-release prep checklists are archived in [`ops/history/`](ops/history/).
 
 ---
 
@@ -115,13 +124,13 @@ Bug reports, analyses, and proposed fixes.
 
 | File | Description |
 |------|-------------|
-| [`BUG-daemon-stops-polling-xmpp-bridge.md`](bugs/BUG-daemon-stops-polling-xmpp-bridge.md) | Daemon stops polling XMPP bridge |
-| [`BUG-subagent-worker-hang.md`](bugs/BUG-subagent-worker-hang.md) | Subagent worker hang issue |
-| [`BUG-unbounded-mpsc-recv-in-spawned-tasks.md`](bugs/BUG-unbounded-mpsc-recv-in-spawned-tasks.md) | Unbounded mpsc recv in spawned tasks |
-| [`LIST-OF-BUGS-BY-NOKO.md`](bugs/LIST-OF-BUGS-BY-NOKO.md) | Bug list compiled by Noko |
-| [`PROPOSED-FIX-BY-BAUD-FOR-BUG-worker-compose-test.md`](bugs/PROPOSED-FIX-BY-BAUD-FOR-BUG-worker-compose-test.md) | Baud's fix for worker compose test |
-| [`PROPOSED-FIX-BY-NOKO-FOR-BUG-subagent-worker-hang.md`](bugs/PROPOSED-FIX-BY-NOKO-FOR-BUG-subagent-worker-hang.md) | Noko's fix for subagent worker hang |
-| [`WEECHAT-NO-SECRET-ACCESS.md`](bugs/WEECHAT-NO-SECRET-ACCESS.md) | WeeChat secret access issue |
+| [`BUG-daemon-stops-polling-xmpp-bridge.md`](bugs/BUG-daemon-stops-polling-xmpp-bridge.md) | Daemon stops polling XMPP bridge (fixed) |
+| [`BUG-subagent-worker-hang.md`](bugs/BUG-subagent-worker-hang.md) | Subagent worker hang (fixed) |
+| [`BUG-unbounded-mpsc-recv-in-spawned-tasks.md`](bugs/BUG-unbounded-mpsc-recv-in-spawned-tasks.md) | Unbounded mpsc recv in spawned tasks (open) |
+| [`BUG-LAPSE.md`](bugs/BUG-LAPSE.md) | Agent "lapse" — `<function=NAME>` tool-call dialect recovery (fixed) |
+| [`WEECHAT-NO-SECRET-ACCESS.md`](bugs/WEECHAT-NO-SECRET-ACCESS.md) | WeeChat tool secret access (fixed) |
+
+See [`bugs/README.md`](bugs/README.md) for the full Open/Fixed bug index (15 docs).
 
 ---
 

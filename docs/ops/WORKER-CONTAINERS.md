@@ -19,17 +19,17 @@ Runs as non-root user `sandbox` (UID 1000) in `/workspace`. Entrypoint is the `l
 
 Node.js-based Codex agent with WebSocket protocol bridge. Health endpoint on port 8443, WebSocket server on port 9090.
 
-**Dockerfile:** `codex4ironclaw/Dockerfile`
+**Dockerfile:** `codex4lunarwing/Dockerfile`
 
 ```bash
-cd codex4ironclaw
+cd codex4lunarwing
 docker build -t lunarwing-codex-worker:latest .
 
 # Or via docker-compose
 docker compose up --build
 ```
 
-Modes: `--mode cli` (one-shot) or `--mode websocket` (persistent). Requires `OPENAI_API_KEY` or TensorZero proxy config. See `codex4ironclaw/CLAUDE.md` for full env var reference.
+Modes: `--mode cli` (one-shot) or `--mode websocket` (persistent). Requires `OPENAI_API_KEY` or TensorZero proxy config. See `codex4lunarwing/CLAUDE.md` for full env var reference.
 
 ## Nanocode Worker
 

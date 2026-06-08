@@ -190,7 +190,7 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | WASM tools catalog | `ic/tools-src/TOOLS.md` |
 | Worker container images | `docs/ops/WORKER-CONTAINERS.md` |
 | Pebble worker ops guide | `docs/ops/PEBBLE-WORKER.md` |
-| Multi-tenancy (production) | `docs/ops/docs/MULTITENANCY-PRODUCTION.md` |
+| Multi-tenancy (production) | `docs/ops/MULTITENANCY-PRODUCTION.md` |
 | Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
 | Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
 | Documentation audit | `docs/DOCS_AUDIT.md` |
@@ -344,7 +344,7 @@ Override init system detection with `LUNARWING_SERVICE_MANAGER=systemd` or `LUNA
 
 ## Multi-Tenancy
 
-Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/ops/docs/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
+Production multi-tenant deployments use `ic/scripts/lunarwing-mt-admin.sh`. Each tenant gets a dedicated OS user, port block (10-port range from `/etc/lunarwing/ports.json`), PostgreSQL container, TensorZero proxy, and XMPP bridge. Supports both systemd (user-level with linger) and OpenRC (system-level with supervise-daemon). See `docs/ops/MULTITENANCY-PRODUCTION.md` for the full walkthrough.
 
 The test harness (`ic/scripts/lunarwing-xmpp-test-env.sh`) provides ephemeral multi-tenancy for development and is fully cross-platform. See `docs/ops/MULTITENANCY-HARNESS.md`.
 
