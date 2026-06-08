@@ -2,7 +2,7 @@
 
 How to run one isolated LunarWing instance using the test harness.
 
-For full detail on every step, see [`ic/testing/lunarwing-xmpp/README.md`](ic/testing/lunarwing-xmpp/README.md).
+For full detail on every step, see [`ic/testing/lunarwing-xmpp/README.md`](../../ic/testing/lunarwing-xmpp/README.md).
 For running two isolated tenants side-by-side, see [`MULTITENANCY-HARNESS.md`](MULTITENANCY-HARNESS.md).
 
 ## Important: Build Behaviour
@@ -81,7 +81,7 @@ which rustc   # must show ~/.rustup/toolchains/... not /opt/homebrew/bin/rustc
 
 ## Full Reference
 
-See [`ic/testing/lunarwing-xmpp/README.md`](ic/testing/lunarwing-xmpp/README.md) for:
+See [`ic/testing/lunarwing-xmpp/README.md`](../../ic/testing/lunarwing-xmpp/README.md) for:
 - Picking and persisting a test root
 - Inspecting generated env files
 - Bridge smoke testing without live XMPP

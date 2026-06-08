@@ -1,4 +1,4 @@
-# IC HC
+# Infrastructure Health Check & Self-Healing — v1.1.2
 
 ---
 
