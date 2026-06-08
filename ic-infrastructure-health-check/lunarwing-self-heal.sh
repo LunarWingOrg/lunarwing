@@ -2,18 +2,24 @@
 # LunarWing Self-Healing Infrastructure Watchdog
 #
 # Reads infrastructure health-check JSON reports and attempts auto-remediation
-# by restarting unhealthy services. Tracks retry counts, applies backoff,
-# and escalates to notification after max retries.
+# by restarting unhealthy services. Applies a grace period before the first
+# restart, exponential backoff with jitter (linear toggle available), a
+# flapping guard, post-restart verification via the component health checks,
+# multi-tenant remediation, state auto-prune, and escalation via notification.
 #
 # Usage:
-#   lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N]
+#   lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N]
+#       [--backoff N] [--backoff-base N] [--backoff-max N]
+#       [--backoff-strategy linear|exponential] [--grace-checks N]
+#       [--prune-ttl SECONDS] [--verify-health true|false]
 #
-# Supports systemd, OpenRC, and launchd init systems.
+# All thresholds are also configurable via SELF_HEAL_* env vars (see below).
+# Supports systemd (incl. per-tenant user units), OpenRC, and launchd.
 # Designed to be called from cron-wrapper.sh after infrastructure-health-check.sh.
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.2.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -22,7 +28,38 @@ REPORT_DIR="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-$HOME/.lunarwing}}/worksp
 SELF_HEAL_STATE_DIR="${SELF_HEAL_STATE_DIR:-$REPORT_DIR/../self-heal}"
 SELF_HEAL_LOG="${SELF_HEAL_LOG:-$SELF_HEAL_STATE_DIR/actions.log}"
 MAX_RETRIES="${SELF_HEAL_MAX_RETRIES:-3}"
+
+# Fixed in-run settle wait after a restart, before verifying. Kept short and
+# un-jittered (a 0s settle would verify before the service has come up).
 BACKOFF_SECONDS="${SELF_HEAL_BACKOFF_SECONDS:-5}"
+
+# Exponential backoff + jitter (compute_backoff()) BETWEEN remediation attempts.
+# This spaces retries ACROSS cron ticks via next_attempt_at — it is not an
+# in-run sleep, so the run never blocks on a long backoff. "linear" returns
+# BACKOFF_BASE unchanged (no jitter) as a backward-compatible kill switch.
+BACKOFF_BASE="${SELF_HEAL_BACKOFF_BASE:-60}"
+BACKOFF_MAX="${SELF_HEAL_BACKOFF_MAX:-3600}"
+BACKOFF_STRATEGY="${SELF_HEAL_BACKOFF_STRATEGY:-exponential}"
+
+# Grace period: consecutive unhealthy checks required before the first restart.
+GRACE_CHECKS="${SELF_HEAL_GRACE_CHECKS:-2}"
+
+# Flapping guard: too many restarts within the window → escalate, stop looping.
+FLAP_MAX_RESTARTS="${SELF_HEAL_FLAP_MAX_RESTARTS:-5}"
+FLAP_WINDOW_SECS="${SELF_HEAL_FLAP_WINDOW_SECS:-3600}"
+
+# Post-restart verification: re-run the component's health-*.sh and parse
+# .status (deeper than is-active). Set false to use is-active only.
+VERIFY_HEALTH="${SELF_HEAL_VERIFY_HEALTH:-true}"
+HEALTH_CHECK_DIR="${SELF_HEAL_HEALTH_CHECK_DIR:-$SCRIPT_DIR}"
+
+# Prune non-escalated state entries untouched for this long. 0 disables pruning.
+STATE_PRUNE_TTL="${SELF_HEAL_STATE_PRUNE_TTL:-86400}"   # 24h
+
+# Multi-tenant registry (lunarwing-mt-admin.sh). Per-tenant systemd units are
+# USER units, restarted via sudo -u <user> systemctl --user.
+TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-/etc/lunarwing/ports.json}"
+
 DRY_RUN=false
 REPORT_FILE=""
 
@@ -48,12 +85,28 @@ die() { log "FATAL: $*"; exit 1; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --report)       REPORT_FILE="$2"; shift 2 ;;
-        --dry-run|-n)   DRY_RUN=true; shift ;;
-        --max-retries)  MAX_RETRIES="$2"; shift 2 ;;
-        --backoff)      BACKOFF_SECONDS="$2"; shift 2 ;;
+        --report)            REPORT_FILE="$2"; shift 2 ;;
+        --dry-run|-n)        DRY_RUN=true; shift ;;
+        --max-retries)       MAX_RETRIES="$2"; shift 2 ;;
+        --backoff)           BACKOFF_SECONDS="$2"; shift 2 ;;
+        --backoff-base)      BACKOFF_BASE="$2"; shift 2 ;;
+        --backoff-max)       BACKOFF_MAX="$2"; shift 2 ;;
+        --backoff-strategy)  BACKOFF_STRATEGY="$2"; shift 2 ;;
+        --grace-checks)      GRACE_CHECKS="$2"; shift 2 ;;
+        --prune-ttl)
+            case "${2:-}" in
+                0|false|no|off) STATE_PRUNE_TTL="0"; shift 2 ;;
+                *) STATE_PRUNE_TTL="$2"; shift 2 ;;
+            esac
+            ;;
+        --verify-health)
+            case "${2:-}" in
+                0|false|no|off) VERIFY_HEALTH="false"; shift 2 ;;
+                *) VERIFY_HEALTH="true"; shift 2 ;;
+            esac
+            ;;
         --help|-h)
-            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N]"
+            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N] [--prune-ttl SECONDS] [--verify-health true|false]"
             exit 0
             ;;
         *) die "unknown arg: $1 (use --help)" ;;
@@ -62,7 +115,6 @@ done
 
 # ── Init system detection ──────────────────────────────────────────────────
 
-# Same logic as health-check and watchdog installers
 detect_service_manager() {
     local override="${LUNARWING_SERVICE_MANAGER:-${IRONCLAW_SERVICE_MANAGER:-}}"
     if [[ -n "$override" ]]; then
@@ -84,6 +136,39 @@ detect_service_manager() {
 SERVICE_MANAGER="$(detect_service_manager)"
 log "detected service manager: $SERVICE_MANAGER"
 
+# ── Multi-tenant helpers ────────────────────────────────────────────────────
+#
+# Per-tenant units are named lunarwing-<tenant>, xmpp-bridge-<tenant>,
+# ironclaw-proxy-<tenant>. On systemd they are USER units owned by the tenant
+# OS user; on OpenRC they are system services. We only treat a unit as
+# per-tenant when its tenant resolves to a real user in the registry, so base
+# units (lunarwing, xmpp-bridge, lunarwing-watchdog, ...) fall through safely.
+
+unit_tenant() {
+    local u="${1%.service}"
+    case "$u" in
+        lunarwing-proxy-*) printf '%s' "${u#lunarwing-proxy-}" ;;
+        ironclaw-proxy-*)  printf '%s' "${u#ironclaw-proxy-}" ;;
+        xmpp-bridge-*)     printf '%s' "${u#xmpp-bridge-}" ;;
+        lunarwing-*)       printf '%s' "${u#lunarwing-}" ;;
+        *)                 printf '' ;;
+    esac
+}
+
+tenant_user() {
+    local tenant="$1"
+    [[ -n "$tenant" && -f "$TENANTS_FILE" ]] || return 0
+    jq -r --arg t "$tenant" '.tenants[$t].user // empty' "$TENANTS_FILE" 2>/dev/null || true
+}
+
+_resolve_systemd_tenant_user() {
+    local svc="$1" tenant user
+    tenant="$(unit_tenant "$svc")"
+    [[ -n "$tenant" ]] || { printf ''; return 0; }
+    user="$(tenant_user "$tenant")"
+    printf '%s' "$user"
+}
+
 # ── Service restart helpers ──────────────────────────────────────────────────
 
 _systemd_active() { systemctl is-active --quiet "$1"; }
@@ -94,6 +179,24 @@ _systemd_restart() {
         return 0
     fi
     systemctl restart "$svc"
+}
+
+# Per-tenant systemd USER units: run as the tenant user against their bus.
+_systemd_user_restart() {
+    local user="$1" unit="$2" uid
+    uid="$(id -u "$user" 2>/dev/null || printf '?')"
+    if [[ "$DRY_RUN" == true ]]; then
+        log "[DRY-RUN] would run: sudo -u $user env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart $unit"
+        return 0
+    fi
+    [[ "$uid" == '?' ]] && { log "WARNING: cannot resolve uid for tenant user $user"; return 1; }
+    sudo -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user restart "$unit"
+}
+_systemd_user_active() {
+    local user="$1" unit="$2" uid
+    uid="$(id -u "$user" 2>/dev/null || printf '?')"
+    [[ "$uid" == '?' ]] && return 1
+    sudo -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user is-active --quiet "$unit"
 }
 
 _openrc_active() { rc-service "$1" status >/dev/null 2>&1; }
@@ -124,7 +227,15 @@ _launchd_restart() {
 restart_service() {
     local svc="$1"
     case "$SERVICE_MANAGER" in
-        systemd) _systemd_restart "$svc" ;;
+        systemd)
+            local user
+            user="$(_resolve_systemd_tenant_user "$svc")"
+            if [[ -n "$user" ]]; then
+                _systemd_user_restart "$user" "$svc"
+            else
+                _systemd_restart "$svc"
+            fi
+            ;;
         openrc)  _openrc_restart "$svc" ;;
         launchd) _launchd_restart "$svc" ;;
         *)       log "WARNING: unknown service manager, cannot restart $svc"; return 1 ;;
@@ -134,7 +245,15 @@ restart_service() {
 check_service_active() {
     local svc="$1"
     case "$SERVICE_MANAGER" in
-        systemd) _systemd_active "$svc" ;;
+        systemd)
+            local user
+            user="$(_resolve_systemd_tenant_user "$svc")"
+            if [[ -n "$user" ]]; then
+                _systemd_user_active "$user" "$svc"
+            else
+                _systemd_active "$svc"
+            fi
+            ;;
         openrc)  _openrc_active "$svc" ;;
         launchd) _launchd_active "$svc" ;;
         *)       return 1 ;;
@@ -142,11 +261,6 @@ check_service_active() {
 }
 
 # ── Component → service mapping ─────────────────────────────────────────────
-#
-# Maps logical health-check component names to service/unit names.
-# Keys are health-check "component" values.
-# Values are space-separated service names (init-system-agnostic; .service not needed).
-# For systemd, .service is auto-appended. For OpenRC/launchd, bare names are used.
 
 declare -A SERVICE_MAP=(
     [gateway]="lunarwing"
@@ -155,56 +269,151 @@ declare -A SERVICE_MAP=(
     [clickhouse]="clickhouse-server"
 )
 
-# Components that represent features of another service, not their own service
-# (e.g., OMEMO is a feature of xmpp-bridge; models is an external API)
-# These are skipped for auto-remediation.
+# Component → health-check script, for post-restart verification.
+declare -A COMPONENT_CHECK_MAP=(
+    [gateway]="health-gateway.sh"
+    [xmpp]="health-xmpp.sh"
+    [tensorzero]="health-tensorzero.sh"
+    [clickhouse]="health-clickhouse.sh"
+)
+
+# Components that represent features of another service, not their own service.
 declare -A NO_REMEDY=(
     [omemo]=1
     [ratelimit]=1
     [models]=1
 )
 
+# ── Exponential backoff with jitter (kumogakure's compute_backoff) ───────────
+#
+# compute_backoff <attempt> -> integer seconds until the next attempt.
+#   linear:      returns BACKOFF_BASE unchanged (no jitter, kill switch).
+#   exponential: BACKOFF_BASE * 2^(attempt-1), capped at BACKOFF_MAX, then full
+#                jitter: uniform random in [0, delay].
+# Used to schedule next_attempt_at across runs (NOT as an in-run sleep), so a
+# jittered 0 just means "retry on the next tick".
+
+compute_backoff() {
+    local attempt="${1:-1}"
+
+    if [[ "$BACKOFF_STRATEGY" == "linear" ]]; then
+        printf '%s' "${BACKOFF_BASE:-60}"
+        return 0
+    fi
+
+    if ! [[ "$attempt" =~ ^[0-9]+$ ]] || [[ "$attempt" -le 0 ]]; then
+        printf '0'; return 0
+    fi
+    local base="${BACKOFF_BASE:-60}"
+    local max="${BACKOFF_MAX:-3600}"
+    if ! [[ "$base" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
+        log "WARNING: invalid backoff config base=$base max=$max; falling back to 0"
+        printf '0'; return 0
+    fi
+
+    # BASE * 2^(attempt-1), capped at MAX (cap inside the loop to avoid overflow).
+    local delay="$base" i
+    for ((i = 1; i < attempt; i++)); do
+        delay=$((delay * 2))
+        if [[ "$delay" -ge "$max" ]]; then delay="$max"; break; fi
+    done
+    if [[ "$delay" -gt "$max" ]]; then delay="$max"; fi
+
+    if [[ "$delay" -le 0 ]]; then printf '0'; return 0; fi
+    printf '%s' "$(( RANDOM % (delay + 1) ))"   # full jitter [0, delay]
+}
+
 # ── State management ────────────────────────────────────────────────────────
+#
+# state.json maps service -> { retries, escalated, last_attempt, escalatedAt,
+# next_attempt_at, consecutive_unhealthy, first_unhealthy_at, last_unhealthy_at,
+# restart_history[] }. Helpers operate on a JSON string and echo a new one.
 
 STATE_FILE="$SELF_HEAL_STATE_DIR/state.json"
 
 ensure_state_dir() {
     mkdir -p "$SELF_HEAL_STATE_DIR"
-    if [[ ! -f "$STATE_FILE" ]]; then
-        echo '{}' > "$STATE_FILE"
-    fi
+    [[ -f "$STATE_FILE" ]] || echo '{}' > "$STATE_FILE"
 }
 
 load_state() { jq -r '.' "$STATE_FILE" 2>/dev/null || echo '{}'; }
 
 save_state() {
-    local state="$1"
-    local tmp
+    local state="$1" tmp
     tmp="$(mktemp "$STATE_FILE.tmp.XXXXXX")"
     printf '%s\n' "$state" > "$tmp"
     mv "$tmp" "$STATE_FILE"
 }
 
-get_retry_count() {
-    local state="$1" svc="$2"
-    echo "$state" | jq -r ".\"$svc\".retries // 0"
+state_get_num() {
+    local state="$1" svc="$2" field="$3" default="${4:-0}"
+    echo "$state" | jq -r --arg s "$svc" --arg f "$field" --argjson d "$default" '.[$s][$f] // $d'
 }
+state_set_num() {
+    local state="$1" svc="$2" field="$3" val="$4"
+    echo "$state" | jq --arg s "$svc" --arg f "$field" --argjson v "$val" \
+        '.[$s] = (.[$s] // {}) | .[$s][$f] = $v'
+}
+state_get_bool() {
+    local state="$1" svc="$2" field="$3"
+    echo "$state" | jq -r --arg s "$svc" --arg f "$field" '.[$s][$f] // false'
+}
+
+get_retry_count() { state_get_num "$1" "$2" retries 0; }
 
 set_retry_count() {
     local state="$1" svc="$2" count="$3"
     echo "$state" | jq --arg svc "$svc" --argjson count "$count" \
-        '.[$svc] = (.[$svc] // {}) | .[$svc].retries = $count | .[$svc].last_attempt = now | .[$svc].escalated = (.[$svc].escalated // false)'
+        '.[$svc] = (.[$svc] // {}) | .[$svc].retries = $count | .[$svc].last_attempt = (now | floor) | .[$svc].escalated = (.[$svc].escalated // false)'
 }
 
 mark_escalated() {
     local state="$1" svc="$2"
     echo "$state" | jq --arg svc "$svc" \
-        '.[$svc] = (.[$svc] // {}) | .[$svc].escalated = true | .[$svc].escalatedAt = now'
+        '.[$svc] = (.[$svc] // {}) | .[$svc].escalated = true | .[$svc].escalatedAt = (now | floor)'
 }
 
 clear_service_state() {
     local state="$1" svc="$2"
     echo "$state" | jq --arg svc "$svc" 'del(.[$svc])'
+}
+
+# Record an unhealthy observation: bump streak + first/last_unhealthy_at.
+record_unhealthy() {
+    local state="$1" svc="$2" now="$3"
+    echo "$state" | jq --arg s "$svc" --argjson now "$now" '
+        .[$s] = (.[$s] // {})
+        | .[$s].consecutive_unhealthy = ((.[$s].consecutive_unhealthy // 0) + 1)
+        | .[$s].first_unhealthy_at = (.[$s].first_unhealthy_at // $now)
+        | .[$s].last_unhealthy_at = $now'
+}
+
+# Flapping window helpers.
+flap_count() {
+    local state="$1" svc="$2" since="$3"
+    echo "$state" | jq -r --arg s "$svc" --argjson since "$since" \
+        '[(.[$s].restart_history // [])[] | select(. >= $since)] | length'
+}
+state_push_restart() {
+    local state="$1" svc="$2" epoch="$3" since="$4"
+    echo "$state" | jq --arg s "$svc" --argjson e "$epoch" --argjson since "$since" \
+        '.[$s] = (.[$s] // {})
+         | .[$s].restart_history = ([ ((.[$s].restart_history // [])[] | select(. >= $since)), $e ])'
+}
+
+# Drop entries untouched past TTL that are not escalated and not currently
+# unhealthy. STATE_PRUNE_TTL=0 disables. Recency = max(last_attempt, last_unhealthy_at).
+prune_state() {
+    local state="$1" now="$2"; shift 2
+    [[ "$STATE_PRUNE_TTL" == "0" ]] && { printf '%s' "$state"; return 0; }
+    local seen_json
+    if [[ $# -gt 0 ]]; then seen_json="$(printf '%s\n' "$@" | jq -R . | jq -s .)"; else seen_json='[]'; fi
+    echo "$state" | jq --argjson now "$now" --argjson ttl "$STATE_PRUNE_TTL" --argjson seen "$seen_json" '
+        with_entries(select(
+            (.value.escalated == true)
+            or (.key | IN($seen[]))
+            or (([.value.last_attempt, .value.last_unhealthy_at] | map(. // 0) | max) >= ($now - $ttl))
+        ))'
 }
 
 # ── Notification escalation ─────────────────────────────────────────────────
@@ -219,73 +428,127 @@ _send_notification() {
     fi
 }
 
+# escalate_service <svc> <retries> [reason]   (retries passed explicitly — no $STATE)
 escalate_service() {
-    local svc="$1"
-    local report_path="${2:-}"
-    log "ESCALATING: $svc has failed $MAX_RETRIES consecutive restart attempts"
-    log_action "ESCALATE target=$svc retries=$MAX_RETRIES"
+    local svc="$1" retries="${2:-0}" reason="${3:-max_retries}"
+    log "ESCALATING: $svc ($reason, retries=$retries)"
+    log_action "ESCALATE target=$svc retries=$retries reason=$reason"
     if [[ "$DRY_RUN" == true ]]; then
         log "[DRY-RUN] would send escalation notification for $svc"
         return 0
     fi
 
-    # Build a terse escalation report
     local esc_report
     esc_report="$SELF_HEAL_STATE_DIR/escalation-$(date +%Y%m%d%H%M%S)-$svc.json"
-    jq -n \
-        --arg svc "$svc" \
-        --arg now "$(timestamp)" \
-        --argjson retries "$(get_retry_count "$STATE" "$svc")" \
-        '{escalated: true, service: $svc, timestamp: $now, retries: $retries, action: "manual_intervention_required"}' \
+    jq -n --arg svc "$svc" --arg now "$(timestamp)" --arg reason "$reason" --argjson retries "$retries" \
+        '{escalated: true, service: $svc, timestamp: $now, retries: $retries, reason: $reason, action: "manual_intervention_required"}' \
         > "$esc_report"
 
     _send_notification "critical" "$esc_report"
     rm -f "$esc_report"
 }
 
+# ── Post-restart verification ───────────────────────────────────────────────
+
+# verify_restart <comp> <svc> -> 0 healthy, 1 still-unhealthy
+verify_restart() {
+    local comp="$1" svc="$2"
+    if [[ "$VERIFY_HEALTH" == true ]]; then
+        local check="${COMPONENT_CHECK_MAP[$comp]:-}"
+        if [[ -n "$check" && -x "$HEALTH_CHECK_DIR/$check" ]]; then
+            local out status
+            out="$("$HEALTH_CHECK_DIR/$check" 2>/dev/null || true)"
+            status="$(echo "$out" | jq -r '.status // "unknown"' 2>/dev/null || echo unknown)"
+            case "$status" in
+                healthy)            log "VERIFY: $comp health check healthy after restart"; return 0 ;;
+                degraded|critical)  log "VERIFY: $comp still $status after restart"; return 1 ;;
+                *)                  log "VERIFY: $comp check inconclusive ($status); falling back to is-active" ;;
+            esac
+        fi
+    fi
+    check_service_active "$svc"
+}
+
 # ── Main remediation logic ──────────────────────────────────────────────────
 
 remediate_component() {
     local comp="$1" state="$2" services="$3"
-    local svc result=0
+    local svc now
+    now="$(date +%s)"
 
     for svc in $services; do
-        local retries
-        retries="$(get_retry_count "$state" "$svc")"
+        local retries escalated old_obs obs flap_since flaps next_at delay
 
-        if [[ $retries -ge $MAX_RETRIES ]]; then
-            local escalated
-            escalated="$(echo "$state" | jq -r ".\"$svc\".escalated // false")"
-            if [[ "$escalated" == "false" ]]; then
-                state="$(mark_escalated "$state" "$svc")"
-                escalate_service "$svc"
-            else
-                log "SKIP: $svc already escalated (retries=$retries >= max=$MAX_RETRIES)"
-            fi
+        retries="$(get_retry_count "$state" "$svc")"
+        escalated="$(state_get_bool "$state" "$svc" escalated)"
+
+        # Record this unhealthy observation (grace period bookkeeping).
+        old_obs="$(state_get_num "$state" "$svc" consecutive_unhealthy 0)"
+        obs=$((old_obs + 1))
+        state="$(record_unhealthy "$state" "$svc" "$now")"
+
+        if [[ "$escalated" == true ]]; then
+            log "SKIP: $svc already escalated (manual intervention pending)"
             continue
         fi
 
-        log "RESTART: $svc (component=$comp, retries so far=$retries)"
+        # Flapping guard: too many restarts within the window → escalate.
+        flap_since=$(( now - FLAP_WINDOW_SECS ))
+        flaps="$(flap_count "$state" "$svc" "$flap_since")"
+        if [[ "$flaps" -ge "$FLAP_MAX_RESTARTS" ]]; then
+            log "FLAPPING: $svc restarted $flaps times in ${FLAP_WINDOW_SECS}s; escalating instead"
+            state="$(mark_escalated "$state" "$svc")"
+            escalate_service "$svc" "$retries" "flapping"
+            continue
+        fi
+
+        # Max retries reached → escalate.
+        if [[ "$retries" -ge "$MAX_RETRIES" ]]; then
+            state="$(mark_escalated "$state" "$svc")"
+            escalate_service "$svc" "$retries" "max_retries"
+            continue
+        fi
+
+        # Grace period: require N consecutive unhealthy checks first.
+        if [[ "$obs" -lt "$GRACE_CHECKS" ]]; then
+            log "GRACE: $svc unhealthy $obs/$GRACE_CHECKS observation(s); deferring restart"
+            log_action "GRACE target=$svc obs=$obs/$GRACE_CHECKS"
+            continue
+        fi
+
+        # Backoff gate: wait until next_attempt_at before retrying.
+        next_at="$(state_get_num "$state" "$svc" next_attempt_at 0)"
+        if [[ "$now" -lt "$next_at" ]]; then
+            log "BACKOFF: $svc waiting (next attempt at epoch $next_at, $((next_at - now))s)"
+            log_action "BACKOFF target=$svc until=$next_at"
+            continue
+        fi
+
+        log "RESTART: $svc (component=$comp, retries=$retries, obs=$obs, flaps=$flaps)"
         log_action "RESTART_BEGIN target=$svc component=$comp retries=$retries"
+        state="$(state_push_restart "$state" "$svc" "$now" "$flap_since")"
 
         if restart_service "$svc"; then
-            # Wait for service to come back
             sleep "$BACKOFF_SECONDS"
-            if check_service_active "$svc"; then
-                log "SUCCESS: $svc is active after restart"
+            if verify_restart "$comp" "$svc"; then
+                log "SUCCESS: $svc healthy after restart"
                 log_action "RESTART_OK target=$svc"
                 state="$(clear_service_state "$state" "$svc")"
             else
                 retries=$((retries + 1))
-                log "WARNING: $svc restart command succeeded but service not active (retries=$retries)"
-                log_action "RESTART_PARTIAL target=$svc retries=$retries"
+                delay="$(compute_backoff "$retries")"
                 state="$(set_retry_count "$state" "$svc" "$retries")"
+                state="$(state_set_num "$state" "$svc" next_attempt_at $(( now + delay )))"
+                log "WARNING: $svc still unhealthy after restart (retries=$retries, next try in ~${delay}s)"
+                log_action "RESTART_PARTIAL target=$svc retries=$retries backoff=${delay}s strategy=$BACKOFF_STRATEGY"
             fi
         else
             retries=$((retries + 1))
-            log "FAILURE: restart command failed for $svc (retries=$retries)"
-            log_action "RESTART_FAIL target=$svc retries=$retries"
+            delay="$(compute_backoff "$retries")"
             state="$(set_retry_count "$state" "$svc" "$retries")"
+            state="$(state_set_num "$state" "$svc" next_attempt_at $(( now + delay )))"
+            log "FAILURE: restart command failed for $svc (retries=$retries, next try in ~${delay}s)"
+            log_action "RESTART_FAIL target=$svc retries=$retries backoff=${delay}s strategy=$BACKOFF_STRATEGY"
         fi
     done
 
@@ -296,7 +559,6 @@ remediate_component() {
 
 find_latest_report() {
     local latest
-    # Portable version — works on GNU and BSD/macOS find
     latest="$(find "$REPORT_DIR" -maxdepth 1 -name '*.json' ! -name '*-summary*' -type f 2>/dev/null | xargs ls -t 2>/dev/null | head -1)"
     printf '%s' "$latest"
 }
@@ -305,10 +567,10 @@ find_latest_report() {
 
 main() {
     local report="$REPORT_FILE"
+    local now_epoch; now_epoch="$(date +%s)"
 
     ensure_state_dir
 
-    # Acquire lock to prevent concurrent self-heal runs
     local lockfile="$SELF_HEAL_STATE_DIR/self-heal.lock"
     if command -v flock >/dev/null 2>&1; then
         exec 200>"$lockfile"
@@ -318,102 +580,80 @@ main() {
         fi
     fi
 
-    if [[ -z "$report" ]]; then
-        report="$(find_latest_report)"
-    fi
-
-    if [[ -z "$report" || ! -f "$report" ]]; then
-        die "no health-check report found in $REPORT_DIR"
-    fi
+    [[ -z "$report" ]] && report="$(find_latest_report)"
+    [[ -z "$report" || ! -f "$report" ]] && die "no health-check report found in $REPORT_DIR"
 
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
-    log "max retries: $MAX_RETRIES | backoff: ${BACKOFF_SECONDS}s | dry-run: $DRY_RUN"
+    log "config: max-retries=$MAX_RETRIES settle=${BACKOFF_SECONDS}s backoff=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s grace=$GRACE_CHECKS flap=$FLAP_MAX_RESTARTS/${FLAP_WINDOW_SECS}s prune-ttl=${STATE_PRUNE_TTL}s verify=$VERIFY_HEALTH dry-run=$DRY_RUN"
 
-    if ! jq . "$report" >/dev/null 2>&1; then
-        die "report is not valid JSON: $report"
-    fi
+    jq . "$report" >/dev/null 2>&1 || die "report is not valid JSON: $report"
 
     local state
     state="$(load_state)"
 
-    # Build a set of target services from all unhealthy components
+    # Build target set (unhealthy) and healthy set (for report-as-truth reset).
     local -a targets=()
     local -A seen=()
-
-    # 1) Handle standard logical components
+    local -A healthy=()
     local comp services svc
-    while IFS= read -r comp; do
+
+    # 1) Standard logical components
+    while IFS=$'\t' read -r comp cstatus; do
         [[ -n "$comp" ]] || continue
-
-        # Skip if component has no remedy
-        if [[ "${NO_REMEDY[$comp]:-}" == "1" ]]; then
-            log "SKIP: component '$comp' has no standalone service (feature/external)"
-            continue
-        fi
-
+        [[ "${NO_REMEDY[$comp]:-}" == "1" ]] && { [[ "$cstatus" != healthy ]] && log "SKIP: component '$comp' has no standalone service (feature/external)"; continue; }
         services="${SERVICE_MAP[$comp]:-}"
-        if [[ -z "$services" ]]; then
-            log "WARNING: no service mapping for component '$comp'; skipping"
-            continue
-        fi
-
+        [[ -n "$services" ]] || { [[ "$cstatus" != healthy ]] && log "WARNING: no service mapping for component '$comp'; skipping"; continue; }
         for svc in $services; do
-            [[ -n "${seen[$svc]:-}" ]] && continue
-            seen[$svc]=1
-            targets+=("$comp:$svc")
+            if [[ "$cstatus" == healthy ]]; then
+                healthy[$svc]=1
+            else
+                [[ -n "${seen[$svc]:-}" ]] && continue
+                seen[$svc]=1
+                targets+=("$comp:$svc")
+            fi
         done
-    done < <(jq -r '.components[] | select(.status != "healthy") | .component' "$report" 2>/dev/null || true)
+    done < <(jq -r '.components[] | "\(.component)\t\(.status)"' "$report" 2>/dev/null || true)
 
-    # 2) Handle init-system-specific components (systemd/openrc/launchd)
-    # These components contain metrics.units or metrics.services listing sub-units
-    local init_comp init_svc_line
-    while IFS=: read -r init_comp init_svc_line; do
-        [[ -n "$init_comp" ]] || continue
-
-        # Extract individual unit/service names from the sub-metrics
-        while IFS= read -r svc; do
-            [[ -n "$svc" ]] || continue
-            [[ -n "${seen[$svc]:-}" ]] && continue
-            seen[$svc]=1
-
-            # systemd units already include .service; strip it for OpenRC
-            if [[ "$SERVICE_MANAGER" == "openrc" ]]; then
-                svc="${svc%.service}"
-            fi
-
-            # Validate: systemd doesn't want bare names without .service
-            if [[ "$SERVICE_MANAGER" == "systemd" && "$svc" != *.* ]]; then
-                svc="${svc}.service"
-            fi
-
-            targets+=("$init_comp:$svc")
-        done < <(echo "$init_svc_line")
+    # 2) Init-system sub-units (systemd/openrc/launchd). Healthy ones populate
+    #    `healthy`; unhealthy ones become targets.
+    local init_comp init_status init_name svc_norm
+    while IFS=$'\t' read -r init_comp init_status init_name; do
+        [[ -n "$init_name" ]] || continue
+        svc_norm="$init_name"
+        [[ "$SERVICE_MANAGER" == "openrc" ]] && svc_norm="${svc_norm%.service}"
+        [[ "$SERVICE_MANAGER" == "systemd" && "$svc_norm" != *.* ]] && svc_norm="${svc_norm}.service"
+        if [[ "$init_status" == healthy ]]; then
+            healthy[$svc_norm]=1
+        else
+            [[ -n "${seen[$svc_norm]:-}" ]] && continue
+            seen[$svc_norm]=1
+            targets+=("$init_comp:$svc_norm")
+        fi
+    # NOTE: each init-system alternative MUST be fully parenthesized — jq's `|`
+    # binds looser than `,`, so an unparenthesized trailing string gets piped
+    # into the next alternative's `.metrics` and aborts the filter.
     done < <(jq -r '
-        (.components[] | select(.component == "systemd" and .status != "healthy")) |
-        (.metrics.units // []) | map(select(.status != "healthy")) | .[].name |
-        "systemd:\(.)",
-        (.components[] | select(.component == "openrc" and .status != "healthy")) |
-        (.metrics.services // []) | map(select(.status != "healthy")) | .[].name |
-        "openrc:\(.)",
-        (.components[] | select(.component == "launchd" and .status != "healthy")) |
-        (.metrics.agents // []) | map(select(.status != "healthy")) | .[].name |
-        "launchd:\(.)"
+        ( .components[] | select(.component == "systemd") | (.metrics.units // [])[]    | "systemd\t\(.status)\t\(.name)" ),
+        ( .components[] | select(.component == "openrc")  | (.metrics.services // [])[] | "openrc\t\(.status)\t\(.name)" ),
+        ( .components[] | select(.component == "launchd") | (.metrics.agents // [])[]   | "launchd\t\(.status)\t\(.name)" )
     ' "$report" 2>/dev/null || true)
 
+    # Report-as-truth recovery: a service the report now calls healthy is cleared
+    # without round-tripping through check_service_active (flaky right after a
+    # restart). Services that simply aren't in this report are left for the TTL prune.
+    local k
+    while IFS= read -r k; do
+        [[ -n "$k" ]] || continue
+        if [[ -n "${healthy[$k]:-}" ]]; then
+            state="$(clear_service_state "$state" "$k")"
+            log "RECOVERED: cleared state for $k (report says healthy)"
+        fi
+    done < <(echo "$state" | jq -r 'keys[]' 2>/dev/null || true)
+
     if [[ ${#targets[@]} -eq 0 ]]; then
-        log "all components healthy; no action needed"
-        # Reset any stale state entries that are now healthy
-        local stale
-        stale="$(echo "$state" | jq -r 'keys[]')"
-        for svc in $stale; do
-            # Check if this service is now healthy
-            if check_service_active "$svc" 2>/dev/null; then
-                state="$(clear_service_state "$state" "$svc")"
-                log "CLEARED stale state for $svc (now healthy)"
-            fi
-        done
+        state="$(prune_state "$state" "$now_epoch")"
         save_state "$state"
         log "=== Self-Healing complete (nothing to do) ==="
         exit 0
@@ -421,17 +661,17 @@ main() {
 
     log "identified ${#targets[@]} target(s) for remediation"
 
-    # Process each unique target
+    local target
     for target in "${targets[@]}"; do
         IFS=: read -r comp svc <<< "$target"
         state="$(remediate_component "$comp" "$state" "$svc")"
     done
 
+    state="$(prune_state "$state" "$now_epoch" "${!seen[@]}")"
     save_state "$state"
 
-    # Generate summary
     local summary
-    summary="$(echo "$state" | jq -r 'to_entries | map({service: .key, retries: .value.retries, escalated: .value.escalated})')"
+    summary="$(echo "$state" | jq -r 'to_entries | map({service: .key, retries: (.value.retries // 0), escalated: (.value.escalated // false)})')"
     log "=== Self-Healing complete ==="
     log "state: $summary"
 }
