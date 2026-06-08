@@ -17,9 +17,13 @@ use lru::LruCache;
 use secrecy::ExposeSecret;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
+use xmpp_parsers::caps::{self, Caps};
 use xmpp_parsers::data_forms::{DataForm, DataFormType, Field, FieldType};
-use xmpp_parsers::disco::{DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, DiscoItemsResult};
+use xmpp_parsers::disco::{
+    DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, DiscoItemsResult, Feature, Identity,
+};
 use xmpp_parsers::eme::ExplicitMessageEncryption;
+use xmpp_parsers::hashes::Algo;
 use xmpp_parsers::http_upload::{SlotRequest, SlotResult};
 use xmpp_parsers::iq::Iq;
 use xmpp_parsers::legacy_omemo::{Bundle, Device, DeviceList, Encrypted};
@@ -31,6 +35,7 @@ use xmpp_parsers::oob::Oob;
 use xmpp_parsers::presence::{Presence, Type as PresenceType};
 use xmpp_parsers::pubsub::pubsub::{Item as PubSubItem, Items, PubSub, Publish, PublishOptions};
 use xmpp_parsers::pubsub::{NodeName, PubSubPayload};
+use xmpp_parsers::stanza_error::{DefinedCondition, ErrorType, StanzaError};
 use xmpp_parsers::{minidom::Element, ns};
 
 use crate::channels::{
@@ -381,8 +386,38 @@ fn room_requires_encryption(config: &XmppConfig, room_jid: &str) -> bool {
     is_jid_allowed(room_jid, &config.encrypted_rooms)
 }
 
+/// XEP-0115 entity-caps node URI identifying this client application.
+const CAPS_NODE: &str = "https://lunarwing.chat";
+
+/// Service-discovery (XEP-0030) identity and feature set this client advertises.
+///
+/// Used both to answer incoming `disco#info` queries and to derive the XEP-0115
+/// caps hash sent in presence, so the advertised hash always matches the
+/// response (an XEP-0115 requirement).
+fn lunarwing_disco_info() -> DiscoInfoResult {
+    DiscoInfoResult {
+        node: None,
+        identities: vec![Identity::new("client", "bot", "", "LunarWing")],
+        features: vec![
+            Feature::new(ns::DISCO_INFO),
+            Feature::new(ns::OOB),
+            Feature::new(ns::PING),
+        ],
+        extensions: vec![],
+    }
+}
+
 fn build_initial_presence() -> Presence {
-    Presence::available()
+    let presence = Presence::available();
+    // Advertise capabilities (XEP-0115) so peers can discover what this client
+    // supports. The ver hash is derived from the same disco#info we answer with.
+    match caps::hash_caps(&caps::compute_disco(&lunarwing_disco_info()), Algo::Sha_1) {
+        Ok(hash) => presence.with_payloads(vec![Caps::new(CAPS_NODE, hash).into()]),
+        Err(e) => {
+            tracing::warn!("XMPP caps hash computation failed; presence sent without caps: {e}");
+            presence
+        }
+    }
 }
 
 fn default_muc_nick(bound_jid: &xmpp_parsers::jid::Jid) -> String {
@@ -876,6 +911,7 @@ impl Channel for XmppChannel {
                             }
                             Some(tokio_xmpp::Event::Stanza(stanza)) => {
                                 if let Err(e) = process_stanza(
+                                    &mut client,
                                     stanza,
                                     &tx,
                                     &config,
@@ -1221,7 +1257,9 @@ impl Channel for XmppChannel {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_stanza(
+    client: &mut tokio_xmpp::Client,
     stanza: tokio_xmpp::Stanza,
     tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
     config: &XmppConfig,
@@ -1250,7 +1288,13 @@ async fn process_stanza(
         tokio_xmpp::Stanza::Presence(presence) => {
             handle_presence_stanza(presence, config, muc_participants, encrypted_room_states).await;
         }
-        tokio_xmpp::Stanza::Iq(_iq) => {}
+        tokio_xmpp::Stanza::Iq(iq) => {
+            if let Some(reply) = build_iq_reply(&iq) {
+                if let Err(e) = client.send_stanza(tokio_xmpp::Stanza::Iq(reply)).await {
+                    tracing::warn!("XMPP IQ reply send failed: {e}");
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -2287,6 +2331,55 @@ fn build_iq_request(
     }
 }
 
+/// Build the IQ reply for an incoming request stanza, or `None` if the stanza
+/// is itself a response (result/error) we must not reply to.
+///
+/// Answers `disco#info` (XEP-0030) with our advertised identity/features and
+/// `ping` (XEP-0199) with an empty result. Every other get/set receives
+/// `service-unavailable` — RFC 6120 §8.2.3 requires an unhandled IQ to get a
+/// reply rather than be silently dropped.
+fn build_iq_reply(iq: &Iq) -> Option<Iq> {
+    match iq {
+        Iq::Get {
+            from, id, payload, ..
+        } => Some(if payload.is("query", ns::DISCO_INFO) {
+            Iq::Result {
+                from: None,
+                to: from.clone(),
+                id: id.clone(),
+                payload: Some(lunarwing_disco_info().into()),
+            }
+        } else if payload.is("ping", ns::PING) {
+            Iq::Result {
+                from: None,
+                to: from.clone(),
+                id: id.clone(),
+                payload: None,
+            }
+        } else {
+            iq_service_unavailable(from.clone(), id.clone())
+        }),
+        Iq::Set { from, id, .. } => Some(iq_service_unavailable(from.clone(), id.clone())),
+        Iq::Result { .. } | Iq::Error { .. } => None,
+    }
+}
+
+/// Construct an `<iq type='error'>` carrying `service-unavailable`.
+fn iq_service_unavailable(to: Option<xmpp_parsers::jid::Jid>, id: String) -> Iq {
+    Iq::Error {
+        from: None,
+        to,
+        id,
+        error: StanzaError::new(
+            ErrorType::Cancel,
+            DefinedCondition::ServiceUnavailable,
+            "",
+            "",
+        ),
+        payload: None,
+    }
+}
+
 fn matching_iq_response(
     iq: Iq,
     expected_id: &str,
@@ -2677,6 +2770,7 @@ async fn send_iq_request(
                             }
                         }
                         process_stanza(
+                            client,
                             stanza,
                             tx,
                             config,
@@ -3021,7 +3115,14 @@ mod tests {
         assert_eq!(presence.type_, PresenceType::None);
         assert!(presence.from.is_none());
         assert!(presence.to.is_none());
-        assert!(presence.payloads.is_empty());
+        // Presence advertises XEP-0115 entity caps whose ver matches our disco#info.
+        assert_eq!(presence.payloads.len(), 1);
+        let caps = Caps::try_from(presence.payloads[0].clone()).expect("caps payload");
+        assert_eq!(caps.node, CAPS_NODE);
+        let expected = caps::hash_caps(&caps::compute_disco(&lunarwing_disco_info()), Algo::Sha_1)
+            .expect("caps hash");
+        assert!(matches!(caps.hash, Algo::Sha_1));
+        assert_eq!(caps.ver, expected.hash);
     }
 
     #[test]
@@ -3083,6 +3184,93 @@ mod tests {
         };
 
         assert!(matching_iq_response(iq, "abc123").is_none());
+    }
+
+    #[test]
+    fn build_iq_reply_answers_disco_info_with_identity_and_features() {
+        let iq = Iq::Get {
+            from: Some("alice@example.com/dino".parse().expect("valid jid")),
+            to: Some("summer@example.com".parse().expect("valid jid")),
+            id: "disco1".to_string(),
+            payload: DiscoInfoQuery { node: None }.into(),
+        };
+        match build_iq_reply(&iq).expect("disco#info gets a reply") {
+            Iq::Result {
+                id, to, payload, ..
+            } => {
+                assert_eq!(id, "disco1");
+                assert_eq!(to, Some("alice@example.com/dino".parse().expect("jid")));
+                let result = DiscoInfoResult::try_from(payload.expect("payload"))
+                    .expect("valid disco#info result");
+                assert!(result.identities.iter().any(|i| i.category == "client"));
+                let vars: Vec<&str> = result.features.iter().map(|f| f.var.as_str()).collect();
+                assert!(vars.contains(&ns::DISCO_INFO));
+                assert!(vars.contains(&ns::OOB));
+            }
+            _ => panic!("expected an iq result for disco#info"),
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_answers_ping_with_empty_result() {
+        let iq = Iq::Get {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "ping1".to_string(),
+            payload: "<ping xmlns='urn:xmpp:ping'/>"
+                .parse()
+                .expect("ping element"),
+        };
+        match build_iq_reply(&iq).expect("ping gets a reply") {
+            Iq::Result { id, payload, .. } => {
+                assert_eq!(id, "ping1");
+                assert!(payload.is_none());
+            }
+            _ => panic!("expected an empty iq result for ping"),
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_rejects_unknown_get_and_set_with_service_unavailable() {
+        let unknown_get = Iq::Get {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "g1".to_string(),
+            payload: "<query xmlns='jabber:iq:version'/>"
+                .parse()
+                .expect("element"),
+        };
+        let set = Iq::Set {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "s1".to_string(),
+            payload: "<query xmlns='jabber:iq:roster'/>"
+                .parse()
+                .expect("element"),
+        };
+        for iq in [unknown_get, set] {
+            match build_iq_reply(&iq).expect("get/set gets a reply") {
+                Iq::Error { error, .. } => {
+                    assert!(matches!(error.type_, ErrorType::Cancel));
+                    assert!(matches!(
+                        error.defined_condition,
+                        DefinedCondition::ServiceUnavailable
+                    ));
+                }
+                _ => panic!("expected a service-unavailable error"),
+            }
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_ignores_responses() {
+        let result = Iq::Result {
+            from: None,
+            to: None,
+            id: "r1".to_string(),
+            payload: None,
+        };
+        assert!(build_iq_reply(&result).is_none());
     }
 
     #[test]
