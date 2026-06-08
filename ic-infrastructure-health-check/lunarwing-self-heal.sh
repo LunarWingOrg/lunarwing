@@ -37,6 +37,10 @@ BACKOFF_STRATEGY="${SELF_HEAL_BACKOFF_STRATEGY:-exponential}"
 # Number of consecutive unhealthy checks before first restart (flapping guard).
 # Default 2: a service must fail two health checks in a row before remediation.
 GRACE_CHECKS="${SELF_HEAL_GRACE_CHECKS:-2}"
+# Maximum age (in seconds) for state entries. Entries with last_unhealthy_at
+# older than this are pruned each run. Default: 86400 (24 hours). Set to 0 to
+# disable pruning.
+STATE_PRUNE_TTL_SECONDS="${SELF_HEAL_STATE_PRUNE_TTL:-86400}"
 DRY_RUN=false
 REPORT_FILE=""
 
@@ -70,6 +74,12 @@ while [[ $# -gt 0 ]]; do
         --backoff-max)   BACKOFF_MAX="$2"; shift 2 ;;
         --backoff-strategy) BACKOFF_STRATEGY="$2"; shift 2 ;;
         --grace-checks)  GRACE_CHECKS="$2"; shift 2 ;;
+        --prune-ttl)
+            case "${2:-}" in
+                0|false|no|off) STATE_PRUNE_TTL_SECONDS="0"; shift 2 ;;
+                *) STATE_PRUNE_TTL_SECONDS="$2"; shift 2 ;;
+            esac
+            ;;
         --verify-health)
             case "${2:-}" in
                 0|false|no|off) VERIFY_HEALTH="false"; shift 2 ;;
@@ -77,7 +87,7 @@ while [[ $# -gt 0 ]]; do
             esac
             ;;
         --help|-h)
-            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N] [--verify-health true|false]"
+            say "Usage: lunarwing-self-heal.sh [--report <path>] [--dry-run] [--max-retries N] [--backoff N] [--backoff-base N] [--backoff-max N] [--backoff-strategy linear|exponential] [--grace-checks N] [--prune-ttl SECONDS] [--verify-health true|false]"
             exit 0
             ;;
         *) die "unknown arg: $1 (use --help)" ;;
@@ -542,7 +552,7 @@ main() {
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
-    log "config: max-retries=$MAX_RETRIES backoff=strategy=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s grace-checks=$GRACE_CHECKS verify-health=$VERIFY_HEALTH dry-run=$DRY_RUN"
+    log "config: max-retries=$MAX_RETRIES backoff=strategy=$BACKOFF_STRATEGY base=${BACKOFF_BASE}s max=${BACKOFF_MAX}s grace-checks=$GRACE_CHECKS prune-ttl=${STATE_PRUNE_TTL_SECONDS}s verify-health=$VERIFY_HEALTH dry-run=$DRY_RUN"
 
     if ! jq . "$report" >/dev/null 2>&1; then
         die "report is not valid JSON: $report"
@@ -550,6 +560,27 @@ main() {
 
     local state
     state="$(load_state)"
+
+    # Prune stale entries BEFORE remediation so leftover state from
+    # decommissioned/renamed services doesn't grow the file forever.
+    # Done here rather than at the end because save_state only writes
+    # the services that were touched by remediation this run.
+    if [[ "${STATE_PRUNE_TTL_SECONDS:-86400}" != "0" ]]; then
+        local pruned
+        pruned="$(echo "$state" | jq --argjson ttl "${STATE_PRUNE_TTL_SECONDS:-86400}" '
+            with_entries(
+                select(.value.last_unhealthy_at == null or (now - .value.last_unhealthy_at) < $ttl)
+            )
+        ' 2>/dev/null || echo '{}')"
+        if [[ "$pruned" != "$state" ]]; then
+            local before after
+            before="$(echo "$state" | jq 'length')"
+            after="$(echo "$pruned" | jq 'length')"
+            log "PRUNE: removed $((before - after)) stale state entries older than ${STATE_PRUNE_TTL_SECONDS:-86400}s"
+            state="$pruned"
+            save_state "$state"  # persist before remediation touches it
+        fi
+    fi
 
     # Build a set of target services from all unhealthy components
     local -a targets=()

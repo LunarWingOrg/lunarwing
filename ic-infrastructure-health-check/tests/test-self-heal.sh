@@ -305,5 +305,77 @@ fi
 # Clean up mock server
 kill "$HTTPD_PID" 2>/dev/null || true
 
+# ── State pruning tests ────────────────────
+# Seed a state file with a fresh entry (now) and a stale entry (1 day ago).
+# With default TTL (86400 = 24h), only the stale entry should be pruned.
+
+STATEDIR11="$TMP/self-heal-prune"
+mkdir -p "$STATEDIR11"
+
+# Create initial state.json with fresh + stale entries to test pruning
+stale_ts="$(python3 -c "import time; print(int(time.time() - (26*3600)))")"
+now_ts="$(python3 -c "import time; print(int(time.time()))")"
+jq -n \
+    --argjson stale_ts "$stale_ts" \
+    --argjson now_ts "$now_ts" \
+    '{
+        "lunarwing": {consecutive_unhealthy: 1, first_unhealthy_at: $now_ts, last_unhealthy_at: $now_ts, retries: 0, escalated: false},
+        "clickhouse-server.service": {retries: 0, escalated: false, last_unhealthy_at: $stale_ts}
+    }' > "$STATEDIR11/state.json"
+
+# Run with the default unhealthy report — the stale entry should be pruned at load time
+out_p2="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR11" \
+       "$SELF_HEAL" --dry-run --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_contains "$out_p2" "PRUNE: removed 1 stale state entr" \
+    "stale entry older than 24h is pruned"
+
+# Verify the stale entry is gone
+pruned_state="$(jq -r '.["clickhouse-server.service"] | type' "$STATEDIR11/state.json" 2>/dev/null || echo null)"
+if [[ "$pruned_state" == "null" ]]; then
+    echo "PASS: stale entry is actually removed from state.json"
+    pass=$((pass + 1))
+else
+    echo "FAIL: stale entry still exists in state.json"
+    fail=$((fail + 1))
+fi
+
+# Verify the fresh entry survives
+fresh_state="$(jq -r '.["lunarwing"] | type' "$STATEDIR11/state.json" 2>/dev/null || echo null)"
+if [[ "$fresh_state" == "object" ]]; then
+    echo "PASS: fresh entry survives pruning"
+    pass=$((pass + 1))
+else
+    echo "FAIL: fresh entry was wrongly pruned"
+    fail=$((fail + 1))
+fi
+
+# Test --prune-ttl 0 disables pruning
+STATEDIR12="$TMP/self-heal-prune-off"
+mkdir -p "$STATEDIR12"
+# Create state.json with a stale entry
+jq -n \
+    --argjson stale_ts "$stale_ts" \
+    --argjson now_ts "$now_ts" \
+    '{
+        "lunarwing": {consecutive_unhealthy: 1, first_unhealthy_at: $now_ts, last_unhealthy_at: $now_ts, retries: 0, escalated: false},
+        "clickhouse-server.service": {retries: 0, escalated: false, last_unhealthy_at: $stale_ts}
+    }' > "$STATEDIR12/state.json"
+# Run with prune-ttl=0 — stale entry should NOT be removed
+out_p3="$(LUNARWING_BASE_DIR="$TMP" LUNARWING_SERVICE_MANAGER=systemd \
+       SELF_HEAL_STATE_DIR="$STATEDIR12" \
+       "$SELF_HEAL" --dry-run --prune-ttl 0 --report "$TMP/grace-report.json" --backoff 0 2>&1)"
+assert_absent "$out_p3" "PRUNE: removed" \
+    "--prune-ttl 0 disables state pruning"
+# Verify stale entry is still present
+prune_off_state="$(jq -r '.["clickhouse-server.service"] | type' "$STATEDIR12/state.json" 2>/dev/null || echo null)"
+if [[ "$prune_off_state" == "object" ]]; then
+    echo "PASS: --prune-ttl 0 preserves stale entries"
+    pass=$((pass + 1))
+else
+    echo "FAIL: --prune-ttl 0 should not remove stale entries"
+    fail=$((fail + 1))
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
