@@ -909,6 +909,10 @@ fn parse_wait_response(body: &[u8]) -> Option<(i64, Vec<(String, LineInfo)>)> {
 /// them via handle_inbound_line. Near-real-time delivery; used when the adapter
 /// advertises support (see detect_and_seed_ingest_mode). Falls back to
 /// per-buffer polling if /api/wait turns out to be unavailable.
+///
+/// Also updates per-buffer `last_seen_ids` watermarks so that if the adapter
+/// restarts, the cursor resets, or the poll path falls back to per-buffer
+/// polling, already-seen events are not re-emitted as duplicate messages.
 fn do_longpoll(adapter_url: &str, relay_password: &str) {
     // Pick up dm/group/allow_from/networks changes (cheap, ~once per wait).
     refresh_policy_config();
@@ -922,14 +926,59 @@ fn do_longpoll(adapter_url: &str, relay_password: &str) {
         base, cursor, WAIT_TIMEOUT_SECS
     );
 
+    // Load current per-buffer watermarks so long-poll can keep them in sync.
+    let mut last_seen_ids: HashMap<String, i64> =
+        channel_host::workspace_read(LAST_SEEN_IDS_PATH)
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+
+    // For drop_log when a duplicate line is detected (only active in debug).
+    let verbose = channel_host::workspace_read(VERBOSE_DROPS_PATH)
+        .map(|s| s == "true")
+        .unwrap_or(false);
+
     match http_get(&url, relay_password, WAIT_HTTP_TIMEOUT_MS) {
         Ok(resp) if resp.status == 200 => match parse_wait_response(&resp.body) {
             Some((new_cursor, events)) => {
                 if !events.is_empty() {
                     debug_log(&format!("/api/wait: {} new event(s)", events.len()));
                 }
+                let mut watermarks_updated = false;
                 for (full_name, line) in &events {
+                    // In-memory dedup within this long-poll tick: skip events
+                    // the adapter may have re-sent (e.g. after partial restart
+                    // that replays the cursor window). Already-seen lines are
+                    // filtered before handle_inbound_line so the agent never
+                    // sees them.
+                    let line_id = line.id.unwrap_or(-1);
+                    {
+                        let current = last_seen_ids
+                            .get(full_name)
+                            .copied()
+                            .unwrap_or(-1);
+                        if line_id <= current {
+                            drop_log(
+                                verbose,
+                                &format!(
+                                    "longpoll: skipping already-seen line id {} (watermark {}) in {}",
+                                    line_id, current, full_name
+                                ),
+                            );
+                            continue;
+                        }
+                    }
                     handle_inbound_line(full_name, line);
+                    // Track per-buffer watermark so poll-path dedup works
+                    // if long-poll falls back or the adapter resets.
+                    if line_id > -1 {
+                        last_seen_ids.insert(full_name.clone(), line_id);
+                        watermarks_updated = true;
+                    }
+                }
+                if watermarks_updated {
+                    if let Ok(json) = serde_json::to_string(&last_seen_ids) {
+                        let _ = channel_host::workspace_write(LAST_SEEN_IDS_PATH, &json);
+                    }
                 }
                 let _ = channel_host::workspace_write(EVENT_CURSOR_PATH, &new_cursor.to_string());
             }
