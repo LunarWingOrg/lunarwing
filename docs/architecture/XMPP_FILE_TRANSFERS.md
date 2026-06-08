@@ -106,3 +106,7 @@ OOB URLs in OMEMO-encrypted messages are embedded in the plaintext body (before 
 In practice:
 - **Unencrypted messages**: OOB element is present in `msg.payloads` and extracted directly
 - **Encrypted DMs/rooms**: The OOB URL may appear in the decrypted plaintext body. The OOB `<x>` element in the outer stanza (if present) is still parsed. Some clients omit the outer OOB element for encrypted messages to avoid leaking the URL to the server.
+
+## Implementation
+
+### Began first phase
