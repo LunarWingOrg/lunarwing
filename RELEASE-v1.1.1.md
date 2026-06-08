@@ -1,10 +1,10 @@
 # Release Notes for LunarWing v1.1.1 - Codename Freedom
 
-**Release Date:** TBD
+**Release Date:** 2026-06-07
 
 ## Overview
 
-LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.6), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, additional polishing of the weechat channel setup and multi-tenant admin script and other various minor changes.
+LunarWing v1.1.1 is a release focused on adding polish, hardening the XMPP file transfer pipeline, removing proprietary channels from the codebase, and improving documentation and project infrastructure. The headline changes are full inbound XMPP file transfer support (XEP-0066 OOB extraction, download, and bridge transport), the removal of Discord, Feishu/Lark, and Slack channel/tool sources (continuing the proprietary channel removal initiative started with WhatsApp in 1.0.6), a new security port analysis identifying a high-severity cross-conversation history leakage bug inherited from upstream, additional polishing of the WeeChat channel (near-real-time long-poll ingestion plus first-DM and mirror-loop fixes, and a multi-tenant port fix) and the multi-tenant admin script, a documentation-accuracy pass, and other various minor changes.
 
 ---
 
@@ -50,7 +50,7 @@ Remaining proprietary channel to be addressed in future releases: Telegram.
 
 New analysis document (`docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md`) covering the upstream IronClaw v0.29.1 patch release. Key finding:
 
-- **P0: Cross-conversation history leakage for non-UUID channel scopes** — LunarWing's v1 history persistence in `src/bridge/router.rs` only handles UUID-formatted conversation scopes correctly. When a channel produces a non-UUID scope (as XMPP does for room JIDs like `xmpp:room:dev@conference.example.org` or DM JIDs like `xmpp:dm:alice@example.org`), the `Uuid::parse_str()` call fails silently and all messages fall back to a single shared "assistant conversation" per user+channel. This causes history leakage across conversations and potential multi-tenant privacy violations. A fix plan is documented with specific file/line references.
+- **P0: Cross-conversation history leakage for non-UUID channel scopes** — LunarWing's v1 history persistence in `src/bridge/router.rs` only handles UUID-formatted conversation scopes correctly. When a channel produces a non-UUID scope (as XMPP does for room JIDs like `xmpp:room:dev@conference.example.org` or DM JIDs like `xmpp:dm:alice@example.org`), the `Uuid::parse_str()` call fails silently and all messages fall back to a single shared "assistant conversation" per user+channel. This causes history leakage across conversations and potential multi-tenant privacy violations. **This was fixed in v1.1.1** (`1.1.1-222-security-improvements-2`): `scoped_conversation_id()` now derives a stable UUID v5 from non-UUID scopes and `resolve_v1_conversation_for_message()` replaces the inline `Uuid::parse_str()` fallback. See `docs/architecture/FIXED_NON_UUID_SCOPE_LEAKAGE.md`.
 
 Previous port analysis documents (`ironclaw-0.28.1`, `ironclaw-0.28.2`, `ironclaw-0.29.0`) were also updated with more specific information.
 
@@ -83,9 +83,20 @@ Server-side WebSocket keepalive implemented on branch `1.1.1-111-oof-june5stagin
 - **Configuration** (`ic/src/settings.rs`, `ic/src/config/channels.rs`) — `ws_ping_interval_secs` (default 30) and `ws_idle_timeout_secs` (default 120), configurable via `WS_PING_INTERVAL_SECS` and `WS_IDLE_TIMEOUT_SECS` env vars.
 - **Tests** — 7 new tracker unit tests + 6 existing handler tests passing. Zero clippy warnings.
 
+### WeeChat Channel Improvements
+
+Substantial polish to the WeeChat (IRC) channel and its multi-tenant deployment, landing across three branches (`#13`, `#14`, `#15`).
+
+- **Multi-tenant port/password fix** (`1.1.1-222-weechat-mulitenant-port-fix-2`) — The in-process WASM WeeChat channel previously ignored per-tenant relay/adapter ports and always polled the hardcoded defaults in `weechat.capabilities.json`, so only the one tenant whose ports happened to match worked. A generic, capability-declared **env-source mechanism** now injects each tenant's `RELAY_URL` / `WS_ADAPTER_URL` (and the per-tenant `RELAY_PASSWORD`, the second blocker — the adapter authenticates WASM requests against it) into channel config at `on_start`. A read-only pre-flight script (`ic/scripts/lunarwing-weechat-preflight.sh`) checks env-vs-registry alignment before upgrading existing tenants. See `docs/ops/WEECHAT-MULTITENANT-PORT-BUG.md`.
+- **Near real-time ingestion (long-poll)** (`1.1.1-444-weechat-polish-and-fixes-4`) — Inbound delivery dropped from ~3s polling (and up to ~90s for a brand-new buffer's first DM) to ~ms. The adapter (`ws_adapter.py`) gained a global ordered event log and a blocking `GET /api/wait` endpoint; the WASM channel probes `/api/health` for support and consumes `/api/wait` via `do_longpoll`, falling back to per-buffer polling against older adapters. Timeout hierarchy: adapter wait ≤20s < WASM HTTP 25s < host callback 30s.
+- **First-DM fix** — The first message in a freshly-created query/DM buffer was dropped at the **adapter**: a line for a buffer not yet in the cached buffer list was discarded entirely (so neither polling nor the long-poll cursor could deliver it). The adapter now refreshes its buffer list synchronously and retries, capturing the first line; `/api/wait` also replays the post-restart backlog so a DM right after an adapter restart isn't skipped.
+- **Mirror-loop fix** — In long-poll mode the agent re-ingested and re-answered its own replies endlessly, because the `irc_privmsg`/`self_msg`/`no_log` tag filter lived only in the poll path. The filter moved into `handle_inbound_line` (`tags_allow_ingest`), the single choke point both ingest paths share (regression test `test_tags_allow_ingest`).
+- **Debug-logging toggle** (`1.1.1-111-weechat-debug-logging-toggle-enable-1`) — The verbose debug logging in the WeeChat WASM channel and adapter is now toggleable via the `debug_logging` capability flag and **disabled by default**.
+- **mt-admin + tooling** — `lunarwing-mt-admin.sh` now warns (non-fatally) if the adapter's `aiohttp` dependency is missing and runs each tenant's adapter/proxy from the tenant's own clone rather than the admin's source repo. New helper scripts: `create-tenant-*.sh` (provision a fresh tenant end-to-end), `upgrade-tenant-*.sh`, and `diag-weechat.sh` (read-only one-shot diagnostic). Full reference: `docs/architecture/WEECHAT-CHANNEL-ARCHITECTURE.md`.
+
 ### Self-Healing Improvements
 
-References to self-healing improvements documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes).
+Self-healing work documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`, including work from PR #6 and contributions by Kumogakare (documents) and Kestrel (suggested changes). The infrastructure health-check suite (`ic-infrastructure-health-check/`) and the watchdog installer (`ic/scripts/install-lunarwing-watchdog.sh`) were also improved — better per-service health checks and cron wrapper; an incorrect set of test fixtures/permission changes was reverted. Further healthcheck/self-healing enhancements are deferred to v1.1.2.
 
 ### Release Notes Archival
 
@@ -100,12 +111,16 @@ References to self-healing improvements documented in `docs/proposals/SELF_HEALI
 
 - `docs/architecture/XMPP_FILE_TRANSFERS.md` — Full architecture document for bidirectional XMPP file transfer support (outbound XEP-0363 + inbound XEP-0066 OOB)
 - `docs/ops/STATUS_OF_REMOVAL_OF_PROPRIETARY_CHANNELS.md` — Tracks which proprietary channels have been removed (WhatsApp, Discord, Feishu/Lark) and which remain (Telegram)
-- `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` — Security analysis of upstream IronClaw 0.29.1 with P0 conversation isolation fix plan
+- `docs/proposals/OLDPROJECT_PORT_ANALYSES/ironclaw-0.29.1-port-analysis.md` — Security analysis of upstream IronClaw 0.29.1 with the P0 conversation-isolation fix (now implemented)
+- `docs/architecture/FIXED_NON_UUID_SCOPE_LEAKAGE.md` — Implementation note for the non-UUID conversation-scope leakage fix
 - `docs/architecture/SECURITY_ENHANCEMENTS.md` — Session notes for the P0-A/P1-H security implementation work
 - `docs/architecture/WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` — Summary of the WebSocket keepalive implementation
 - `docs/proposals/WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` — Full design document for WebSocket server-side keepalive (problem statement, solution, configuration, migration notes)
 - `docs/proposals/MULTICA_LUNARTICA_RESKIN.md` — Plan for reskinning Multica UI for Lunartica
 - `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER` — Proposal to rename remaining ironclaw references in WeeChat channel, ws_adapter, and associated scripts
+- `docs/architecture/WEECHAT-CHANNEL-ARCHITECTURE.md` — Authoritative WeeChat channel reference (components, ingestion/latency model, config precedence, known issues with fix status)
+- `docs/ops/WEECHAT-MULTITENANT-PORT-BUG.md` — The per-tenant port/password fix and the env-sourced-fields mechanism
+- `docs/bugs/README.md` — New Open-vs-Fixed bug index; the `docs/bugs/` set was reconciled against the code (stale "open" reports that are actually fixed were corrected)
 - `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md` — Self-healing infrastructure improvements reference
 - `docs/ops/PENDING_CLEANUP.md` — Updated with current removal status (Discord, Feishu, Slack marked as removed)
 - `ic/FEATURE_PARITY.md` — Updated to reflect proprietary channel removals
@@ -148,6 +163,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 |---------|--------|
 | Healthcheck and Self-Healing Enhancements | v.1.1.2 |
 | Remove other non-supported extensions from the LW repo, specifically Google related ones. | v1.1.2 |
+| Better implementation of memory `lapse` bug fix previously implemented in 1.1.0 | v1.1.2 |
 | Update funding.json with actual payment addresses and additional info | v1.1.3 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental feature; more testing required) | v1.1.4 |
 | Lunartica UI reskin | v1.1.4 |
@@ -162,11 +178,11 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.8 |
 | Proprietary channel removal continuation (Telegram) | v1.1.9 |
-| It is still undecided if Github extension should be removed from the main LunarWing repo or continued to be supported. | v1.1.9 |
+| Decision to remove Github extension | v1.1.9 |
 | v2 engine route | v1.2.0 |
 | Better githooks for repo | v1.2.1 |
 | LunarWing developer CI/CD Pipeline | v1.2.1 |
-| LunarWing decision on continuing to use Github to publish source code or simply use it as a mirror | v1.2.1 |
+| LunarWing decision on switching to Codeberg or Self-hosted Gitlab rather than Github to host monorepo (GH can still be used as a mirror) | v1.2.1 |
 | LunarVoice (Further planning required) | v1.2.2 |
 | Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 1.2.0-1.2.2) | v1.2.3 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.2.4 |
