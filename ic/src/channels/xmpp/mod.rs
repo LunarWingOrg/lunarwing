@@ -17,9 +17,13 @@ use lru::LruCache;
 use secrecy::ExposeSecret;
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
+use xmpp_parsers::caps::{self, Caps};
 use xmpp_parsers::data_forms::{DataForm, DataFormType, Field, FieldType};
-use xmpp_parsers::disco::{DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, DiscoItemsResult};
+use xmpp_parsers::disco::{
+    DiscoInfoQuery, DiscoInfoResult, DiscoItemsQuery, DiscoItemsResult, Feature, Identity,
+};
 use xmpp_parsers::eme::ExplicitMessageEncryption;
+use xmpp_parsers::hashes::Algo;
 use xmpp_parsers::http_upload::{SlotRequest, SlotResult};
 use xmpp_parsers::iq::Iq;
 use xmpp_parsers::legacy_omemo::{Bundle, Device, DeviceList, Encrypted};
@@ -31,6 +35,7 @@ use xmpp_parsers::oob::Oob;
 use xmpp_parsers::presence::{Presence, Type as PresenceType};
 use xmpp_parsers::pubsub::pubsub::{Item as PubSubItem, Items, PubSub, Publish, PublishOptions};
 use xmpp_parsers::pubsub::{NodeName, PubSubPayload};
+use xmpp_parsers::stanza_error::{DefinedCondition, ErrorType, StanzaError};
 use xmpp_parsers::{minidom::Element, ns};
 
 use crate::channels::{
@@ -50,6 +55,12 @@ const MUC_ADMIN_NS: &str = "http://jabber.org/protocol/muc#admin";
 const OUTBOUND_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60 * 60);
 const OOB_DOWNLOAD_TIMEOUT_SECS: u64 = 30;
 const OOB_MAX_FILE_SIZE: u64 = 20 * 1024 * 1024;
+/// Max OOB attachments processed from a single stanza (matches the WASM host's
+/// per-message attachment cap). Bounds the download work a peer can trigger.
+const MAX_OOB_ATTACHMENTS: usize = 10;
+/// Max OOB file downloads run concurrently, so one slow URL can't serialize the
+/// whole batch (and block the bridge's client event loop) for N * timeout.
+const MAX_CONCURRENT_OOB_DOWNLOADS: usize = 4;
 
 #[derive(Debug, Clone, Default)]
 struct EncryptedRoomState {
@@ -381,8 +392,38 @@ fn room_requires_encryption(config: &XmppConfig, room_jid: &str) -> bool {
     is_jid_allowed(room_jid, &config.encrypted_rooms)
 }
 
+/// XEP-0115 entity-caps node URI identifying this client application.
+const CAPS_NODE: &str = "https://lunarwing.chat";
+
+/// Service-discovery (XEP-0030) identity and feature set this client advertises.
+///
+/// Used both to answer incoming `disco#info` queries and to derive the XEP-0115
+/// caps hash sent in presence, so the advertised hash always matches the
+/// response (an XEP-0115 requirement).
+fn lunarwing_disco_info() -> DiscoInfoResult {
+    DiscoInfoResult {
+        node: None,
+        identities: vec![Identity::new("client", "bot", "", "LunarWing")],
+        features: vec![
+            Feature::new(ns::DISCO_INFO),
+            Feature::new(ns::OOB),
+            Feature::new(ns::PING),
+        ],
+        extensions: vec![],
+    }
+}
+
 fn build_initial_presence() -> Presence {
-    Presence::available()
+    let presence = Presence::available();
+    // Advertise capabilities (XEP-0115) so peers can discover what this client
+    // supports. The ver hash is derived from the same disco#info we answer with.
+    match caps::hash_caps(&caps::compute_disco(&lunarwing_disco_info()), Algo::Sha_1) {
+        Ok(hash) => presence.with_payloads(vec![Caps::new(CAPS_NODE, hash).into()]),
+        Err(e) => {
+            tracing::warn!("XMPP caps hash computation failed; presence sent without caps: {e}");
+            presence
+        }
+    }
 }
 
 fn default_muc_nick(bound_jid: &xmpp_parsers::jid::Jid) -> String {
@@ -876,6 +917,7 @@ impl Channel for XmppChannel {
                             }
                             Some(tokio_xmpp::Event::Stanza(stanza)) => {
                                 if let Err(e) = process_stanza(
+                                    &mut client,
                                     stanza,
                                     &tx,
                                     &config,
@@ -1221,7 +1263,9 @@ impl Channel for XmppChannel {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_stanza(
+    client: &mut tokio_xmpp::Client,
     stanza: tokio_xmpp::Stanza,
     tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
     config: &XmppConfig,
@@ -1250,7 +1294,13 @@ async fn process_stanza(
         tokio_xmpp::Stanza::Presence(presence) => {
             handle_presence_stanza(presence, config, muc_participants, encrypted_room_states).await;
         }
-        tokio_xmpp::Stanza::Iq(_iq) => {}
+        tokio_xmpp::Stanza::Iq(iq) => {
+            if let Some(reply) = build_iq_reply(&iq) {
+                if let Err(e) = client.send_stanza(tokio_xmpp::Stanza::Iq(reply)).await {
+                    tracing::warn!("XMPP IQ reply send failed: {e}");
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -1480,7 +1530,7 @@ async fn handle_message_stanza(
             .or_insert_with(HashSet::new);
     }
 
-    let attachments = extract_oob_attachments(&msg.payloads).await;
+    let attachments = extract_inbound_attachments(&msg.payloads, &content).await;
     let content = if !attachments.is_empty()
         && attachments
             .iter()
@@ -2287,6 +2337,55 @@ fn build_iq_request(
     }
 }
 
+/// Build the IQ reply for an incoming request stanza, or `None` if the stanza
+/// is itself a response (result/error) we must not reply to.
+///
+/// Answers `disco#info` (XEP-0030) with our advertised identity/features and
+/// `ping` (XEP-0199) with an empty result. Every other get/set receives
+/// `service-unavailable` — RFC 6120 §8.2.3 requires an unhandled IQ to get a
+/// reply rather than be silently dropped.
+fn build_iq_reply(iq: &Iq) -> Option<Iq> {
+    match iq {
+        Iq::Get {
+            from, id, payload, ..
+        } => Some(if payload.is("query", ns::DISCO_INFO) {
+            Iq::Result {
+                from: None,
+                to: from.clone(),
+                id: id.clone(),
+                payload: Some(lunarwing_disco_info().into()),
+            }
+        } else if payload.is("ping", ns::PING) {
+            Iq::Result {
+                from: None,
+                to: from.clone(),
+                id: id.clone(),
+                payload: None,
+            }
+        } else {
+            iq_service_unavailable(from.clone(), id.clone())
+        }),
+        Iq::Set { from, id, .. } => Some(iq_service_unavailable(from.clone(), id.clone())),
+        Iq::Result { .. } | Iq::Error { .. } => None,
+    }
+}
+
+/// Construct an `<iq type='error'>` carrying `service-unavailable`.
+fn iq_service_unavailable(to: Option<xmpp_parsers::jid::Jid>, id: String) -> Iq {
+    Iq::Error {
+        from: None,
+        to,
+        id,
+        error: StanzaError::new(
+            ErrorType::Cancel,
+            DefinedCondition::ServiceUnavailable,
+            "",
+            "",
+        ),
+        payload: None,
+    }
+}
+
 fn matching_iq_response(
     iq: Iq,
     expected_id: &str,
@@ -2677,6 +2776,7 @@ async fn send_iq_request(
                             }
                         }
                         process_stanza(
+                            client,
                             stanza,
                             tx,
                             config,
@@ -2766,15 +2866,35 @@ fn extract_body_from_message(msg: &xmpp_parsers::message::Message) -> Option<Str
     msg.bodies.values().find(|b| !b.is_empty()).cloned()
 }
 
-/// Extract OOB URLs from message payloads, download the files, and return as attachments.
-async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment> {
-    let oob_urls: Vec<(String, Option<String>)> = payloads
-        .iter()
-        .filter_map(|p| Oob::try_from(p.clone()).ok())
-        .map(|oob| (oob.url, oob.desc))
-        .collect();
+/// Extract downloadable attachments referenced by an incoming message: OOB URLs
+/// from the stanza payloads (XEP-0066) plus any `aesgcm://` (XEP-0454) URLs that
+/// appear only in the decrypted body — some clients omit the cleartext OOB
+/// element for encrypted files. Downloads (and decrypts) them and returns the
+/// resulting attachments.
+async fn extract_inbound_attachments(payloads: &[Element], body: &str) -> Vec<IncomingAttachment> {
+    let mut urls = collect_oob_urls(payloads, MAX_OOB_ATTACHMENTS);
+    let oob_total = payloads.iter().filter(|p| p.is("x", ns::OOB)).count();
+    if oob_total > MAX_OOB_ATTACHMENTS {
+        tracing::warn!(
+            count = oob_total,
+            max = MAX_OOB_ATTACHMENTS,
+            "Too many OOB URLs in stanza; downloading only the first {MAX_OOB_ATTACHMENTS}"
+        );
+    }
 
-    if oob_urls.is_empty() {
+    // Add encrypted-media URLs found only in the (decrypted) body, deduped
+    // against the OOB elements and bounded by the same per-stanza cap.
+    let known: HashSet<String> = urls.iter().map(|(u, _)| u.clone()).collect();
+    for url in collect_aesgcm_urls(body, MAX_OOB_ATTACHMENTS) {
+        if urls.len() >= MAX_OOB_ATTACHMENTS {
+            break;
+        }
+        if !known.contains(&url) {
+            urls.push((url, None));
+        }
+    }
+
+    if urls.is_empty() {
         return Vec::new();
     }
 
@@ -2789,23 +2909,98 @@ async fn extract_oob_attachments(payloads: &[Element]) -> Vec<IncomingAttachment
         }
     };
 
-    let mut attachments = Vec::new();
-    for (url, _desc) in &oob_urls {
-        match download_oob_file(&client, url).await {
-            Ok(attachment) => attachments.push(attachment),
-            Err(e) => {
-                tracing::warn!(url = %url, "OOB file download failed: {}", e);
+    // Download up to MAX_CONCURRENT_OOB_DOWNLOADS files at once so a single slow
+    // URL can't serialize the whole batch (and stall the client event loop) for
+    // N * timeout. `buffered` keeps the results in stanza order.
+    futures::stream::iter(urls)
+        .map(|(url, _desc)| {
+            let client = &client;
+            async move {
+                match download_oob_file(client, &url).await {
+                    Ok(attachment) => Some(attachment),
+                    Err(e) => {
+                        tracing::warn!(url = %url, "OOB file download failed: {}", e);
+                        None
+                    }
+                }
             }
+        })
+        .buffered(MAX_CONCURRENT_OOB_DOWNLOADS)
+        .filter_map(|opt| async move { opt })
+        .collect()
+        .await
+}
+
+/// Collect OOB URLs (with optional descriptions) from message payloads, capped
+/// at `max` to bound the download work a single stanza can trigger.
+fn collect_oob_urls(payloads: &[Element], max: usize) -> Vec<(String, Option<String>)> {
+    payloads
+        .iter()
+        .filter_map(|p| Oob::try_from(p.clone()).ok())
+        .map(|oob| (oob.url, oob.desc))
+        .take(max)
+        .collect()
+}
+
+/// Extract `aesgcm://` (XEP-0454) URLs from message text, capped at `max`.
+///
+/// Only the explicit encrypted-media scheme is collected — plain `https://`
+/// links in a body are intentionally not auto-downloaded.
+fn collect_aesgcm_urls(text: &str, max: usize) -> Vec<String> {
+    text.split_whitespace()
+        .filter(|tok| tok.starts_with("aesgcm://"))
+        .map(|tok| tok.to_string())
+        .take(max)
+        .collect()
+}
+
+/// Derive a display filename from a URL's last path segment, stripping any query
+/// or fragment. A missing extension is fine — the segment (e.g. an opaque
+/// XEP-0363 UUID) is still a unique, useful name, which keeps distinct files
+/// from colliding on a shared `oob-{filename}` storage key downstream.
+fn filename_from_url(url: &str) -> Option<String> {
+    url.rsplit('/')
+        .next()
+        .and_then(|s| s.split(['?', '#']).next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
+/// Read a byte stream into memory, aborting as soon as the accumulated size
+/// exceeds `max`. Bounds peak memory to `max` + one chunk regardless of what
+/// the server advertises in `Content-Length`.
+async fn read_capped_body<S, B, E>(stream: S, max: u64) -> Result<Vec<u8>, String>
+where
+    S: futures::Stream<Item = Result<B, E>>,
+    B: AsRef<[u8]>,
+    E: std::fmt::Display,
+{
+    let mut stream = std::pin::pin!(stream);
+    let mut data: Vec<u8> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Failed to read response body: {e}"))?;
+        let chunk = chunk.as_ref();
+        if data.len() as u64 + chunk.len() as u64 > max {
+            return Err(format!("File too large: exceeds {max} bytes"));
         }
+        data.extend_from_slice(chunk);
     }
-    attachments
+    Ok(data)
 }
 
 /// Download a single file from an OOB URL and return as an IncomingAttachment.
+///
+/// `aesgcm://` (XEP-0454) URLs are fetched over https and AES-256-GCM-decrypted;
+/// every other http(s) URL is downloaded as-is.
 async fn download_oob_file(
     client: &reqwest::Client,
     url: &str,
 ) -> Result<IncomingAttachment, String> {
+    if url.starts_with("aesgcm://") {
+        return download_aesgcm_file(client, url).await;
+    }
+
     let response = client
         .get(url)
         .send()
@@ -2837,29 +3032,16 @@ async fn download_oob_file(
         }
     }
 
-    let data = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
-
-    if data.len() as u64 > OOB_MAX_FILE_SIZE {
-        return Err(format!(
-            "File too large: {} bytes (max {OOB_MAX_FILE_SIZE})",
-            data.len()
-        ));
-    }
+    // Enforce the size cap *while* streaming so a missing or understated
+    // Content-Length can't make us buffer an unbounded body into memory.
+    let data = read_capped_body(response.bytes_stream(), OOB_MAX_FILE_SIZE).await?;
 
     let mime_type = content_type
         .split(';')
         .next()
         .unwrap_or("application/octet-stream")
         .trim();
-    let filename = url
-        .split('/')
-        .last()
-        .and_then(|s| s.split('?').next())
-        .filter(|s| !s.is_empty() && s.contains('.'))
-        .map(|s| s.to_string());
+    let filename = filename_from_url(url);
 
     Ok(IncomingAttachment {
         id: Uuid::new_v4().to_string(),
@@ -2870,9 +3052,124 @@ async fn download_oob_file(
         source_url: Some(url.to_string()),
         storage_key: None,
         extracted_text: None,
-        data: data.to_vec(),
+        data,
         duration_secs: None,
     })
+}
+
+/// Download and AES-256-GCM-decrypt an `aesgcm://` (XEP-0454) media URL.
+async fn download_aesgcm_file(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<IncomingAttachment, String> {
+    let (https_url, iv, key) = parse_aesgcm_url(url)?;
+
+    let response = client
+        .get(&https_url)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP GET failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {} from aesgcm URL", response.status()));
+    }
+    if let Some(len) = response
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        && len > OOB_MAX_FILE_SIZE
+    {
+        return Err(format!(
+            "File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"
+        ));
+    }
+
+    let ciphertext = read_capped_body(response.bytes_stream(), OOB_MAX_FILE_SIZE).await?;
+    let data = decrypt_aesgcm(&ciphertext, &iv, &key)?;
+
+    // The server stores ciphertext, so its Content-Type is unreliable — infer
+    // the type from the filename in the URL path instead.
+    let filename = filename_from_url(&https_url);
+    let mime_type = mime_guess::from_path(filename.as_deref().unwrap_or(""))
+        .first_or_octet_stream()
+        .essence_str()
+        .to_string();
+
+    Ok(IncomingAttachment {
+        id: Uuid::new_v4().to_string(),
+        kind: AttachmentKind::from_mime_type(&mime_type),
+        mime_type,
+        filename,
+        size_bytes: Some(data.len() as u64),
+        // Keep the original aesgcm:// URL so body deduplication matches.
+        source_url: Some(url.to_string()),
+        storage_key: None,
+        extracted_text: None,
+        data,
+        duration_secs: None,
+    })
+}
+
+/// Parse an `aesgcm://` (XEP-0454) URL into its https fetch URL, IV, and key.
+///
+/// Format: `aesgcm://<host>/<path>#<hex(IV ‖ key)>` where the key is the last
+/// 32 bytes and the IV is the remainder (12 or 16 bytes).
+fn parse_aesgcm_url(url: &str) -> Result<(String, Vec<u8>, Vec<u8>), String> {
+    let rest = url
+        .strip_prefix("aesgcm://")
+        .ok_or_else(|| "not an aesgcm:// URL".to_string())?;
+    let (location, fragment) = rest
+        .split_once('#')
+        .ok_or_else(|| "aesgcm:// URL missing key fragment".to_string())?;
+    if location.is_empty() {
+        return Err("aesgcm:// URL missing host/path".to_string());
+    }
+    let key_material =
+        hex::decode(fragment).map_err(|e| format!("invalid aesgcm key fragment: {e}"))?;
+    let iv_len = key_material
+        .len()
+        .checked_sub(32)
+        .ok_or_else(|| "aesgcm key material shorter than the 32-byte key".to_string())?;
+    if iv_len != 12 && iv_len != 16 {
+        return Err(format!(
+            "unexpected aesgcm IV length {iv_len} (expected 12 or 16)"
+        ));
+    }
+    let (iv, key) = key_material.split_at(iv_len);
+    Ok((format!("https://{location}"), iv.to_vec(), key.to_vec()))
+}
+
+/// AES-256-GCM-decrypt XEP-0454 media. Supports the standard 12-byte IV and the
+/// legacy 16-byte IV; the ciphertext carries the 16-byte GCM tag appended.
+fn decrypt_aesgcm(ciphertext: &[u8], iv: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::aead::generic_array::GenericArray;
+    use aes_gcm::{Aes256Gcm, KeyInit};
+
+    if key.len() != 32 {
+        return Err(format!("aesgcm key must be 32 bytes, got {}", key.len()));
+    }
+    let failed = || "aesgcm decryption failed (bad key/IV or corrupt data)".to_string();
+    match iv.len() {
+        12 => {
+            let cipher =
+                Aes256Gcm::new_from_slice(key).map_err(|e| format!("aesgcm init failed: {e}"))?;
+            cipher
+                .decrypt(GenericArray::from_slice(iv), ciphertext)
+                .map_err(|_| failed())
+        }
+        16 => {
+            type Aes256GcmIv16 = aes_gcm::AesGcm<aes_gcm::aes::Aes256, aes_gcm::aead::consts::U16>;
+            let cipher = Aes256GcmIv16::new_from_slice(key)
+                .map_err(|e| format!("aesgcm init failed: {e}"))?;
+            cipher
+                .decrypt(GenericArray::from_slice(iv), ciphertext)
+                .map_err(|_| failed())
+        }
+        n => Err(format!(
+            "unsupported aesgcm IV length {n} (expected 12 or 16)"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -3021,7 +3318,14 @@ mod tests {
         assert_eq!(presence.type_, PresenceType::None);
         assert!(presence.from.is_none());
         assert!(presence.to.is_none());
-        assert!(presence.payloads.is_empty());
+        // Presence advertises XEP-0115 entity caps whose ver matches our disco#info.
+        assert_eq!(presence.payloads.len(), 1);
+        let caps = Caps::try_from(presence.payloads[0].clone()).expect("caps payload");
+        assert_eq!(caps.node, CAPS_NODE);
+        let expected = caps::hash_caps(&caps::compute_disco(&lunarwing_disco_info()), Algo::Sha_1)
+            .expect("caps hash");
+        assert!(matches!(caps.hash, Algo::Sha_1));
+        assert_eq!(caps.ver, expected.hash);
     }
 
     #[test]
@@ -3083,6 +3387,253 @@ mod tests {
         };
 
         assert!(matching_iq_response(iq, "abc123").is_none());
+    }
+
+    #[test]
+    fn build_iq_reply_answers_disco_info_with_identity_and_features() {
+        let iq = Iq::Get {
+            from: Some("alice@example.com/dino".parse().expect("valid jid")),
+            to: Some("summer@example.com".parse().expect("valid jid")),
+            id: "disco1".to_string(),
+            payload: DiscoInfoQuery { node: None }.into(),
+        };
+        match build_iq_reply(&iq).expect("disco#info gets a reply") {
+            Iq::Result {
+                id, to, payload, ..
+            } => {
+                assert_eq!(id, "disco1");
+                assert_eq!(to, Some("alice@example.com/dino".parse().expect("jid")));
+                let result = DiscoInfoResult::try_from(payload.expect("payload"))
+                    .expect("valid disco#info result");
+                assert!(result.identities.iter().any(|i| i.category == "client"));
+                let vars: Vec<&str> = result.features.iter().map(|f| f.var.as_str()).collect();
+                assert!(vars.contains(&ns::DISCO_INFO));
+                assert!(vars.contains(&ns::OOB));
+            }
+            _ => panic!("expected an iq result for disco#info"),
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_answers_ping_with_empty_result() {
+        let iq = Iq::Get {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "ping1".to_string(),
+            payload: "<ping xmlns='urn:xmpp:ping'/>"
+                .parse()
+                .expect("ping element"),
+        };
+        match build_iq_reply(&iq).expect("ping gets a reply") {
+            Iq::Result { id, payload, .. } => {
+                assert_eq!(id, "ping1");
+                assert!(payload.is_none());
+            }
+            _ => panic!("expected an empty iq result for ping"),
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_rejects_unknown_get_and_set_with_service_unavailable() {
+        let unknown_get = Iq::Get {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "g1".to_string(),
+            payload: "<query xmlns='jabber:iq:version'/>"
+                .parse()
+                .expect("element"),
+        };
+        let set = Iq::Set {
+            from: Some("alice@example.com".parse().expect("valid jid")),
+            to: None,
+            id: "s1".to_string(),
+            payload: "<query xmlns='jabber:iq:roster'/>"
+                .parse()
+                .expect("element"),
+        };
+        for iq in [unknown_get, set] {
+            match build_iq_reply(&iq).expect("get/set gets a reply") {
+                Iq::Error { error, .. } => {
+                    assert!(matches!(error.type_, ErrorType::Cancel));
+                    assert!(matches!(
+                        error.defined_condition,
+                        DefinedCondition::ServiceUnavailable
+                    ));
+                }
+                _ => panic!("expected a service-unavailable error"),
+            }
+        }
+    }
+
+    #[test]
+    fn build_iq_reply_ignores_responses() {
+        let result = Iq::Result {
+            from: None,
+            to: None,
+            id: "r1".to_string(),
+            payload: None,
+        };
+        assert!(build_iq_reply(&result).is_none());
+    }
+
+    #[test]
+    fn collect_oob_urls_caps_and_extracts() {
+        let make = |u: &str| {
+            format!("<x xmlns='jabber:x:oob'><url>{u}</url></x>")
+                .parse::<Element>()
+                .expect("oob element")
+        };
+        // A single OOB element yields its URL.
+        let one = vec![make("https://example.com/file.png")];
+        let urls = collect_oob_urls(&one, MAX_OOB_ATTACHMENTS);
+        assert_eq!(urls.len(), 1);
+        assert_eq!(urls[0].0, "https://example.com/file.png");
+        // More than `max` OOB elements are capped (no unbounded download work).
+        let many: Vec<Element> = (0..(MAX_OOB_ATTACHMENTS + 5))
+            .map(|i| make(&format!("https://example.com/f{i}.bin")))
+            .collect();
+        let capped = collect_oob_urls(&many, MAX_OOB_ATTACHMENTS);
+        assert_eq!(capped.len(), MAX_OOB_ATTACHMENTS);
+    }
+
+    #[tokio::test]
+    async fn read_capped_body_enforces_limit() {
+        // Under the cap: returns the concatenated bytes.
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Ok(vec![1, 2, 3]), Ok(vec![4, 5])];
+        let out = read_capped_body(futures::stream::iter(chunks), 10)
+            .await
+            .expect("under cap");
+        assert_eq!(out, vec![1, 2, 3, 4, 5]);
+
+        // Over the cap: aborts with an error (without buffering the whole body).
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Ok(vec![0u8; 6]), Ok(vec![0u8; 6])];
+        let err = read_capped_body(futures::stream::iter(chunks), 8)
+            .await
+            .expect_err("over cap");
+        assert!(err.contains("too large"), "unexpected error: {err}");
+
+        // A stream error propagates.
+        let chunks: Vec<Result<Vec<u8>, String>> = vec![Err("boom".to_string())];
+        let err = read_capped_body(futures::stream::iter(chunks), 10)
+            .await
+            .expect_err("stream error");
+        assert!(err.contains("boom"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn parse_aesgcm_url_extracts_https_iv_key() {
+        // 12-byte IV (24 hex) + 32-byte key (64 hex).
+        let url = format!(
+            "aesgcm://up.example.com/abc/photo.jpg#{}{}",
+            "0".repeat(24),
+            "a".repeat(64)
+        );
+        let (https, iv, key) = parse_aesgcm_url(&url).expect("valid 12-byte IV url");
+        assert_eq!(https, "https://up.example.com/abc/photo.jpg");
+        assert_eq!(iv.len(), 12);
+        assert_eq!(key.len(), 32);
+
+        // 16-byte IV (32 hex) + key.
+        let url16 = format!("aesgcm://h/p.bin#{}{}", "0".repeat(32), "a".repeat(64));
+        let (_h, iv16, key16) = parse_aesgcm_url(&url16).expect("valid 16-byte IV url");
+        assert_eq!(iv16.len(), 16);
+        assert_eq!(key16.len(), 32);
+
+        // Rejections: wrong scheme, missing fragment, bad hex, too-short material.
+        assert!(parse_aesgcm_url("https://x/y.jpg#deadbeef").is_err());
+        assert!(parse_aesgcm_url("aesgcm://h/p.jpg").is_err());
+        assert!(parse_aesgcm_url("aesgcm://h/p.jpg#zzzz").is_err());
+        assert!(parse_aesgcm_url(&format!("aesgcm://h/p#{}", "a".repeat(60))).is_err());
+    }
+
+    #[test]
+    fn decrypt_aesgcm_roundtrip() {
+        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{Aes256Gcm, KeyInit};
+
+        let key = [7u8; 32];
+        let iv = [3u8; 12];
+        let plaintext = b"hello encrypted media";
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+        let ciphertext = cipher
+            .encrypt(GenericArray::from_slice(&iv), plaintext.as_ref())
+            .unwrap();
+
+        let decrypted = decrypt_aesgcm(&ciphertext, &iv, &key).expect("decrypts");
+        assert_eq!(decrypted, plaintext);
+
+        // Tampered ciphertext fails the GCM tag check.
+        let mut bad = ciphertext.clone();
+        *bad.last_mut().unwrap() ^= 0xff;
+        assert!(decrypt_aesgcm(&bad, &iv, &key).is_err());
+
+        // Wrong key length is rejected.
+        assert!(decrypt_aesgcm(&ciphertext, &iv, &[0u8; 16]).is_err());
+    }
+
+    #[test]
+    fn collect_aesgcm_urls_filters_and_caps() {
+        let text = "look aesgcm://h/a.jpg#aa and https://h/b.jpg then aesgcm://h/c.png#bb";
+        assert_eq!(
+            collect_aesgcm_urls(text, 10),
+            vec![
+                "aesgcm://h/a.jpg#aa".to_string(),
+                "aesgcm://h/c.png#bb".to_string()
+            ]
+        );
+        let many: String = (0..5).map(|i| format!("aesgcm://h/{i}.bin#xx ")).collect();
+        assert_eq!(collect_aesgcm_urls(&many, 2).len(), 2);
+    }
+
+    #[test]
+    fn aesgcm_url_parse_then_decrypt_roundtrip() {
+        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::generic_array::GenericArray;
+        use aes_gcm::{Aes256Gcm, KeyInit};
+
+        let key = [9u8; 32];
+        let iv = [1u8; 12];
+        let plaintext = b"file bytes over the wire";
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+        let ciphertext = cipher
+            .encrypt(GenericArray::from_slice(&iv), plaintext.as_ref())
+            .unwrap();
+
+        let fragment = format!("{}{}", hex::encode(iv), hex::encode(key));
+        let url = format!("aesgcm://up.example.com/x/file.bin#{fragment}");
+        let (https, iv_p, key_p) = parse_aesgcm_url(&url).unwrap();
+        assert_eq!(https, "https://up.example.com/x/file.bin");
+        assert_eq!(
+            decrypt_aesgcm(&ciphertext, &iv_p, &key_p).unwrap(),
+            plaintext
+        );
+    }
+
+    #[test]
+    fn filename_from_url_handles_extension_query_and_opaque_segments() {
+        assert_eq!(
+            filename_from_url("https://up.example.com/abc/photo.png").as_deref(),
+            Some("photo.png")
+        );
+        // Query and fragment are stripped.
+        assert_eq!(
+            filename_from_url("https://up.example.com/x/doc.pdf?token=1#frag").as_deref(),
+            Some("doc.pdf")
+        );
+        // Opaque, extensionless segment is kept (was previously dropped to None,
+        // which collapsed to a shared "file" downstream).
+        assert_eq!(
+            filename_from_url("https://up.example.com/9f2c1a7b").as_deref(),
+            Some("9f2c1a7b")
+        );
+        // Distinct opaque URLs yield distinct names (no collision).
+        assert_ne!(
+            filename_from_url("https://up/aaaa"),
+            filename_from_url("https://up/bbbb")
+        );
+        // Trailing slash / empty final segment → None.
+        assert_eq!(filename_from_url("https://up.example.com/"), None);
     }
 
     #[test]

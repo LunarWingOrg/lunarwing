@@ -4130,9 +4130,7 @@ mod tests {
         use lunarwing_engine::ResumeKind;
         assert!(clamp_always_to_resume_kind(
             true,
-            &ResumeKind::Approval {
-                allow_always: true
-            }
+            &ResumeKind::Approval { allow_always: true }
         ));
     }
 
@@ -4152,9 +4150,7 @@ mod tests {
         use lunarwing_engine::ResumeKind;
         assert!(!clamp_always_to_resume_kind(
             false,
-            &ResumeKind::Approval {
-                allow_always: true
-            }
+            &ResumeKind::Approval { allow_always: true }
         ));
     }
 

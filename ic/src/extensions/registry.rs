@@ -148,13 +148,17 @@ impl ExtensionRegistry {
 
     /// Return all visible registry entries (builtins + cached discoveries). Hidden entries are excluded.
     pub async fn all_entries(&self) -> Vec<RegistryEntry> {
-        let mut entries: Vec<RegistryEntry> = self.entries.iter()
+        let mut entries: Vec<RegistryEntry> = self
+            .entries
+            .iter()
             .filter(|e| !e.hidden.unwrap_or(false))
             .cloned()
             .collect();
         let cache = self.discovery_cache.read().await;
         for entry in cache.iter() {
-            if entry.hidden.unwrap_or(false) { continue; }
+            if entry.hidden.unwrap_or(false) {
+                continue;
+            }
             if !entries
                 .iter()
                 .any(|e| e.name == entry.name && e.kind == entry.kind)
