@@ -7,7 +7,6 @@
 5. [ ] Remove other non-supported extensions from the LW repo, specifically Google related ones
 6. [ ] Test Better implementation of memory lapse bug fix
 7. [ ] Write up rest of release notes for v1.1.2 explaining all changes since v1.1.1
-4. [ ] Complete tests of everything that was changed since 1.1.1 (might help if we do generate release notes first)
-6. [ ] Create a new branch to correspond with release                                                                                                          
-7. [ ] Create GH release tag and add release notes to it like other releases already have
-8. 
+8. [ ] Complete tests of everything that was changed since 1.1.1 (might help if we do generate release notes first)
+9. [ ] Create a new branch to correspond with release                                                                                                          
+10. [ ] Create GH release tag and add release notes to it like other releases already have
