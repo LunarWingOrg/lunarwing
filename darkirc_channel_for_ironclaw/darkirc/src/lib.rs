@@ -549,8 +549,8 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
 // Utilities
 // ============================================================================
 
-fn split_message(text: &str, max_len: usize) -> Vec<String> {
-    if text.len() <= max_len {
+fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
+    if text.as_bytes().len() <= max_bytes {
         return vec![text.to_string()];
     }
 
@@ -558,17 +558,28 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
     let mut remaining = text;
 
     while !remaining.is_empty() {
-        if remaining.len() <= max_len {
+        if remaining.as_bytes().len() <= max_bytes {
             chunks.push(remaining.to_string());
             break;
         }
 
-        // Find the largest valid char boundary at or before max_len
-        let mut end = max_len;
-        while end > 0 && !remaining.is_char_boundary(end) {
+        // Find the largest char boundary whose UTF-8 fits in max_bytes
+        let mut end = remaining.len();
+        while end > 0 {
+            // Ensure we're at a char boundary
+            if !remaining.is_char_boundary(end) {
+                end -= 1;
+                continue;
+            }
+            // Check byte length
+            if remaining[..end].as_bytes().len() <= max_bytes {
+                break;
+            }
             end -= 1;
         }
+
         if end == 0 {
+            // Single character exceeds max_bytes — take it anyway
             let first_char_len = remaining.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
             chunks.push(remaining[..first_char_len].to_string());
             remaining = &remaining[first_char_len..];
@@ -576,15 +587,28 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
         }
 
         let chunk = &remaining[..end];
-        let break_at = chunk
-            .rfind('\n')
-            .or_else(|| chunk.rfind(' '))
-            .unwrap_or(end);
 
-        let break_at = if break_at == 0 { end } else { break_at };
+        // Prefer breaking at newline
+        if let Some(nl) = chunk.rfind('\n') {
+            if nl > 0 {
+                chunks.push(remaining[..nl].to_string());
+                remaining = remaining[nl + 1..].trim_start_matches('\n').trim_start();
+                continue;
+            }
+        }
 
-        chunks.push(remaining[..break_at].to_string());
-        remaining = remaining[break_at..].trim_start_matches('\n').trim_start();
+        // Then at a space
+        if let Some(sp) = chunk.rfind(' ') {
+            if sp > 0 {
+                chunks.push(remaining[..sp].to_string());
+                remaining = remaining[sp + 1..].trim_start();
+                continue;
+            }
+        }
+
+        // No good break point — hard cut at the byte limit
+        chunks.push(chunk.to_string());
+        remaining = &remaining[end..];
     }
 
     chunks

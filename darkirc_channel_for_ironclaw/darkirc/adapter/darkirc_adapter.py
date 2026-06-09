@@ -122,10 +122,10 @@ class IRCClient:
         await self._send(f"PONG :{token}")
 
     async def privmsg(self, target: str, text: str):
-        # Split long messages into IRC-safe chunks (~400 bytes)
-        chunks = [text[i:i+400] for i in range(0, len(text), 400)]
+        # Split long messages into IRC-safe chunks (~400 UTF-8 bytes, word-safe)
+        chunks = _split_message_bytes(text, 400)
         successful_chunks = 0
-        
+
         for chunk in chunks:
             try:
                 await self._send(f"PRIVMSG {target} :{chunk}")
@@ -133,7 +133,7 @@ class IRCClient:
             except Exception as e:
                 log.error("Failed to send chunk %d to %s: %s", successful_chunks + 1, target, e)
                 # Continue trying to send remaining chunks
-                
+
         log.info("Sent %d of %d chunk(s) to %s", successful_chunks, len(chunks), target)
 
     async def close(self):
@@ -166,6 +166,64 @@ class IRCClient:
 
     def mark_registered(self):
         self._registered = True
+
+
+# ---------------------------------------------------------------------------
+# Message splitting (UTF-8 byte-safe, word-boundary-aware)
+# ---------------------------------------------------------------------------
+
+def _split_message_bytes(text: str, max_bytes: int) -> list:
+    """Split text into chunks that fit within max_bytes UTF-8 encoded length,
+    preferring natural break points (newlines, then spaces).
+    Always preserves character boundaries (no split mid-codepoint).
+    """
+    if len(text.encode("utf-8")) <= max_bytes:
+        return [text]
+
+    chunks: list = []
+    remaining = text
+
+    while remaining:
+        if len(remaining.encode("utf-8")) <= max_bytes:
+            chunks.append(remaining)
+            break
+
+        # Binary-search the largest slice whose UTF-8 fits in max_bytes
+        lo, hi = 0, len(remaining)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if len(remaining[:mid].encode("utf-8")) <= max_bytes:
+                lo = mid
+            else:
+                hi = mid - 1
+
+        if lo == 0:
+            # Single character exceeds max_bytes — just take it anyway
+            chunks.append(remaining[0])
+            remaining = remaining[1:]
+            continue
+
+        cut = remaining[:lo]
+
+        # Prefer breaking at newline
+        nl = cut.rfind("\n")
+        if nl > 0:
+            chunks.append(cut[:nl])
+            remaining = remaining[nl + 1:]  # skip the newline
+            continue
+
+        # Then at a space
+        sp = cut.rfind(" ")
+        if sp > 0:
+            chunks.append(cut[:sp])
+            remaining = remaining[sp + 1:]  # skip the space
+            continue
+
+        # No good break point — hard cut at the byte limit
+        chunks.append(cut)
+        remaining = remaining[lo:]
+
+    return chunks
 
 
 # ---------------------------------------------------------------------------
