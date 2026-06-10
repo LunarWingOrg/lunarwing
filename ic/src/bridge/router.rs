@@ -266,9 +266,7 @@ async fn persist_always_allow(
         return None;
     }
 
-    let Some(store) = state.effect_adapter.settings_store().await else {
-        return None;
-    };
+    let store = state.effect_adapter.settings_store().await?;
 
     let key = format!("tool_permissions.{}", pending.action_name);
     let prior = match store.get_setting(&pending.user_id, &key).await {
@@ -2237,10 +2235,10 @@ async fn handle_with_engine_inner(
         .map_err(|e| engine_err("thread error", e))?;
 
     // Dual-write to v1 database so the gateway history API shows messages.
-    if let Some(ref db) = state.db {
-        if let Some(cid) = resolve_v1_conversation_for_message(db.as_ref(), message).await {
-            let _ = db.add_conversation_message(cid, "user", content).await;
-        }
+    if let Some(ref db) = state.db
+        && let Some(cid) = resolve_v1_conversation_for_message(db.as_ref(), message).await
+    {
+        let _ = db.add_conversation_message(cid, "user", content).await;
     }
 
     debug!(thread_id = %thread_id, "engine v2: thread spawned");

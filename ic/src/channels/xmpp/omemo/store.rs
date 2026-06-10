@@ -155,8 +155,8 @@ impl OmemoStore {
     ) -> Result<OpenSignalState, OmemoStoreError> {
         fs::create_dir_all(self.v2_dir())?;
 
-        let context = Context::new(DefaultCrypto::default())
-            .map_err(|e| OmemoStoreError::Signal(e.to_string()))?;
+        let context =
+            Context::new(DefaultCrypto).map_err(|e| OmemoStoreError::Signal(e.to_string()))?;
         let mut state = self.load_or_init_local_state(&context, requested_device_id)?;
         let prekeys_available = self.ensure_prekeys(&context, &mut state)?;
         let store_context = self.create_store_context(&context, &state)?;
@@ -367,7 +367,7 @@ impl OmemoStore {
             self.persist_local_state(state, self.load_next_pre_key_id()?.max(1))?;
         }
 
-        Ok(self.count_files(&self.prekeys_dir())?)
+        self.count_files(&self.prekeys_dir())
     }
 
     fn try_migrate_legacy_identity(

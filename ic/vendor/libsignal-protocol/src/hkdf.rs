@@ -11,6 +11,8 @@ use std::{ptr, rc::Rc};
 #[derive(Debug, Clone)]
 pub struct HMACBasedKeyDerivationFunction {
     pub(crate) raw: Raw<sys::hkdf_context>,
+    // Never read; keeps the owning Context alive for this handle's lifetime.
+    #[allow(dead_code)]
     ctx: Rc<ContextInner>,
 }
 

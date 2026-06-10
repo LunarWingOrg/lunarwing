@@ -332,16 +332,16 @@ impl CostGuard {
         if let Some(limit_cents) = self.config.max_cost_per_user_per_day_cents {
             let today = chrono::Utc::now().date_naive();
             let per_user = self.per_user_daily_cost.lock().await;
-            if let Some(entry) = per_user.get(user_id) {
-                if entry.reset_date == today {
-                    let spent_cents = to_cents(entry.total);
-                    if spent_cents >= limit_cents {
-                        return Err(CostLimitExceeded::UserDailyBudget {
-                            user_id: user_id.to_string(),
-                            spent_cents,
-                            limit_cents,
-                        });
-                    }
+            if let Some(entry) = per_user.get(user_id)
+                && entry.reset_date == today
+            {
+                let spent_cents = to_cents(entry.total);
+                if spent_cents >= limit_cents {
+                    return Err(CostLimitExceeded::UserDailyBudget {
+                        user_id: user_id.to_string(),
+                        spent_cents,
+                        limit_cents,
+                    });
                 }
             }
         }

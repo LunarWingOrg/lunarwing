@@ -6,6 +6,7 @@ use libsignal_protocol::{
 };
 use std::{panic::RefUnwindSafe, sync::Mutex};
 
+#[allow(clippy::type_complexity)]
 pub(crate) struct MockCrypto<C> {
     inner: C,
     random_func:
@@ -73,8 +74,8 @@ pub fn fake_random_generator() -> impl Fn(&mut [u8]) -> Result<(), InternalError
     move |data| {
         let mut test_next_random = test_next_random.lock().unwrap();
 
-        for i in 0..data.len() {
-            data[i] = *test_next_random;
+        for byte in data.iter_mut() {
+            *byte = *test_next_random;
             *test_next_random = test_next_random.wrapping_add(1);
         }
 

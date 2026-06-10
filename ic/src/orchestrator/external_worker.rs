@@ -55,6 +55,7 @@ struct TaskProgressPayload {
     #[allow(dead_code)]
     task_id: String,
     delta: String,
+    #[allow(dead_code)]
     done: bool,
 }
 
@@ -267,6 +268,7 @@ pub struct ExternalTaskResult {
 
 // ── WebSocket task runner ───────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 async fn run_external_task(
     job_id: Uuid,
     url: &str,

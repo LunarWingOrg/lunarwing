@@ -1590,11 +1590,11 @@ impl Agent {
             {
                 let mut sess = session.lock().await;
                 if let Some(thread) = sess.threads.get_mut(&thread_id) {
-                    let pre_state = thread.state.clone();
+                    let pre_state = thread.state;
                     thread.clear_pending_approval();
-                    let after_clear = thread.state.clone();
+                    let after_clear = thread.state;
                     thread.complete_turn(&rejection);
-                    let after_complete = thread.state.clone();
+                    let after_complete = thread.state;
                     tracing::debug!(
                         %thread_id,
                         ?pre_state,

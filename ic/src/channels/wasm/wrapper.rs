@@ -2371,8 +2371,8 @@ impl WasmChannel {
                                         std::sync::atomic::Ordering::Release,
                                     );
 
-                                    if !emitted_messages.is_empty() {
-                                        if let Err(e) = Self::dispatch_emitted_messages(
+                                    if !emitted_messages.is_empty()
+                                        && let Err(e) = Self::dispatch_emitted_messages(
                                             EmitDispatchContext {
                                                 channel_name: &cn,
                                                 owner_scope_id: &osi,
@@ -2385,12 +2385,11 @@ impl WasmChannel {
                                             emitted_messages,
                                         )
                                         .await
-                                        {
-                                            tracing::warn!(
-                                                channel = %cn, error = %e,
-                                                "Failed to dispatch emitted messages from poll"
-                                            );
-                                        }
+                                    {
+                                        tracing::warn!(
+                                            channel = %cn, error = %e,
+                                            "Failed to dispatch emitted messages from poll"
+                                        );
                                     }
                                 }
                                 Err(e) => {
@@ -2867,13 +2866,13 @@ impl Channel for WasmChannel {
             });
         }
 
-        if let Some(ref handle) = *self.poll_task.read().await {
-            if handle.is_finished() {
-                return Err(ChannelError::HealthCheckFailed {
-                    name: self.name.clone(),
-                    reason: "polling task exited".to_string(),
-                });
-            }
+        if let Some(ref handle) = *self.poll_task.read().await
+            && handle.is_finished()
+        {
+            return Err(ChannelError::HealthCheckFailed {
+                name: self.name.clone(),
+                reason: "polling task exited".to_string(),
+            });
         }
 
         let last_ms = self

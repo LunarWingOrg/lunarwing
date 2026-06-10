@@ -253,8 +253,8 @@ async fn report_complete(
         tracing::error!(job_id = %job_id, "Failed to complete job cleanup: {}", e);
     }
     let status = completion_report_status(&report);
-    if let Some(ref store) = state.store {
-        if let Err(e) = store
+    if let Some(ref store) = state.store
+        && let Err(e) = store
             .update_sandbox_job_status(
                 job_id,
                 status,
@@ -264,14 +264,13 @@ async fn report_complete(
                 Some(Utc::now()),
             )
             .await
-        {
-            tracing::warn!(
-                job_id = %job_id,
-                status = status,
-                "Failed to persist sandbox job completion status: {}",
-                e
-            );
-        }
+    {
+        tracing::warn!(
+            job_id = %job_id,
+            status = status,
+            "Failed to persist sandbox job completion status: {}",
+            e
+        );
     }
 
     // Broadcast an SSE JobResult so the job monitor can transition the

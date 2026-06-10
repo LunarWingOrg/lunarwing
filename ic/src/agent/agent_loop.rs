@@ -295,6 +295,8 @@ impl Agent {
         *self.mission_manager_slot.write().await = Some(mgr);
     }
 
+    // Read side of the slot set via set_mission_manager(); reserved for engine-side use.
+    #[allow(dead_code)]
     pub(crate) async fn mission_manager(&self) -> Option<Arc<lunarwing_engine::MissionManager>> {
         self.mission_manager_slot.read().await.clone()
     }
@@ -950,7 +952,7 @@ impl Agent {
                             .resolve_thread(
                                 &message.user_id,
                                 &message.channel,
-                                message.conversation_scope().as_deref(),
+                                message.conversation_scope(),
                             )
                             .await;
                         let sess = session.lock().await;
@@ -1033,14 +1035,14 @@ impl Agent {
                         .await;
                     {
                         let mut sess = session.lock().await;
-                        if let Some(thread) = sess.threads.get_mut(&thread_id) {
-                            if thread.state == ThreadState::Processing {
-                                thread.fail_turn("handle_message panicked");
-                                tracing::warn!(
-                                    thread_id = %thread_id,
-                                    "Reset stuck thread after panic"
-                                );
-                            }
+                        if let Some(thread) = sess.threads.get_mut(&thread_id)
+                            && thread.state == ThreadState::Processing
+                        {
+                            thread.fail_turn("handle_message panicked");
+                            tracing::warn!(
+                                thread_id = %thread_id,
+                                "Reset stuck thread after panic"
+                            );
                         }
                     }
 

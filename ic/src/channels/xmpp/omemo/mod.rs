@@ -834,8 +834,7 @@ mod tests {
             bob.bundle().await.unwrap(),
         );
         let context =
-            libsignal_protocol::Context::new(libsignal_protocol::crypto::DefaultCrypto::default())
-                .unwrap();
+            libsignal_protocol::Context::new(libsignal_protocol::crypto::DefaultCrypto).unwrap();
         let bundle = build_pre_key_bundle(&context, &remote).unwrap();
 
         assert_eq!(bundle.registration_id(), 0);

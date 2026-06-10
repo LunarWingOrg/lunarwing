@@ -12,7 +12,7 @@ use chrono::Utc;
 
 fn embedding_from_blob(row: &libsql::Row, idx: i32) -> Option<Vec<f32>> {
     let bytes: Vec<u8> = row.get(idx).ok()?;
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return None;
     }
     Some(

@@ -350,7 +350,7 @@ impl XmppChannel {
                     .get(room.as_str())
                     .and_then(|state| state.last_error.clone())
             })
-            .last();
+            .next_back();
 
         MucEncryptionDiagnostics {
             encrypted_rooms_total,
@@ -502,6 +502,7 @@ async fn record_encrypted_room_error(
     state.last_error = Some(error.into());
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_room_capabilities(
     client: &mut tokio_xmpp::Client,
     room_jid: &str,
@@ -554,6 +555,7 @@ async fn fetch_room_capabilities(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_room_affiliation_jids(
     client: &mut tokio_xmpp::Client,
     room_jid: &str,
@@ -594,6 +596,7 @@ async fn fetch_room_affiliation_jids(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn refresh_encrypted_room_state(
     client: &mut tokio_xmpp::Client,
     room_jid: &str,
@@ -1295,16 +1298,17 @@ async fn process_stanza(
             handle_presence_stanza(presence, config, muc_participants, encrypted_room_states).await;
         }
         tokio_xmpp::Stanza::Iq(iq) => {
-            if let Some(reply) = build_iq_reply(&iq) {
-                if let Err(e) = client.send_stanza(tokio_xmpp::Stanza::Iq(reply)).await {
-                    tracing::warn!("XMPP IQ reply send failed: {e}");
-                }
+            if let Some(reply) = build_iq_reply(&iq)
+                && let Err(e) = client.send_stanza(tokio_xmpp::Stanza::Iq(reply)).await
+            {
+                tracing::warn!("XMPP IQ reply send failed: {e}");
             }
         }
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_message_stanza(
     msg: xmpp_parsers::message::Message,
     tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
@@ -1615,10 +1619,7 @@ async fn handle_presence_stanza(
     let state = states
         .entry(room_jid.clone())
         .or_insert_with(EncryptedRoomState::default);
-    let is_self_presence = muc_user
-        .status
-        .iter()
-        .any(|status| *status == MucStatus::SelfPresence);
+    let is_self_presence = muc_user.status.contains(&MucStatus::SelfPresence);
     if is_self_presence
         && let Some(nick) = muc_user
             .items
@@ -1669,15 +1670,12 @@ async fn handle_presence_stanza(
         }
     }
 
-    if muc_user
-        .status
-        .iter()
-        .any(|status| *status == MucStatus::ConfigRoomNonAnonymous)
-    {
+    if muc_user.status.contains(&MucStatus::ConfigRoomNonAnonymous) {
         state.non_anonymous = true;
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn build_outbound_dm_stanza(
     client: &mut tokio_xmpp::Client,
     to_jid: xmpp_parsers::jid::Jid,
@@ -1692,8 +1690,8 @@ async fn build_outbound_dm_stanza(
     pairing_store: &PairingStore,
     outbound_tx: &mpsc::Sender<OutboundMessage>,
 ) -> Result<Option<xmpp_parsers::message::Message>, ChannelError> {
-    if !omemo.diagnostics().await.bundle_published {
-        if let Err(err) = publish_omemo_state(
+    if !omemo.diagnostics().await.bundle_published
+        && let Err(err) = publish_omemo_state(
             client,
             tx,
             config,
@@ -1705,20 +1703,14 @@ async fn build_outbound_dm_stanza(
             outbound_tx,
         )
         .await
+    {
+        let target_bare = bare_jid(&to_jid.to_string()).to_string();
+        if let Some(stanza) =
+            maybe_fallback_plaintext_dm(config, &to_jid, &body, &target_bare, "local_publish", &err)
         {
-            let target_bare = bare_jid(&to_jid.to_string()).to_string();
-            if let Some(stanza) = maybe_fallback_plaintext_dm(
-                config,
-                &to_jid,
-                &body,
-                &target_bare,
-                "local_publish",
-                &err,
-            ) {
-                return Ok(Some(stanza));
-            }
-            return Err(err);
+            return Ok(Some(stanza));
         }
+        return Err(err);
     }
 
     let target_bare = bare_jid(&to_jid.to_string()).to_string();
@@ -1838,6 +1830,7 @@ async fn build_outbound_dm_stanza(
     Ok(Some(message))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn encrypted_room_recipients(
     client: &mut tokio_xmpp::Client,
     room_jid: &str,
@@ -1917,6 +1910,7 @@ async fn encrypted_room_recipients(
     Ok(recipients)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn build_outbound_groupchat_stanza(
     client: &mut tokio_xmpp::Client,
     to_jid: xmpp_parsers::jid::Jid,
@@ -1990,6 +1984,7 @@ async fn build_outbound_groupchat_stanza(
     Ok(Some(message))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_omemo_state(
     client: &mut tokio_xmpp::Client,
     tx: &tokio::sync::mpsc::Sender<IncomingMessage>,
@@ -2064,6 +2059,7 @@ async fn publish_omemo_state(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_recipient_bundles(
     client: &mut tokio_xmpp::Client,
     bare_jid_str: &str,
@@ -2122,6 +2118,7 @@ async fn fetch_recipient_bundles(
     Ok(bundles)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_omemo_device_list(
     client: &mut tokio_xmpp::Client,
     bare_jid_str: &str,
@@ -2183,6 +2180,7 @@ async fn fetch_omemo_device_list(
     Ok(devices)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_omemo_bundle(
     client: &mut tokio_xmpp::Client,
     bare_jid_str: &str,
@@ -2241,6 +2239,7 @@ async fn fetch_omemo_bundle(
     Ok(Some(bundle))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_pep_payload<P>(
     client: &mut tokio_xmpp::Client,
     node: &str,
@@ -2732,6 +2731,7 @@ async fn upload_file_via_http_slot(
     Ok(slot.get.url)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn send_iq_request(
     client: &mut tokio_xmpp::Client,
     to: Option<xmpp_parsers::jid::Jid>,
@@ -2770,11 +2770,10 @@ async fn send_iq_request(
                 match event {
                     Some(tokio_xmpp::Event::Online { .. }) => {}
                     Some(tokio_xmpp::Event::Stanza(stanza)) => {
-                        if let tokio_xmpp::Stanza::Iq(iq) = &stanza {
-                            if let Some(response) = matching_iq_response(iq.clone(), &request_id) {
+                        if let tokio_xmpp::Stanza::Iq(iq) = &stanza
+                            && let Some(response) = matching_iq_response(iq.clone(), &request_id) {
                                 return response;
                             }
-                        }
                         process_stanza(
                             client,
                             stanza,
@@ -3024,12 +3023,12 @@ async fn download_oob_file(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok());
 
-    if let Some(len) = content_length {
-        if len > OOB_MAX_FILE_SIZE {
-            return Err(format!(
-                "File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"
-            ));
-        }
+    if let Some(len) = content_length
+        && len > OOB_MAX_FILE_SIZE
+    {
+        return Err(format!(
+            "File too large: {len} bytes (max {OOB_MAX_FILE_SIZE})"
+        ));
     }
 
     // Enforce the size cap *while* streaming so a missing or understated
@@ -3641,7 +3640,7 @@ mod tests {
         let options = omemo_publish_options();
         let form = options.form.expect("publish options form");
         assert_eq!(
-            form.form_type().as_deref(),
+            form.form_type(),
             Some("http://jabber.org/protocol/pubsub#publish-options")
         );
 
