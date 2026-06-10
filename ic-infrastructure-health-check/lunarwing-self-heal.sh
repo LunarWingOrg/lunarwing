@@ -58,7 +58,14 @@ STATE_PRUNE_TTL="${SELF_HEAL_STATE_PRUNE_TTL:-86400}"   # 24h
 
 # Multi-tenant registry (lunarwing-mt-admin.sh). Per-tenant systemd units are
 # USER units, restarted via sudo -u <user> systemctl --user.
-TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-/etc/lunarwing/ports.json}"
+# Umbrel: /etc/ is non-persistent across app updates; prefer a data-volume path
+# when available, falling back to /etc/ for bare-metal installs.
+_default_tenants_file() {
+    local candidate="${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-}}/tenants/ports.json"
+    [[ -f "$candidate" ]] && { printf '%s' "$candidate"; return 0; }
+    printf '%s' "/etc/lunarwing/ports.json"
+}
+TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-$(_default_tenants_file)}"
 
 DRY_RUN=false
 REPORT_FILE=""
@@ -304,6 +311,12 @@ compute_backoff() {
     if ! [[ "$attempt" =~ ^[0-9]+$ ]] || [[ "$attempt" -le 0 ]]; then
         printf '0'; return 0
     fi
+    # Hard cap: services escalated and idling for weeks would otherwise run a
+    # huge exponentiation loop. Defensive only — practical attempts are <10.
+    if [[ "$attempt" -gt 20 ]]; then
+        printf '%s' "${max:-3600}"
+        return 0
+    fi
     local base="${BACKOFF_BASE:-60}"
     local max="${BACKOFF_MAX:-3600}"
     if ! [[ "$base" =~ ^[0-9]+$ ]] || ! [[ "$max" =~ ^[0-9]+$ ]]; then
@@ -320,7 +333,14 @@ compute_backoff() {
     if [[ "$delay" -gt "$max" ]]; then delay="$max"; fi
 
     if [[ "$delay" -le 0 ]]; then printf '0'; return 0; fi
-    printf '%s' "$(( RANDOM % (delay + 1) ))"   # full jitter [0, delay]
+    # $RANDOM is 15-bit (0-32767). Above that the distribution skews; use urandom.
+    if [[ "$delay" -gt 32767 ]]; then
+        local rand
+        rand=$(od -An -tu2 -N2 /dev/urandom | tr -d ' ')
+        printf '%s' "$(( rand % (delay + 1) ))"
+    else
+        printf '%s' "$(( RANDOM % (delay + 1) ))"
+    fi   # full jitter [0, delay]
 }
 
 # ── State management ────────────────────────────────────────────────────────
@@ -396,9 +416,13 @@ flap_count() {
 }
 state_push_restart() {
     local state="$1" svc="$2" epoch="$3" since="$4"
-    echo "$state" | jq --arg s "$svc" --argjson e "$epoch" --argjson since "$since" \
+    local RESTART_HISTORY_MAX=20
+    echo "$state" | jq --arg s "$svc" --argjson e "$epoch" --argjson since "$since" --argjson max "$RESTART_HISTORY_MAX" \
         '.[$s] = (.[$s] // {})
-         | .[$s].restart_history = ([ ((.[$s].restart_history // [])[] | select(. >= $since)), $e ])'
+         | .[$s].restart_history = (
+             [ ((.[$s].restart_history // [])[] | select(. >= $since)), $e ]
+             | if length > $max then .[-$max:] else . end
+         )'
 }
 
 # Drop entries untouched past TTL that are not escalated and not currently
