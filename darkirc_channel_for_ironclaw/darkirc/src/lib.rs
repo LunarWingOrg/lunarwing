@@ -148,6 +148,10 @@ const ADAPTER_URL_PATH: &str = "state/adapter_url";
 const DM_POLICY_PATH: &str = "state/dm_policy";
 const ALLOW_FROM_PATH: &str = "state/allow_from";
 
+/// Max UTF-8 bytes per IRC message chunk.
+/// Conservative under the 512-byte IRC protocol limit.
+const MAX_IRC_MESSAGE_BYTES: usize = 400;
+
 // ============================================================================
 // Channel Implementation
 // ============================================================================
@@ -318,8 +322,8 @@ impl Guest for DarkIrcChannel {
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(default_adapter_url);
 
-                let truncated = if message.len() > 400 {
-                    format!("{}...", &message[..397])
+                let truncated = if message.len() > MAX_IRC_MESSAGE_BYTES {
+                    format!("{}...", &message[..MAX_IRC_MESSAGE_BYTES - 3])
                 } else {
                     message.to_string()
                 };
@@ -473,7 +477,7 @@ fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(default_adapter_url);
 
-    let chunks = split_message(content, 400);
+    let chunks = split_message(content, MAX_IRC_MESSAGE_BYTES);
     let mut successful_chunks = 0;
     let mut last_error = None;
 
@@ -550,12 +554,16 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
 // ============================================================================
 
 fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
-    if text.as_bytes().len() <= max_bytes {
-        return vec![text.to_string()];
+    // Normalize CRLF to LF so stray \r doesn't linger in output chunks
+    let normalized = text.replace("\r\n", "\n");
+    let text_ref: &str = &normalized;
+
+    if text_ref.as_bytes().len() <= max_bytes {
+        return vec![text_ref.to_string()];
     }
 
     let mut chunks = Vec::new();
-    let mut remaining = text;
+    let mut remaining = text_ref;
 
     while !remaining.is_empty() {
         if remaining.as_bytes().len() <= max_bytes {
@@ -664,6 +672,111 @@ mod tests {
         let chunks = split_message(&text, 400);
         assert_eq!(chunks[0].len(), 400);
         assert_eq!(chunks[1].len(), 100);
+    }
+
+    #[test]
+    fn test_split_message_pure_ascii() {
+        let text = "the quick brown fox jumps over the lazy dog";
+        let chunks = split_message(text, 20);
+        for chunk in &chunks {
+            assert!(chunk.as_bytes().len() <= 20, "chunk too long: {:?}", chunk);
+            assert!(!chunk.is_empty(), "got empty chunk");
+        }
+        // Just check invariants: byte limit, non-empty, char-boundary safe
+        for chunk in &chunks {
+            for (i, _) in chunk.char_indices() {
+                assert!(chunk.is_char_boundary(i), "mid-codepoint split");
+            }
+        }
+    }
+
+    #[test]
+    fn test_split_message_2byte_utf8_at_boundary() {
+        // "héllo" — the 'é' is 2 bytes in UTF-8
+        let text = "héllo héllo héllo héllo";
+        let chunks = split_message(text, 7);
+        for chunk in &chunks {
+            assert!(chunk.as_bytes().len() <= 7, "chunk too long: {:?}", chunk);
+        }
+        // Delimiters stripped, so concat removes spaces
+        let joined: String = chunks.concat();
+        assert_eq!(joined, "héllohéllohéllohéllo");
+    }
+
+    #[test]
+    fn test_split_message_4byte_emoji() {
+        // 🐴 is 4 bytes in UTF-8
+        let text = "🐴🦄🐴🦄🐴🦄🐴🦄🐴";
+        let chunks = split_message(text, 9);
+        for chunk in &chunks {
+            assert!(chunk.as_bytes().len() <= 9);
+        }
+        let joined: String = chunks.concat();
+        assert_eq!(joined, text);
+    }
+
+    #[test]
+    fn test_split_message_mixed() {
+        let text = "Hello 🐴 world!\nThis is a test\nwith mixed ASCII and emoji 🦄 here";
+        let chunks = split_message(text, 25);
+        for chunk in &chunks {
+            assert!(chunk.as_bytes().len() <= 25, "chunk too long: {:?}", chunk);
+            assert!(!chunk.is_empty(), "got empty chunk");
+        }
+        // All non-delimiter chars preserved (chars lost are only spaces/newlines at breakpoints)
+        let joined: String = chunks.concat();
+        let breakpoint_count = chunks.len() - 1;
+        let content_len = text.chars().filter(|&c| c != ' ' && c != '\n').count();
+        // joined should have content_len chars plus any delimiters that were *not* breakpoints
+        assert!(joined.chars().count() >= content_len, "char loss: {} < {}", joined.chars().count(), content_len);
+        assert_eq!(joined.chars().count() + breakpoint_count, text.chars().count(), "unexpected total: joined {} + breakpoints {} != text {}", joined.chars().count(), breakpoint_count, text.chars().count());
+    }
+
+    #[test]
+    fn test_split_message_empty() {
+        let chunks = split_message("", 400);
+        assert_eq!(chunks, vec![""]);
+    }
+
+    #[test]
+    fn test_split_message_crlf_normalized() {
+        let text = "Line one\r\nLine two\r\nLine three";
+        let chunks = split_message(text, 400);
+        let joined: String = chunks.concat();
+        assert!(!joined.contains('\r'), "stray \\r in output: {:?}", joined);
+        assert_eq!(joined, "Line one\nLine two\nLine three");
+    }
+
+    #[test]
+    fn test_split_message_unicode_no_split_mid_char() {
+        let test_strings = vec![
+            "こんにちは世界",
+            "Здравствуй мир",
+            "안녕하세요 세계",
+            "مرحبا بالعالم",
+            "🐴🦄🌟💫✨",
+        ];
+        for text in test_strings {
+            let chunks = split_message(text, 10);
+            for chunk in &chunks {
+                assert!(chunk.as_bytes().len() <= 10, "chunk too long: {:?}", chunk);
+                assert!(!chunk.is_empty(), "got empty chunk");
+                // Verify valid UTF-8 at char boundaries (no mid-codepoint splits)
+                for (i, _) in chunk.char_indices() {
+                    assert!(chunk.is_char_boundary(i), "non-char-boundary at {} in {:?}", i, chunk);
+                }
+            }
+            // Verify no data loss: all original characters appear in order across chunks.
+            // (Since we already check char boundaries, we just need to confirm characters are preserved.)
+            let joined: String = chunks.concat();
+            // For texts with spaces/newlines, delimiters at split points are removed.
+            // For delimiter-free texts, joined should equal the original.
+            // We'll just verify that every non-space/non-newline char appears in joined.
+            // (Simplest safe check: compare filtered strings after removing spaces/newlines.)
+            let filtered_original: String = text.chars().filter(|&c| c != ' ' && c != '\n').collect();
+            let filtered_joined: String = joined.chars().filter(|&c| c != ' ' && c != '\n').collect();
+            assert_eq!(filtered_joined, filtered_original, "characters lost or reordered");
+        }
     }
 
     #[test]

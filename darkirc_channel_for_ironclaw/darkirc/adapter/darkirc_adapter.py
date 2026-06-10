@@ -41,6 +41,9 @@ HTTP_PORT = int(os.getenv("ADAPTER_PORT", "6680"))
 # Max messages to buffer before dropping oldest
 MAX_QUEUE = int(os.getenv("ADAPTER_MAX_QUEUE", "500"))
 
+# Max UTF-8 bytes per IRC message chunk (conservative under 512-byte IRC limit)
+MAX_IRC_MESSAGE_BYTES = int(os.getenv("DARKIRC_MAX_MESSAGE_BYTES", "400"))
+
 # Shared secret for basic auth between WASM channel and adapter
 # The WASM channel sends this as Bearer token
 ADAPTER_SECRET = os.getenv("ADAPTER_SECRET", "")
@@ -122,8 +125,9 @@ class IRCClient:
         await self._send(f"PONG :{token}")
 
     async def privmsg(self, target: str, text: str):
-        # Split long messages into IRC-safe chunks (~400 UTF-8 bytes, word-safe)
-        chunks = _split_message_bytes(text, 400)
+        # Normalize CRLF to LF, then split into IRC-safe chunks (UTF-8 byte-safe, word-safe)
+        normalized = text.replace("\r\n", "\n")
+        chunks = _split_message_bytes(normalized, MAX_IRC_MESSAGE_BYTES)
         successful_chunks = 0
 
         for chunk in chunks:
@@ -177,6 +181,9 @@ def _split_message_bytes(text: str, max_bytes: int) -> list:
     preferring natural break points (newlines, then spaces).
     Always preserves character boundaries (no split mid-codepoint).
     """
+    # Normalize CRLF to LF so stray \r doesn't linger in output chunks
+    text = text.replace("\r\n", "\n")
+
     if len(text.encode("utf-8")) <= max_bytes:
         return [text]
 
