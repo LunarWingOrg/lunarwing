@@ -127,6 +127,7 @@ A `rustfmt` pass tidied four files touched by recent security/registry work with
 
 These items are targeted for this release per the v1.1.1 deferral table but have **not** landed in staging as of this draft. They may ship in v1.1.2 if completed during the testing window, or slip to a later release:
 
+- **Improvements to warnings and errors in compile** - more on this later
 - **Healthcheck and self-healing enhancements** — Further improvements to the infrastructure health-check suite and watchdog beyond the v1.1.1 baseline.
 
 > The remaining-Google-extension removal originally tracked here **landed in this release** — see *Removal of Google Tool Extensions* under Changes. The GitHub extension decision remains deferred (currently targeted v1.1.9).
