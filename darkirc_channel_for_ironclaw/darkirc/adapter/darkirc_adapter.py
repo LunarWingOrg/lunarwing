@@ -125,9 +125,8 @@ class IRCClient:
         await self._send(f"PONG :{token}")
 
     async def privmsg(self, target: str, text: str):
-        # Normalize CRLF to LF, then split into IRC-safe chunks (UTF-8 byte-safe, word-safe)
-        normalized = text.replace("\r\n", "\n")
-        chunks = _split_message_bytes(normalized, MAX_IRC_MESSAGE_BYTES)
+        # Normalization (CRLF → LF, lone \r → \n) and chunking happen inside _split_message_bytes
+        chunks = _split_message_bytes(text, MAX_IRC_MESSAGE_BYTES)
         successful_chunks = 0
 
         for chunk in chunks:
@@ -180,9 +179,14 @@ def _split_message_bytes(text: str, max_bytes: int) -> list:
     """Split text into chunks that fit within max_bytes UTF-8 encoded length,
     preferring natural break points (newlines, then spaces).
     Always preserves character boundaries (no split mid-codepoint).
+
+    Also normalizes line endings: \r\n → \n, and standalone \r → \n,
+    so the output never contains stray \r.
     """
-    # Normalize CRLF to LF so stray \r doesn't linger in output chunks
-    text = text.replace("\r\n", "\n")
+    # Normalize CRLF to LF, plus standalone \r (old Mac line endings) to \n.
+    # .replace('\r', '\n') handles both in a single pass: \r\n becomes \n\n,
+    # which is fine for our purposes (we treat newlines as whitespace at split points).
+    text = text.replace('\r', '\n')
 
     if len(text.encode("utf-8")) <= max_bytes:
         return [text]

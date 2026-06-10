@@ -139,6 +139,16 @@ def test_crlf_normalization():
         assert "\r" not in chunk
 
 
+def test_standalone_cr_normalization():
+    """Standalone \\r (old Mac line endings) also normalized to \\n."""
+    text = "Line one\rLine two\rLine three"
+    result = _split_message_bytes(text, 400)
+    # No stray \r in output
+    for chunk in result:
+        assert "\r" not in chunk, f"stray \\r in chunk: {chunk!r}"
+    assert_split_invariants(result, text, 400)
+
+
 def test_mixed_boundaries():
     """Mix of spaces, newlines, and hard cuts."""
     text = "First part with spaces\nSecond part with no breaks at all aaaaaaaaaaaa"
@@ -224,6 +234,7 @@ if __name__ == "__main__":
         test_empty_string,
         test_no_break_points,
         test_crlf_normalization,
+        test_standalone_cr_normalization,
         test_mixed_boundaries,
         test_unicode_normalization,
         test_edge_whitespace,

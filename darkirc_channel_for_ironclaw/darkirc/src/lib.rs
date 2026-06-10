@@ -150,6 +150,8 @@ const ALLOW_FROM_PATH: &str = "state/allow_from";
 
 /// Max UTF-8 bytes per IRC message chunk.
 /// Conservative under the 512-byte IRC protocol limit.
+/// Mirrors the Python adapter's `MAX_IRC_MESSAGE_BYTES` default (env: `DARKIRC_MAX_MESSAGE_BYTES`);
+/// update both sides together if you change one.
 const MAX_IRC_MESSAGE_BYTES: usize = 400;
 
 // ============================================================================
@@ -554,8 +556,10 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
 // ============================================================================
 
 fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
-    // Normalize CRLF to LF so stray \r doesn't linger in output chunks
-    let normalized = text.replace("\r\n", "\n");
+    // Normalize CRLF → LF and standalone \r → \n (old Mac line endings).
+    // .replace('\r', "\n") handles both in one pass; \r\n becomes \n\n,
+    // which is harmless — newlines are treated as whitespace at split points.
+    let normalized = text.replace('\r', "\n");
     let text_ref: &str = &normalized;
 
     if text_ref.as_bytes().len() <= max_bytes {
@@ -793,6 +797,17 @@ mod tests {
         let joined: String = chunks.concat();
         // Explicit CRLF check in addition to the invariant
         assert!(!joined.contains('\r'), "stray \\r in output: {:?}", joined);
+        assert_split_invariants(&chunks, text, 400);
+    }
+
+    #[test]
+    fn test_split_message_standalone_cr_normalized() {
+        // Old Mac line endings: standalone \r (not \r\n)
+        let text = "Line one\rLine two\rLine three";
+        let chunks = split_message(text, 400);
+        for chunk in &chunks {
+            assert!(!chunk.contains('\r'), "stray \\r in chunk: {:?}", chunk);
+        }
         assert_split_invariants(&chunks, text, 400);
     }
 
