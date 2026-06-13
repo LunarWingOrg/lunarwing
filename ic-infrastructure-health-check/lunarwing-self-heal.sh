@@ -48,6 +48,10 @@ GRACE_CHECKS="${SELF_HEAL_GRACE_CHECKS:-2}"
 FLAP_MAX_RESTARTS="${SELF_HEAL_FLAP_MAX_RESTARTS:-5}"
 FLAP_WINDOW_SECS="${SELF_HEAL_FLAP_WINDOW_SECS:-3600}"
 
+# Restart history cap: trim restart_history[] to last N entries to prevent
+# unbounded state growth. Must be ≥ FLAP_MAX_RESTARTS to preserve flap detection.
+HISTORY_MAX="${SELF_HEAL_HISTORY_MAX:-20}"
+
 # Post-restart verification: re-run the component's health-*.sh and parse
 # .status (deeper than is-active). Set false to use is-active only.
 VERIFY_HEALTH="${SELF_HEAL_VERIFY_HEALTH:-true}"
@@ -416,8 +420,7 @@ flap_count() {
 }
 state_push_restart() {
     local state="$1" svc="$2" epoch="$3" since="$4"
-    local RESTART_HISTORY_MAX=20
-    echo "$state" | jq --arg s "$svc" --argjson e "$epoch" --argjson since "$since" --argjson max "$RESTART_HISTORY_MAX" \
+    echo "$state" | jq --arg s "$svc" --argjson e "$epoch" --argjson since "$since" --argjson max "$HISTORY_MAX" \
         '.[$s] = (.[$s] // {})
          | .[$s].restart_history = (
              [ ((.[$s].restart_history // [])[] | select(. >= $since)), $e ]
@@ -588,6 +591,12 @@ find_latest_report() {
 }
 
 # ── Entry point ─────────────────────────────────────────────────────────────
+
+# ── Sentinel for test harness extraction ──────────────────────────────────
+# If you move this block, update any `src_fn` harness that sources everything
+# before the marker. The sentinel must appear immediately before main() entry.
+
+# HARNESS_ENTRY_POINT
 
 main() {
     local report="$REPORT_FILE"
