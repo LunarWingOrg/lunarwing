@@ -17,6 +17,7 @@ System design and technical architecture documents.
 | [`ATOMICBOOL_DEEPER_PROPAGATION.md`](architecture/ATOMICBOOL_DEEPER_PROPAGATION.md) | AtomicBool cancellation propagation design |
 | [`HANDLE_MESSAGE_FIX.md`](architecture/HANDLE_MESSAGE_FIX.md) | Message handler timeout fix |
 | [`RESPONSE_SUPPRESSION_IMPLEMENTATION.md`](architecture/RESPONSE_SUPPRESSION_IMPLEMENTATION.md) | Response suppression implementation |
+| [`SELF_HEAL_DEPLOYMENT_WIRING.md`](architecture/SELF_HEAL_DEPLOYMENT_WIRING.md) | How the infra health-check + self-heal pipeline is installed/scheduled; why it's host-level (not per-tenant) and not wired into MT provisioning |
 
 ---
 
