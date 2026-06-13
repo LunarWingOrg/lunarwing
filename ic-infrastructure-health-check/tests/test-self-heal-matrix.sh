@@ -309,15 +309,20 @@ oH3="$(run_dry "$h3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 
 assert_absent   "$oH3" "FLAPPING"                              "H3: out-of-window restarts do not count"
 assert_contains "$oH3" "would run: systemctl restart lunarwing" "H3: restart proceeds when history is stale"
 
-# H4 — restart_history is capped at 20. Seed 25 recent entries with a high flap
-# threshold (so it restarts rather than escalating); force verify-fail so the
-# entry (with its trimmed history) survives into state.json.
+# H4 — restart_history is capped. Read the cap from the script under test (so
+# this assertion tracks the source rather than hardcoding the constant — Baud
+# review P2), seed cap+5 recent entries with a high flap threshold (so it
+# restarts rather than escalating), and force verify-fail so the entry (with its
+# trimmed history) survives into state.json.
 h4="$(sb)"; mk_check "$h4" gateway critical >/dev/null
 report "$h4" "$GW"
-seed_state "$h4" "$(jq -n --argjson n "$(now)" '{lunarwing:{consecutive_unhealthy:5,restart_history:[range(0;25)|($n-(.*5))]}}')"
-run_dry "$h4" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_FLAP_MAX_RESTARTS=100 \
+h4cap="$(grep -oE 'RESTART_HISTORY_MAX=[0-9]+' "$SH" | head -1 | cut -d= -f2)"
+[[ "$h4cap" =~ ^[0-9]+$ ]] || h4cap=20          # fallback if the constant is renamed
+h4seed=$((h4cap + 5)); h4flap=$((h4seed + 50))  # seed past the cap; never flap
+seed_state "$h4" "$(jq -n --argjson n "$(now)" --argjson c "$h4seed" '{lunarwing:{consecutive_unhealthy:5,restart_history:[range(0;$c)|($n-(.*5))]}}')"
+run_dry "$h4" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_FLAP_MAX_RESTARTS="$h4flap" \
     SELF_HEAL_VERIFY_HEALTH=true SELF_HEAL_HEALTH_CHECK_DIR="$h4/checks" >/dev/null
-assert_eq "$(state_of "$h4" '.lunarwing.restart_history | length')" "20" "H4: restart_history trimmed to 20"
+assert_eq "$(state_of "$h4" '.lunarwing.restart_history | length')" "$h4cap" "H4: restart_history trimmed to cap ($h4cap, read from script)"
 
 echo "=== Section I: Post-restart verification ==="
 

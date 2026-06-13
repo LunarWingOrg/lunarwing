@@ -119,8 +119,22 @@ run_raw() {
 _BODY=""
 _ensure_body() {
     [[ -n "$_BODY" && -f "$_BODY" ]] && return 0
+    # We source everything before the script's `main "$@"` entry line. Guard
+    # that anchor (and the result) so a future restructure of
+    # lunarwing-self-heal.sh fails HERE with a clear message instead of silently
+    # yielding a truncated body and cryptic downstream errors. (Baud review P1.)
+    grep -qE '^main "\$@"$' "$SH" || {
+        echo "FATAL: src_fn: no 'main \"\$@\"' anchor in $SH — the extraction" \
+             "boundary moved; update lib.sh:_ensure_body" >&2
+        exit 1
+    }
     _BODY="$ROOT/self-heal-body.sh"
     sed '/^main "\$@"$/,$d' "$SH" > "$_BODY"
+    if [[ ! -s "$_BODY" ]] || ! grep -qE '^compute_backoff\(\)' "$_BODY"; then
+        echo "FATAL: src_fn: extracted body looks wrong (empty, or missing" \
+             "compute_backoff) — check lib.sh:_ensure_body against $SH" >&2
+        exit 1
+    fi
 }
 
 # src_fn [ENV=VAL ...] -- <fn> [args...]   — echoes the function's stdout.
@@ -192,16 +206,26 @@ EOF
     # Mock sudo: drop leading `-n`, `-u <user>`, `env`, `VAR=VAL`, then exec the
     # rest — so `sudo -u t env XDG=.. systemctl --user restart u` hits our fake
     # systemctl with no privilege required.
+    #
+    # It is built for the EXACT invocations lunarwing-self-heal.sh makes for
+    # per-tenant systemd USER units (see _systemd_user_restart/_systemd_user_active):
+    #   sudo -u <user> env XDG_RUNTIME_DIR=/run/user/<uid> systemctl --user restart   <unit>
+    #   sudo -u <user> env XDG_RUNTIME_DIR=/run/user/<uid> systemctl --user is-active --quiet <unit>
+    # (a leading -n may also appear). If the script ever introduces a sudo flag
+    # we don't model (-E, -i, -g, --preserve-env=...), warn loudly so the
+    # resulting failure reads as mock drift, not a real defect. (Baud review P1.)
     cat > "$bin/sudo" <<'EOF'
 #!/usr/bin/env bash
 args=("$@"); i=0
 while [[ $i -lt ${#args[@]} ]]; do
   case "${args[$i]}" in
-    -n) ;;
-    -u) i=$((i+1)) ;;
-    env) ;;
-    *=*) ;;
-    *) break ;;
+    -n)  ;;                         # non-interactive
+    -u)  i=$((i+1)) ;;              # -u <user>: also skip the username
+    env) ;;                         # the `env` prefix
+    -*)  echo "mock sudo: unrecognized flag '${args[$i]}' — update mk_mockbin (sudo invocation drift)" >&2
+         break ;;
+    *=*) ;;                         # VAR=VAL handed to env (no leading dash)
+    *)   break ;;                   # start of the actual command
   esac
   i=$((i+1))
 done
