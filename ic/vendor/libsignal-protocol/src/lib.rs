@@ -58,7 +58,7 @@
     rust_2018_idioms,
     clippy::cargo_common_metadata,
     clippy::fallible_impl_from,
-    intra_doc_link_resolution_failure
+    rustdoc::broken_intra_doc_links
 )]
 #![allow(clippy::missing_const_for_fn)]
 
@@ -136,7 +136,7 @@ pub trait Serializable {
 pub(crate) fn default_context() -> Result<Context, Error> {
     #[cfg(feature = "crypto-native")]
     {
-        return Context::new(crypto::DefaultCrypto::default());
+        return Context::new(crypto::DefaultCrypto);
     }
 
     #[cfg(all(not(feature = "crypto-native"), feature = "crypto-openssl"))]

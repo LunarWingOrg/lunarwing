@@ -36,8 +36,25 @@ fn main() {
         return;
     }
 
-    // Build WASM module
+    // Skip rebuild if telegram.wasm is newer than every input. Walk src/
+    // recursively so edits to existing files are detected — a shallow dir
+    // mtime only changes on add/remove/rename, not on content edits. Any
+    // unreadable mtime falls through to a rebuild, which is the safe default.
+    let inputs = [channel_dir.join("src"), channel_dir.join("Cargo.toml")];
+    if wasm_out.is_file()
+        && let Ok(out_mtime) = wasm_out.metadata().and_then(|m| m.modified())
+        && let Some(newest_input) = inputs.iter().filter_map(|p| newest_mtime(p)).max()
+        && newest_input <= out_mtime
+    {
+        println!("cargo:warning=telegram.wasm is fresh, skipping WASM rebuild");
+        return;
+    }
+
+    // Build WASM module — use a separate target dir to avoid deadlock
+    // with the parent cargo process that holds the main target lock.
+    let wasm_target_dir = channel_dir.join("target");
     let status = match Command::new("cargo")
+        .env("CARGO_TARGET_DIR", &wasm_target_dir)
         .args([
             "build",
             "--release",
@@ -65,7 +82,7 @@ fn main() {
         return;
     }
 
-    let raw_wasm = channel_dir.join("target/wasm32-wasip2/release/telegram_channel.wasm");
+    let raw_wasm = wasm_target_dir.join("wasm32-wasip2/release/telegram_channel.wasm");
     if !raw_wasm.exists() {
         eprintln!(
             "cargo:warning=Telegram WASM output not found at {:?}",
@@ -110,6 +127,29 @@ fn main() {
         if strip_ok {
             let _ = std::fs::rename(&stripped, &wasm_out);
         }
+    }
+}
+
+/// Newest modification time at `path`, recursing into directories.
+///
+/// Returns `None` if the path is missing or no mtime is readable; callers treat
+/// that as "assume stale" so a rebuild is never skipped on uncertain input.
+fn newest_mtime(path: &Path) -> Option<std::time::SystemTime> {
+    let meta = path.metadata().ok()?;
+    if meta.is_dir() {
+        // The directory's own mtime catches add/remove/rename; recursing into
+        // entries catches edits to existing files, which don't bump it.
+        let mut newest = meta.modified().ok()?;
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                if let Some(t) = newest_mtime(&entry.path()) {
+                    newest = newest.max(t);
+                }
+            }
+        }
+        Some(newest)
+    } else {
+        meta.modified().ok()
     }
 }
 

@@ -1138,12 +1138,12 @@ impl Tool for CreateJobTool {
 
         // Route to external worker if requested and available
         if mode_str != "worker" {
-            if let Some(ref ewm) = self.external_worker_manager {
-                if ewm.get_worker(mode_str).is_some() {
-                    let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
-                    let task = format!("{}\n\n{}", title, description);
-                    return self.execute_external(&task, mode_str, wait, ctx).await;
-                }
+            if let Some(ref ewm) = self.external_worker_manager
+                && ewm.get_worker(mode_str).is_some()
+            {
+                let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
+                let task = format!("{}\n\n{}", title, description);
+                return self.execute_external(&task, mode_str, wait, ctx).await;
             }
             return Err(ToolError::InvalidParameters(format!(
                 "Unknown job mode '{}'. Available: worker{}",

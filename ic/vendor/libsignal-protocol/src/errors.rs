@@ -1,3 +1,7 @@
+// The old failure_derive macro expands to a non-local impl inside a sibling
+// const, which an item-level allow on the enum cannot reach.
+#![allow(non_local_definitions)]
+
 use std::{
     convert::TryFrom,
     fmt::{self, Display, Formatter},

@@ -276,7 +276,7 @@ impl Context {
 #[cfg(feature = "crypto-native")]
 impl Default for Context {
     fn default() -> Context {
-        match Context::new(DefaultCrypto::default()) {
+        match Context::new(DefaultCrypto) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Unable to create a context using the defaults: {}", e)
@@ -411,6 +411,7 @@ unsafe extern "C" fn unlock_function(user_data: *mut c_void) {
 /// A pointer to this [`State`] will be shared throughout the
 /// `libsignal-protocol-c` library, so any mutation **must** be done using the
 /// appropriate synchronisation mechanisms (i.e. `RefCell` or atomics).
+#[allow(clippy::type_complexity)]
 struct State {
     mux: ReentrantLock,
     log_func: Mutex<Box<dyn Fn(Level, &str) + RefUnwindSafe>>,
@@ -494,7 +495,7 @@ mod tests {
     #[test]
     fn library_initialization_example_from_readme_openssl() {
         use crate::crypto::OpenSSLCrypto;
-        let ctx = Context::new(OpenSSLCrypto::default()).unwrap();
+        let ctx = Context::new(OpenSSLCrypto).unwrap();
 
         drop(ctx);
     }

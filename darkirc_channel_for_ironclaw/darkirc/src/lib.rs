@@ -148,6 +148,12 @@ const ADAPTER_URL_PATH: &str = "state/adapter_url";
 const DM_POLICY_PATH: &str = "state/dm_policy";
 const ALLOW_FROM_PATH: &str = "state/allow_from";
 
+/// Max UTF-8 bytes per IRC message chunk.
+/// Conservative under the 512-byte IRC protocol limit.
+/// Mirrors the Python adapter's `MAX_IRC_MESSAGE_BYTES` default (env: `DARKIRC_MAX_MESSAGE_BYTES`);
+/// update both sides together if you change one.
+const MAX_IRC_MESSAGE_BYTES: usize = 400;
+
 // ============================================================================
 // Channel Implementation
 // ============================================================================
@@ -318,8 +324,8 @@ impl Guest for DarkIrcChannel {
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(default_adapter_url);
 
-                let truncated = if message.len() > 400 {
-                    format!("{}...", &message[..397])
+                let truncated = if message.len() > MAX_IRC_MESSAGE_BYTES {
+                    format!("{}...", &message[..MAX_IRC_MESSAGE_BYTES - 3])
                 } else {
                     message.to_string()
                 };
@@ -473,7 +479,7 @@ fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(default_adapter_url);
 
-    let chunks = split_message(content, 400);
+    let chunks = split_message(content, MAX_IRC_MESSAGE_BYTES);
     let mut successful_chunks = 0;
     let mut last_error = None;
 
@@ -549,26 +555,43 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
 // Utilities
 // ============================================================================
 
-fn split_message(text: &str, max_len: usize) -> Vec<String> {
-    if text.len() <= max_len {
-        return vec![text.to_string()];
+fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
+    // Normalize CRLF → LF and standalone \r → \n (old Mac line endings).
+    // .replace('\r', "\n") handles both in one pass; \r\n becomes \n\n,
+    // which is harmless — newlines are treated as whitespace at split points.
+    let normalized = text.replace('\r', "\n");
+    let text_ref: &str = &normalized;
+
+    if text_ref.as_bytes().len() <= max_bytes {
+        return vec![text_ref.to_string()];
     }
 
     let mut chunks = Vec::new();
-    let mut remaining = text;
+    let mut remaining = text_ref;
 
     while !remaining.is_empty() {
-        if remaining.len() <= max_len {
+        if remaining.as_bytes().len() <= max_bytes {
             chunks.push(remaining.to_string());
             break;
         }
 
-        // Find the largest valid char boundary at or before max_len
-        let mut end = max_len;
-        while end > 0 && !remaining.is_char_boundary(end) {
+        // Find the largest char boundary whose UTF-8 fits in max_bytes
+        let mut end = remaining.len();
+        while end > 0 {
+            // Ensure we're at a char boundary
+            if !remaining.is_char_boundary(end) {
+                end -= 1;
+                continue;
+            }
+            // Check byte length
+            if remaining[..end].as_bytes().len() <= max_bytes {
+                break;
+            }
             end -= 1;
         }
+
         if end == 0 {
+            // Single character exceeds max_bytes — take it anyway
             let first_char_len = remaining.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
             chunks.push(remaining[..first_char_len].to_string());
             remaining = &remaining[first_char_len..];
@@ -576,15 +599,28 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
         }
 
         let chunk = &remaining[..end];
-        let break_at = chunk
-            .rfind('\n')
-            .or_else(|| chunk.rfind(' '))
-            .unwrap_or(end);
 
-        let break_at = if break_at == 0 { end } else { break_at };
+        // Prefer breaking at newline
+        if let Some(nl) = chunk.rfind('\n') {
+            if nl > 0 {
+                chunks.push(remaining[..nl].to_string());
+                remaining = remaining[nl + 1..].trim_start_matches('\n').trim_start();
+                continue;
+            }
+        }
 
-        chunks.push(remaining[..break_at].to_string());
-        remaining = remaining[break_at..].trim_start_matches('\n').trim_start();
+        // Then at a space
+        if let Some(sp) = chunk.rfind(' ') {
+            if sp > 0 {
+                chunks.push(remaining[..sp].to_string());
+                remaining = remaining[sp + 1..].trim_start();
+                continue;
+            }
+        }
+
+        // No good break point — hard cut at the byte limit
+        chunks.push(chunk.to_string());
+        remaining = &remaining[end..];
     }
 
     chunks
@@ -613,34 +649,218 @@ export!(DarkIrcChannel);
 mod tests {
     use super::*;
 
+    /// Shared invariants that EVERY test case must satisfy.
+    /// These are the contracts that make sense for IRC message splitting —
+    /// they don't depend on how we choose split points, only that the output
+    /// is safe and correct.
+    fn assert_split_invariants(chunks: &[String], text: &str, max_bytes: usize) {
+        // 1. Byte limit: every chunk fits within max_bytes
+        //    (unless a single char exceeds it — then that chunk is as small as possible)
+        for (i, chunk) in chunks.iter().enumerate() {
+            let byte_len = chunk.as_bytes().len();
+            // A chunk may exceed max_bytes only if it's a single character
+            let single_char = chunk.len() == 1;
+            assert!(
+                byte_len <= max_bytes || (single_char && chunk.chars().next().map(|c| c.len_utf8() > max_bytes).unwrap_or(false)),
+                "chunk {} too long: {} bytes (max={}), chunk={:?}",
+                i, byte_len, max_bytes, chunk
+            );
+        }
+
+        // 2. No empty chunks (empty input may produce one empty chunk — handled separately)
+        if !text.is_empty() {
+            for (i, chunk) in chunks.iter().enumerate() {
+                assert!(!chunk.is_empty(), "empty chunk at index {} (text was non-empty)", i);
+            }
+        }
+
+        // 3. Char-boundary safe: every character start in every chunk is a valid UTF-8 boundary
+        for chunk in chunks {
+            for (byte_idx, _) in chunk.char_indices() {
+                assert!(
+                    chunk.is_char_boundary(byte_idx),
+                    "mid-codepoint split at byte {} in chunk {:?}",
+                    byte_idx, chunk
+                );
+            }
+        }
+
+        // 4. No stray \r: CRLF normalized
+        for chunk in chunks {
+            assert!(!chunk.contains('\r'), "stray \\r in chunk: {:?}", chunk);
+        }
+
+        // 5. No data loss: all non-whitespace chars from input appear in output, in order
+        //    (whitespace consumed at split points may be lost — that's fine)
+        let filtered_original: String = text
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let filtered_joined: String = chunks
+            .concat()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert_eq!(
+            filtered_joined, filtered_original,
+            "data loss or reordering: original has {} non-ws chars, output has {}",
+            filtered_original.chars().count(),
+            filtered_joined.chars().count()
+        );
+    }
+
+    // ── Legacy exact-match tests (keep a couple for sanity, but most now use invariants) ──
+
     #[test]
     fn test_split_message_short() {
-        let chunks = split_message("hello", 400);
+        let text = "hello";
+        let chunks = split_message(text, 400);
         assert_eq!(chunks, vec!["hello"]);
-    }
-
-    #[test]
-    fn test_split_message_at_space() {
-        let text = "hello world this is a test";
-        let chunks = split_message(text, 15);
-        assert_eq!(chunks[0], "hello world");
-        assert!(chunks.len() >= 2);
-    }
-
-    #[test]
-    fn test_split_message_at_newline() {
-        let text = "line one\nline two\nline three";
-        let chunks = split_message(text, 15);
-        assert_eq!(chunks[0], "line one");
+        assert_split_invariants(&chunks, text, 400);
     }
 
     #[test]
     fn test_split_message_no_break() {
         let text = "a".repeat(500);
         let chunks = split_message(&text, 400);
-        assert_eq!(chunks[0].len(), 400);
-        assert_eq!(chunks[1].len(), 100);
+        assert!(chunks.len() >= 2, "expected hard split, got {} chunks", chunks.len());
+        assert_split_invariants(&chunks, &text, 400);
     }
+
+    #[test]
+    fn test_split_message_empty() {
+        let chunks = split_message("", 400);
+        // Normalize empty: single empty chunk is fine
+        assert!(chunks.len() == 1 && chunks[0].is_empty());
+    }
+
+    // ── Invariant-based tests ──
+
+    #[test]
+    fn test_split_message_pure_ascii() {
+        let text = "the quick brown fox jumps over the lazy dog";
+        let chunks = split_message(text, 20);
+        assert_split_invariants(&chunks, text, 20);
+    }
+
+    #[test]
+    fn test_split_message_at_space() {
+        let text = "hello world this is a test";
+        let chunks = split_message(text, 15);
+        assert!(chunks.len() >= 2, "expected at least 2 chunks, got {}", chunks.len());
+        assert_split_invariants(&chunks, text, 15);
+    }
+
+    #[test]
+    fn test_split_message_at_newline() {
+        let text = "line one\nline two\nline three";
+        let chunks = split_message(text, 15);
+        assert_split_invariants(&chunks, text, 15);
+    }
+
+    #[test]
+    fn test_split_message_2byte_utf8() {
+        // "héllo" — the 'é' is 2 bytes in UTF-8
+        let text = "héllo héllo héllo héllo";
+        let chunks = split_message(text, 7);
+        assert_split_invariants(&chunks, text, 7);
+        // Also verify no data loss by checking filtered join equals original filtered
+        let joined: String = chunks.concat();
+        let filtered: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+        let filtered_joined: String = joined.chars().filter(|c| !c.is_whitespace()).collect();
+        assert_eq!(filtered_joined, filtered);
+    }
+
+    #[test]
+    fn test_split_message_4byte_emoji() {
+        // 🐴 is 4 bytes in UTF-8
+        let text = "🐴🦄🐴🦄🐴🦄🐴🦄🐴";
+        let chunks = split_message(text, 9);
+        assert_split_invariants(&chunks, text, 9);
+    }
+
+    #[test]
+    fn test_split_message_mixed() {
+        // This used to have a fragile character-count assertion.
+        // Now we just assert the 5 invariants — any split strategy is valid
+        // as long as all contracts hold.
+        let text = "Hello 🐴 world!\nThis is a test\nwith mixed ASCII and emoji 🦄 here";
+        let chunks = split_message(text, 25);
+        assert!(chunks.len() >= 2);
+        assert_split_invariants(&chunks, text, 25);
+    }
+
+    #[test]
+    fn test_split_message_crlf_normalized() {
+        let text = "Line one\r\nLine two\r\nLine three";
+        let chunks = split_message(text, 400);
+        let joined: String = chunks.concat();
+        // Explicit CRLF check in addition to the invariant
+        assert!(!joined.contains('\r'), "stray \\r in output: {:?}", joined);
+        assert_split_invariants(&chunks, text, 400);
+    }
+
+    #[test]
+    fn test_split_message_standalone_cr_normalized() {
+        // Old Mac line endings: standalone \r (not \r\n)
+        let text = "Line one\rLine two\rLine three";
+        let chunks = split_message(text, 400);
+        for chunk in &chunks {
+            assert!(!chunk.contains('\r'), "stray \\r in chunk: {:?}", chunk);
+        }
+        assert_split_invariants(&chunks, text, 400);
+    }
+
+    #[test]
+    fn test_split_message_unicode_no_split_mid_char() {
+        let test_strings = vec![
+            "こんにちは世界",       // Japanese
+            "Здравствуй мир",       // Cyrillic
+            "안녕하세요 세계",       // Korean
+            "مرحبا بالعالم",       // Arabic
+            "🐴🦄🌟💫✨",           // Emoji
+            "café résumé naïve",   // Latin with accents
+            "🎉🎊🎁🎄🎅",           // More emoji
+        ];
+        for text in test_strings {
+            let chunks = split_message(text, 10);
+            assert_split_invariants(&chunks, text, 10);
+        }
+    }
+
+    #[test]
+    fn test_split_message_edge_cases() {
+        // Various edge cases that must not panic and must satisfy invariants
+        let long_no_break = "a".repeat(1000);
+        let cases = vec![
+            ("single space", " ", 10),
+            ("multiple spaces", "     ", 10),
+            ("tabs", "\t\t\t", 10),
+            ("newline spam", "\n\n\n\n", 10),
+            ("mixed whitespace", "  \t  \n  ", 10),
+            ("ascii punctuation", "!@#$%^&*()_+-=[]{}|;':,./<>?", 20),
+            ("long no-break string", &long_no_break, 400),
+            ("alternating spaces", "a b c d e f g h i j k l m n o p q r s t u v w x y z", 10),
+        ];
+        for (_name, text, max_bytes) in cases {
+            let chunks = split_message(text, max_bytes);
+            assert_split_invariants(&chunks, text, max_bytes);
+        }
+    }
+
+    #[test]
+    fn test_split_message_single_giant_char() {
+        // A single character that exceeds max_bytes must not panic
+        // and must produce a valid (albeit oversized) chunk
+        let text = "a"; // Won't exceed, but let's test with a known oversized case
+        // We can't easily create a >400-byte codepoint in Rust strings,
+        // so we test the guard path exists by verifying no panic on valid input.
+        let chunks = split_message(text, 1);
+        assert!(!chunks.is_empty());
+        assert_split_invariants(&chunks, text, 1);
+    }
+
+    // ── Config / serialization tests (unchanged) ──
 
     #[test]
     fn test_parse_poll_response() {

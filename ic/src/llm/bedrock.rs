@@ -760,11 +760,13 @@ mod tests {
             id: "call_1".to_string(),
             name: "echo".to_string(),
             arguments: serde_json::json!({"text": "hi"}),
+            reasoning: None,
         };
         let tc2 = crate::llm::provider::ToolCall {
             id: "call_2".to_string(),
             name: "time".to_string(),
             arguments: serde_json::json!({}),
+            reasoning: None,
         };
 
         let messages = vec![
@@ -803,6 +805,7 @@ mod tests {
             id: "call_1".to_string(),
             name: "search".to_string(),
             arguments: serde_json::json!({"query": "test"}),
+            reasoning: None,
         };
 
         let messages = vec![
@@ -826,6 +829,7 @@ mod tests {
             id: "call_1".to_string(),
             name: "echo".to_string(),
             arguments: serde_json::json!({}),
+            reasoning: None,
         };
 
         let messages = vec![
@@ -990,11 +994,13 @@ mod tests {
             id: "call_abc".to_string(),
             name: "get_weather".to_string(),
             arguments: serde_json::json!({"city": "NYC"}),
+            reasoning: None,
         };
         let tc2 = crate::llm::provider::ToolCall {
             id: "call_def".to_string(),
             name: "get_time".to_string(),
             arguments: serde_json::json!({"tz": "EST"}),
+            reasoning: None,
         };
 
         let messages = vec![

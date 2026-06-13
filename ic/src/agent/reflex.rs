@@ -201,10 +201,10 @@ impl ReflexRouter {
         }
 
         // 3. Semantic fallback — only if embedding provider is set
-        if self.embedding_provider.is_some() {
-            if let Some(tool) = self.semantic_route(&normalized).await {
-                return Some(tool);
-            }
+        if self.embedding_provider.is_some()
+            && let Some(tool) = self.semantic_route(&normalized).await
+        {
+            return Some(tool);
         }
 
         None

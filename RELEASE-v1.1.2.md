@@ -127,41 +127,20 @@ A `rustfmt` pass tidied four files touched by recent security/registry work with
 
 These items are targeted for this release per the v1.1.1 deferral table but have **not** landed in staging as of this draft. They may ship in v1.1.2 if completed during the testing window, or slip to a later release:
 
+- **Improvements to warnings and errors in compile** - more on this later
 - **Healthcheck and self-healing enhancements** — Further improvements to the infrastructure health-check suite and watchdog beyond the v1.1.1 baseline.
 
 > The remaining-Google-extension removal originally tracked here **landed in this release** — see *Removal of Google Tool Extensions* under Changes. The GitHub extension decision remains deferred (currently targeted v1.1.9).
 
 ## Features and changes deferred to future releases
 
+### (A larger list of changes and features planned for the future has been included in `docs/ops/ROADMAP_2026.MD`)
+
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
 | Feature | Target |
 |---------|--------|
 | Existing external worker polishing | v1.1.3 |
-| K.E.R.S. Lunarvision polishing | v1.1.3 |
-| Update funding.json with actual payment addresses and additional info | v1.1.3 |
-| Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental; more testing required) | v1.1.4 |
-| Lunartica UI reskin | v1.1.4 |
-| XMPP OMEMO MUC fallback fix | v1.1.5 |
-| XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
-| Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero directly) — disable on existing tenants and by default on new ones | v1.1.5 |
-| External Worker enhancements | v1.1.6 |
-| Add rootless docker and rootless podman as mechanisms for mt-admin setup | v1.1.6 |
-| List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
-| WASM Channel Polishing | v1.1.7 |
-| Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
-| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |
-| Upgrade version of tensorzero, plus optional tighter integration across deployments, plus expansion of healthcheck tests for Clickhouse Database | v1.1.8 |
-| Proprietary channel removal continuation (Telegram) | v1.1.9 |
-| Decision to remove GitHub extension | v1.1.9 |
-| v2 engine route, LunarWing UI Performance Overhaul | v1.2.0 |
-| Better githooks for repo | v1.2.1 |
-| LunarWing developer CI/CD pipeline | v1.2.1 |
-| LunarWing decision on switching to Codeberg or self-hosted GitLab rather than GitHub to host the monorepo (GH can still be used as a mirror) | v1.2.1 |
-| LunarVoice (further planning required) | v1.2.2 |
-| Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 1.2.0–1.2.2) | v1.2.3 |
-| Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.4 |
-| New suite of planned features adopting concepts from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 
 ## Release Cadence
 

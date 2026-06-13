@@ -28,7 +28,7 @@ mod openssl;
 
 /// The error returned from a failed conversion to [`SignalCipherType`].
 #[derive(Debug, Copy, Clone)]
-pub struct SignalCipherTypeError(i32);
+pub struct SignalCipherTypeError(#[allow(dead_code)] i32);
 
 #[derive(Debug, Copy, Clone)]
 enum CipherMode {
@@ -379,6 +379,9 @@ unsafe extern "C" fn decrypt_func(
 }
 
 #[allow(clippy::cognitive_complexity)]
+// Internal helper shared by the C callbacks; never exposed as a C function
+// pointer itself, so the non-FFI-safe `CipherMode` parameter is fine.
+#[allow(improper_ctypes_definitions)]
 unsafe extern "C" fn internal_cipher(
     mode: CipherMode,
     output: *mut *mut signal_buffer,
@@ -435,8 +438,8 @@ mod crypto_tests {
     #[test]
     fn test_crypter_cbc() {
         // Here is a test to see the behavior of DefaultCrypto vs OpenSSLCrypto
-        let native_crypto = DefaultCrypto::default();
-        let openssl_crypto = OpenSSLCrypto::default();
+        let native_crypto = DefaultCrypto;
+        let openssl_crypto = OpenSSLCrypto;
         let data = [1, 2, 3, 4, 5, 6, 7];
         let mut key = [0u8; 16];
         let mut iv = [0u8; 16];
@@ -475,8 +478,8 @@ mod crypto_tests {
     #[test]
     fn test_crypter_ctr() {
         // Here is a test to see the behavior of DefaultCrypto vs OpenSSLCrypto
-        let native_crypto = DefaultCrypto::default();
-        let openssl_crypto = OpenSSLCrypto::default();
+        let native_crypto = DefaultCrypto;
+        let openssl_crypto = OpenSSLCrypto;
         let data = [1, 2, 3, 4, 5, 6, 7];
         let mut key = [0u8; 16];
         let mut iv = [0u8; 16];

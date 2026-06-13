@@ -331,7 +331,7 @@ impl Thread {
 
     /// Start a new turn with user input.
     pub fn start_turn(&mut self, user_input: impl Into<String>) -> &mut Turn {
-        let prev_state = self.state.clone();
+        let prev_state = self.state;
         let turn_number = self.turns.len();
         let turn = Turn::new(turn_number, user_input);
         self.turns.push(turn);

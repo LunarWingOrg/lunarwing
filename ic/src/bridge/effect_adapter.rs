@@ -218,13 +218,12 @@ impl EffectBridgeAdapter {
             .or_else(|| params.get("_args").and_then(|a| a.get(0)))
             .and_then(|v| v.as_str());
 
-        if let Some(name) = name {
-            if let Some(mission) = mgr
+        if let Some(name) = name
+            && let Some(mission) = mgr
                 .find_by_name(context.project_id, &context.user_id, name)
                 .await?
-            {
-                return Ok(mission.id);
-            }
+        {
+            return Ok(mission.id);
         }
 
         if let Some(id_str) = id_str {
