@@ -105,7 +105,7 @@ Hardening to the health-check/self-heal scripts surfaced and fixed a silent reme
 
 ### Removal of Google Tool Extensions
 
-Following the earlier removal of the proprietary Slack, Discord, WhatsApp, and Feishu channels, v1.1.2 retires the six **Google tool extensions** that previously shipped in the registry — **Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, and Google Slides** — in keeping with the Lunarpunk direction.
+Following the earlier removal of the proprietary Slack, Discord, WhatsApp, and Feishu channels, v1.1.2 retires the six **Google tool extensions** that previously shipped in the registry — **Gmail, Google Calendar, Google Drive, Google Docs, Google Sheets, and Google Slides** — in keeping with the Lunarpunk direction. Oauth backend for these services remain in the repo (for now).
 
 Removed:
 
