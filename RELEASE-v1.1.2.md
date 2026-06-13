@@ -1,8 +1,10 @@
-# Release Notes for LunarWing v1.1.2 - Codename TBD
+# Release Notes for LunarWing v1.1.2 - Codename Kunai
 
-**Release Date:** TBD (in preparation)
+**Release Date:** TBD
 
 ## Overview
+
+### Much of this is to be rewritten to reflect actual changes
 
 Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), even-numbered releases are feature releases — but in practice v1.1.2 is predominantly polish, hardening, and fixes built on top of the v1.1.1 foundation. The two headline changes are a **more robust fix for the long-standing empty-response "lapse" bug** (now recovering tool calls that GLM/Qwen-style models emit in the `<function=NAME>…</function>` XML dialect instead of misreporting them as empty responses) and a **substantial round of XMPP inbound file-transfer hardening** (XEP-0030/0115 capability advertisement so clients will actually offer to send files, XEP-0454 `aesgcm://` encrypted-media download + AES-256-GCM decryption, bounded-concurrency downloads, and streamed size enforcement). The release also **removes the remaining Google tool extensions** (Gmail, Calendar, Drive, Docs, Sheets, Slides) as part of LunarWing's proprietary-extension cleanup, and carries forward release-process tooling/documentation and the usual housekeeping. One item targeted for this cycle — healthcheck/self-healing enhancements — remains in progress at the time of this draft (see *Planned for v1.1.2*).
 

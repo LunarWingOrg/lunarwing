@@ -198,3 +198,33 @@ Create a plist in ~/Library/LaunchAgents/ pointing to cron-wrapper.sh.
 | 0 | All components healthy |
 | 1 | One or more components degraded |
 | 2 | One or more components critical |
+
+## Testing & Chaos Suite
+
+The self-heal watchdog has a test suite under `tests/` (see
+`docs/proposals/CHAOS_ENGINEERING_TEST_PLAN.md` for the full matrix):
+
+```bash
+cd ic-infrastructure-health-check
+bash tests/run-all.sh                 # regression + unit matrix + chaos
+bash tests/run-all.sh matrix chaos    # pick suites: regression | matrix | chaos
+bash tests/test-self-heal-matrix.sh   # dry-run unit matrix (A1–N3)
+bash tests/chaos-harness.sh           # end-to-end fault-injection scenarios
+```
+
+| Suite | What it does |
+|-------|--------------|
+| `test-self-heal.sh` | Original regression checks (jq precedence, backoff, grace, flapping, …). |
+| `test-self-heal-matrix.sh` | The full A–N matrix in `--dry-run` against synthetic reports. ~115 assertions. |
+| `chaos-harness.sh` | Drives the **real** self-heal loop (kill → restart → verify → recover/escalate) against a mock init system. |
+| `lib.sh` | Shared harness + the mock init system (sourced, not run directly). |
+
+**Safety.** The matrix is dry-run only and never triggers a real restart or the
+real HTTP/component health probes. The chaos harness runs self-heal for real but
+against a *mock* `systemctl`/`rc-service`/`sudo` shadowed onto `PATH`, so a
+"restart" flips a sandbox file — no live unit is touched — and escalation runs
+`send-notification.sh` with an empty `GOTIFY_TOKEN` so it never hits the network.
+Prefer a dedicated test box over a live multi-tenant host regardless.
+
+Requirements: `bash` + `jq` (everywhere), and `flock` for the locking test
+(skipped gracefully if absent).
