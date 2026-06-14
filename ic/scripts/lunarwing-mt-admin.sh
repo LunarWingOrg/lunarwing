@@ -1184,6 +1184,10 @@ patch_tenant_env() {
       say "added RELAY_URL=http://127.0.0.1:$weechat_port to $env_path"
     fi
   fi
+
+  # Wire the nanocode external worker into config.toml so existing tenants get
+  # create_job(mode: "nanocode") routing without a hand-edited config file.
+  ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
 }
 
 extract_host_from_url() {
@@ -2136,6 +2140,7 @@ add_tenant() {
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
+  ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   say ""
 
   say "--- Starting PostgreSQL ---"
@@ -2709,4 +2714,7 @@ main() {
   esac
 }
 
-main "$@"
+# Only dispatch when executed directly; allows sourcing for tests/inspection.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
