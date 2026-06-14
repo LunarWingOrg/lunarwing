@@ -42,6 +42,8 @@ url = "ws://localhost:9090/ws/agent"
 timeout_ms = 300000
 ```
 
+The `ws://localhost:9090/...` URL above is the single-tenant default. **Multi-tenant deployments do not need this step:** `ic/scripts/lunarwing-mt-admin.sh` writes the `[[sandbox.external_workers]]` block automatically (`add-tenant`, or `patch-env` for existing tenants), using the tenant's allocated `pebble_wss` port and `GATEWAY_AUTH_TOKEN` as the worker auth token. See `docs/bugs/MISSING-CONFIG-FOR-NANOCODE.md`.
+
 Then use `create_job(mode: "pebble", description: "...")` to dispatch tasks.
 
 ## Architecture

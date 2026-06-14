@@ -61,6 +61,9 @@ After the worker image is built (`build-tenant <name> --with-nanocode`) and the 
 
 ## Follow-up
 
-`pebble` is the same kind of external worker (`pebble_wss` port, identical WS protocol). The
-generator is generic — `ensure_external_worker_config <name> "pebble" "pebble_wss"` wires it the
-same way once we extend the fix to that worker.
+`pebble` — the other external worker (`pebble_wss` port, identical WS protocol and
+`AGENT_AUTH_TOKEN=GATEWAY_AUTH_TOKEN` launch) — is now wired the same way: `add_tenant` and
+`patch_tenant_env` also call `ensure_external_worker_config "$name" "pebble" "pebble_wss"`, so a
+tenant's `config.toml` gets both `[[sandbox.external_workers]]` blocks. The
+`external_worker_config_supports_multiple_workers` test in `ic/src/config/sandbox.rs` covers a
+combined nanocode + pebble config.

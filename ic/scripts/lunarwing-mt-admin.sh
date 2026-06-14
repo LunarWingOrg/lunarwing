@@ -1188,6 +1188,7 @@ patch_tenant_env() {
   # Wire the nanocode external worker into config.toml so existing tenants get
   # create_job(mode: "nanocode") routing without a hand-edited config file.
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
+  ensure_external_worker_config "$name" "pebble" "pebble_wss"
 }
 
 extract_host_from_url() {
@@ -2141,6 +2142,7 @@ add_tenant() {
   write_tenant_proxy_env "$name" "$tensorzero_url"
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
+  ensure_external_worker_config "$name" "pebble" "pebble_wss"
   say ""
 
   say "--- Starting PostgreSQL ---"
