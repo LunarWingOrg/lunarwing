@@ -4,6 +4,8 @@
 # Date: 2026-06-16
 # Author: Kageho
 
+#possibly broken in current state due to single-quoted heredocs
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
