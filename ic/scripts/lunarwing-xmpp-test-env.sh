@@ -878,7 +878,7 @@ install_wasm() {
   local installed=0 skipped=0
   local has_wasm_tools=true
   if ! command -v wasm-tools >/dev/null 2>&1; then
-    say "wasm-tools not found; copying raw WASM files without componentize/strip"
+    say "note: wasm-tools not installed — installing raw WASM components (works fine; skipping optional debug-info strip)"
     has_wasm_tools=false
   fi
 

@@ -40,6 +40,13 @@ pub enum SkillRegistryError {
     #[error("Failed to parse SKILL.md for '{name}': {reason}")]
     ParseError { name: String, reason: String },
 
+    /// The file has no YAML frontmatter at all, so it is not a skill file — most
+    /// often a legacy or stray markdown doc (e.g. a migrated `GOTIFYSKILL.md`).
+    /// Discovery treats this as "not a skill" and skips it quietly, reserving
+    /// warnings for files that *are* structured as skills but are malformed.
+    #[error("No YAML frontmatter; not a skill file")]
+    MissingFrontmatter,
+
     #[error("Skill file too large for '{name}': {size} bytes (max {max} bytes)")]
     FileTooLarge { name: String, size: u64, max: u64 },
 
@@ -273,6 +280,14 @@ impl SkillRegistry {
                             tracing::debug!("Loaded skill: {}", name);
                             results.push((name, skill));
                         }
+                        // A SKILL.md with no frontmatter isn't a skill (e.g. a
+                        // legacy migrated markdown doc) — skip it quietly.
+                        Err(SkillRegistryError::MissingFrontmatter) => {
+                            tracing::debug!(
+                                "Skipping {:?}: no YAML frontmatter (not a skill file)",
+                                path.file_name().unwrap_or_default()
+                            );
+                        }
                         Err(e) => {
                             tracing::warn!(
                                 "Failed to load skill from {:?}: {}",
@@ -296,6 +311,14 @@ impl SkillRegistry {
                     Ok((name, skill)) => {
                         tracing::info!("Loaded skill: {}", name);
                         results.push((name, skill));
+                    }
+                    // A SKILL.md with no frontmatter isn't a skill (e.g. a legacy
+                    // migrated markdown doc) — skip it quietly.
+                    Err(SkillRegistryError::MissingFrontmatter) => {
+                        tracing::debug!(
+                            "Skipping {:?}: no YAML frontmatter (not a skill file)",
+                            fname
+                        );
                     }
                     Err(e) => {
                         tracing::warn!("Failed to load skill from {:?}: {}", fname, e);
@@ -407,6 +430,9 @@ impl SkillRegistry {
     /// hold time.
     pub async fn install_skill(&mut self, content: &str) -> Result<String, SkillRegistryError> {
         let normalized = normalize_line_endings(content);
+        // Explicit install is a deliberate "this IS a skill" action, so every
+        // parse failure (including missing frontmatter) surfaces as a loud
+        // ParseError — unlike passive discovery, which skips non-skill markdown.
         let parsed = parse_skill_md(&normalized).map_err(|e: SkillParseError| match e {
             SkillParseError::InvalidName { ref name } => SkillRegistryError::ParseError {
                 name: name.clone(),
@@ -580,6 +606,8 @@ async fn load_from_content(
     let normalized = normalize_line_endings(content);
 
     let parsed = parse_skill_md(&normalized).map_err(|e: SkillParseError| match e {
+        // No frontmatter at all → not a skill file; callers skip these quietly.
+        SkillParseError::MissingFrontmatter => SkillRegistryError::MissingFrontmatter,
         SkillParseError::InvalidName { ref name } => SkillRegistryError::ParseError {
             name: name.clone(),
             reason: e.to_string(),
@@ -684,6 +712,8 @@ async fn load_and_validate_skill(
 
     // Parse SKILL.md
     let parsed = parse_skill_md(&normalized_content).map_err(|e: SkillParseError| match e {
+        // No frontmatter at all → not a skill file; discovery skips these quietly.
+        SkillParseError::MissingFrontmatter => SkillRegistryError::MissingFrontmatter,
         SkillParseError::InvalidName { ref name } => SkillRegistryError::ParseError {
             name: name.clone(),
             reason: e.to_string(),
@@ -805,6 +835,56 @@ mod tests {
         let skill = &registry.skills()[0];
         assert_eq!(skill.trust, SkillTrust::Trusted);
         assert!(skill.prompt_content.contains("helpful test assistant"));
+    }
+
+    #[tokio::test]
+    async fn test_frontmatterless_skill_md_skipped() {
+        // A SKILL.md with no YAML frontmatter — e.g. a legacy Ironclaw
+        // GOTIFYSKILL.md copied in as SKILL.md — must be skipped, not loaded.
+        // Discovery routes it to a quiet debug log, not a startup warning.
+        let dir = tempfile::tempdir().unwrap();
+        let skill_dir = dir.path().join("legacy-gotify");
+        fs::create_dir(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "# Gotify Notification Skill\n\nWhen using the gotify tool, ALWAYS pass JSON params.\n",
+        )
+        .unwrap();
+
+        let mut registry = SkillRegistry::new(dir.path().to_path_buf());
+        let loaded = registry.discover_all().await;
+        assert!(
+            loaded.is_empty(),
+            "frontmatter-less SKILL.md should be skipped, got {loaded:?}"
+        );
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_parse_error_distinguishes_missing_vs_malformed_frontmatter() {
+        // No frontmatter at all → MissingFrontmatter (discovery skips quietly).
+        let no_fm = load_from_content(
+            "Just plain markdown, no frontmatter.\n",
+            SkillTrust::Trusted,
+            SkillSource::Bundled(PathBuf::from("legacy")),
+        )
+        .await;
+        assert!(
+            matches!(no_fm, Err(SkillRegistryError::MissingFrontmatter)),
+            "expected MissingFrontmatter, got {no_fm:?}"
+        );
+
+        // Frontmatter present but malformed → ParseError (discovery still warns).
+        let bad_yaml = load_from_content(
+            "---\nname: [invalid yaml\n---\n\nBody.\n",
+            SkillTrust::Trusted,
+            SkillSource::Bundled(PathBuf::from("broken")),
+        )
+        .await;
+        assert!(
+            matches!(bad_yaml, Err(SkillRegistryError::ParseError { .. })),
+            "expected ParseError, got {bad_yaml:?}"
+        );
     }
 
     #[tokio::test]
