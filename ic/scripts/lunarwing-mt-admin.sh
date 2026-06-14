@@ -306,6 +306,41 @@ ports_migrate() {
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v5"
   fi
+
+  if [[ "$current_version" -lt 6 ]]; then
+    say "migrating port registry v${current_version} -> v6 (add extended port range for overflow services) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    # v6 expands per-tenant capacity *without moving any existing port*. Each
+    # tenant's existing block (base_port + .ports) is left untouched; a parallel
+    # block is mirrored into a second range (extended_base = base_port - range
+    # start + extended_range start) holding fresh reserved_N slots for future
+    # services. Mirroring preserves the >= block_size spacing, so extended blocks
+    # never overlap each other or the original range.
+    jq '
+      .version = 6
+      | .extended_range = { "start": 20000, "end": 29999 }
+      | .extended_block_size = (.block_size // 10)
+      | ( .range.start // 10000 ) as $rstart
+      | ( .extended_range.start ) as $estart
+      | ( .extended_block_size ) as $bs
+      | .tenants |= with_entries(
+          .value |= (
+            if .base_port then
+              ( .base_port - $rstart + $estart ) as $eb
+              | .extended_base = $eb
+              | .extended_ports = (
+                  reduce range(0; $bs) as $i ({}; . + { ("reserved_\($i)"): ($eb + $i) })
+                )
+            else . end
+          )
+        )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v6"
+    current_version=6
+  fi
 }
 
 ports_allocate() {
@@ -330,23 +365,31 @@ ports_allocate() {
   local tmp
   tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
   jq --arg name "$name" --argjson base "$base" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-    .tenants[$name] = {
-      base_port: $base,
-      user: $name,
-      created_at: $ts,
-      ports: {
-        gateway:          ($base + 0),
-        http:             ($base + 1),
-        bridge:           ($base + 2),
-        postgres:         ($base + 3),
-        proxy:            ($base + 4),
-        weechat:          ($base + 5),
-        orchestrator:     ($base + 6),
-        nanocode_wss:     ($base + 7),
-        pebble_wss:       ($base + 8),
-        weechat_adapter:  ($base + 9)
+    ( .range.start // 10000 ) as $rstart
+    | ( .extended_range.start // 20000 ) as $estart
+    | ( .extended_block_size // 10 ) as $ebs
+    | ( $base - $rstart + $estart ) as $ebase
+    | .tenants[$name] = {
+        base_port: $base,
+        user: $name,
+        created_at: $ts,
+        ports: {
+          gateway:          ($base + 0),
+          http:             ($base + 1),
+          bridge:           ($base + 2),
+          postgres:         ($base + 3),
+          proxy:            ($base + 4),
+          weechat:          ($base + 5),
+          orchestrator:     ($base + 6),
+          nanocode_wss:     ($base + 7),
+          pebble_wss:       ($base + 8),
+          weechat_adapter:  ($base + 9)
+        },
+        extended_base: $ebase,
+        extended_ports: (
+          reduce range(0; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) })
+        )
       }
-    }
   ' "$PORTS_REGISTRY" >"$tmp"
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
