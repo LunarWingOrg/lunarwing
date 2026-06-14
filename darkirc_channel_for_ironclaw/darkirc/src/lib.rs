@@ -31,7 +31,7 @@ wit_bindgen::generate!({
 use serde::{Deserialize, Serialize};
 
 use exports::near::agent::channel::{
-    AgentResponse, ChannelConfig, Guest, HttpEndpointConfig, IncomingHttpRequest,
+    AgentResponse, ChannelConfig, Guest, IncomingHttpRequest,
     OutgoingHttpResponse, PollConfig, StatusType, StatusUpdate,
 };
 use near::agent::channel_host::{self, EmittedMessage};
@@ -51,7 +51,8 @@ struct AdapterMessage {
     from: String,
     // Message text (control codes already stripped by adapter).
     text: String,
-    // ISO8601 timestamp.
+    // ISO8601 timestamp (parsed from the adapter but currently unused).
+    #[allow(dead_code)]
     ts: String,
 }
 
@@ -313,7 +314,7 @@ impl Guest for DarkircChannel {
     }
 
     // Deliver the agent's response back to the DarkIRC user via the adapter.
-    fn on_response(response: AgentResponse) -> Result<(), String> {
+    fn on_respond(response: AgentResponse) -> Result<(), String> {
         let metadata: DarkircMessageMetadata = serde_json::from_str(&response.metadata_json)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
@@ -343,7 +344,9 @@ impl Guest for DarkircChannel {
                         Err(_) => return,
                     };
 
-                let adapter_url = channel_host::workspace_read(&adapter_url_path(&metadata.nick))
+                let tenant_id = channel_host::workspace_read(&tenant_id_path())
+                    .unwrap_or_else(|| "default".to_string());
+                let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| default_adapter_url());
 
@@ -387,10 +390,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
     let nick = &msg.from;
 
     // --- DM policy enforcement ---
-    let dm_policy =
-        channel_host::workspace_read(&dm_policy_path(&msg.from)).unwrap_or_else(|| "pairing".to_string());
-
-    // Note: We need to read tenant_id to get the correct paths
+    // Read tenant_id first so all state paths resolve to the tenant-scoped keys.
     let tenant_id = channel_host::workspace_read(&tenant_id_path()).unwrap_or_else(|| "default".to_string());
     let allow_from_path = allow_from_path(&tenant_id);
     let dm_policy_path = dm_policy_path(&tenant_id);
@@ -404,10 +404,8 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
 
-        if let Ok(Ok(stored_allowed)) = channel_host::workspace_read(&allow_from_path)
-            .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
-        {
-            allowed.extend(stored_allowed);
+        if let Ok(store_allowed) = channel_host::pairing_read_allow_from(CHANNEL_NAME) {
+            allowed.extend(store_allowed);
         }
 
         let is_allowed = allowed.contains(&"*".to_string())
@@ -504,7 +502,9 @@ fn adapter_health(adapter_url: &str) -> Result<bool, String> {
 }
 
 fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
-    let adapter_url = channel_host::workspace_read(&adapter_url_path(&nick))
+    let tenant_id = channel_host::workspace_read(&tenant_id_path())
+        .unwrap_or_else(|| "default".to_string());
+    let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| default_adapter_url());
 
@@ -681,7 +681,7 @@ mod tests {
     fn assert_split_invariants(chunks: &[String], text: &str, max_bytes: usize) {
         // 1. Byte limit: every chunk fits within max_bytes
         //    (unless a single char exceeds it ─ then that chunk is as small as possible)
-        for (i, chunk) in chunks.iter().enumerate().enumerate() {
+        for (i, chunk) in chunks.iter().enumerate() {
             let byte_len = chunk.as_bytes().len();
             // A chunk may exceed max_bytes only if it's a single character
             let single_char = chunk.len() == 1;
