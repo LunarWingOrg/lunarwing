@@ -51,6 +51,10 @@ LLM_BASE_URL=http://127.0.0.1:<proxy_port>/v1
 LLM_MODEL=tensorzero::function_name::lunarwing
 ```
 
+> `LLM_BASE_URL` can be set at provisioning time with `add-tenant --llm-base-url <url>` (or
+> fleet-wide via `LUNARWING_MT_LLM_BASE_URL`) instead of hand-editing it here — useful for
+> pointing tenants straight at a gateway or upstream endpoint as the proxy is phased out.
+
 To point directly at OpenAI (bypassing TensorZero):
 
 ```bash

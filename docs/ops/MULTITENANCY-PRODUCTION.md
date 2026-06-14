@@ -398,11 +398,13 @@ add-tenant <name> [options]      Create user, allocate ports, clone repo,
   --xmpp-jid <jid>              XMPP JID for this tenant
   --xmpp-password <pass>        XMPP password (generated if omitted)
   --tensorzero-url <url>         Upstream TensorZero URL
+  --llm-base-url <url>           LLM endpoint (LLM_BASE_URL); default: local proxy
 
 add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
   --docker-group                 Add user to docker/podman group
   --xmpp-domain <domain>        XMPP domain for JIDs (default: xmpp.localhost)
   --tensorzero-url <url>         Upstream TensorZero URL
+  --llm-base-url <url>           LLM endpoint (LLM_BASE_URL); default: local proxy
 
 remove-tenant <name>             Stop services, deallocate ports
   --purge                        Also delete OS user and home directory

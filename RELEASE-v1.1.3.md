@@ -82,7 +82,7 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - **`e2e_advanced_traces` bootstrap-greeting tests failing** — `bootstrap_greeting_fires` and `bootstrap_onboarding_clears_bootstrap` fail because the static bootstrap greeting doesn't arrive in the test rig. Pre-existing (surfaced once the v1.1.1 `cargo test` compile blocker was fixed); not LLM/`StubLlm`-related. One of the 16 pre-existing, env-dependent e2e failures confirmed unchanged by this release's work. See `docs/bugs/BUG-e2e-bootstrap-greeting-tests.md`.
 - **Multica Bridge** — May require significant improvements; remains pre-release/experimental. More work on this is scheduled for the next two releases.
-- **Multi-tenant admin script** — A flag exists to set an API key for a model endpoint, but no equivalent flag exists to set an HTTP URL automatically via this method.
+- **Multi-tenant admin script — resolved.** `add-tenant`/`add-tenants` now accept `--llm-base-url <url>` (with `LUNARWING_MT_LLM_BASE_URL` as a fleet-wide default) to set `LLM_BASE_URL`, mirroring the existing `--llm-api-key`. The default stays each tenant's local TensorZero proxy; set the flag/env to point straight at a gateway or upstream endpoint as the proxy is phased out.
 - **Sandbox workers and external workers may not be fully configured at start when creating a new tenant or setting up a new multi-tenant instance** - This is actually already documented and should be tracked as an item to fix here for future releases since it seems fairly important.
 
 
