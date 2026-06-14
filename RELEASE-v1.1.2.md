@@ -189,6 +189,8 @@ New `scripts/build-lunarwing.sh` builds the LunarWing (`ic`) crate **natively on
 - **`e2e_advanced_traces` bootstrap-greeting tests failing** — `bootstrap_greeting_fires` and `bootstrap_onboarding_clears_bootstrap` fail because the static bootstrap greeting doesn't arrive in the test rig. Pre-existing (surfaced once the v1.1.1 `cargo test` compile blocker was fixed); not LLM/`StubLlm`-related. One of the 16 pre-existing, env-dependent e2e failures confirmed unchanged by this release's work. See `docs/bugs/BUG-e2e-bootstrap-greeting-tests.md`.
 - **Multica Bridge** — May require significant improvements; remains pre-release/experimental.
 - **Multi-tenant admin script** — A flag exists to set an API key for a model endpoint, but no equivalent flag exists to set an HTTP URL automatically via this method.
+- **Weechat Pairing Output is incorrect** - See: WEECHAT_CHANNEL_PAIRING_CHANGE_OUTPUTTED_COMMAND_IS_WRONG.md in docs/proposals for more information. the command the agent sends to you is simply incorrect (outdated).
+- **Sandbox workers and external workers may not be fully configured at start when creating a new tenant or setting up a new multi-tenant instance** - This is actually already documented and should be tracked as an item to fix here for future releases since it seems fairly important.
 
 ## Upgrade Notes
 
