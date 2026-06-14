@@ -1,0 +1,1 @@
+* WeeChat works — edition 2021, host tests run, my test passes. (Note: the crate has 2 pre-existing warnings unrelated to my change — an unused HttpEndpointConfig import and rand_check's probability param being ignored, which looks like a latent bug. I'm leaving those alone as out-of-scope; flagging for you.)

@@ -430,7 +430,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
                                 .unwrap_or_else(|| default_adapter_url());
 
                             let reply = format!(
-                                "To pair with this agent, run: ironclaw pairing approve darkirc {}",
+                                "To pair with this agent, run: lunarwing pairing approve darkirc {}",
                                 result.code
                             );
 
