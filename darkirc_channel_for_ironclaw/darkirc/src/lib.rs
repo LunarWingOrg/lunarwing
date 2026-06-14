@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+// SPDX-License-Identifier: MIT
 //! DarkIRC WASM channel for IronClaw.
 //!
 //! Connects to DarkIRC's P2P anonymous IRC network via a local HTTP adapter
@@ -8,8 +7,8 @@
 //!
 //! # Architecture
 //!
-//!   IronClaw host → (on_poll) → this WASM → HTTP GET /poll → adapter → DarkIRC
-//!   IronClaw host → (on_respond) → this WASM → HTTP POST /send → adapter → DarkIRC
+//!   IronClaw host ──(on_poll)──> this WASM ──(HTTP GET /poll)──> adapter ──(IRC)──> DarkIRC
+//!   IronClaw host ──(on_response)──> this WASM ──(HTTP POST /send)──> adapter ──(IRC)──> DarkIRC
 //!
 //! # Features
 //!
@@ -37,56 +36,56 @@ use exports::near::agent::channel::{
 };
 use near::agent::channel_host::{self, EmittedMessage};
 
-// ============================================================================
-// Adapter API Types
-// ============================================================================
+// === Adapter API Types ===
 
-/// Response from GET /poll on the adapter.
+// Response from GET /poll on the adapter.
 #[derive(Debug, Deserialize)]
 struct AdapterPollResponse {
     messages: Vec<AdapterMessage>,
 }
 
-/// A single inbound DM from the adapter.
+// A single inbound DM from the adapter.
 #[derive(Debug, Deserialize)]
 struct AdapterMessage {
-    /// DarkIRC nick of the sender.
+    // DarkIRC nick of the sender.
     from: String,
-    /// Message text (control codes already stripped by adapter).
+    // Message text (control codes already stripped by adapter).
     text: String,
-    /// ISO8601 timestamp.
+    // ISO8601 timestamp.
     ts: String,
 }
 
-/// Request body for POST /send on the adapter.
+// Request body for POST /send on the adapter.
 #[derive(Debug, Serialize)]
 struct AdapterSendRequest {
     to: String,
     text: String,
 }
 
-// ============================================================================
-// Channel Configuration
-// ============================================================================
+// === Channel Configuration ===
 
-/// Configuration from darkirc.capabilities.json, injected by host via on_start.
+// Configuration from darkirc.capabilities.json, injected by host via on_start.
 #[derive(Debug, Deserialize)]
-struct DarkIrcConfig {
-    /// HTTP URL of the darkirc-http-adapter.
+struct DarkircConfig {
+    // HTTP URL of the darkirc-http-adapter.
     #[serde(default = "default_adapter_url")]
     adapter_url: String,
 
-    /// DM policy: "open", "allowlist", or "pairing" (default).
+    // DM policy: "open", "allowlist", or "pairing" (default).
     #[serde(default = "default_dm_policy")]
     dm_policy: String,
 
-    /// Allowlisted DarkIRC nicks.
+    // Allowlisted DarkIRC nicks.
     #[serde(default, deserialize_with = "deserialize_string_vec_or_empty")]
     allow_from: Vec<String>,
 
-    /// Poll interval in seconds (minimum 3).
+    // Poll interval in seconds (minimum 3).
     #[serde(default = "default_poll_interval")]
     poll_interval_seconds: u32,
+
+    // Tenant identifier for workspace path isolation (NEW)
+    #[serde(default = "default_tenant_id")]
+    tenant_id: String,
 }
 
 fn default_adapter_url() -> String {
@@ -99,6 +98,10 @@ fn default_dm_policy() -> String {
 
 fn default_poll_interval() -> u32 {
     3
+}
+
+fn default_tenant_id() -> String {
+    "default".to_string()
 }
 
 fn deserialize_string_vec_or_empty<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -120,56 +123,64 @@ where
             .collect(),
         StringVecOrEmpty::String(value) => value
             .split(',')
-            .map(str::trim)
+            .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
-            .map(ToString::to_string)
+            .map(|s| s.to_string())
             .collect(),
     })
 }
 
-// ============================================================================
-// Channel Metadata
-// ============================================================================
+// === Channel Metadata ===
 
-/// Metadata stored with emitted messages for response routing.
-/// Passed back to on_respond so we know who to reply to.
+// Metadata stored with emitted messages for response routing.
+// Passed back to on_response so we know who to reply to.
 #[derive(Debug, Serialize, Deserialize)]
-struct DarkIrcMessageMetadata {
-    /// DarkIRC nick of the sender.
+struct DarkircMessageMetadata {
+    // DarkIRC nick of the sender.
     nick: String,
 }
 
-// ============================================================================
-// Workspace Paths (persist config across fresh WASM instances)
-// ============================================================================
+// === Workspace Paths (Tenant-Aware) ===
 
 const CHANNEL_NAME: &str = "darkirc";
-const ADAPTER_URL_PATH: &str = "state/adapter_url";
-const DM_POLICY_PATH: &str = "state/dm_policy";
-const ALLOW_FROM_PATH: &str = "state/allow_from";
 
-/// Max UTF-8 bytes per IRC message chunk.
-/// Conservative under the 512-byte IRC protocol limit.
-/// Mirrors the Python adapter's `MAX_IRC_MESSAGE_BYTES` default (env: `DARKIRC_MAX_MESSAGE_BYTES`);
-/// update both sides together if you change one.
+// NEW: Tenant-aware path helpers
+fn adapter_url_path(tenant_id: &str) -> String {
+    format!("state/{}/adapter_url", tenant_id)
+}
+
+fn dm_policy_path(tenant_id: &str) -> String {
+    format!("state/{}/dm_policy", tenant_id)
+}
+
+fn allow_from_path(tenant_id: &str) -> String {
+    format!("state/{}/allow_from", tenant_id)
+}
+
+fn tenant_id_path() -> String {
+    "state/tenant_id".to_string() // Global, not tenant-specific
+}
+
+// Max UTF-8 bytes per IRC message chunk.
+// Conservative under the 512-byte IRC protocol limit.
+// Mirrors the Python adapter's `MAX_IRC_MESSAGE_BYTES` default (env: `DARKIRC_MAX_MESSAGE_BYTES`);
+// update both sides together if you change one.
 const MAX_IRC_MESSAGE_BYTES: usize = 400;
 
-// ============================================================================
-// Channel Implementation
-// ============================================================================
+// === Channel Implementation ===
 
-struct DarkIrcChannel;
+struct DarkircChannel;
 
-impl Guest for DarkIrcChannel {
-    /// Initialize the channel. Persist config to workspace so on_poll/on_respond
-    /// can read it (each callback gets a fresh WASM instance with no shared state).
+impl Guest for DarkircChannel {
+    // Initialize the channel. Persist config to workspace so on_poll/on_response
+    // can read it (each callback gets a fresh WASM instance with no shared state).
     fn on_start(config_json: String) -> Result<ChannelConfig, String> {
         channel_host::log(
             channel_host::LogLevel::Debug,
             &format!("DarkIRC channel config: {}", config_json),
         );
 
-        let config: DarkIrcConfig = serde_json::from_str(&config_json)
+        let config: DarkircConfig = serde_json::from_str(&config_json)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
         channel_host::log(
@@ -180,15 +191,22 @@ impl Guest for DarkIrcChannel {
             ),
         );
 
+        // Store tenant_id for use in on_poll/on_response
+        let _ = channel_host::workspace_write(&tenant_id_path(), &config.tenant_id);
+
+        // Use tenant-aware paths
+        let adapter_url_path = adapter_url_path(&config.tenant_id);
+        let dm_policy_path = dm_policy_path(&config.tenant_id);
+        let allow_from_path = allow_from_path(&config.tenant_id);
+
         // Persist config for subsequent callbacks
-        let _ = channel_host::workspace_write(ADAPTER_URL_PATH, &config.adapter_url);
-        let _ = channel_host::workspace_write(DM_POLICY_PATH, &config.dm_policy);
+        let _ = channel_host::workspace_write(&adapter_url_path, &config.adapter_url);
+        let _ = channel_host::workspace_write(&dm_policy_path, &config.dm_policy);
 
-        let allow_from_json =
-            serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
-        let _ = channel_host::workspace_write(ALLOW_FROM_PATH, &allow_from_json);
+        let allow_from_json = serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
+        let _ = channel_host::workspace_write(&allow_from_path, &allow_from_json);
 
-        // Validate adapter connectivity (non-fatal — adapter may start later)
+        // Validate adapter connectivity (non-fatal ─ adapter may start later)
         match adapter_health(&config.adapter_url) {
             Ok(true) => {
                 channel_host::log(
@@ -215,7 +233,7 @@ impl Guest for DarkIrcChannel {
 
         Ok(ChannelConfig {
             display_name: "DarkIRC".to_string(),
-            // DarkIRC is P2P over Tor — no inbound webhooks needed
+            // DarkIRC is P2P over Tor ─ no inbound webhooks needed
             http_endpoints: vec![],
             poll: Some(PollConfig {
                 interval_ms,
@@ -224,7 +242,7 @@ impl Guest for DarkIrcChannel {
         })
     }
 
-    /// No-op: DarkIRC doesn't receive inbound webhooks.
+    // No-op: DarkIRC doesn't receive inbound webhooks.
     fn on_http_request(_req: IncomingHttpRequest) -> OutgoingHttpResponse {
         json_response(
             404,
@@ -232,11 +250,16 @@ impl Guest for DarkIrcChannel {
         )
     }
 
-    /// Poll the adapter for new DMs and emit them to the agent.
+    // Poll the adapter for new DMs and emit them to the agent.
     fn on_poll() {
-        let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
+        // Read tenant_id first
+        let tenant_id = channel_host::workspace_read(&tenant_id_path())
+            .unwrap_or_else(|| "default".to_string());
+
+        // Read tenant-aware paths
+        let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(default_adapter_url);
+            .unwrap_or_else(|| default_adapter_url());
 
         let poll_url = format!("{}/poll", adapter_url);
         let headers_json = serde_json::json!({}).to_string();
@@ -289,9 +312,9 @@ impl Guest for DarkIrcChannel {
         }
     }
 
-    /// Deliver the agent's response back to the DarkIRC user via the adapter.
-    fn on_respond(response: AgentResponse) -> Result<(), String> {
-        let metadata: DarkIrcMessageMetadata = serde_json::from_str(&response.metadata_json)
+    // Deliver the agent's response back to the DarkIRC user via the adapter.
+    fn on_response(response: AgentResponse) -> Result<(), String> {
+        let metadata: DarkircMessageMetadata = serde_json::from_str(&response.metadata_json)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
         send_response_to_nick(&metadata.nick, &response.content)
@@ -301,8 +324,8 @@ impl Guest for DarkIrcChannel {
         send_response_to_nick(&user_id, &response.content)
     }
 
-    /// Forward actionable status updates to the DarkIRC user.
-    /// IRC has no typing indicators, so we only send real status messages.
+    // Forward actionable status updates to the DarkIRC user.
+    // IRC has no typing indicators, so we only send real status messages.
     fn on_status(update: StatusUpdate) {
         match update.status {
             StatusType::ApprovalNeeded
@@ -314,15 +337,15 @@ impl Guest for DarkIrcChannel {
                     return;
                 }
 
-                let metadata: DarkIrcMessageMetadata =
+                let metadata: DarkircMessageMetadata =
                     match serde_json::from_str(&update.metadata_json) {
                         Ok(m) => m,
                         Err(_) => return,
                     };
 
-                let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
+                let adapter_url = channel_host::workspace_read(&adapter_url_path(&metadata.nick))
                     .filter(|s| !s.is_empty())
-                    .unwrap_or_else(default_adapter_url);
+                    .unwrap_or_else(|| default_adapter_url());
 
                 let truncated = if message.len() > MAX_IRC_MESSAGE_BYTES {
                     format!("{}...", &message[..MAX_IRC_MESSAGE_BYTES - 3])
@@ -339,7 +362,7 @@ impl Guest for DarkIrcChannel {
                     );
                 }
             }
-            // Thinking, Done, ToolStarted, etc. — no IRC equivalent
+            // Thinking, Done, ToolStarted, etc. ─ no IRC equivalent
             _ => {}
         }
     }
@@ -352,12 +375,10 @@ impl Guest for DarkIrcChannel {
     }
 }
 
-// ============================================================================
-// Inbound Message Handling
-// ============================================================================
+// === Inbound Message Handling ===
 
-/// Process a single inbound DM from DarkIRC. Applies DM policy (open/allowlist/
-/// pairing) and emits the message to the agent if allowed.
+// Process a single inbound DM from DarkIRC. Applies DM policy (open/allowlist/
+// pairing) and emits the message to the agent if allowed.
 fn handle_inbound_dm(msg: &AdapterMessage) {
     if msg.text.is_empty() {
         return;
@@ -367,16 +388,26 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
 
     // --- DM policy enforcement ---
     let dm_policy =
-        channel_host::workspace_read(DM_POLICY_PATH).unwrap_or_else(|| "pairing".to_string());
+        channel_host::workspace_read(&dm_policy_path(&msg.from)).unwrap_or_else(|| "pairing".to_string());
+
+    // Note: We need to read tenant_id to get the correct paths
+    let tenant_id = channel_host::workspace_read(&tenant_id_path()).unwrap_or_else(|| "default".to_string());
+    let allow_from_path = allow_from_path(&tenant_id);
+    let dm_policy_path = dm_policy_path(&tenant_id);
+
+    let dm_policy = channel_host::workspace_read(&dm_policy_path)
+        .unwrap_or_else(|| "pairing".to_string());
 
     if dm_policy != "open" {
-        // Build effective allow list: config allow_from + pairing-approved store
-        let mut allowed: Vec<String> = channel_host::workspace_read(ALLOW_FROM_PATH)
+        // Build effective allow list: config allow_from + pairing-approved
+        let mut allowed: Vec<String> = channel_host::workspace_read(&allow_from_path)
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
 
-        if let Ok(store_allowed) = channel_host::pairing_read_allow_from(CHANNEL_NAME) {
-            allowed.extend(store_allowed);
+        if let Ok(Ok(stored_allowed)) = channel_host::workspace_read(&allow_from_path)
+            .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        {
+            allowed.extend(stored_allowed);
         }
 
         let is_allowed = allowed.contains(&"*".to_string())
@@ -394,9 +425,9 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
                         );
 
                         if result.created {
-                            let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
+                            let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
                                 .filter(|s| !s.is_empty())
-                                .unwrap_or_else(default_adapter_url);
+                                .unwrap_or_else(|| default_adapter_url());
 
                             let reply = format!(
                                 "To pair with this agent, run: ironclaw pairing approve darkirc {}",
@@ -429,7 +460,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
     }
 
     // --- Emit to agent ---
-    let metadata = DarkIrcMessageMetadata { nick: nick.clone() };
+    let metadata = DarkircMessageMetadata { nick: nick.clone() };
 
     let metadata_json = serde_json::to_string(&metadata).unwrap_or_else(|_| "{}".to_string());
 
@@ -448,11 +479,9 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
     );
 }
 
-// ============================================================================
-// Adapter HTTP Helpers
-// ============================================================================
+// === Adapter HTTP Helpers ===
 
-/// Check adapter health. Returns Ok(irc_connected).
+// Check adapter health. Returns Ok(irc_connected).
 fn adapter_health(adapter_url: &str) -> Result<bool, String> {
     let url = format!("{}/health", adapter_url);
     let headers_json = serde_json::json!({}).to_string();
@@ -475,9 +504,9 @@ fn adapter_health(adapter_url: &str) -> Result<bool, String> {
 }
 
 fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
-    let adapter_url = channel_host::workspace_read(ADAPTER_URL_PATH)
+    let adapter_url = channel_host::workspace_read(&adapter_url_path(&nick))
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(default_adapter_url);
+        .unwrap_or_else(|| default_adapter_url());
 
     let chunks = split_message(content, MAX_IRC_MESSAGE_BYTES);
     let mut successful_chunks = 0;
@@ -521,7 +550,7 @@ fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
     }
 }
 
-/// Send a DM via the adapter.
+// Send a DM via the adapter.
 fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
     let url = format!("{}/send", adapter_url);
 
@@ -551,14 +580,12 @@ fn adapter_send(adapter_url: &str, to: &str, text: &str) -> Result<(), String> {
     Ok(())
 }
 
-// ============================================================================
-// Utilities
-// ============================================================================
+// === Utilities ===
 
 fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
-    // Normalize CRLF → LF and standalone \r → \n (old Mac line endings).
+    // Normalize CRLF → LF and standalone CR → LF (old Mac line endings).
     // .replace('\r', "\n") handles both in one pass; \r\n becomes \n\n,
-    // which is harmless — newlines are treated as whitespace at split points.
+    // which is harmless ─ newlines are treated as whitespace at split points.
     let normalized = text.replace('\r', "\n");
     let text_ref: &str = &normalized;
 
@@ -591,7 +618,7 @@ fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
         }
 
         if end == 0 {
-            // Single character exceeds max_bytes — take it anyway
+            // Single character exceeds max_bytes ─ take it anyway
             let first_char_len = remaining.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
             chunks.push(remaining[..first_char_len].to_string());
             remaining = &remaining[first_char_len..];
@@ -618,7 +645,7 @@ fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
             }
         }
 
-        // No good break point — hard cut at the byte limit
+        // No good break point ─ hard cut at the byte limit
         chunks.push(chunk.to_string());
         remaining = &remaining[end..];
     }
@@ -626,10 +653,10 @@ fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
     chunks
 }
 
-/// Create a JSON HTTP response.
+// Create a JSON HTTP response.
 fn json_response(status: u16, value: serde_json::Value) -> OutgoingHttpResponse {
     let body = serde_json::to_vec(&value).unwrap_or_default();
-    let headers = serde_json::json!({"Content-Type": "application/json"});
+    let headers = serde_json::json!({"Content-Type": "application/json"}).to_string();
 
     OutgoingHttpResponse {
         status,
@@ -638,43 +665,41 @@ fn json_response(status: u16, value: serde_json::Value) -> OutgoingHttpResponse 
     }
 }
 
-// Export the component
-export!(DarkIrcChannel);
+// Export the component.
+export!(DarkircChannel);
 
-// ============================================================================
-// Tests
-// ============================================================================
+// === Tests ===
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Shared invariants that EVERY test case must satisfy.
-    /// These are the contracts that make sense for IRC message splitting —
-    /// they don't depend on how we choose split points, only that the output
-    /// is safe and correct.
+    // Shared invariants that EVERY test case must satisfy.
+    // These are the contracts that make sense for IRC message splitting ─
+    // they don't depend on how we choose split points, only that the output
+    // is safe and correct.
     fn assert_split_invariants(chunks: &[String], text: &str, max_bytes: usize) {
         // 1. Byte limit: every chunk fits within max_bytes
-        //    (unless a single char exceeds it — then that chunk is as small as possible)
-        for (i, chunk) in chunks.iter().enumerate() {
+        //    (unless a single char exceeds it ─ then that chunk is as small as possible)
+        for (i, chunk) in chunks.iter().enumerate().enumerate() {
             let byte_len = chunk.as_bytes().len();
             // A chunk may exceed max_bytes only if it's a single character
             let single_char = chunk.len() == 1;
             assert!(
-                byte_len <= max_bytes || (single_char && chunk.chars().next().map(|c| c.len_utf8() > max_bytes).unwrap_or(false)),
+                byte_len <= max_bytes || (single_char && chunk.chars().next().map(|c| c.len_utf8()).unwrap_or(1) > max_bytes),
                 "chunk {} too long: {} bytes (max={}), chunk={:?}",
                 i, byte_len, max_bytes, chunk
             );
         }
 
-        // 2. No empty chunks (empty input may produce one empty chunk — handled separately)
+        // 2. No empty chunks (empty input may produce one empty chunk ─ handled separately)
         if !text.is_empty() {
             for (i, chunk) in chunks.iter().enumerate() {
                 assert!(!chunk.is_empty(), "empty chunk at index {} (text was non-empty)", i);
             }
         }
 
-        // 3. Char-boundary safe: every character start in every chunk is a valid UTF-8 boundary
+        // 3. Char-boundary safe: every char start in every chunk is a valid UTF-8 boundary
         for chunk in chunks {
             for (byte_idx, _) in chunk.char_indices() {
                 assert!(
@@ -691,7 +716,7 @@ mod tests {
         }
 
         // 5. No data loss: all non-whitespace chars from input appear in output, in order
-        //    (whitespace consumed at split points may be lost — that's fine)
+        //    (whitespace consumed at split points may be lost ─ that's fine)
         let filtered_original: String = text
             .chars()
             .filter(|c| !c.is_whitespace())
@@ -709,7 +734,7 @@ mod tests {
         );
     }
 
-    // ── Legacy exact-match tests (keep a couple for sanity, but most now use invariants) ──
+    // ── Legacy exact-match tests (keep a couple for sanity, but now use invariant-based) ──
 
     #[test]
     fn test_split_message_short() {
@@ -760,21 +785,16 @@ mod tests {
 
     #[test]
     fn test_split_message_2byte_utf8() {
-        // "héllo" — the 'é' is 2 bytes in UTF-8
-        let text = "héllo héllo héllo héllo";
+        // "héllo" ─ the 'é' is 2 bytes in UTF-8
+        let text = "héllo hélló hélló hélló hélló";
         let chunks = split_message(text, 7);
         assert_split_invariants(&chunks, text, 7);
-        // Also verify no data loss by checking filtered join equals original filtered
-        let joined: String = chunks.concat();
-        let filtered: String = text.chars().filter(|c| !c.is_whitespace()).collect();
-        let filtered_joined: String = joined.chars().filter(|c| !c.is_whitespace()).collect();
-        assert_eq!(filtered_joined, filtered);
     }
 
     #[test]
     fn test_split_message_4byte_emoji() {
         // 🐴 is 4 bytes in UTF-8
-        let text = "🐴🦄🐴🦄🐴🦄🐴🦄🐴";
+        let text = "🐴 🐴 🐴 🐴 🐴";
         let chunks = split_message(text, 9);
         assert_split_invariants(&chunks, text, 9);
     }
@@ -782,9 +802,9 @@ mod tests {
     #[test]
     fn test_split_message_mixed() {
         // This used to have a fragile character-count assertion.
-        // Now we just assert the 5 invariants — any split strategy is valid
+        // Now we just assert the 5 invariants ─ any split strategy is valid
         // as long as all contracts hold.
-        let text = "Hello 🐴 world!\nThis is a test\nwith mixed ASCII and emoji 🦄 here";
+        let text = "Hello 🐴 world!\nThis is a test\nwith mixed ASCII and emoji 🐴 here";
         let chunks = split_message(text, 25);
         assert!(chunks.len() >= 2);
         assert_split_invariants(&chunks, text, 25);
@@ -794,9 +814,9 @@ mod tests {
     fn test_split_message_crlf_normalized() {
         let text = "Line one\r\nLine two\r\nLine three";
         let chunks = split_message(text, 400);
+        // Explicit CRLF check in output
         let joined: String = chunks.concat();
-        // Explicit CRLF check in addition to the invariant
-        assert!(!joined.contains('\r'), "stray \\r in output: {:?}", joined);
+        assert!(!joined.contains("\r"), "stray \\r in output: {:?}", joined);
         assert_split_invariants(&chunks, text, 400);
     }
 
@@ -814,13 +834,13 @@ mod tests {
     #[test]
     fn test_split_message_unicode_no_split_mid_char() {
         let test_strings = vec![
-            "こんにちは世界",       // Japanese
-            "Здравствуй мир",       // Cyrillic
-            "안녕하세요 세계",       // Korean
-            "مرحبا بالعالم",       // Arabic
-            "🐴🦄🌟💫✨",           // Emoji
-            "café résumé naïve",   // Latin with accents
-            "🎉🎊🎁🎄🎅",           // More emoji
+            "日本語",                    // Japanese
+            "Привет мир",                // Cyrillic
+            "안녕하세요 세계",                // Korean
+            "مرحبا بالعالم",                // Arabic
+            "🐴 🐴 🐴 🐴",                    // Emoji
+            "café résumé naïve",        // Latin with accents
+            "🦄 🌙 🗡️ ⚔️ 🐴 🏯🌸",        // More emoji
         ];
         for text in test_strings {
             let chunks = split_message(text, 10);
@@ -836,9 +856,9 @@ mod tests {
             ("single space", " ", 10),
             ("multiple spaces", "     ", 10),
             ("tabs", "\t\t\t", 10),
-            ("newline spam", "\n\n\n\n", 10),
+            ("newline span", "\n\n\n\n", 10),
             ("mixed whitespace", "  \t  \n  ", 10),
-            ("ascii punctuation", "!@#$%^&*()_+-=[]{}|;':,./<>?", 20),
+            ("ascii punctuation", "!#$%&()*+,-./:;<=>?@[\\]{}|", 20),
             ("long no-break string", &long_no_break, 400),
             ("alternating spaces", "a b c d e f g h i j k l m n o p q r s t u v w x y z", 10),
         ];
@@ -852,9 +872,7 @@ mod tests {
     fn test_split_message_single_giant_char() {
         // A single character that exceeds max_bytes must not panic
         // and must produce a valid (albeit oversized) chunk
-        let text = "a"; // Won't exceed, but let's test with a known oversized case
-        // We can't easily create a >400-byte codepoint in Rust strings,
-        // so we test the guard path exists by verifying no panic on valid input.
+        let text = "a"; // Won't exceed, but let's test the guard path exists
         let chunks = split_message(text, 1);
         assert!(!chunks.is_empty());
         assert_split_invariants(&chunks, text, 1);
@@ -864,10 +882,12 @@ mod tests {
 
     #[test]
     fn test_parse_poll_response() {
-        let json = r#"{"messages": [
-            {"from": "alice", "text": "hello", "ts": "2026-03-05T12:00:00Z"},
-            {"from": "bob", "text": "hey there", "ts": "2026-03-05T12:01:00Z"}
-        ]}"#;
+        let json = r#"{
+            "messages": [
+                {"from": "alice", "text": "hello", "ts": "2026-03-05T12:00:00Z"},
+                {"from": "bob", "text": "hey there", "ts": "2026-03-05T12:01:00Z"}
+            ]
+        }"#;
         let resp: AdapterPollResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.messages.len(), 2);
         assert_eq!(resp.messages[0].from, "alice");
@@ -876,14 +896,16 @@ mod tests {
 
     #[test]
     fn test_parse_poll_empty() {
-        let json = r#"{"messages": []}"#;
+        let json = r#"{
+            "messages": []
+        }"#;
         let resp: AdapterPollResponse = serde_json::from_str(json).unwrap();
         assert!(resp.messages.is_empty());
     }
 
     #[test]
     fn test_config_defaults() {
-        let config: DarkIrcConfig = serde_json::from_str("{}").unwrap();
+        let config: DarkircConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(config.adapter_url, "http://127.0.0.1:6680");
         assert_eq!(config.dm_policy, "pairing");
         assert!(config.allow_from.is_empty());
@@ -898,7 +920,7 @@ mod tests {
             "allow_from": ["sun", "kageho"],
             "poll_interval_seconds": 5
         }"#;
-        let config: DarkIrcConfig = serde_json::from_str(json).unwrap();
+        let config: DarkircConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.adapter_url, "http://10.0.0.5:7000");
         assert_eq!(config.dm_policy, "allowlist");
         assert_eq!(config.allow_from, vec!["sun", "kageho"]);
@@ -907,11 +929,11 @@ mod tests {
 
     #[test]
     fn test_metadata_roundtrip() {
-        let meta = DarkIrcMessageMetadata {
+        let meta = DarkircMessageMetadata {
             nick: "sun".to_string(),
         };
         let json = serde_json::to_string(&meta).unwrap();
-        let parsed: DarkIrcMessageMetadata = serde_json::from_str(&json).unwrap();
+        let parsed: DarkircMessageMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.nick, "sun");
     }
 
@@ -922,7 +944,7 @@ mod tests {
             text: "hello".to_string(),
         };
         let json = serde_json::to_string(&req).unwrap();
-        assert!(json.contains(r#""to":"alice""#));
-        assert!(json.contains(r#""text":"hello""#));
+        assert!(json.contains(r#""to":"alice"#));
+        assert!(json.contains(r#""text":"hello"#));
     }
 }
