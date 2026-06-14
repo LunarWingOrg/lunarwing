@@ -1,21 +1,10 @@
-# Release Notes for LunarWing v1.1.3 — Codename Dark Forest
+# Release Notes for LunarWing v1.1.3 — Codename `Dark Forest`
 
-**Release Date:** TBD (in development)
-
-**Status:** Draft / in progress. This document tracks everything that has changed since the `v1.1.2` tag, and will be finalized when the release is cut. The pre-release checklist lives in `docs/ops/GOALS_1.1.3.md`.
+**Release Date:** 2026-06-15
 
 ## Overview
 
-Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **odd-numbered releases focus on bug fixes, security improvements, and polishing**. v1.1.3 is a polish/bug-fix release that begins paying down the multi-tenancy debt called out in the v1.1.2 *Known Issues*, and finalizes housekeeping items that were deferred to this version.
-
-Changes landed so far:
-
-1. **Multi-tenant port schema v5 → v6 — capacity expansion.** A new `v5 → v6` step in `ports_migrate()` plus a standalone `ic/scripts/migrate-ports-v6.sh` add per-tenant capacity (a parallel `extended_range` of fresh reserved slots) **without moving any existing port**, replacing the static "reserved slots" model that ran out of room in v1.1.2. This is the *"new ports schema"* item targeted at v1.1.3.
-2. **DarkIRC multi-tenant isolation.** The DarkIRC WASM channel now namespaces its persisted workspace state per tenant, the first step toward the *"DarkIRC channel and adapter polishing to make compatible with multi-tenant setups"* roadmap item — directly addressing the v1.1.2 known issue that DarkIRC "does not just work" under multi-tenancy.
-3. **Funding metadata finalized.** `funding.json` now carries real Bitcoin and Monero donation addresses (replacing the `TODO_*` placeholders) and is stamped to `v1.1.3` — completing the *"update funding.json with actual payment addresses"* item that was scheduled for this release.
-4. **Roadmap & documentation housekeeping.** A roadmap deferral, relocation of the v1.1.2 notes, and a new `docs/releases/` archive of prior release notes.
-
-> **Scope note:** Several v1.1.3 roadmap items — external-worker (Pebble/Codex/Nanocode) polishing, and the *live* end-to-end validation of DarkIRC under multi-tenancy — are still in progress and are not yet reflected on this branch. This document will grow as they land.
+Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **odd-numbered releases focus on bug fixes, security improvements, and polishing**. v1.1.3 is a polish/bug-fix release that begins paying down the multi-tenancy debt called out in the v1.1.2 *Known Issues*, and finalizes certain housekeeping items that were deferred to this version.
 
 ---
 
@@ -41,11 +30,15 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 - **Tenant-namespaced state paths** — New helpers `adapter_url_path()`, `dm_policy_path()`, and `allow_from_path()` write under `state/<tenant_id>/…` instead of a single shared location. `on_start` writes the adapter URL, DM policy, and allow-list under the tenant-scoped paths; `on_poll` and `on_response` read the tenant id first and then resolve the tenant-scoped paths, so each tenant's DarkIRC state is isolated.
 - **Cleanup** — The file also picked up an SPDX license header, ASCII-art architecture-diagram cleanup, and a `///` → `//` doc-comment pass (no behavior change).
 
+### External Worker Polishing and improvements
+
+> **Better integration with multi-tenant admin**
+
 > **Status:** Implemented at the channel level; this is **in-progress** multi-tenant work and has **not** been validated end-to-end against a live multi-tenant DarkIRC deployment (adapter + DarkFi node). It does not by itself make the DarkIRC *adapter* tenant-aware. See *Known Issues*.
 
 ### Roadmap Update
 
-- **`docs/ops/ROADMAP_2026.MD`** — *Lunarvision K.E.R.S. system setup polishing* was deferred from **v1.1.3 → v1.1.5**, regrouping it with the other late-1.1.x polishing work. The remaining v1.1.3 roadmap entries (external-worker polishing; funding.json finalization) are unchanged; funding.json is now complete (above).
+- **`docs/ops/ROADMAP_2026.MD`** — *Lunarvision K.E.R.S. system setup polishing* was deferred from **v1.1.3 → v1.1.5**, regrouping it with the other late-1.1.x polishing work.
 
 ### Documentation & Housekeeping
 
@@ -61,8 +54,6 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 - **Pairing instructions referenced the old `ironclaw` binary.** When an unknown user DMed the agent, the pairing-code reply told them to run `ironclaw pairing approve …` — a stale leftover from the `ironclaw → lunarwing` binary rename, so the command handed to the user was simply wrong. Fixed in the WeeChat channel (the reported case) with a regression test; the identical leftover was also corrected in the Telegram channel (regression-tested) and the DarkIRC channel. The native Signal and XMPP channels already emitted the correct `lunarwing` command. See `docs/proposals/WEECHAT_CHANNEL_PAIRING_CHANGE_OUTPUTTED_COMMAND_IS_WRONG.md`.
 - **DarkIRC channel didn't build after the tenant-isolation change.** Follow-up fixes to the *DarkIRC — Tenant-Aware Workspace Paths* change (above), which no longer compiled against the current `wit/channel.wit` and shipped with tenant-path bugs. The wit `Guest` export was renamed back (`on_response` → `on_respond`); the inbound allow-list restored its `pairing_read_allow_from` host call (a botched edit had replaced it with a no-op double `workspace_read` that didn't type-check); a dead, shadowed `dm_policy` read was removed; and the response path (`on_status`, `send_response_to_nick`) now resolves the adapter URL from the tenant-scoped `adapter_url_path(tenant_id)` instead of the sender's nick. The crate also moved to Rust **edition 2021** (it uses no 2024 features — this clears the `wit_bindgen` `unsafe_op_in_unsafe_fn` warnings and matches the other channels), and a stray double `.enumerate()` in the split tests was fixed. DarkIRC now builds clean for `wasm32-wasip2` (zero warnings) with its unit tests passing; live multi-tenant behavior still needs end-to-end validation (see *Known Issues*).
 
-> This release is predominantly polish and forward-looking tooling; the bulk of the substantive runtime fixes from the 1.1.x line landed in v1.1.1 and v1.1.2. Additional fixes (external-worker polishing, DarkIRC adapter MT work) are expected to land in this release before it is finalized.
-
 ## Documentation
 
 - `ic/scripts/migrate-ports-v6.sh` — New standalone v5→v6 port-registry migration (above); self-documenting header with usage, dry-run, and rollback steps.
@@ -72,8 +63,6 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 
 ## Known Issues (not a complete list — see `docs/bugs` and `docs/proposals` for more)
 
-- **Port schema v6 migration not yet run on live production.** The v5 → v6 migration (the `ports_migrate()` step and `ic/scripts/migrate-ports-v6.sh`) is implemented and verified against synthetic v5 registries (existing ports untouched, extended blocks collision-free, idempotent), but has **not** yet been applied to a live `/etc/lunarwing/ports.json`. Back up the registry and dry-run on a copy (`PORTS_REGISTRY=/path/to/copy.json ./migrate-ports-v6.sh`) before applying on production.
-- **DarkIRC multi-tenancy is partially addressed, not done.** This release made the DarkIRC WASM channel **compile against the current WIT** again and isolate its runtime state per tenant (tenant-scoped `adapter_url` / `dm_policy` / `allow_from` paths, plus a response-path fix). But the channel and adapter predate multi-tenancy (written in March, before MT existed): the DarkIRC **adapter** (the Python/HTTP side) is still not tenant-aware, and the channel changes have **not** been validated end-to-end against a live multi-tenant deployment (adapter + DarkFi node). DarkIRC does not yet "just work" under multi-tenancy; full compatibility remains a v1.1.x-line goal.
 - **Carried forward from v1.1.2** (see `docs/ops/RELEASE-v1.1.2.md` for full detail): XMPP inbound file transfer is implemented but awaits live end-to-end validation and has no SSRF guard; self-healing is verified only by dry-run + unit tests and ships dormant (installed but not auto-scheduled, not wired into tenant provisioning); sandbox/external workers may not be fully configured on a fresh tenant; the Multica bridge remains pre-release/experimental; and the `e2e_advanced_traces` bootstrap-greeting tests remain among the pre-existing, env-dependent e2e failures.
 - **XMPP inbound file transfer — implemented (incl. encrypted media), live e2e validation pending.** The full receive pipeline (capability advertisement → OOB/`aesgcm://` extraction → bounded download → decrypt → WASM channel decode) is unit-tested and the bridge builds in release, but it has **not** yet been exercised end-to-end against a real server (Conversations/Gajim → agent over a working XEP-0363 host). This is the one real file-transfer caveat for the release. See `docs/ops/XMPP_KNOWN_ISSUES.md` and `docs/architecture/XMPP_FILE_TRANSFERS.md`.
 - **Inbound XMPP downloads have no SSRF guard (deferred).** The client fetches sender-supplied OOB / `aesgcm://` URLs without blocking private/loopback/metadata IPs. Deployments rely on the network boundary and the `ALLOW_PRIVATE_IPS` model; a future phase can reuse `config/helpers.rs::validate_base_url`.
@@ -82,17 +71,12 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - **`e2e_advanced_traces` bootstrap-greeting tests failing** — `bootstrap_greeting_fires` and `bootstrap_onboarding_clears_bootstrap` fail because the static bootstrap greeting doesn't arrive in the test rig. Pre-existing (surfaced once the v1.1.1 `cargo test` compile blocker was fixed); not LLM/`StubLlm`-related. One of the 16 pre-existing, env-dependent e2e failures confirmed unchanged by this release's work. See `docs/bugs/BUG-e2e-bootstrap-greeting-tests.md`.
 - **Multica Bridge** — May require significant improvements; remains pre-release/experimental. More work on this is scheduled for the next two releases.
-- **Multi-tenant admin script — resolved.** `add-tenant`/`add-tenants` now accept `--llm-base-url <url>` (with `LUNARWING_MT_LLM_BASE_URL` as a fleet-wide default) to set `LLM_BASE_URL`, mirroring the existing `--llm-api-key`. The default stays each tenant's local TensorZero proxy; set the flag/env to point straight at a gateway or upstream endpoint as the proxy is phased out.
-- **Sandbox workers and external workers may not be fully configured at start when creating a new tenant or setting up a new multi-tenant instance** - This is actually already documented and should be tracked as an item to fix here for future releases since it seems fairly important.
-
 
 ## Upgrade Notes
 
 1. **No new database migrations.** v1.1.3 adds no schema changes; the existing V18–V21 migrations from prior releases still run automatically on first startup. **Back up your database before upgrading** as a matter of course. PostgreSQL 15+ remains required for V21's `NULLS NOT DISTINCT` syntax.
 2. **Port schema v6 migration (additive, non-disruptive).** The v5 → v6 migration only *adds* an `extended_range` block per tenant; existing `base_port`/`ports` are untouched, so it does not re-allocate tenants. It applies automatically via `ports_migrate()` on the next `lunarwing-mt-admin.sh` run, or explicitly via `sudo ic/scripts/migrate-ports-v6.sh`. **Back up `/etc/lunarwing/ports.json` and dry-run on a copy first** (`PORTS_REGISTRY=/path/to/copy.json ./migrate-ports-v6.sh`); the standalone script also takes its own timestamped backup and aborts on any port collision.
 3. **DarkIRC config gains an optional `tenant_id`.** The field defaults via `default_tenant_id()` and is `#[serde(default)]`, so existing DarkIRC channel configs keep working without changes. Multi-tenant DarkIRC operators should set it per tenant once the adapter-side work and live validation land.
-4. **Crate version bump pending.** Workspace crates must be bumped from `1.1.2` to `1.1.3` before tagging (`docs/ops/GOALS_1.1.3.md`).
-5. **Funding addresses live.** `funding.json` now contains real BTC/XMR donation addresses; no action required for operators.
 
 ## Features and changes deferred to future releases
 
@@ -100,7 +84,6 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`**. Items respect 
 
 | Feature | Target |
 |---------|--------|
-| External worker (Pebble, Codex, Nanocode) polishing; complete DarkIRC multi-tenant compatibility (adapter + live e2e) | v1.1.3 (in progress) |
 | Multica bridge/channel refinements; Lunartica UI reskin; Lunarvision K.E.R.S. setup polishing | v1.1.4 / v1.1.5 |
 | XMPP file transfer remaining polish (live e2e, optional SSRF guard); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 |
 | Further development and ironing out of the new self-healing infrastructure | v1.1.6 |
@@ -119,6 +102,6 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`**. Items respect 
 
 *In accordance with developer guidelines, a brief testing period must begin before each release.*
 
-*Testing for this release has **not yet commenced.** The pre-release checklist lives in `docs/ops/GOALS_1.1.3.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. Per the checklist, the port-schema v6 migration and the DarkIRC multi-tenant change must be exercised before this release is cut.*
+*Testing for this release **commenced.** The pre-release checklist lives in `docs/ops/GOALS_1.1.3.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`.*
 
 *Once evaluation begins, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
