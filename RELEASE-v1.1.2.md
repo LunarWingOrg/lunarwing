@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.2 - Codename Kunai
 
-**Release Date:** TBD
+**Release Date:** 2026-06-14
 
 ## Overview
 
@@ -76,7 +76,7 @@ The previously *in-progress* "healthcheck and self-healing enhancements" have la
 - **Escalation & locking.** After max retries (or on flap detection) the service is marked escalated, an escalation JSON report is written, and `send-notification.sh` fires a Gotify alert. A `flock` guard prevents concurrent self-heal instances.
 - **New CLI flags:** `--backoff-base` / `--backoff-max` / `--backoff-strategy`, `--grace-checks`, `--prune-ttl`, `--verify-health`, `--dry-run`, `--report`, `--help`.
 
-> Scope note: the script and chaos suite are internally versioned toward the larger v1.2.0 self-healing epic, but the code ships in v1.1.2. Self-healing remains a **host-level, manually installed and scheduled** facility — it is not wired into tenant provisioning. See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` and *Known Issues*.
+> Scope note: the script and chaos suite are internally versioned toward the larger v1.2.0 self-healing epic, but the code ships in v1.1.2. Self-healing remains a **host-level, manually installed and scheduled** facility — it is not wired into tenant provisioning. See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` and **.
 
 ### Chaos Engineering Test Suite (Self-Healing)
 
@@ -177,20 +177,22 @@ New `scripts/build-lunarwing.sh` builds the LunarWing (`ic`) crate **natively on
 - `RELEASE-v1.1.1.md` archived to `docs/ops/`.
 - **Google extension removal** — `ic/tools-src/TOOLS.md`, `ic/src/registry/mod.rs`, `ic/src/cli/registry.rs`, and `ic/tests/e2e/CLAUDE.md` updated to drop the removed Google tools from the catalog, bundle list, CLI help, and e2e scenario table. See *Removal of Google Tool Extensions* above.
 
-## Known Issues (not a complete list — see `docs/bugs` for more)
+## Known Issues (not a complete list — see `docs/bugs` and `docs/proposals` for more)
 
 - **XMPP inbound file transfer — implemented (incl. encrypted media), live e2e validation pending.** The full receive pipeline (capability advertisement → OOB/`aesgcm://` extraction → bounded download → decrypt → WASM channel decode) is unit-tested and the bridge builds in release, but it has **not** yet been exercised end-to-end against a real server (Conversations/Gajim → agent over a working XEP-0363 host). This is the one real file-transfer caveat for the release. See `docs/ops/XMPP_KNOWN_ISSUES.md` and `docs/architecture/XMPP_FILE_TRANSFERS.md`.
 - **Inbound XMPP downloads have no SSRF guard (deferred).** The client fetches sender-supplied OOB / `aesgcm://` URLs without blocking private/loopback/metadata IPs. Deployments rely on the network boundary and the `ALLOW_PRIVATE_IPS` model; a future phase can reuse `config/helpers.rs::validate_base_url`.
 - **Self-healing verified by dry-run + unit tests, not against live running services.** The self-heal hardening and chaos suite were verified on a dev host (dry-run + the mock init system + unit tests); the restart → verify → escalate path has **not** been exercised against running services on a real multi-tenant deployment. (Tracks with the v1.1.8 "expansion of healthcheck tests for ClickHouse" roadmap item.)
-- **Self-heal is installed but not auto-scheduled, and not wired into provisioning.** `install-lunarwing-watchdog.sh` copies the self-heal / health-cron scripts into `/usr/local/sbin` but enables no timer for them, and the repo ships no health-check `.timer`/`.service` unit — so a fresh host has self-healing **dormant** until an operator both runs the installer and schedules `cron-wrapper.sh`. Tenant provisioning (`lunarwing-mt-admin.sh add-tenant`) installs none of it (it's a once-per-host concern). See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` (gaps G1/G2).
+- **Self-heal is installed but not auto-scheduled, and not wired into provisioning.** `install-lunarwing-watchdog.sh` copies the self-heal / health-cron scripts into `/usr/local/sbin` but enables no timer for them, and the repo ships no health-check `.timer`/`.service` unit — so a fresh host has self-healing **dormant** until an operator both runs the installer and schedules `cron-wrapper.sh`. Tenant provisioning (`lunarwing-mt-admin.sh add-tenant`) installs none of it (it's a once-per-host concern). See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` (gaps G1/G2). This will kept in its current state until further polishing and testing is done with self-healing.
 - **`wasm-tools` not found on build** — Cosmetic warning during `build-tenant --with-wasm`. Raw WASM files are copied without stripping/componentizing. Functionality is unaffected; install `wasm-tools` to eliminate the warning.
 - **Gotify skill frontmatter** — Legacy `GOTIFYSKILL.md` files from Ironclaw may have missing YAML frontmatter delimiters, causing a skill load warning on startup. Does not affect Gotify native WASM tool functionality.
 - **Logs download endpoint has no UI button** — `/api/logs/download` is available as a backend API but the corresponding gateway UI "download logs" button has not been added yet.
 - **`e2e_advanced_traces` bootstrap-greeting tests failing** — `bootstrap_greeting_fires` and `bootstrap_onboarding_clears_bootstrap` fail because the static bootstrap greeting doesn't arrive in the test rig. Pre-existing (surfaced once the v1.1.1 `cargo test` compile blocker was fixed); not LLM/`StubLlm`-related. One of the 16 pre-existing, env-dependent e2e failures confirmed unchanged by this release's work. See `docs/bugs/BUG-e2e-bootstrap-greeting-tests.md`.
-- **Multica Bridge** — May require significant improvements; remains pre-release/experimental.
+- **Multica Bridge** — May require significant improvements; remains pre-release/experimental. More work on this is scheduled for the next two releases.
 - **Multi-tenant admin script** — A flag exists to set an API key for a model endpoint, but no equivalent flag exists to set an HTTP URL automatically via this method.
 - **Weechat Pairing Output is incorrect** - See: WEECHAT_CHANNEL_PAIRING_CHANGE_OUTPUTTED_COMMAND_IS_WRONG.md in docs/proposals for more information. the command the agent sends to you is simply incorrect (outdated).
 - **Sandbox workers and external workers may not be fully configured at start when creating a new tenant or setting up a new multi-tenant instance** - This is actually already documented and should be tracked as an item to fix here for future releases since it seems fairly important.
+- **DarkIRC WASM channel and adapter was never made to work with multi-tenant setups** - Can admit that this was partially an oversight. Shipped new DarkIRC code in this release but the original channel and adapter was created back in March, long before multi-tenant capability was built. This will need to be rectified in the next release. At this time, multi-tenant setups do not "just work" with DarkIRC.
+- **Speaking of Multi-Tenant Setups** - The current static ports.json schema with reserved slots has officially run out of `reserved` slots, as all of the assigned ports are now in use for something. Sadly, this means the current ports.json v5 system needs to be thrown out and redone. Ideas include: 1) Dynamic Port Pool 2) Per-Tenant Port Blocks 3) Service-Type Hierarchy - The best idea currently is some combination of 2 and 3. We already have versioned port schemas, so a method for upgrading v5 to a v6 would be doable. If we can figure out a way to do this without messing with current tenant's ports, then a solution will exist for this in the future and it will solve this problem as well as the *DarkIRC WASM channel and adapter was never made to work with multi-tenant setups* known issue.
 
 ## Upgrade Notes
 
@@ -217,9 +219,11 @@ The full, canonical list now lives in **`docs/ops/ROADMAP_2026.MD`**. Items are 
 
 | Feature | Target |
 |---------|--------|
-| External worker (Pebble, Codex, Nanocode) polishing; Lunarvision K.E.R.S. setup polishing | v1.1.3 |
+| External worker (Pebble, Codex, Nanocode) polishing; Lunarvision K.E.R.S. setup polishing; new ports schema (see Known Issues section for more details); DarkIRC channel and adapter polishing to make compatible with Multi-Tenant setups | v1.1.3 |
 | Multica bridge/channel refinements; Lunartica UI reskin | v1.1.4 |
 | XMPP file transfer remaining polish (live e2e, optional SSRF guard, more hardening); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 |
+| Weechat channel, adapter, env config, capabilites.json remaining polish (live e2e, optional SSRF guard, more hardening); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 or earlier |
+| Further development and ironing out of the new Self Healing infrastructure | v1.1.6 |
 | Self-healing epic (first-class, wired-in) | v1.2.0 |
 
 ## Release Cadence
@@ -235,6 +239,6 @@ The full, canonical list now lives in **`docs/ops/ROADMAP_2026.MD`**. Items are 
 
 *In accordance with developer guidelines, a brief testing period must begin before each release.*
 
-*Testing for this release has **not yet commenced**. The pre-release checklist lives in `docs/ops/GOALS_1.1.2.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The self-healing chaos suite (`ic-infrastructure-health-check/tests/run-all.sh`) should be run on a dedicated test machine, not a live multi-tenant host.*
+*Testing for this release has **commenced**. The pre-release checklist lives in `docs/ops/GOALS_1.1.2.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The self-healing chaos suite (`ic-infrastructure-health-check/tests/run-all.sh`) should be run on a dedicated test machine, not a live multi-tenant host.*
 
 *Once evaluation begins, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
