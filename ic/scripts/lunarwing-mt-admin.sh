@@ -691,9 +691,21 @@ install_wasm_tenant() {
 
   mkdir -p "$channels_dir" "$tools_dir"
 
+  # Resolve wasm-tools. add-tenant installs it for the *tenant* user under
+  # ~/.cargo/bin; this function runs as root/admin, so prefer the tenant's copy
+  # (otherwise we'd miss it and warn spuriously) before falling back to the
+  # admin PATH. Output is chowned to the tenant at the end either way.
+  local wasm_tools="" tenant_wasm_tools
+  tenant_wasm_tools="$(tenant_home "$name")/.cargo/bin/wasm-tools"
+  if [[ -x "$tenant_wasm_tools" ]]; then
+    wasm_tools="$tenant_wasm_tools"
+  elif command -v wasm-tools >/dev/null 2>&1; then
+    wasm_tools="wasm-tools"
+  fi
+
   local has_wasm_tools=true
-  if ! command -v wasm-tools >/dev/null 2>&1; then
-    say "wasm-tools not found; copying raw WASM files without componentize/strip"
+  if [[ -z "$wasm_tools" ]]; then
+    say "note: wasm-tools not installed — installing raw WASM components (works fine; skipping optional debug-info strip)"
     has_wasm_tools=false
   fi
 
@@ -716,9 +728,9 @@ install_wasm_tenant() {
     fi
 
     if [[ "$has_wasm_tools" == "true" ]]; then
-      wasm-tools component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
+      "$wasm_tools" component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
         || cp "$src_wasm" "$dest_wasm"
-      wasm-tools strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
+      "$wasm_tools" strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
     else
       cp "$src_wasm" "$dest_wasm"
     fi
@@ -747,9 +759,9 @@ install_wasm_tenant() {
     fi
 
     if [[ "$has_wasm_tools" == "true" ]]; then
-      wasm-tools component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
+      "$wasm_tools" component new "$src_wasm" -o "$dest_wasm" 2>/dev/null \
         || cp "$src_wasm" "$dest_wasm"
-      wasm-tools strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
+      "$wasm_tools" strip "$dest_wasm" -o "$dest_wasm" 2>/dev/null || true
     else
       cp "$src_wasm" "$dest_wasm"
     fi
