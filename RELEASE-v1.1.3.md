@@ -1,4 +1,4 @@
-# Release Notes for LunarWing v1.1.3 — Codename _TBD_
+# Release Notes for LunarWing v1.1.3 — Codename Dark Forest
 
 **Release Date:** TBD (in development)
 

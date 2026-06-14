@@ -1,8 +1,8 @@
-# PRE-RELEASE CHECKLIST for 1.1.3
+# PRE-RELEASE CHECKLIST for 1.1.3 - Codename Dark Forest
 **Open TODOs (1.1.3) — Polishing and Bug Fix Release**
 1. [ ] Run automated testing scripts.
 2. [ ] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh   
-3. [ ] Bump crate versions to 1.1.3
+3. [ ] Bump crate versions to 1.1.3 (in progress)
 4. [ ] Continue to make improvements to health check and self healing. See: docs/ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
 5. [ ] Continue to test Healthcheck and Self-Healing Enhancements. See: docs/ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
 6. [ ] Write up rest of release notes for v1.1.3 explaining all changes since v1.1.2
