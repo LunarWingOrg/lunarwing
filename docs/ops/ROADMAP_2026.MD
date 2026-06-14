@@ -6,8 +6,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Existing external worker, Pebble, Codex, Nanocode polishing | v1.1.3 |
-| Update funding.json with actual payment addresses, additional info | v1.1.3 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental; more testing required) | v1.1.4 |
 | Lunartica UI reskin | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.5 |
@@ -16,6 +14,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Lunarvision K.E.R.S. system setup polishing | v1.1.5 |
 | External Worker planned enhancements | v1.1.6 |
 | Add rootless docker and rootless podman as mechanisms for mt-admin setup | v1.1.6 |
+| IC infra serious development begins | v1.1.6 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
 | Additional WASM Channel Polishing | v1.1.7 |
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
