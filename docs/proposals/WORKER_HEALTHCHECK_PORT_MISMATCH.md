@@ -2,8 +2,8 @@
 
 #### other improvement possible
 
-**Status:** Proposed
-**Severity:** Low (cosmetic) — workers are fully functional; the Docker `HEALTHCHECK` reports a false `unhealthy`.
+**Status:** Resolved (2026-06-14) — **Option 2** applied to both workers (`HEALTH_PORT="0"` → `"8443"`).
+**Severity:** Low (cosmetic) — workers are fully functional; the Docker `HEALTHCHECK` reported a false `unhealthy`.
 **Scope:** Every tenant's `lunarwing-nanocode-<name>` and `lunarwing-pebble-<name>` container created by `lunarwing-mt-admin.sh`.
 
 ## TL;DR
@@ -99,9 +99,32 @@ Point the health server at the port the image already probes by changing `0` →
 
 In-container `8443` is safe across tenants because each container has its own network namespace (no host-level conflict).
 
-### Recommendation
+### Recommendation (superseded — see Resolution)
 
-Ship **Option 1** for both workers now (resolves the reported symptom with zero risk), and optionally pursue **Option 2** for pebble (and nanocode, if its bridge is taught to serve `/health`) as a later observability enhancement.
+The original recommendation was to ship **Option 1** for both now and pursue **Option 2** later. On
+inspection (below), **Option 2 turned out to work for both workers**, so it shipped directly — it
+resolves the symptom *and* restores a real liveness signal, which Option 1 cannot.
+
+## Resolution
+
+`start_tenant_nanocode` and `start_tenant_pebble` now launch with `-e HEALTH_PORT="8443"` (was
+`"0"`), matching the port the images' baked `HEALTHCHECK` probes. No host port is published — the
+probe runs inside the container's own network namespace, so `8443` is safe across tenants. This
+answers open question #2: `HEALTH_PORT=0` was an unnecessary override (likely a perceived
+host-port-conflict concern that doesn't apply to an in-container probe).
+
+**Both health servers serve `/health` and honour `HEALTH_PORT`** (verified, resolving open
+question #1):
+
+- **pebble** — `src/bridge.rs` reads `HEALTH_PORT`, `src/main.rs:36` binds `0.0.0.0:<port>`,
+  `src/health.rs` returns `200 {"status":"ok",…}` on `/health`.
+- **nanocode** — `entrypoint.sh:15,97` launches `python3 health_server.py --port "$HEALTH_PORT"`,
+  and `health_server.py` returns `200 {"status":"ok",…}` on `/health` (confirmed by running it
+  directly: `curl -sf http://127.0.0.1:<port>/health` → exit 0). The bridge fronting `opencode` on
+  `:4096` is unrelated to the health server, which is a standalone process.
+
+Net effect: both containers now report `healthy` instead of `unhealthy`, and Docker-health-based
+tooling (infra health-check suite, future `depends_on: service_healthy`) reads a true signal.
 
 ## Applying to already-running tenants
 
@@ -135,11 +158,11 @@ docker exec lunarwing-pebble-<name> curl -sf http://127.0.0.1:8443/health && ech
 
 All tenants with worker containers. Observed on `eris` (2026-06-13). `noko`, `ono`, `cumulus`, `nimbus` will exhibit the same if/when their nanocode/pebble containers are created.
 
-## Open questions
+## Resolved questions
 
-1. Does the nanocode bridge expose `/health` on `HEALTH_PORT` at all? If not, decide whether to (a) teach it to, or (b) accept Option 1 for nanocode permanently.
-2. Was `HEALTH_PORT=0` deliberate (e.g., to avoid a perceived port conflict)? If so, document that the in-container probe needs no host port and Option 2 is safe.
-3. Should a working healthcheck feed the infra health-check / self-heal tooling, or is the WS-bridge probe the canonical liveness check for workers?
+1. **Does the nanocode bridge expose `/health` on `HEALTH_PORT`?** Yes — `health_server.py` serves `/health` (200) and `entrypoint.sh` launches it with `--port "$HEALTH_PORT"`. Option 2 works for nanocode.
+2. **Was `HEALTH_PORT=0` deliberate?** Treated as an over-cautious override; the in-container probe needs no host port, so `8443` is safe and conflict-free across tenants.
+3. **Should the working healthcheck feed infra health-check / self-heal tooling?** _(Still open.)_ Docker health is now truthful, so it *can* be consumed; whether it becomes the canonical worker liveness check vs. the WS-bridge probe is left to the self-heal work (`SELF_HEALING_IMPROVEMENTS_2.md`).
 
 ## References
 

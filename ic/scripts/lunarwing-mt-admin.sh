@@ -1345,11 +1345,16 @@ start_tenant_nanocode() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
+    # 127.0.0.1:8443/health, served by health_server.py). The probe runs inside
+    # the container's network namespace, so this needs no -p publish and never
+    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
+    # container stuck "unhealthy" even though the WS bridge was fine.
     $CONTAINER_RT run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
       -e WS_PORT="$wss_port" \
-      -e HEALTH_PORT="0" \
+      -e HEALTH_PORT="8443" \
       -e NANOCODE_MODE=websocket \
       -e WS_ROLE=server \
       -e WS_BIND_HOST=0.0.0.0 \
@@ -1429,11 +1434,16 @@ start_tenant_pebble() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
+    # 127.0.0.1:8443/health, served by src/health.rs). The probe runs inside the
+    # container's network namespace, so this needs no -p publish and never
+    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
+    # container stuck "unhealthy" even though the WS bridge was fine.
     $CONTAINER_RT run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
       -e WS_PORT="$wss_port" \
-      -e HEALTH_PORT="0" \
+      -e HEALTH_PORT="8443" \
       -e PEBBLE_MODE=websocket \
       -e WS_BIND_HOST=0.0.0.0 \
       -e WS_PATH=/ws/agent \
