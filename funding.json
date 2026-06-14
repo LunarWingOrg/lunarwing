@@ -1,5 +1,5 @@
 {
-  "version": "v1.1.0",
+  "version": "v1.1.3",
   "entity": {
     "type": "individual",
     "role": "owner",
@@ -36,7 +36,7 @@
       {
         "guid": "xmr",
         "type": "other",
-        "address": "TODO_XMR_ADDRESS",
+        "address": "8AfbtzK3pQme9xRYQQ7HR2CtQoMdeRVk6iobZP1zR1gq789nyfxVnNzJwq4BUYMoZtQHoW2fTTzYyj4RB5d3xGza2iuQKPo",
         "description": "Monero (XMR)"
       }
     ],
