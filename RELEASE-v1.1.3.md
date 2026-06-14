@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.3 — Codename `Dark Forest`
 
-**Release Date:** 2026-06-15
+**Release Date:** 2026-06-14
 
 ## Overview
 
