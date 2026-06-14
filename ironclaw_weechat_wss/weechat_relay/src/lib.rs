@@ -1397,10 +1397,7 @@ fn handle_pairing_request(buffer_name: &str, nick: &str) {
                 let relay_password =
                     channel_host::workspace_read(RELAY_PASSWORD_PATH).unwrap_or_default();
 
-                let reply = format!(
-                    "To pair with this agent, run: ironclaw pairing approve {} {}",
-                    CHANNEL_NAME, result.code
-                );
+                let reply = pairing_instructions(CHANNEL_NAME, &result.code);
 
                 // Extract network from buffer name (irc.<network>.<nick>)
                 let network = buffer_name.split('.').nth(1).unwrap_or("");
@@ -1840,9 +1837,35 @@ export!(WeechatRelayChannel);
 // Tests
 // ============================================================================
 
+/// Pairing instructions shown to an unpaired user when they DM the agent.
+/// Uses the current `lunarwing` binary name — the old `ironclaw` name was a
+/// stale leftover from the binary rename that produced an incorrect command.
+fn pairing_instructions(channel: &str, code: impl std::fmt::Display) -> String {
+    format!(
+        "To pair with this agent, run: lunarwing pairing approve {} {}",
+        channel, code
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pairing_instructions_uses_lunarwing_binary() {
+        let msg = pairing_instructions(CHANNEL_NAME, "XN1234");
+        assert!(
+            msg.contains("lunarwing pairing approve"),
+            "expected lunarwing binary: {}",
+            msg
+        );
+        assert!(
+            !msg.contains("ironclaw"),
+            "stale ironclaw reference: {}",
+            msg
+        );
+        assert!(msg.contains("XN1234"));
+    }
 
     #[test]
     fn test_split_message_short() {

@@ -106,9 +106,15 @@ fn main() {
         .unwrap_or(false);
 
     if !component_ok {
-        // Fallback: copy raw module if wasm-tools unavailable
-        if std::fs::copy(&raw_wasm, &wasm_out).is_err() {
-            eprintln!("cargo:warning=wasm-tools not found. Run: cargo install wasm-tools");
+        // Fallback: copy the raw module when wasm-tools is unavailable. The raw
+        // wasip2 artifact is already a valid component, so this is harmless and
+        // we stay quiet about the missing (optional) tool — only a genuine copy
+        // failure is worth a warning.
+        if let Err(e) = std::fs::copy(&raw_wasm, &wasm_out) {
+            eprintln!(
+                "cargo:warning=failed to copy telegram.wasm fallback to {:?}: {e}",
+                wasm_out
+            );
         }
     } else {
         // Strip debug info (use temp file to avoid clobbering)

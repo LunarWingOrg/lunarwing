@@ -1644,14 +1644,21 @@ fn register_webhook(tunnel_url: &str, webhook_secret: Option<&str>) -> Result<()
 // Pairing Reply
 // ============================================================================
 
+/// Pairing instructions shown to an unknown user when they DM the bot. Uses the
+/// current `lunarwing` binary name — the old `ironclaw` name was a stale leftover
+/// from the binary rename that produced an incorrect command.
+fn pairing_reply_text(code: &str) -> String {
+    format!(
+        "To pair with this bot, run: `lunarwing pairing approve telegram {}`",
+        code
+    )
+}
+
 /// Send a pairing code message to a chat. Used when an unknown user DMs the bot.
 fn send_pairing_reply(chat_id: i64, code: &str) -> Result<(), String> {
     send_message(
         chat_id,
-        &format!(
-            "To pair with this bot, run: `ironclaw pairing approve telegram {}`",
-            code
-        ),
+        &pairing_reply_text(code),
         None,
         Some("Markdown"),
         None,
@@ -2246,6 +2253,22 @@ export!(TelegramChannel);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pairing_reply_uses_lunarwing_binary() {
+        let msg = pairing_reply_text("XN1234");
+        assert!(
+            msg.contains("lunarwing pairing approve telegram"),
+            "expected lunarwing binary: {}",
+            msg
+        );
+        assert!(
+            !msg.contains("ironclaw"),
+            "stale ironclaw reference: {}",
+            msg
+        );
+        assert!(msg.contains("XN1234"));
+    }
 
     #[test]
     fn test_split_message_short() {
