@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.2 - Codename Kunai
 
-**Release Date:** TBD
+**Release Date:** 2026-06-14
 
 ## Overview
 
