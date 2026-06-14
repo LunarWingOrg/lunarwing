@@ -111,25 +111,26 @@ run_raw() {
 
 # ── Pure-function harness ────────────────────────────────────────────────────
 #
-# Source the script body (everything before `main "$@"`) and call one function,
-# fully isolated in a `bash -c` subshell so the script's `set -e` and one-time
-# config never leak into the suite. Lets us unit-test compute_backoff, jq state
-# helpers, etc. deterministically.
+# Source the script body (everything before the HARNESS_ENTRY_POINT marker) and
+# call one function, fully isolated in a `bash -c` subshell so the script's
+# `set -e` and one-time config never leak into the suite. Lets us unit-test
+# compute_backoff, jq state helpers, etc. deterministically.
 
 _BODY=""
 _ensure_body() {
     [[ -n "$_BODY" && -f "$_BODY" ]] && return 0
-    # We source everything before the script's `main "$@"` entry line. Guard
-    # that anchor (and the result) so a future restructure of
+    # We source everything before the HARNESS_ENTRY_POINT sentinel in the
+    # script. Guard that anchor (and the result) so a future restructure of
     # lunarwing-self-heal.sh fails HERE with a clear message instead of silently
     # yielding a truncated body and cryptic downstream errors. (Baud review P1.)
-    grep -qE '^main "\$@"$' "$SH" || {
-        echo "FATAL: src_fn: no 'main \"\$@\"' anchor in $SH — the extraction" \
-             "boundary moved; update lib.sh:_ensure_body" >&2
+    grep -qE '^# HARNESS_ENTRY_POINT$' "$SH" || {
+        echo "FATAL: src_fn: no '# HARNESS_ENTRY_POINT' sentinel in $SH — the" \
+             "extraction boundary moved; add the marker before main() in" \
+             "lunarwing-self-heal.sh, then update lib.sh:_ensure_body" >&2
         exit 1
     }
     _BODY="$ROOT/self-heal-body.sh"
-    sed '/^main "\$@"$/,$d' "$SH" > "$_BODY"
+    sed '/^# HARNESS_ENTRY_POINT$/,$d' "$SH" > "$_BODY"
     if [[ ! -s "$_BODY" ]] || ! grep -qE '^compute_backoff\(\)' "$_BODY"; then
         echo "FATAL: src_fn: extracted body looks wrong (empty, or missing" \
              "compute_backoff) — check lib.sh:_ensure_body against $SH" >&2

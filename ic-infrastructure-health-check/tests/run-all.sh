@@ -15,6 +15,12 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --list: print available suites and exit (for CI introspection)
+if [[ "${1:-}" == "--list" ]]; then
+    printf '%s\n' "regression matrix chaos"
+    exit 0
+fi
+
 declare -A SUITES=(
     [regression]="test-self-heal.sh"
     [matrix]="test-self-heal-matrix.sh"
