@@ -1,5 +1,7 @@
 # Worker Container Healthcheck Port Mismatch (nanocode + pebble)
 
+#### other improvement possible
+
 **Status:** Proposed
 **Severity:** Low (cosmetic) — workers are fully functional; the Docker `HEALTHCHECK` reports a false `unhealthy`.
 **Scope:** Every tenant's `lunarwing-nanocode-<name>` and `lunarwing-pebble-<name>` container created by `lunarwing-mt-admin.sh`.
