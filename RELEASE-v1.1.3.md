@@ -10,7 +10,7 @@ Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **odd-numbered releases
 
 Changes landed so far:
 
-1. **Multi-tenant port schema v2 — migration tooling.** A new `scripts/migrate-ports-to-v2.sh` migration script plus `scripts/MIGRATION_README.md` introduce a per-tenant **port-block** schema to replace the static "reserved slots" model that ran out of room in v1.1.2. This is the *"new ports schema"* item targeted at v1.1.3.
+1. **Multi-tenant port schema v5 → v6 — capacity expansion.** A new `v5 → v6` step in `ports_migrate()` plus a standalone `ic/scripts/migrate-ports-v6.sh` add per-tenant capacity (a parallel `extended_range` of fresh reserved slots) **without moving any existing port**, replacing the static "reserved slots" model that ran out of room in v1.1.2. This is the *"new ports schema"* item targeted at v1.1.3.
 2. **DarkIRC multi-tenant isolation.** The DarkIRC WASM channel now namespaces its persisted workspace state per tenant, the first step toward the *"DarkIRC channel and adapter polishing to make compatible with multi-tenant setups"* roadmap item — directly addressing the v1.1.2 known issue that DarkIRC "does not just work" under multi-tenancy.
 3. **Funding metadata finalized.** `funding.json` now carries real Bitcoin and Monero donation addresses (replacing the `TODO_*` placeholders) and is stamped to `v1.1.3` — completing the *"update funding.json with actual payment addresses"* item that was scheduled for this release.
 4. **Roadmap & documentation housekeeping.** A roadmap deferral, relocation of the v1.1.2 notes, and a new `docs/releases/` archive of prior release notes.
@@ -21,31 +21,17 @@ Changes landed so far:
 
 ## Changes
 
-### Multi-Tenant Port Schema v2 — Migration Tooling
+### Multi-Tenant Port Schema v6 — Capacity Expansion
 
-v1.1.2 shipped with a flagged *Known Issue*: the static `ports.json` schema (v5) with fixed, individually-named `reserved_N` slots had **run out of reserved slots** — every assigned port was in use — so the scheme needed to be redesigned without disturbing existing tenants' ports. v1.1.3 introduces the migration tooling for a **per-tenant port-block** schema (v2 of the standalone migration format) that scales by adding tenant blocks rather than reserved slots.
+v1.1.2 flagged a *Known Issue*: the multi-tenant port registry (`/etc/lunarwing/ports.json`) packs each tenant into a fixed **10-port block** (`block_size: 10`), and the v1→v5 migrations had already assigned all ten offsets (`gateway`, `http`, `bridge`, `postgres`, `proxy`, `weechat`, `orchestrator`, `nanocode_wss`, `pebble_wss`, `weechat_adapter`) — leaving **no free slot for a new service type**. Existing tenants are packed every 10 ports, so their blocks can't be widened in place without colliding with the next tenant. v1.1.3 adds a **v5 → v6** migration that expands capacity *without moving any existing port*.
 
-- **`scripts/migrate-ports-to-v2.sh`** (new) — Converts a legacy `ports.json` (flat `tenant → {gateway, websocket, telemetry, …}` map) into the new tenant-block structure. It backs up the existing file to a timestamped `ic/config/ports.json.bak.<ts>`, auto-detects the block size from the spacing of existing base ports, derives each service's offset from its current port, fills in default offsets for any unconfigured services, validates the result for port collisions, and logs to `logs/port-migration.log`. It prints a rollback recipe on completion.
-- **`scripts/MIGRATION_README.md`** (new) — Operator guide: when to run, prerequisites, before/after schema examples, the service-offset table, benefits, troubleshooting, and rollback steps.
+- **`ports_migrate()` in `ic/scripts/lunarwing-mt-admin.sh`** — gains a `v5 → v6` step alongside the existing v1→v5 chain (same in-place `jq` + atomic temp-file swap, keyed on `.version`), so the upgrade applies automatically on the next admin run. `ports_allocate()` now also writes the extended block for newly created tenants.
+- **`ic/scripts/migrate-ports-v6.sh`** (new) — standalone operator script modeled on `migrate-ports-v5.sh` for running the v5→v6 migration explicitly. It is idempotent, takes a timestamped backup, validates the result for port collisions, and swaps the registry in atomically **only** if validation passes (printing a rollback recipe). Supports a dry run on a copy via `PORTS_REGISTRY=/path/to/copy.json`.
+- The earlier broken preview script `scripts/migrate-ports-to-v2.sh` and its `MIGRATION_README.md` were **removed** — they targeted a `ports.json` shape that never existed, wrote to the wrong path, stamped a non-existent `"schema_version": "v2"`, and crashed on single-quoted heredocs.
 
-**v2 schema shape.** Each tenant gets a contiguous block (default **10 ports**) addressed by a `base_port` plus per-service `service_offsets`:
+**v6 schema shape.** Every tenant keeps its existing `base_port` and `ports` block **untouched**. v6 adds a parallel block mirrored into a second range (`extended_range: 20000–29999`): each tenant gains `extended_base = base_port − range.start + extended_range.start` and an `extended_ports` object of ten fresh `reserved_N` slots. Because base ports are unique and spaced ≥ `block_size` apart, the mirrored extended blocks never overlap each other or the original range. Future service additions rename `extended_ports.reserved_N → <service>` — the same pattern the v2→v5 migrations used with the original reserved slots, now continued in the new range.
 
-| Service | Offset | Port (base = 10000) |
-|---------|--------|---------------------|
-| gateway | 0 | 10000 |
-| websocket | 1 | 10001 |
-| telemetry | 2 | 10002 |
-| adapter | 3 | 10003 |
-| worker | 4 | 10004 |
-| debug | 5 | 10005 |
-| metrics | 6 | 10006 |
-| health | 7 | 10007 |
-| reserved_1 | 8 | 10008 |
-| reserved_2 | 9 | 10009 |
-
-Existing tenants keep the same ports (offsets are derived from their current assignments), so the migration is designed to be non-disruptive. Per the README, deprecation of the legacy schema is targeted at v1.2.0, and the tenant-isolation guarantee this provides is groundwork the self-healing work (v1.1.6+) will build on.
-
-> **Status:** This is **preview tooling shipped for review and dry-running** — it has **not** been validated end-to-end against a live multi-tenant `ports.json` yet. See *Known Issues* before running it on a production registry.
+> **Status:** Implemented and verified against synthetic v5 registries (existing ports confirmed untouched, extended blocks collision-free, migration idempotent). It has **not** yet been run against a live production `/etc/lunarwing/ports.json`. Back up the registry and dry-run on a copy before applying — see *Upgrade Notes*.
 
 ### DarkIRC — Tenant-Aware Workspace Paths (Multi-Tenant Isolation)
 
@@ -79,16 +65,15 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 
 ## Documentation
 
-- `scripts/MIGRATION_README.md` — New operator guide for the port-schema v2 migration (above).
+- `ic/scripts/migrate-ports-v6.sh` — New standalone v5→v6 port-registry migration (above); self-documenting header with usage, dry-run, and rollback steps.
 - `docs/releases/` — New archive directory containing `RELEASE-v1.1.0.md`, `RELEASE-v1.1.1.md`, and `RELEASE-v1.1.2.md`; root `RELEASE-v1.1.2.md` relocated to `docs/ops/`.
 - `docs/ops/ROADMAP_2026.MD` — Lunarvision K.E.R.S. polishing moved to v1.1.5.
 - `docs/ops/GOALS_1.1.3.md` — v1.1.3 pre-release checklist.
 
 ## Known Issues (not a complete list — see `docs/bugs` and `docs/proposals` for more)
 
-- **Port schema v2 migration is unvalidated preview tooling.** `migrate-ports-to-v2.sh` has **not** been run end-to-end against a live `ports.json`. In particular, its embedded Python is in **single-quoted heredocs** (`<< 'PYTHON_SCRIPT'` / `<< 'VALIDATE_SCRIPT'`), so the shell does not interpolate `${PORTS_FILE}` / `$(date …)` inside them — the migration and validation blocks need a fix (and a dry run on a backup) before use on a production registry. **Back up `ports.json` first** (the script also makes its own timestamped backup). Treat as a starting point, not a turnkey migration!
-- **DarkIRC multi-tenancy is partially addressed, not done.** The WASM channel now isolates state per tenant, but the change has not been validated against a live multi-tenant deployment, and the DarkIRC **adapter** (the Python/HTTP side) is not yet tenant-aware. DarkIRC does not yet "just work" under multi-tenancy; full compatibility remains a v1.1.3-line goal.
-- **last two related to first two** - see last two
+- **Port schema v6 migration not yet run on live production.** The v5 → v6 migration (the `ports_migrate()` step and `ic/scripts/migrate-ports-v6.sh`) is implemented and verified against synthetic v5 registries (existing ports untouched, extended blocks collision-free, idempotent), but has **not** yet been applied to a live `/etc/lunarwing/ports.json`. Back up the registry and dry-run on a copy (`PORTS_REGISTRY=/path/to/copy.json ./migrate-ports-v6.sh`) before applying on production.
+- **DarkIRC multi-tenancy is partially addressed, not done.** This release made the DarkIRC WASM channel **compile against the current WIT** again and isolate its runtime state per tenant (tenant-scoped `adapter_url` / `dm_policy` / `allow_from` paths, plus a response-path fix). But the channel and adapter predate multi-tenancy (written in March, before MT existed): the DarkIRC **adapter** (the Python/HTTP side) is still not tenant-aware, and the channel changes have **not** been validated end-to-end against a live multi-tenant deployment (adapter + DarkFi node). DarkIRC does not yet "just work" under multi-tenancy; full compatibility remains a v1.1.x-line goal.
 - **Crate versions not yet bumped.** The workspace is still at `1.1.2` (`ic/Cargo.toml`); the bump to `1.1.3` is a pre-release checklist item (`docs/ops/GOALS_1.1.3.md`).
 - **Carried forward from v1.1.2** (see `docs/ops/RELEASE-v1.1.2.md` for full detail): XMPP inbound file transfer is implemented but awaits live end-to-end validation and has no SSRF guard; self-healing is verified only by dry-run + unit tests and ships dormant (installed but not auto-scheduled, not wired into tenant provisioning); sandbox/external workers may not be fully configured on a fresh tenant; the Multica bridge remains pre-release/experimental; and the `e2e_advanced_traces` bootstrap-greeting tests remain among the pre-existing, env-dependent e2e failures.
 - **XMPP inbound file transfer — implemented (incl. encrypted media), live e2e validation pending.** The full receive pipeline (capability advertisement → OOB/`aesgcm://` extraction → bounded download → decrypt → WASM channel decode) is unit-tested and the bridge builds in release, but it has **not** yet been exercised end-to-end against a real server (Conversations/Gajim → agent over a working XEP-0363 host). This is the one real file-transfer caveat for the release. See `docs/ops/XMPP_KNOWN_ISSUES.md` and `docs/architecture/XMPP_FILE_TRANSFERS.md`.
@@ -100,15 +85,12 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 - **Multica Bridge** — May require significant improvements; remains pre-release/experimental. More work on this is scheduled for the next two releases.
 - **Multi-tenant admin script** — A flag exists to set an API key for a model endpoint, but no equivalent flag exists to set an HTTP URL automatically via this method.
 - **Sandbox workers and external workers may not be fully configured at start when creating a new tenant or setting up a new multi-tenant instance** - This is actually already documented and should be tracked as an item to fix here for future releases since it seems fairly important.
-- **Last two related to first two** - see first two
-- **DarkIRC WASM channel and adapter was never made to work with multi-tenant setups** - Can admit that this was partially an oversight. Shipped new DarkIRC code in this release but the original channel and adapter was created back in March, long before multi-tenant capability was built. This will need to be rectified in the next release. At this time, multi-tenant setups do not "just work" with DarkIRC.
-- **Speaking of Multi-Tenant Setups** - The current static ports.json schema with reserved slots has officially run out of `reserved` slots, as all of the assigned ports are now in use for something. Sadly, this means the current ports.json v5 system needs to be thrown out and redone. Ideas include: 1) Dynamic Port Pool 2) Per-Tenant Port Blocks 3) Service-Type Hierarchy - The best idea currently is some combination of 2 and 3. We already have versioned port schemas, so a method for upgrading v5 to a v6 would be doable. If we can figure out a way to do this without messing with current tenant's ports, then a solution will exist for this in the future and it will solve this problem as well as the *DarkIRC WASM channel and adapter was never made to work with multi-tenant setups* known issue.
 
 
 ## Upgrade Notes
 
 1. **No new database migrations.** v1.1.3 adds no schema changes; the existing V18–V21 migrations from prior releases still run automatically on first startup. **Back up your database before upgrading** as a matter of course. PostgreSQL 15+ remains required for V21's `NULLS NOT DISTINCT` syntax.
-2. **Port schema v2 migration is opt-in (and preview).** Existing multi-tenant hosts continue to run on the current `ports.json` unchanged. Do **not** run `scripts/migrate-ports-to-v2.sh` on a live registry yet — see *Known Issues*. When validated, run it with all LunarWing services stopped, keep the timestamped backup, and restart services after verifying no collisions.
+2. **Port schema v6 migration (additive, non-disruptive).** The v5 → v6 migration only *adds* an `extended_range` block per tenant; existing `base_port`/`ports` are untouched, so it does not re-allocate tenants. It applies automatically via `ports_migrate()` on the next `lunarwing-mt-admin.sh` run, or explicitly via `sudo ic/scripts/migrate-ports-v6.sh`. **Back up `/etc/lunarwing/ports.json` and dry-run on a copy first** (`PORTS_REGISTRY=/path/to/copy.json ./migrate-ports-v6.sh`); the standalone script also takes its own timestamped backup and aborts on any port collision.
 3. **DarkIRC config gains an optional `tenant_id`.** The field defaults via `default_tenant_id()` and is `#[serde(default)]`, so existing DarkIRC channel configs keep working without changes. Multi-tenant DarkIRC operators should set it per tenant once the adapter-side work and live validation land.
 4. **Crate version bump pending.** Workspace crates must be bumped from `1.1.2` to `1.1.3` before tagging (`docs/ops/GOALS_1.1.3.md`).
 5. **Funding addresses live.** `funding.json` now contains real BTC/XMR donation addresses; no action required for operators.
@@ -138,6 +120,6 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`**. Items respect 
 
 *In accordance with developer guidelines, a brief testing period must begin before each release.*
 
-*Testing for this release has **not yet commenced.** The pre-release checklist lives in `docs/ops/GOALS_1.1.3.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. Per the checklist, the port-schema v2 migration and the DarkIRC multi-tenant change must be exercised before this release is cut.*
+*Testing for this release has **not yet commenced.** The pre-release checklist lives in `docs/ops/GOALS_1.1.3.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. Per the checklist, the port-schema v6 migration and the DarkIRC multi-tenant change must be exercised before this release is cut.*
 
 *Once evaluation begins, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
