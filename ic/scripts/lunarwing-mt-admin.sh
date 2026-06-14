@@ -21,6 +21,10 @@ BUILD_LOCK="/var/lock/lunarwing-build.lock"
 PROFILE="${LUNARWING_MT_PROFILE:-release}"
 SOURCE_REPO="${LUNARWING_MT_SOURCE_REPO:-$LUNARWING_ROOT}"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000/openai/v1}"
+# Fleet-wide default for the daemon's LLM endpoint (LLM_BASE_URL). Empty = fall
+# back to each tenant's local TensorZero proxy. Set this (or --llm-base-url per
+# tenant) to point new tenants straight at a gateway as the proxy is phased out.
+DEFAULT_LLM_BASE_URL="${LUNARWING_MT_LLM_BASE_URL:-}"
 DEFAULT_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 DEFAULT_GOTIFY_TITLE="${LUNARWING_MT_GOTIFY_TITLE:-}"
 
@@ -69,6 +73,8 @@ Commands:
     --xmpp-jid <jid>              XMPP JID for this tenant
     --xmpp-password <pass>        XMPP password (generated if omitted)
     --llm-api-key <key>            API key for the LLM backend provider
+    --llm-base-url <url>           LLM endpoint the daemon dials (LLM_BASE_URL).
+                                   Default: this tenant's local TensorZero proxy
     --tensorzero-url <url>         Upstream TensorZero URL
     --gotify-url <url>             Custom Gotify server URL (e.g. https://gotify.example.com)
 
@@ -122,6 +128,8 @@ Environment:
   LUNARWING_MT_PROFILE             Build profile: release (default) or debug
   LUNARWING_MT_SOURCE_REPO         Path to source repo to clone from
   LUNARWING_MT_TENSORZERO_URL      Default upstream TensorZero URL
+  LUNARWING_MT_LLM_BASE_URL        Fleet-wide default LLM_BASE_URL for new tenants
+                                   (empty = each tenant's local TensorZero proxy)
   LUNARWING_MT_GOTIFY_URL          Default Gotify server URL for new tenants
   LUNARWING_MT_GOTIFY_TITLE        Default Gotify notification title for new tenants
 EOF
@@ -858,6 +866,7 @@ write_tenant_lunarwing_env() {
   local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
+  local llm_base_url="${6:-}"
 
   local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
@@ -883,6 +892,12 @@ write_tenant_lunarwing_env() {
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
 
+  # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
+  # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
+  # LUNARWING_MT_LLM_BASE_URL) overrides it — e.g. to point straight at a shared
+  # gateway or upstream OpenAI-compatible endpoint as the proxy is phased out.
+  local llm_base_url_effective="${llm_base_url:-http://127.0.0.1:${proxy_port}/v1}"
+
   (
     umask 077
     cat >"$path" <<ENVEOF
@@ -897,9 +912,9 @@ DATABASE_URL=postgres://lunarwing:lunarwing@127.0.0.1:${pg_port}/lunarwing
 DATABASE_SSLMODE=disable
 PGSSLMODE=disable
 
-# LLM — TensorZero proxy
+# LLM — OpenAI-compatible endpoint (defaults to the local TensorZero proxy)
 LLM_BACKEND=openai_compatible
-LLM_BASE_URL=http://127.0.0.1:${proxy_port}/v1
+LLM_BASE_URL=${llm_base_url_effective}
 LLM_API_KEY=${llm_api_key:-token-${name}}
 LLM_MODEL=tensorzero::function_name::lunarwing
 ALLOW_PRIVATE_IPS=1
@@ -2126,6 +2141,7 @@ add_tenant() {
   local gotify_url="${6:-$DEFAULT_GOTIFY_URL}"
   local gotify_title="${7:-$DEFAULT_GOTIFY_TITLE}"
   local llm_api_key="${8:-}"
+  local llm_base_url="${9:-$DEFAULT_LLM_BASE_URL}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -2147,7 +2163,7 @@ add_tenant() {
   say ""
 
   say "--- Generating environment files ---"
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
@@ -2483,13 +2499,14 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key=""
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-jid)        xmpp_jid="$2"; shift 2 ;;
           --xmpp-password)   xmpp_password="$2"; shift 2 ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
+          --llm-base-url)    llm_base_url="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
@@ -2503,17 +2520,18 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key=""
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL"
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-domain)     xmpp_domain="$2"; shift 2 ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
+          --llm-base-url)    llm_base_url="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
@@ -2535,7 +2553,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url"
       done
       ;;
 

@@ -18,7 +18,7 @@
   What carried over / what's new
 
   - Same 5-step flow + WeeChat tmux instructions as the vex script, all parameterized by $TENANT.
-  - Every knob is now a flag (with env-var fallback): --xmpp-jid, --xmpp-domain, --xmpp-password, --llm-api-key, --gotify-url, --[no-]docker-group,
+  - Every knob is now a flag (with env-var fallback): --xmpp-jid, --xmpp-domain, --xmpp-password, --llm-api-key, --llm-base-url, --gotify-url, --[no-]docker-group,
   --[no-]nanocode, --[no-]pebble, --[no-]wasm, --[no-]ensure-toolchain, --minimal, --yes.
   - Defaults are full-featured (docker-group + nanocode + pebble + wasm + cargo-component bootstrap all on), so sudo create-tenant.sh vex is identical to 
   create-tenant-vex.sh.
