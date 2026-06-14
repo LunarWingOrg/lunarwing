@@ -6,15 +6,17 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Multica bridge and channel refinements and agent orchestration workflow improvements (currently marked as pre-release/experimental; more testing required) | v1.1.4 |
+| Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.4 |
 | Lunartica UI reskin | v1.1.4 |
+| LunarWing article webpage on lunarwing.org and 1st article will be released | v1.1.4 |
+| Documentation reorg and refresh | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.5 |
 | XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
-| Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero directly) — disable on existing tenants and by default on new ones | v1.1.5 |
 | Lunarvision K.E.R.S. system setup polishing | v1.1.5 |
 | External Worker planned enhancements | v1.1.6 |
 | Add rootless docker and rootless podman as mechanisms for mt-admin setup | v1.1.6 |
-| IC infra serious development begins | v1.1.6 |
+| IC infra serious development begins, for both systemd and openrc | v1.1.6 |
+| Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero directly) — toggle to disable on existing tenants and by ensure by default disabled on new ones | v1.1.7 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
 | Additional WASM Channel Polishing | v1.1.7 |
 | Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |
@@ -27,7 +29,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Better githooks for repo | v1.2.1 |
 | LunarWing developer CI/CD pipeline | v1.2.1 |
 | LunarWing decision on switching to Codeberg or self-hosted GitLab rather than GitHub to host the monorepo (GH can still be used as a mirror) | v1.2.1 |
-| Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.4 |
+| Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
 | New suite of planned features adopting concepts from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | LunarVoice (further planning required) | v1.2.6 |
-| Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 1.2.0–1.2.6) | v1.2.7 |
+| Stabilization & polish buffer — reserved for v2 engine, LunarVoice, other new features from after 1.1.8 | v1.2.7 |
