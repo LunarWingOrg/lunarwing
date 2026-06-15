@@ -211,8 +211,39 @@ detect_container_runtime() {
 }
 
 CONTAINER_RT=""
+MT_ROOTLESS=""
 ensure_container_runtime() {
   [[ -n "$CONTAINER_RT" ]] || CONTAINER_RT="$(detect_container_runtime)"
+  if [[ -z "$MT_ROOTLESS" ]]; then
+    # Rootless-per-tenant is the default for podman (no daemon; each tenant owns
+    # its containers under ~/.local/share/containers). Docker keeps the legacy
+    # rootful-as-root model (it has a daemon). Override via LUNARWING_MT_ROOTLESS.
+    if [[ -n "${LUNARWING_MT_ROOTLESS:-}" ]]; then
+      MT_ROOTLESS="${LUNARWING_MT_ROOTLESS}"
+    elif [[ "$CONTAINER_RT" == "podman" ]]; then
+      MT_ROOTLESS="true"
+    else
+      MT_ROOTLESS="false"
+    fi
+  fi
+}
+
+# Run the container runtime for a TENANT's containers. When rootless (podman),
+# execute as the tenant user against their rootless store + runtime dir; when
+# rootful (docker), run as root unchanged. Every per-tenant pg/worker container
+# operation MUST go through this so inspect/start/stop/exec/rm hit the SAME store
+# that owns the container — root and rootless podman are separate universes.
+_ctr() {
+  local name="$1"; shift
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    local uid home
+    uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
+    home="$(getent passwd "$name" | cut -d: -f6)"
+    sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@"
+  else
+    "$CONTAINER_RT" "$@"
+  fi
 }
 
 # ── Port registry ────────────────────────────────────────────────────────────
@@ -473,6 +504,40 @@ all_tenant_names() {
 
 # ── User management ──────────────────────────────────────────────────────────
 
+# Provision rootless-podman prerequisites for a tenant user. Idempotent: skips
+# anything already present, never overlaps existing subordinate-id ranges.
+ensure_rootless_prereqs() {
+  local name="$1" uid home start
+  ensure_container_runtime
+  uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
+  home="$(getent passwd "$name" | cut -d: -f6)"
+
+  # Subordinate uid/gid ranges for the user namespace. useradd may pre-allocate
+  # these (via /etc/login.defs); only add when absent, and append AFTER the
+  # current max so a new tenant never overlaps an existing range (or eris).
+  if ! grep -q "^${name}:" /etc/subuid 2>/dev/null; then
+    start="$(awk -F: 'BEGIN{m=100000}{e=$2+$3; if(e>m)m=e}END{print m}' /etc/subuid 2>/dev/null)"
+    usermod --add-subuids "${start}-$((start + 65535))" "$name" \
+      || die "failed to allocate subuid range for $name (shadow with subid support required)"
+    say "allocated subuid range ${start}-$((start + 65535)) for $name"
+  fi
+  if ! grep -q "^${name}:" /etc/subgid 2>/dev/null; then
+    start="$(awk -F: 'BEGIN{m=100000}{e=$2+$3; if(e>m)m=e}END{print m}' /etc/subgid 2>/dev/null)"
+    usermod --add-subgids "${start}-$((start + 65535))" "$name" \
+      || die "failed to allocate subgid range for $name"
+    say "allocated subgid range ${start}-$((start + 65535)) for $name"
+  fi
+
+  # Runtime dir (XDG_RUNTIME_DIR). linger (enabled in create_tenant_user)
+  # recreates it at boot; create it now for immediate use. tmpfs, 0700, owned.
+  install -d -m 0700 -o "$name" -g "$name" "/run/user/$uid"
+
+  # One-time rootless storage init (safe to re-run after subid changes).
+  sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
+    "$CONTAINER_RT" system migrate >/dev/null 2>&1 || true
+  say "rootless prerequisites ready for $name (subuid/subgid, /run/user/$uid, storage)"
+}
+
 create_tenant_user() {
   local name="$1"
   local add_docker_group="${2:-false}"
@@ -485,9 +550,21 @@ create_tenant_user() {
   fi
 
   ensure_init_system
-  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    loginctl enable-linger "$name"
-    say "enabled linger for $name"
+
+  # Rootless-podman prerequisites for the tenant (subuid/subgid, runtime dir,
+  # storage). No-op when rootful (docker).
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    ensure_rootless_prereqs "$name"
+  fi
+
+  # Persist a per-user runtime manager so /run/user/<uid> survives reboot. Works
+  # on both systemd-logind and elogind (OpenRC) — capability-gated, not
+  # systemd-only, so rootless podman keeps a runtime dir across reboots.
+  if command -v loginctl >/dev/null 2>&1; then
+    if loginctl enable-linger "$name" 2>/dev/null; then
+      say "enabled linger for $name"
+    fi
   fi
 
   if [[ "$add_docker_group" == "true" ]]; then
@@ -1516,27 +1593,34 @@ start_tenant_postgres() {
   pg_port="$(ports_get "$name" postgres)"
   container_name="lunarwing-pg-$name"
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "PostgreSQL already running ($container_name, port $pg_port)"
       return 0
     fi
     say "starting existing PostgreSQL container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating PostgreSQL container $container_name on port $pg_port"
-    $CONTAINER_RT run -d \
+    # Named volume (not anonymous) so the data has a stable, inspectable,
+    # exportable identity for backups; rootless podman auto-chowns it inside the
+    # tenant user namespace. --restart is a no-op under rootless podman (no
+    # daemon — OpenRC owns lifecycle), so only set it for rootful docker.
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e POSTGRES_USER=lunarwing \
       -e POSTGRES_PASSWORD=lunarwing \
       -e POSTGRES_DB=lunarwing \
       -p "127.0.0.1:${pg_port}:5432" \
-      --restart unless-stopped \
+      -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
+      "${restart_arg[@]}" \
       pgvector/pgvector:pg16 >/dev/null
   fi
 
   local attempts=0
-  while ! $CONTAINER_RT exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
+  while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
     [[ $attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
     sleep 1
@@ -1549,8 +1633,8 @@ stop_tenant_postgres() {
   ensure_container_runtime
 
   local container_name="lunarwing-pg-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "PostgreSQL stopped ($container_name)"
   fi
 }
@@ -1561,8 +1645,11 @@ reset_tenant_postgres() {
 
   local container_name="lunarwing-pg-$name"
   stop_tenant_postgres "$name"
-  $CONTAINER_RT rm -f "$container_name" >/dev/null 2>&1 || true
-  say "PostgreSQL removed ($container_name)"
+  _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+  # Remove the named data volume too so a subsequent create starts fresh (matches
+  # the pre-named-volume behaviour where the anonymous volume was orphaned on rm).
+  _ctr "$name" volume rm "lunarwing-pg-${name}" >/dev/null 2>&1 || true
+  say "PostgreSQL removed ($container_name, data volume cleared)"
 }
 
 # ── Systemd service units ────────────────────────────────────────────────────
@@ -1784,11 +1871,80 @@ render_tenant_openrc_units() {
   local weechat_home
   weechat_home="$(tenant_home "$name")/.config/weechat"
 
-  # Resolve the container runtime path so the daemon's start_pre can bring up
-  # this tenant's Postgres container on boot (Podman has no daemon to honor
-  # --restart under OpenRC; idempotent on Docker). Empty -> start_pre skips it.
+  # Resolve the container runtime path + tenant identity so the dedicated
+  # Postgres init service can bring the container up (rootless: as the tenant
+  # user; rootful docker: as root). Empty runtime -> the pg service no-ops.
+  ensure_container_runtime
   local pg_runtime_bin="" pg_container="lunarwing-pg-$name"
   [[ -n "${CONTAINER_RT:-}" ]] && pg_runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  local pg_uid pg_home
+  pg_uid="$(id -u "$name" 2>/dev/null || echo "")"
+  pg_home="$(tenant_home "$name")"
+
+  # ── Postgres container init script (dedicated service; the daemon needs it) ──
+  # A first-class unit (not a daemon start_pre side-effect) so the host self-heal
+  # pipeline — which auto-discovers /etc/init.d units — can remediate a crashed
+  # Postgres independently.
+  cat >"/etc/init.d/lunarwing-pg-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing Postgres container ($name)"
+
+: "\${pg_runtime:=$pg_runtime_bin}"
+: "\${pg_container:=$pg_container}"
+: "\${pg_rootless:=$MT_ROOTLESS}"
+: "\${pg_user:=$name}"
+: "\${pg_home:=$pg_home}"
+: "\${pg_uid:=$pg_uid}"
+: "\${pg_wait:=60}"
+
+depend() {
+    need net localmount
+    after firewall
+    before lunarwing-${name}
+}
+
+# Run the container runtime for this tenant's container: rootless -> as the
+# tenant user with their runtime dir + HOME; rootful -> as root unchanged.
+_pg() {
+    if [ "\${pg_rootless}" = "true" ]; then
+        sudo -u "\${pg_user}" env HOME="\${pg_home}" XDG_RUNTIME_DIR="/run/user/\${pg_uid}" "\${pg_runtime}" "\$@"
+    else
+        "\${pg_runtime}" "\$@"
+    fi
+}
+
+start() {
+    [ -n "\${pg_runtime}" ] && [ -x "\${pg_runtime}" ] || { ewarn "no container runtime; skipping Postgres for $name"; return 0; }
+    ebegin "Starting Postgres container (\${pg_container})"
+    if [ "\${pg_rootless}" = "true" ]; then
+        checkpath -d -m 0700 -o "\${pg_user}:\${pg_user}" "/run/user/\${pg_uid}"
+    fi
+    _pg start "\${pg_container}" >/dev/null 2>&1 || { eend 1 "container start failed"; return 1; }
+    _w=0
+    while ! _pg exec "\${pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
+        _w=\$((_w + 1))
+        [ "\$_w" -lt "\${pg_wait}" ] || { eend 1 "Postgres not ready after \${pg_wait}s"; return 1; }
+        sleep 1
+    done
+    eend 0
+}
+
+stop() {
+    [ -n "\${pg_runtime}" ] && [ -x "\${pg_runtime}" ] || return 0
+    ebegin "Stopping Postgres container (\${pg_container})"
+    _pg stop "\${pg_container}" >/dev/null 2>&1
+    eend 0
+}
+
+status() {
+    if [ "\$(_pg inspect -f '{{.State.Running}}' "\${pg_container}" 2>/dev/null)" = "true" ]; then
+        einfo "\${pg_container}: running"; return 0
+    fi
+    einfo "\${pg_container}: stopped"; return 3
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-pg-${name}"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -1813,9 +1969,6 @@ description="LunarWing AI assistant ($name)"
 : "\${lunarwing_respawn_max:=5}"
 : "\${lunarwing_respawn_period:=60}"
 : "\${lunarwing_retry:=SIGTERM/30/KILL/5}"
-: "\${lunarwing_pg_runtime:=$pg_runtime_bin}"
-: "\${lunarwing_pg_container:=$pg_container}"
-: "\${lunarwing_pg_wait:=60}"
 
 command="\${lunarwing_command}"
 command_args="\${lunarwing_args}"
@@ -1832,9 +1985,9 @@ error_log="\${lunarwing_error_log}"
 required_files="\${command}"
 
 depend() {
-    need net localmount
+    need net localmount lunarwing-pg-${name}
     use dns logger
-    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
+    after firewall lunarwing-pg-${name} xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
 }
 
 load_env() {
@@ -1852,18 +2005,8 @@ start_pre() {
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${output_log}"
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${error_log}"
     load_env || return 1
-    # Podman has no daemon to honor --restart under OpenRC; ensure this tenant's
-    # Postgres container is up and accepting connections before the daemon starts
-    # (runs as root in start_pre; idempotent on Docker).
-    if [ -n "\${lunarwing_pg_runtime}" ] && [ -x "\${lunarwing_pg_runtime}" ] && "\${lunarwing_pg_runtime}" inspect "\${lunarwing_pg_container}" >/dev/null 2>&1; then
-        "\${lunarwing_pg_runtime}" start "\${lunarwing_pg_container}" >/dev/null 2>&1 || true
-        _lw_pg=0
-        while ! "\${lunarwing_pg_runtime}" exec "\${lunarwing_pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
-            _lw_pg=\$((_lw_pg + 1))
-            [ "\$_lw_pg" -lt "\${lunarwing_pg_wait}" ] || break
-            sleep 1
-        done
-    fi
+    # Postgres is brought up by the dedicated lunarwing-pg-${name} service, which
+    # this unit declares as `need` — so the DB is already up before we get here.
     umask "\${lunarwing_umask}"
 }
 INITEOF
@@ -2125,7 +2268,9 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
-  # Optional channels first, non-fatal: a missing weechat/aiohttp must not abort
+  # Postgres first: the daemon `need`s it (and it's idempotent if already up).
+  rc-service "lunarwing-pg-${name}" start
+  # Optional channels next, non-fatal: a missing weechat/aiohttp must not abort
   # the core stack (the main daemon does not depend on them).
   rc-service "weechat-${name}" start 2>/dev/null || say "  (weechat-${name} skipped — optional)"
   rc-service "lunarwing-weechat-adapter-${name}" start 2>/dev/null || say "  (lunarwing-weechat-adapter-${name} skipped — optional)"
@@ -2136,7 +2281,7 @@ start_tenant_openrc() {
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  for svc in "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+  for svc in "lunarwing-pg-${name}" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
              "weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
     if rc-service "$svc" status >/dev/null 2>&1; then
       rc-update add "$svc" default >/dev/null 2>&1 || true
@@ -2152,12 +2297,14 @@ stop_tenant_openrc() {
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   rc-service "weechat-${name}" stop 2>/dev/null || true
+  # Postgres last: the daemon depends on it, so it stops after its consumers.
+  rc-service "lunarwing-pg-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}" "lunarwing-pg-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -2514,7 +2661,7 @@ status_tenant() {
 
   ensure_container_runtime
   local container_name="lunarwing-pg-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
     say "PostgreSQL: running ($container_name)"
   else
     say "PostgreSQL: stopped ($container_name)"
@@ -2548,7 +2695,7 @@ status_tenant() {
       say "  ${svc}.service: $state"
     done
   else
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
+    for svc in "lunarwing-pg-${name}" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
       local state
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
       say "  $svc: $state"
@@ -2644,6 +2791,14 @@ doctor() {
   fi
   if command -v podman >/dev/null 2>&1; then
     _check "podman available" podman info
+  fi
+
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    _check "rootless: newuidmap setuid" bash -c '[ -u "$(command -v newuidmap 2>/dev/null)" ]'
+    _check "rootless: newgidmap setuid" bash -c '[ -u "$(command -v newgidmap 2>/dev/null)" ]'
+    _check "rootless: /etc/subuid populated" test -s /etc/subuid
+    _check "rootless: /etc/subgid populated" test -s /etc/subgid
   fi
 
   ensure_init_system
