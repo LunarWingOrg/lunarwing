@@ -1938,8 +1938,11 @@ stop() {
 }
 
 status() {
+    # Emit the standard OpenRC "started"/"stopped" wording (not "running") so the
+    # health-check parser (grep started|stopped) and the mt-admin status display
+    # classify the container correctly instead of relying on the rc_exit fallback.
     if [ "\$(_pg inspect -f '{{.State.Running}}' "\${pg_container}" 2>/dev/null)" = "true" ]; then
-        einfo "\${pg_container}: running"; return 0
+        einfo "\${pg_container}: started"; return 0
     fi
     einfo "\${pg_container}: stopped"; return 3
 }
