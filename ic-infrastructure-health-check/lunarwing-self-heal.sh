@@ -465,7 +465,13 @@ _send_notification() {
     local status="$1" report_path="$2"
     local notify_script="$SCRIPT_DIR/send-notification.sh"
     if [[ -x "$notify_script" ]]; then
-        "$notify_script" "$status" "$report_path"
+        # CRITICAL: redirect the notifier's stdout to stderr. escalate_service runs
+        # inside remediate_component, whose STDOUT is captured as the returned state
+        # JSON (state="$(remediate_component ...)"). Any stdout here corrupts that
+        # JSON, so the next prune_state jq aborts under `set -e` BEFORE save_state —
+        # silently losing escalated:true. Also tolerate a non-zero notify (e.g.
+        # Gotify non-200) so the escalated state still persists if the page fails.
+        "$notify_script" "$status" "$report_path" >&2 || log "WARNING: escalation notification failed (page may not have been delivered)"
     else
         log "WARNING: send-notification.sh not found at $notify_script; cannot escalate"
     fi
