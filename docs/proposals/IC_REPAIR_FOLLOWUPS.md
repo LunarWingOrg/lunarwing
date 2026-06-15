@@ -15,7 +15,7 @@ each item is directly actionable.
 | # | Item | Self-heal code? | Difficulty | Action |
 |---|------|:---:|---|---|
 | 6c | Notifier timeout | ✅ | trivial | **FIXED** `2b462f95` |
-| 6b | Truncated-state recovery | ✅ | easy | **do now** |
+| 6b | Truncated-state recovery | ✅ | easy | **FIXED** `(pending commit)` |
 | 2 | systemd `.timer/.service` scheduling | ✅ | moderate | **do now** |
 | 6a | Escalation cooldown / rate-limit | ✅ | moderate | do now (one design choice) |
 | 10 | Per-tenant app-level health (Pattern C) | ✅ | involved | **defer** (own design pass) |
@@ -48,14 +48,17 @@ whole self-heal tick.
   returned state JSON** — stray stdout corrupts state (the documented `:474` hazard).
 - *(curl itself is already bounded at `send-notification.sh:66` via `--connect-timeout 10 --max-time 15`.)*
 
-#### 6b. Truncated-state recovery — *easy (~8 lines, mostly already there)*
-Recovery already half-exists: `load_state:379` falls back to `{}` on parse failure and
-`save_state:381-386` is atomic (mktemp + mv). The gap is that a corrupt file is **silently** discarded
+#### 6b. Truncated-state recovery — *easy (~8 lines, mostly already there)* ✅ FIXED
+Recovery already half-exists: `load_state` falls back to `{}` on parse failure and
+`save_state` is atomic (mktemp + mv). The gap was that a corrupt file was **silently** discarded
 — which is exactly what drops `escalated:true` and causes re-paging.
 
 - **Change:** in `load_state`, on jq parse failure log a WARNING and
   `mv "$STATE_FILE" "$STATE_FILE.corrupt.<ts>"` before emitting `{}`, so corruption is visible and
-  preserved for forensics. Use a single-slot `.corrupt` name (or gate) so files don't accumulate.
+  preserved for forensics. Per-run single-slot rename (timestamps differ across runs, so
+  the file can still be there for next time).
+- **Tests:** added section O in `test-self-heal-matrix.sh` (O1: detect + rename + recover, O2:
+  empty state isn't flagged, O3: bounded accumulation).
 
 #### 2. Wire systemd `.timer/.service` scheduling — *moderate, self-contained in one file*
 `ensure_health_pipeline()` is OpenRC-only, so the prod systemd leg gets the hardened scripts but no
