@@ -248,6 +248,11 @@ _launchd_restart() {
 
 restart_service() {
     local svc="$1"
+    # Close the self-heal lock fd (200, opened in main()) for the restart and ALL
+    # its children. rc-service/systemctl spawn a long-lived supervise-daemon that
+    # would otherwise INHERIT fd 200 and hold the flock forever — wedging every
+    # later self-heal run with "another self-heal instance is running". The
+    # `200>&-` on the case compound closes it for the whole dispatch subtree.
     case "$SERVICE_MANAGER" in
         systemd)
             local user
@@ -261,7 +266,7 @@ restart_service() {
         openrc)  _openrc_restart "$svc" ;;
         launchd) _launchd_restart "$svc" ;;
         *)       log "WARNING: unknown service manager, cannot restart $svc"; return 1 ;;
-    esac
+    esac 200>&-
 }
 
 check_service_active() {
