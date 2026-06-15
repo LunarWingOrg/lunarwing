@@ -246,6 +246,32 @@ _ctr() {
   fi
 }
 
+# Ensure a worker image is available to whoever will run the tenant's container.
+# Rootful (docker): the shared root store already has it — just verify presence.
+# Rootless (podman): the image lives in the tenant's OWN store; if absent, copy it
+# from the admin (root) store via save|load (per-tenant, ~minutes for large images;
+# a shared additionalimagestore would avoid the N copies but isn't wired yet).
+# Returns non-zero if the image can't be made available (caller should skip).
+_ensure_tenant_image() {
+  local name="$1" image="$2"
+  if _ctr "$name" image inspect "$image" &>/dev/null; then
+    return 0
+  fi
+  if [[ "$MT_ROOTLESS" != "true" ]]; then
+    return 1   # rootful + not built yet -> caller skips (build first)
+  fi
+  if ! "$CONTAINER_RT" image inspect "$image" &>/dev/null; then
+    return 1   # rootless, but the admin store has no source image to copy
+  fi
+  say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  if "$CONTAINER_RT" save "$image" | _ctr "$name" load >/dev/null 2>&1; then
+    say "image $image available in ${name}'s store"
+    return 0
+  fi
+  say "WARNING: failed to load $image into ${name}'s store"
+  return 1
+}
+
 # ── Port registry ────────────────────────────────────────────────────────────
 
 ports_registry_init() {
@@ -1391,7 +1417,7 @@ configure_pebble() {
   say "pebble configured for tenant '$name' at $env_path"
 
   local container_name="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null 2>&1; then
+  if _ctr "$name" inspect "$container_name" &>/dev/null 2>&1; then
     say "note: restart the pebble worker to pick up new config:"
     say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
   fi
@@ -1413,19 +1439,20 @@ start_tenant_nanocode() {
     return 0
   fi
 
-  # Check if the image exists
-  if ! $CONTAINER_RT image inspect lunarwing-worker-nanocode:latest &>/dev/null; then
-    say "nanocode worker image not found; run 'build-nanocode-worker' first (skipping)"
+  # Ensure the image is available to whoever runs the container (rootless: load it
+  # into the tenant's store via save|load; rootful: must already be built in root).
+  if ! _ensure_tenant_image "$name" lunarwing-worker-nanocode:latest; then
+    say "nanocode worker image not available; run 'build-nanocode-worker' first (skipping)"
     return 0
   fi
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "nanocode worker already running ($container_name, WSS port $wss_port)"
       return 0
     fi
     say "starting existing nanocode worker container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating nanocode worker container $container_name on WSS port $wss_port"
 
@@ -1465,7 +1492,9 @@ start_tenant_nanocode() {
     # the container's network namespace, so this needs no -p publish and never
     # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
     # container stuck "unhealthy" even though the WS bridge was fine.
-    $CONTAINER_RT run -d \
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
       -e WS_PORT="$wss_port" \
@@ -1477,7 +1506,7 @@ start_tenant_nanocode() {
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       -v "$workspace_dir:/workspace:z" \
-      --restart unless-stopped \
+      "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
       --mode websocket >/dev/null
   fi
@@ -1490,8 +1519,8 @@ stop_tenant_nanocode() {
   ensure_container_runtime
 
   local container_name="lunarwing-nanocode-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
   fi
 }
@@ -1511,18 +1540,18 @@ start_tenant_pebble() {
     return 0
   fi
 
-  if ! $CONTAINER_RT image inspect lunarwing-worker-pebble:latest &>/dev/null; then
-    say "pebble worker image not found; run 'build-pebble-worker' first (skipping)"
+  if ! _ensure_tenant_image "$name" lunarwing-worker-pebble:latest; then
+    say "pebble worker image not available; run 'build-pebble-worker' first (skipping)"
     return 0
   fi
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "pebble worker already running ($container_name, WSS port $wss_port)"
       return 0
     fi
     say "starting existing pebble worker container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating pebble worker container $container_name on WSS port $wss_port"
 
@@ -1554,7 +1583,9 @@ start_tenant_pebble() {
     # container's network namespace, so this needs no -p publish and never
     # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
     # container stuck "unhealthy" even though the WS bridge was fine.
-    $CONTAINER_RT run -d \
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
       -e WS_PORT="$wss_port" \
@@ -1565,7 +1596,7 @@ start_tenant_pebble() {
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       -v "$workspace_dir:/workspace:z" \
-      --restart unless-stopped \
+      "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
   fi
 
@@ -1577,8 +1608,8 @@ stop_tenant_pebble() {
   ensure_container_runtime
 
   local container_name="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "pebble worker stopped ($container_name)"
   fi
 }
@@ -2671,18 +2702,18 @@ status_tenant() {
   fi
 
   local nanocode_container="lunarwing-nanocode-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$nanocode_container" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$nanocode_container" 2>/dev/null | grep -q true; then
     say "Nanocode worker: running ($nanocode_container, WSS port $(ports_get "$name" nanocode_wss))"
-  elif $CONTAINER_RT inspect "$nanocode_container" &>/dev/null; then
+  elif _ctr "$name" inspect "$nanocode_container" &>/dev/null; then
     say "Nanocode worker: stopped ($nanocode_container)"
   else
     say "Nanocode worker: not created"
   fi
 
   local pebble_container="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$pebble_container" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$pebble_container" 2>/dev/null | grep -q true; then
     say "Pebble worker: running ($pebble_container, WSS port $(ports_get "$name" pebble_wss))"
-  elif $CONTAINER_RT inspect "$pebble_container" &>/dev/null; then
+  elif _ctr "$name" inspect "$pebble_container" &>/dev/null; then
     say "Pebble worker: stopped ($pebble_container)"
   else
     say "Pebble worker: not created"
