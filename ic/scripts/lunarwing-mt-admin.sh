@@ -2006,7 +2006,7 @@ start_pre() {
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${error_log}"
     load_env || return 1
     # Postgres is brought up by the dedicated lunarwing-pg-${name} service, which
-    # this unit declares as `need` — so the DB is already up before we get here.
+    # this unit declares as a hard dependency (need), so the DB is already up.
     umask "\${lunarwing_umask}"
 }
 INITEOF
