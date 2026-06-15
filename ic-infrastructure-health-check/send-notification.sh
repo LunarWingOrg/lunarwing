@@ -43,28 +43,35 @@ esac
 
 # Build message from latest report
 if [ -n "$report_file" ] && [ -f "$report_file" ]; then
-    # Extract component statuses
-    message=$(jq -r '
+    # --arg report_file: jq must be told about it (a bare $report_file is a
+    # compile error). [...] | join: a bare .components[] / .alerts[] yields N
+    # separate jq outputs; collect+join them into single strings instead.
+    message=$(jq -r --arg report_file "$report_file" '
         "Overall: " + (.overall_status | ascii_upcase) + "\n\n" +
-        "Components:\n" +
-        (.components[] | "- " + .component + ": " + .status) +
+        "Components:\n" + ([.components[] | "- " + .component + ": " + .status] | join("\n")) +
         "\n\n" +
-        (if .alerts | length > 0 then "Issues:\n" + (.alerts[] | "- " + .message) else "" end) +
-        "\n\nFull report: " + $report_file
+        (if (.alerts | length) > 0 then "Issues:\n" + ([.alerts[] | "- " + .message] | join("\n")) + "\n\n" else "" end) +
+        "Full report: " + $report_file
     ' "$report_file")
 else
     message="Infrastructure health check completed with status: $status"
 fi
 
-# Send to Gotify
-curl -s --connect-timeout 10 --max-time 15 -X POST "$GOTIFY_URL/message" \
-    -H "Content-Type: application/json" \
-    -d "{
-        \"title\": \"$title\",
-        \"message\": \"$message\",
-        \"priority\": $priority
-    }" \
-    -H "X-Gotify-Key: $GOTIFY_TOKEN" \
-    >/dev/null 2>&1
+# Build the JSON payload with jq so newlines/quotes in the message are escaped
+# correctly (the previous hand-built JSON broke on the message's literal newlines).
+payload=$(jq -n --arg title "$title" --arg message "$message" --argjson priority "$priority" \
+    '{title: $title, message: $message, priority: $priority}')
 
-echo "Notification sent: $title"
+# Send to Gotify
+http_code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 15 \
+    -X POST "$GOTIFY_URL/message" \
+    -H "Content-Type: application/json" \
+    -H "X-Gotify-Key: $GOTIFY_TOKEN" \
+    -d "$payload")
+
+if [ "$http_code" = "200" ]; then
+    echo "Notification sent: $title"
+else
+    echo "Notification FAILED (HTTP $http_code): $title" >&2
+    exit 1
+fi
