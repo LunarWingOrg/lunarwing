@@ -42,7 +42,7 @@ assert_eq "$a1rc" "1" "A1: exit 1 when no report"
 
 # A2 — malformed report JSON → die, exit 1.
 a2="$(sb)"; printf 'this is not json{' > "$a2/report.json"
-oA2="$(run_raw "$a2" LUNARWING_SERVICE_MANAGER=systemd -- --dry-run --report "$a2/report.json")"
+oA2="$(run_raw "$a2" LUNARWING_SERVICE_MANAGER=systemd -- --dry-run --report "$a2/report.json")"; RC=$?
 assert_contains "$oA2" "report is not valid JSON" "A2: invalid JSON dies"
 assert_eq "$RC" "1" "A2: exit 1 on malformed report"
 
@@ -450,13 +450,13 @@ echo "=== Section N: CLI argument validation ==="
 
 # N1 — unknown flag → die.
 n1="$(sb)"
-oN1="$(run_raw "$n1" LUNARWING_SERVICE_MANAGER=systemd -- --bogus)"
+oN1="$(run_raw "$n1" LUNARWING_SERVICE_MANAGER=systemd -- --bogus)"; RC=$?
 assert_contains "$oN1" "unknown arg: --bogus" "N1: unknown flag dies"
 assert_eq "$RC" "1" "N1: unknown flag exits 1"
 
 # N2 — --help → usage, exit 0.
 n2="$(sb)"
-oN2="$(run_raw "$n2" LUNARWING_SERVICE_MANAGER=systemd -- --help)"
+oN2="$(run_raw "$n2" LUNARWING_SERVICE_MANAGER=systemd -- --help)"; RC=$?
 assert_contains "$oN2" "Usage: lunarwing-self-heal.sh" "N2: --help prints usage"
 assert_eq "$RC" "0" "N2: --help exits 0"
 
@@ -472,3 +472,4 @@ assert_contains "$oN3" "base=123s"       "N3: --backoff-base parsed"
 assert_contains "$oN3" "verify=false"    "N3: --verify-health parsed"
 
 finish
+
