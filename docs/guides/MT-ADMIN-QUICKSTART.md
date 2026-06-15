@@ -12,13 +12,37 @@ deployment with the WeeChat IRC channel configured and receiving messages.
 Before you begin, confirm the following are installed:
 
 - **Root or sudo access** on the target machine
-- **Docker or Podman** (running and accessible)
-- **Rust toolchain** via rustup (`rustup`, `cargo`, targets `wasm32-wasip1`
-  and `wasm32-wasip2`)
+- **Docker or Podman** (running and accessible). Podman is daemonless — there is
+  no service to start. With Podman, point image resolution at Docker Hub so the
+  unqualified `pgvector/pgvector:pg16` image resolves without a prompt:
+  ```bash
+  echo 'unqualified-search-registries = ["docker.io"]' \
+    | sudo tee /etc/containers/registries.conf.d/zz-lunarwing-docker-io.conf
+  ```
 - **jq** for JSON port registry operations
-- **Python 3** with `aiohttp` (`pip install aiohttp`)
 - **git** for repo cloning
-- **weechat** if you actually want your agent to use weechat as a communication channel
+
+You do **not** need a host Rust toolchain: `add-tenant` installs a dedicated
+rustup toolchain (with the `wasm32-wasip1`/`wasm32-wasip2` targets) into each
+tenant's home, and tenant builds use that. A `[FAIL] rustup installed` from
+`doctor` is therefore benign on hosts where Rust came from the system package
+manager rather than rustup.
+
+**Only needed for the WeeChat channel (Part 2), not for core multi-tenancy:**
+
+- **weechat** — the IRC client the agent talks to
+- **Python 3** with `aiohttp` — required by the WeeChat WS adapter
+
+Install hints by distro:
+
+```bash
+# Debian/Ubuntu
+sudo apt install jq git python3-aiohttp weechat
+# Fedora
+sudo dnf install jq git python3-aiohttp weechat
+# Gentoo  (podman also needs:  net-firewall/iptables nftables  USE flag)
+sudo emerge app-misc/jq app-containers/podman dev-python/aiohttp net-irc/weechat
+```
 
 All commands below run from the repository root (e.g., `/home/you/lunarwing`).
 
@@ -33,8 +57,19 @@ sudo ic/scripts/lunarwing-mt-admin.sh doctor
 Fix any `[FAIL]` items before continuing. Common fixes:
 
 - Missing WASM targets: `rustup target add wasm32-wasip1 wasm32-wasip2`
-- Missing aiohttp: `pip install aiohttp`
-- Docker not running: `sudo systemctl start docker`
+- Missing aiohttp (WeeChat only): install your distro's `python3-aiohttp` package
+  (on externally-managed Python you may need `pip install --user --break-system-packages aiohttp`)
+- Docker not running — systemd: `sudo systemctl start docker`; OpenRC:
+  `sudo rc-service docker start`. **Podman needs no daemon** — if `doctor` reports
+  Podman available, you're set.
+
+These `[FAIL]`s are benign and can be ignored:
+
+- `rustup installed` — a per-tenant toolchain is installed by `add-tenant`
+  (see Prerequisites).
+- `port registry exists` — created automatically on your first `add-tenant`.
+- `nanocode/pebble worker image exists` — only relevant if you use the worker
+  containers.
 
 ---
 
@@ -53,7 +88,9 @@ This single command does all of the following:
    (e.g., `10000`-`10009`).
 4. Clones the source repo into `/home/ruffles/lunarwing/`.
 5. Generates environment files (`lunarwing.env`, `xmpp-bridge.env`,
-   `proxy.env`) in `/home/ruffles/lunarwing/env/`, all mode `0600`.
+   `proxy.env`) in `/home/ruffles/lunarwing/env/`, all mode `0600`. All HTTP
+   services (gateway and webhook) bind `127.0.0.1`, and the HTTP webhook gets a
+   generated `HTTP_WEBHOOK_SECRET` so its channel starts cleanly.
 6. Starts a per-tenant PostgreSQL container (`lunarwing-pg-ruffles`) bound to
    `127.0.0.1:<postgres-port>`.
 7. Renders systemd user units (or OpenRC init scripts) for all four services.
@@ -105,8 +142,25 @@ This starts four services:
 | `lunarwing-proxy-ruffles.service` | TensorZero LLM proxy |
 | `lunarwing-weechat-adapter-ruffles.service` | WeeChat WebSocket adapter |
 
-The main service has `Wants=` on the other three, so they all come up
+On **systemd**, the main service has `Wants=` on the others, so they all come up
 together when you start it.
+
+> **OpenRC caveat.** `start-tenant` also starts the WeeChat relay and WeeChat WS
+> adapter services, and it does **not** tolerate their failure: if the `weechat`
+> binary or Python `aiohttp` is missing, `start-tenant` aborts **before** the main
+> daemon ever starts. The main daemon does not actually depend on WeeChat (its
+> `depend()` is only `need net localmount`; the `lunarwing_rc_need` conf.d var is
+> inert). If you don't need the WeeChat channel, start the three core services
+> directly and skip WeeChat:
+>
+> ```bash
+> sudo rc-service lunarwing-proxy-ruffles start
+> sudo rc-service xmpp-bridge-ruffles     start
+> sudo rc-service lunarwing-ruffles       start
+> ```
+>
+> To use the full `start-tenant` flow including WeeChat, install the deps first
+> (e.g. `sudo emerge net-irc/weechat dev-python/aiohttp`).
 
 ---
 
@@ -483,7 +537,17 @@ changed the relay or adapter to a different address, add it to
 
 - **OpenRC**: Add services to the default runlevel:
   ```bash
-  rc-update add lunarwing-ruffles default
+  rc-update add lunarwing-proxy-ruffles default
+  rc-update add xmpp-bridge-ruffles     default
+  rc-update add lunarwing-ruffles       default
+  ```
+
+- **Podman Postgres on reboot.** Unlike Docker, Podman has no daemon to honor
+  `--restart unless-stopped`, so the per-tenant Postgres container does **not**
+  come back automatically — the daemon then can't connect after a reboot. Until a
+  boot hook is added, start the containers on boot, e.g.:
+  ```bash
+  for t in ruffles miyuki; do sudo podman start lunarwing-pg-$t; done
   ```
 
 #### Build fails with OOM
@@ -501,6 +565,8 @@ low-RAM hosts (Rust compilation is memory-intensive). Options:
 
 - [Production Multi-Tenant Reference](../ops/MULTITENANCY-PRODUCTION.md) --
   full configuration reference, port registry schema, security model
+- [Gentoo + OpenRC + Podman Setup & Changes](../ops/MT-GENTOO-SETUP-AND-CHANGES-MADE.md)
+  -- OpenRC/Podman-specific setup, the env-file fix, and operational caveats
 - [WeeChat Relay Channel](ironclaw_weechat_wss/README.md) -- channel
   protocol details, architecture, and development
 - [WeeChat Relay Installation](ironclaw_weechat_wss/weechat_relay/INSTALL.md)

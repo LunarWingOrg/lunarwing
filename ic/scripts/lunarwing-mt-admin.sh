@@ -886,11 +886,12 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token relay_password secrets_key
+  local gateway_token bridge_token relay_password secrets_key webhook_secret
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
+  webhook_secret="$(generate_token)"
 
   # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
   # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
@@ -949,8 +950,10 @@ GATEWAY_HOST=127.0.0.1
 GATEWAY_PORT=$gateway_port
 GATEWAY_AUTH_TOKEN=$gateway_token
 
-# HTTP webhook
+# HTTP webhook (bound to localhost only; secret-protected)
+HTTP_HOST=127.0.0.1
 HTTP_PORT=$http_port
+HTTP_WEBHOOK_SECRET=$webhook_secret
 
 # Orchestrator (sandbox container callback)
 ORCHESTRATOR_PORT=$orchestrator_port
@@ -963,7 +966,7 @@ PEBBLE_WSS_PORT=$pebble_wss_port
 
 # WeeChat relay + adapter
 # RELAY_URL / WS_ADAPTER_URL are full URLs consumed by the in-process WASM
-# channel (via the capabilities `env` source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
+# channel (via the capabilities 'env' source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
 # are the bare port consumed by the standalone ws_adapter.py process.
 RELAY_URL=http://127.0.0.1:${weechat_port}
 RELAY_PASSWORD=$relay_password
@@ -1761,6 +1764,12 @@ render_tenant_openrc_units() {
   local weechat_home
   weechat_home="$(tenant_home "$name")/.config/weechat"
 
+  # Resolve the container runtime path so the daemon's start_pre can bring up
+  # this tenant's Postgres container on boot (Podman has no daemon to honor
+  # --restart under OpenRC; idempotent on Docker). Empty -> start_pre skips it.
+  local pg_runtime_bin="" pg_container="lunarwing-pg-$name"
+  [[ -n "${CONTAINER_RT:-}" ]] && pg_runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
 #!/sbin/openrc-run
@@ -1784,6 +1793,9 @@ description="LunarWing AI assistant ($name)"
 : "\${lunarwing_respawn_max:=5}"
 : "\${lunarwing_respawn_period:=60}"
 : "\${lunarwing_retry:=SIGTERM/30/KILL/5}"
+: "\${lunarwing_pg_runtime:=$pg_runtime_bin}"
+: "\${lunarwing_pg_container:=$pg_container}"
+: "\${lunarwing_pg_wait:=60}"
 
 command="\${lunarwing_command}"
 command_args="\${lunarwing_args}"
@@ -1820,6 +1832,18 @@ start_pre() {
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${output_log}"
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${error_log}"
     load_env || return 1
+    # Podman has no daemon to honor --restart under OpenRC; ensure this tenant's
+    # Postgres container is up and accepting connections before the daemon starts
+    # (runs as root in start_pre; idempotent on Docker).
+    if [ -n "\${lunarwing_pg_runtime}" ] && [ -x "\${lunarwing_pg_runtime}" ] && "\${lunarwing_pg_runtime}" inspect "\${lunarwing_pg_container}" >/dev/null 2>&1; then
+        "\${lunarwing_pg_runtime}" start "\${lunarwing_pg_container}" >/dev/null 2>&1 || true
+        _lw_pg=0
+        while ! "\${lunarwing_pg_runtime}" exec "\${lunarwing_pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
+            _lw_pg=\$((_lw_pg + 1))
+            [ "\$_lw_pg" -lt "\${lunarwing_pg_wait}" ] || break
+            sleep 1
+        done
+    fi
     umask "\${lunarwing_umask}"
 }
 INITEOF
@@ -2081,12 +2105,24 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
-  rc-service "weechat-${name}" start
-  rc-service "lunarwing-weechat-adapter-${name}" start
+  # Optional channels first, non-fatal: a missing weechat/aiohttp must not abort
+  # the core stack (the main daemon does not depend on them).
+  rc-service "weechat-${name}" start 2>/dev/null || say "  (weechat-${name} skipped — optional)"
+  rc-service "lunarwing-weechat-adapter-${name}" start 2>/dev/null || say "  (lunarwing-weechat-adapter-${name} skipped — optional)"
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
   say "OpenRC services started for $name"
+
+  # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
+  local svc
+  for svc in "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+             "weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
+    if rc-service "$svc" status >/dev/null 2>&1; then
+      rc-update add "$svc" default >/dev/null 2>&1 || true
+    fi
+  done
+  say "enabled boot persistence (default runlevel) for $name's running services"
 }
 
 stop_tenant_openrc() {

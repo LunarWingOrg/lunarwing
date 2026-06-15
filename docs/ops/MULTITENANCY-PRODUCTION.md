@@ -335,7 +335,7 @@ rc-service lunarwing-<name> status
 
 Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. Default credentials: `lunarwing/lunarwing/lunarwing` (user/password/database).
 
-The container is created with `--restart unless-stopped` so it survives host reboots (when using Docker). For Podman, consider generating a systemd unit via `podman generate systemd`.
+The container is created with `--restart unless-stopped` so it survives host reboots when using Docker. Podman has no daemon to honor that policy, so on **OpenRC** each tenant daemon's generated init script brings its container up in `start_pre` (and waits for `pg_isready`) before launching — see [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](MT-GENTOO-SETUP-AND-CHANGES-MADE.md). On Podman + systemd, generate a unit via `podman generate systemd` instead.
 
 ## Container Runtime
 
