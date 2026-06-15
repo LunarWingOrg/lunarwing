@@ -14,7 +14,7 @@ each item is directly actionable.
 
 | # | Item | Self-heal code? | Difficulty | Action |
 |---|------|:---:|---|---|
-| 6c | Notifier timeout | ✅ | trivial | **do now** |
+| 6c | Notifier timeout | ✅ | trivial | **FIXED** `2b462f95` |
 | 6b | Truncated-state recovery | ✅ | easy | **do now** |
 | 2 | systemd `.timer/.service` scheduling | ✅ | moderate | **do now** |
 | 6a | Escalation cooldown / rate-limit | ✅ | moderate | do now (one design choice) |
@@ -35,7 +35,7 @@ These are the only items that edit the pipeline. **Recommended order: 6c → 6b 
 
 ### Quick wins — do now
 
-#### 6c. Notifier timeout — *trivial (~3–6 lines)*
+#### 6c. Notifier timeout — *trivial (~3–6 lines)* ✅ FIXED (commit `2b462f95`)
 The notifier is invoked unguarded at `lunarwing-self-heal.sh:474`. A hung Gotify endpoint stalls the
 whole self-heal tick.
 
