@@ -268,8 +268,10 @@ else
     exit 2
 fi
 
-# Send notification if degraded or critical
-if [ "$overall_status" != "healthy" ]; then
+# Send notification if degraded or critical. HEALTHCHECK_NOTIFY=false suppresses
+# this per-run notify (e.g. multi-tenant hosts where only self-heal ESCALATIONS
+# should page; set in /etc/lunarwing/health.env). Default true = unchanged.
+if [ "$overall_status" != "healthy" ] && [ "${HEALTHCHECK_NOTIFY:-true}" = "true" ]; then
     if [ -x "$SCRIPT_DIR/send-notification.sh" ]; then
         "$SCRIPT_DIR/send-notification.sh" "$overall_status" "$report_file" || log "WARNING: Failed to send notification"
     else

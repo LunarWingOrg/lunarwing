@@ -2260,10 +2260,13 @@ LUNARWING_BASE_DIR=$HEALTH_BASE_DIR
 LUNARWING_SERVICE_MANAGER=openrc
 SELF_HEAL_TENANTS_FILE=$PORTS_REGISTRY
 
-# MT hardening: remediate only auto-discovered per-tenant init units; disable the
-# single-shared-server xmpp probe; ignore stale reports.
+# MT hardening: remediate only auto-discovered per-tenant init units; disable
+# checks that are N/A host-globally; page only on self-heal escalation (not on
+# every non-healthy run); ignore stale reports.
 SELF_HEAL_REMEDY_LOGICAL=false
 HEALTH_XMPP_SERVER=
+HEALTH_MODELS_ENABLED=false
+HEALTHCHECK_NOTIFY=false
 SELF_HEAL_MAX_REPORT_AGE=$(( HEALTH_INTERVAL_MIN * 60 * 4 ))
 
 # Escalation notifications (fill in to enable Gotify pushes).
