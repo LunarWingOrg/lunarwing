@@ -53,12 +53,15 @@ Recovery already half-exists: `load_state` falls back to `{}` on parse failure a
 `save_state` is atomic (mktemp + mv). The gap was that a corrupt file was **silently** discarded
 — which is exactly what drops `escalated:true` and causes re-paging.
 
-- **Change:** in `load_state`, on jq parse failure log a WARNING and
-  `mv "$STATE_FILE" "$STATE_FILE.corrupt.<ts>"` before emitting `{}`, so corruption is visible and
-  preserved for forensics. Per-run single-slot rename (timestamps differ across runs, so
-  the file can still be there for next time).
-- **Tests:** added section O in `test-self-heal-matrix.sh` (O1: detect + rename + recover, O2:
-  empty state isn't flagged, O3: bounded accumulation).
+- **Change:** in `load_state`, on jq parse failure log a WARNING and rename the file to a **fixed**
+  single-slot `"$STATE_FILE.corrupt"` (no timestamp) before emitting `{}`, so corruption is visible and
+  preserved for forensics while being last-wins / bounded — it cannot accumulate across recurring
+  corruption. (An earlier draft used `.corrupt.<ts>`, which the "won't accumulate" comment contradicted.)
+- **Tests:** Section O in `test-self-heal-matrix.sh`, rewritten to actually exercise the path —
+  O1: non-empty truncated state → detect + rename + recover + complete; O2: a 0-byte file is valid,
+  not flagged; O3: single-slot rename leaves exactly one `.corrupt` after repeated corruption. Seeds
+  corrupt bytes directly (not via `seed_state`, whose `jq -n` rejects malformed JSON to an empty file).
+  Full self-heal suite green: **188 passed / 0 failed** (regression 28, matrix 124, chaos 36).
 
 #### 2. Wire systemd `.timer/.service` scheduling — *moderate, self-contained in one file*
 `ensure_health_pipeline()` is OpenRC-only, so the prod systemd leg gets the hardened scripts but no

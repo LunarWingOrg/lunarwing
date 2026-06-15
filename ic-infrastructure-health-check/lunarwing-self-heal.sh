@@ -390,11 +390,12 @@ load_state() {
         printf '%s' "$parsed"
     else
         # State file is corrupt (truncated write, disk error, etc.). Preserve it
-        # for forensics under a single-slot .corrupt name (won't accumulate), then
-        # start fresh so escalated state can be rebuilt from the next tick.
-        local ts; ts="$(date +%s)"
-        mv "$STATE_FILE" "$STATE_FILE.corrupt.${ts}" 2>/dev/null || true
-        log "WARNING: state.json is corrupt — renamed to state.json.corrupt.${ts} and starting fresh"
+        # for forensics under a FIXED single-slot .corrupt name (no timestamp) so
+        # it overwrites last-wins and cannot accumulate unbounded across recurring
+        # corruption. Then start fresh so escalated state can be rebuilt from the
+        # next tick.
+        mv "$STATE_FILE" "$STATE_FILE.corrupt" 2>/dev/null || true
+        log "WARNING: state.json is corrupt — renamed to state.json.corrupt and starting fresh"
         echo '{}'
     fi
 }

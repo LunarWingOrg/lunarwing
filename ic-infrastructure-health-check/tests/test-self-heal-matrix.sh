@@ -435,34 +435,44 @@ assert_absent   "$oL2" "another self-heal instance is running" "L2: no false loc
 
 echo "=== Section O: Truncated-state recovery (6b) ==="
 
-# O1 — corrupt state.json is renamed for forensics, run still completes cleanly.
-o1="$(sb)"
-seed_state "$o1" '{"lunarwing":{"conse'
-# the seed is intentionally truncated JSON
+# The state dir under test is $sb/self-heal (run_dry sets SELF_HEAL_STATE_DIR);
+# state.json lives there, NOT at $sb. Seed corrupt bytes DIRECTLY — `seed_state`
+# pipes through `jq -n`, which would reject malformed JSON and write an empty
+# (and therefore valid) file, never exercising the corrupt path.
+seed_corrupt() { printf '%s' "$2" > "$1/self-heal/state.json"; }   # raw non-empty invalid JSON
+HEALTHY='{components:[{component:"gateway",status:"healthy",metrics:{}}]}'
+
+# O1 — a non-empty, truncated state.json is detected, renamed for forensics, and
+# the tick still completes (nothing-to-do path against a healthy report).
+o1="$(sb)"; report "$o1" "$HEALTHY"
+seed_corrupt "$o1" '{"lunarwing":{"conse'
 oO1="$(run_dry "$o1" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
 assert_contains "$oO1" "state.json is corrupt"                "O1: corrupt state is detected and logged"
-assert_contains "$oO1" "state.json.corrupt."                  "O1: corrupt file is renamed (forensic slot)"
+assert_contains "$oO1" "renamed to state.json.corrupt"        "O1: corrupt file is renamed (forensic slot)"
 assert_contains "$oO1" "Self-Healing complete"                "O1: run completes despite corrupt state"
-[[ -f "$o1/state.json" ]] || fail "O1: state.json not recreated after corruption"
+[[ -f "$o1/self-heal/state.json.corrupt" ]] && ok "O1: forensic .corrupt copy preserved" \
+    || bad "O1: forensic .corrupt copy preserved" "no state.json.corrupt in $o1/self-heal"
+[[ -f "$o1/self-heal/state.json" ]] && ok "O1: fresh state.json rewritten after recovery" \
+    || bad "O1: fresh state.json rewritten after recovery" "state.json missing post-run"
 
-# O2 — empty state.json is treated as valid empty state (not a parse failure).
-o2="$(sb)"
-echo -n "" > "$o2/state.json"
+# O2 — a genuinely empty (0-byte) state.json parses as valid empty state (jq exits
+# 0), so it must NOT be flagged corrupt; the tick completes normally.
+o2="$(sb)"; report "$o2" "$HEALTHY"
+: > "$o2/self-heal/state.json"
 oO2="$(run_dry "$o2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
 assert_absent   "$oO2" "state.json is corrupt"                "O2: empty state is valid, not flagged"
 assert_contains "$oO2" "Self-Healing complete"                "O2: empty state runs cleanly"
 
-# O3 — only one .corrupt.<ts> file accumulates (single-slot rename, not additive).
-o3="$(sb)"
-seed_state "$o3" '{"lunarwing":'
+# O3 — the forensic rename is single-slot: a FIXED .corrupt name (no timestamp),
+# so repeated corruption overwrites last-wins and never accumulates. Corrupt,
+# run (heals state.json), corrupt again, run — exactly one .corrupt file remains.
+o3="$(sb)"; report "$o3" "$HEALTHY"
+seed_corrupt "$o3" '{"lunarwing":'
 run_dry "$o3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false >/dev/null
-# corrupt again to confirm second rename overwrites / coexists — at minimum, at most one .corrupt.* file per run
+seed_corrupt "$o3" '{"broken'
 run_dry "$o3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false >/dev/null
-corrupt_count="$(find "$o3" -maxdepth 1 -name 'state.json.corrupt.*' | wc -l | tr -d ' ')"
-# Note: each rename gets a unique timestamp from `date +%s` so multiple .corrupt files may exist across runs;
-# the single-slot guarantee is per-run (no append). We assert it's bounded, not exactly 1.
-[[ "$corrupt_count" -le 2 ]] || fail "O3: corrupt file accumulation unbounded (got $corrupt_count)"
-ok "O3: bounded corrupt-file accumulation (got $corrupt_count)"
+corrupt_count="$(find "$o3/self-heal" -maxdepth 1 -name 'state.json.corrupt*' | wc -l | tr -d ' ')"
+assert_eq "$corrupt_count" "1" "O3: single-slot rename — exactly one .corrupt file after repeated corruption"
 
 echo "=== Section M: Dry-run mode ==="
 
