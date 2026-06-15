@@ -272,6 +272,110 @@ _ensure_tenant_image() {
   return 1
 }
 
+# Render a dedicated OpenRC unit for a tenant's external worker (nanocode/pebble),
+# modeled on the lunarwing-pg-<t> unit. Health-aware status() checks the worker's
+# /health endpoint (curl is present in both worker images) so the host self-heal
+# pipeline — which auto-discovers /etc/init.d/lunarwing-* units — can detect and
+# remediate a crashed OR hung worker, and so it survives reboot. OpenRC only.
+render_worker_openrc_unit() {
+  local name="$1" worker="$2" health_port="${3:-8443}"
+  ensure_container_runtime
+  local runtime_bin="" container="lunarwing-${worker}-${name}" uid home
+  [[ -n "${CONTAINER_RT:-}" ]] && runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  uid="$(id -u "$name" 2>/dev/null || echo "")"
+  home="$(tenant_home "$name")"
+
+  cat >"/etc/init.d/${container}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing ${worker} worker ($name)"
+
+: "\${wk_runtime:=$runtime_bin}"
+: "\${wk_container:=$container}"
+: "\${wk_rootless:=$MT_ROOTLESS}"
+: "\${wk_user:=$name}"
+: "\${wk_home:=$home}"
+: "\${wk_uid:=$uid}"
+: "\${wk_health_port:=$health_port}"
+: "\${wk_wait:=60}"
+
+depend() {
+    need net localmount
+    after firewall lunarwing-${name}
+}
+
+# Run the container runtime as the owning user (rootless) or root (rootful).
+_wk() {
+    if [ "\${wk_rootless}" = "true" ]; then
+        sudo -u "\${wk_user}" env HOME="\${wk_home}" XDG_RUNTIME_DIR="/run/user/\${wk_uid}" "\${wk_runtime}" "\$@"
+    else
+        "\${wk_runtime}" "\$@"
+    fi
+}
+
+# Healthy = container running AND its internal /health endpoint answers.
+_wk_healthy() {
+    [ "\$(_wk inspect -f '{{.State.Running}}' "\${wk_container}" 2>/dev/null)" = "true" ] || return 1
+    _wk exec "\${wk_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${wk_health_port}/health" 2>/dev/null
+}
+
+start() {
+    [ -n "\${wk_runtime}" ] && [ -x "\${wk_runtime}" ] || { ewarn "no container runtime; skipping ${worker} for $name"; return 0; }
+    ebegin "Starting ${worker} worker (\${wk_container})"
+    if [ "\${wk_rootless}" = "true" ]; then
+        checkpath -d -m 0700 -o "\${wk_user}:\${wk_user}" "/run/user/\${wk_uid}"
+    fi
+    _wk start "\${wk_container}" >/dev/null 2>&1 || { eend 1 "container start failed"; return 1; }
+    _w=0
+    while ! _wk_healthy; do
+        _w=\$((_w + 1))
+        [ "\$_w" -lt "\${wk_wait}" ] || { eend 1 "${worker} worker not healthy after \${wk_wait}s"; return 1; }
+        sleep 1
+    done
+    eend 0
+}
+
+stop() {
+    [ -n "\${wk_runtime}" ] && [ -x "\${wk_runtime}" ] || return 0
+    ebegin "Stopping ${worker} worker (\${wk_container})"
+    _wk stop "\${wk_container}" >/dev/null 2>&1
+    eend 0
+}
+
+status() {
+    # Standard OpenRC started/stopped wording so health-openrc.sh classifies it.
+    if _wk_healthy; then
+        einfo "\${wk_container}: started"; return 0
+    fi
+    einfo "\${wk_container}: stopped"; return 3
+}
+INITEOF
+  chmod 0755 "/etc/init.d/${container}"
+}
+
+# Promote a (rootless) worker container to a dedicated OpenRC unit so it is
+# health-monitored, self-healed, and boot-persistent. No-op unless OpenRC.
+_register_worker_unit() {
+  local name="$1" worker="$2"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  render_worker_openrc_unit "$name" "$worker"
+  rc-update add "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
+  rc-service "lunarwing-${worker}-${name}" start >/dev/null 2>&1 || true
+  say "registered OpenRC unit lunarwing-${worker}-${name} (health-monitored, boot-persistent)"
+}
+
+# Tear down a worker's OpenRC unit (boot-disable + remove the init script).
+_deregister_worker_unit() {
+  local name="$1" worker="$2"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  [[ -f "/etc/init.d/lunarwing-${worker}-${name}" ]] || return 0
+  rc-service "lunarwing-${worker}-${name}" stop >/dev/null 2>&1 || true
+  rc-update del "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
+  rm -f "/etc/init.d/lunarwing-${worker}-${name}" "/etc/conf.d/lunarwing-${worker}-${name}"
+}
+
 # ── Port registry ────────────────────────────────────────────────────────────
 
 ports_registry_init() {
@@ -1449,10 +1553,10 @@ start_tenant_nanocode() {
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
     if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "nanocode worker already running ($container_name, WSS port $wss_port)"
-      return 0
+    else
+      say "starting existing nanocode worker container $container_name"
+      _ctr "$name" start "$container_name" >/dev/null
     fi
-    say "starting existing nanocode worker container $container_name"
-    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating nanocode worker container $container_name on WSS port $wss_port"
 
@@ -1511,6 +1615,7 @@ start_tenant_nanocode() {
       --mode websocket >/dev/null
   fi
 
+  _register_worker_unit "$name" nanocode
   say "nanocode worker ready ($container_name, WSS port $wss_port)"
 }
 
@@ -1519,7 +1624,11 @@ stop_tenant_nanocode() {
   ensure_container_runtime
 
   local container_name="lunarwing-nanocode-$name"
-  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "nanocode worker stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
     _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
   fi
@@ -1548,10 +1657,10 @@ start_tenant_pebble() {
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
     if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "pebble worker already running ($container_name, WSS port $wss_port)"
-      return 0
+    else
+      say "starting existing pebble worker container $container_name"
+      _ctr "$name" start "$container_name" >/dev/null
     fi
-    say "starting existing pebble worker container $container_name"
-    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating pebble worker container $container_name on WSS port $wss_port"
 
@@ -1600,6 +1709,7 @@ start_tenant_pebble() {
       lunarwing-worker-pebble:latest >/dev/null
   fi
 
+  _register_worker_unit "$name" pebble
   say "pebble worker ready ($container_name, WSS port $wss_port)"
 }
 
@@ -1608,7 +1718,11 @@ stop_tenant_pebble() {
   ensure_container_runtime
 
   local container_name="lunarwing-pebble-$name"
-  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "pebble worker stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
     _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "pebble worker stopped ($container_name)"
   fi
@@ -2338,7 +2452,7 @@ stop_tenant_openrc() {
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}" "lunarwing-pg-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
