@@ -60,6 +60,17 @@ HEALTH_CHECK_DIR="${SELF_HEAL_HEALTH_CHECK_DIR:-$SCRIPT_DIR}"
 # Prune non-escalated state entries untouched for this long. 0 disables pruning.
 STATE_PRUNE_TTL="${SELF_HEAL_STATE_PRUNE_TTL:-86400}"   # 24h
 
+# Logical-component remediation. In multi-tenant deployments the logical
+# components (gateway/xmpp/tensorzero/clickhouse) map to single-instance base
+# service names (lunarwing, xmpp-bridge, ...) that DON'T exist — only per-tenant
+# init units do. Set false to remediate ONLY the auto-discovered init sub-units
+# and avoid phantom restarts/escalations of nonexistent base services.
+REMEDY_LOGICAL="${SELF_HEAL_REMEDY_LOGICAL:-true}"
+
+# Report staleness guard: refuse to act on a report older than this many seconds
+# (0 = disabled). Prevents remediating on stale data if the scheduler stalls.
+MAX_REPORT_AGE="${SELF_HEAL_MAX_REPORT_AGE:-0}"
+
 # Multi-tenant registry (lunarwing-mt-admin.sh). Per-tenant systemd units are
 # USER units, restarted via sudo -u <user> systemctl --user.
 # Umbrel: /etc/ is non-persistent across app updates; prefer a data-volume path
@@ -586,7 +597,9 @@ remediate_component() {
 
 find_latest_report() {
     local latest
-    latest="$(find "$REPORT_DIR" -maxdepth 1 -name '*.json' ! -name '*-summary*' -type f 2>/dev/null | xargs ls -t 2>/dev/null | head -1)"
+    # ISO-8601 report names sort chronologically; sort|tail avoids the empty-dir
+    # `xargs ls -t` foot-gun (with no matches, xargs would ls the CWD).
+    latest="$(find "$REPORT_DIR" -maxdepth 1 -name '*.json' ! -name '*-summary*' -type f 2>/dev/null | sort | tail -1)"
     printf '%s' "$latest"
 }
 
@@ -616,6 +629,16 @@ main() {
     [[ -z "$report" ]] && report="$(find_latest_report)"
     [[ -z "$report" || ! -f "$report" ]] && die "no health-check report found in $REPORT_DIR"
 
+    # Staleness guard: don't remediate on stale data (e.g. scheduler stalled).
+    if [[ "$MAX_REPORT_AGE" -gt 0 ]] 2>/dev/null; then
+        local mtime; mtime="$(stat -c %Y "$report" 2>/dev/null || stat -f %m "$report" 2>/dev/null || echo "$now_epoch")"
+        local report_age=$(( now_epoch - mtime ))
+        if [[ "$report_age" -gt "$MAX_REPORT_AGE" ]]; then
+            log "WARNING: latest report is ${report_age}s old (> MAX_REPORT_AGE=${MAX_REPORT_AGE}s); refusing to act on stale data"
+            exit 0
+        fi
+    fi
+
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
@@ -632,7 +655,8 @@ main() {
     local -A healthy=()
     local comp services svc
 
-    # 1) Standard logical components
+    # 1) Standard logical components (skipped in MT mode — see SELF_HEAL_REMEDY_LOGICAL).
+    if [[ "$REMEDY_LOGICAL" == "true" ]]; then
     while IFS=$'\t' read -r comp cstatus; do
         [[ -n "$comp" ]] || continue
         [[ "${NO_REMEDY[$comp]:-}" == "1" ]] && { [[ "$cstatus" != healthy ]] && log "SKIP: component '$comp' has no standalone service (feature/external)"; continue; }
@@ -648,6 +672,9 @@ main() {
             fi
         done
     done < <(jq -r '.components[] | "\(.component)\t\(.status)"' "$report" 2>/dev/null || true)
+    else
+        log "MT mode: logical-component remediation disabled (SELF_HEAL_REMEDY_LOGICAL=false); only init sub-units will be remediated"
+    fi
 
     # 2) Init-system sub-units (systemd/openrc/launchd). Healthy ones populate
     #    `healthy`; unhealthy ones become targets.

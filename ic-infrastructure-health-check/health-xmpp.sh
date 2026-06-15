@@ -7,8 +7,11 @@
 set -euo pipefail
 
 # Configuration
-XMPP_SERVER="xmpp.sobe.world"
-XMPP_PORT=5222
+# XMPP server reachability target. Configurable; empty DISABLES the probe (e.g.
+# multi-tenant hosts using a local/per-tenant XMPP domain rather than one shared
+# server) — reported healthy/disabled instead of a false critical.
+XMPP_SERVER="${HEALTH_XMPP_SERVER-xmpp.sobe.world}"
+XMPP_PORT="${HEALTH_XMPP_PORT:-5222}"
 LATENCY_DEGRADED_MS=500
 LATENCY_CRITICAL_MS=2000
 ERROR_DEGRADED=1
@@ -20,6 +23,12 @@ latency_ms=0
 error_count=0
 active_sessions=0
 issues=()
+
+# Probe disabled (no server configured) — emit healthy/disabled and stop.
+if [ -z "$XMPP_SERVER" ]; then
+    printf '{"component":"xmpp","status":"healthy","timestamp":"%s","metrics":{"enabled":false},"issues":["xmpp check disabled (HEALTH_XMPP_SERVER empty)"]}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    exit 0
+fi
 
 # Check XMPP connectivity
 check_connection() {
