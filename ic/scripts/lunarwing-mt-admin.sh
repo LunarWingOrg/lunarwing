@@ -886,11 +886,12 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token relay_password secrets_key
+  local gateway_token bridge_token relay_password secrets_key webhook_secret
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
+  webhook_secret="$(generate_token)"
 
   # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
   # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
@@ -949,8 +950,10 @@ GATEWAY_HOST=127.0.0.1
 GATEWAY_PORT=$gateway_port
 GATEWAY_AUTH_TOKEN=$gateway_token
 
-# HTTP webhook
+# HTTP webhook (bound to localhost only; secret-protected)
+HTTP_HOST=127.0.0.1
 HTTP_PORT=$http_port
+HTTP_WEBHOOK_SECRET=$webhook_secret
 
 # Orchestrator (sandbox container callback)
 ORCHESTRATOR_PORT=$orchestrator_port
@@ -963,7 +966,7 @@ PEBBLE_WSS_PORT=$pebble_wss_port
 
 # WeeChat relay + adapter
 # RELAY_URL / WS_ADAPTER_URL are full URLs consumed by the in-process WASM
-# channel (via the capabilities `env` source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
+# channel (via the capabilities 'env' source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
 # are the bare port consumed by the standalone ws_adapter.py process.
 RELAY_URL=http://127.0.0.1:${weechat_port}
 RELAY_PASSWORD=$relay_password
