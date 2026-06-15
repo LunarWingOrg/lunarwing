@@ -148,21 +148,46 @@ To enable the full documented `start-tenant` flow (incl. WeeChat) instead, insta
 `emerge net-irc/weechat dev-python/aiohttp` (this host already had `tmux` + `weechat`; only
 `aiohttp` was missing).
 
-### Postgres containers do NOT auto-start on boot
+### Boot persistence (implemented)
 
-The OpenRC units do not start the per-tenant Postgres container, and Podman has no daemon to honor
-`--restart unless-stopped` the way Docker does. After a reboot the containers stay stopped and the
-daemon can't connect. **Workaround until a boot hook is added:** start them via the admin script
-(or `podman start lunarwing-pg-<t>`) on boot. A proper fix is a per-tenant OpenRC service (or a
-single `podman-restart`-style unit) that `podman start`s the containers in the daemon's `start_pre`.
+Reboot survival on OpenRC needs two pieces:
 
-### Enabling services at boot
+**1. Postgres containers.** The OpenRC units don't start the per-tenant Postgres container, and
+Podman (unlike Docker) has no daemon to honor `--restart unless-stopped` — so after a reboot the
+containers would stay stopped and the daemons couldn't connect. The fix is a small OpenRC service,
+`lunarwing-pg` (committed as [`../../ic/systemd/lunarwing-pg.openrc`](../../ic/systemd/lunarwing-pg.openrc)),
+that auto-discovers every `lunarwing-pg-*` container, `podman start`s them, and blocks until each
+accepts connections. It declares `before` the daemons so they start against a ready DB:
 
 ```bash
-sudo rc-update add lunarwing-proxy-<t> default
-sudo rc-update add xmpp-bridge-<t>     default
-sudo rc-update add lunarwing-<t>       default
+sudo install -m 0755 ic/systemd/lunarwing-pg.openrc /etc/init.d/lunarwing-pg
+sudo rc-update add lunarwing-pg default
 ```
+
+> The script ships with `before lunarwing-zeus lunarwing-mars lunarwing-ate`; edit that line (or
+> set `rc_before` in `/etc/conf.d/lunarwing-pg`) when your tenant set changes.
+
+**2. Per-tenant services.** Add each tenant's three core services to the default runlevel (skip
+weechat/adapter unless their deps are installed):
+
+```bash
+for t in zeus mars ate; do
+  sudo rc-update add lunarwing-proxy-$t default
+  sudo rc-update add xmpp-bridge-$t     default
+  sudo rc-update add lunarwing-$t       default
+done
+```
+
+Verify ordering is PG → proxy/bridge → daemon:
+
+```bash
+sudo rc-service lunarwing-pg ibefore     # -> lunarwing-zeus lunarwing-mars lunarwing-ate
+sudo rc-service lunarwing-zeus iafter    # -> xmpp-bridge-zeus lunarwing-proxy-zeus lunarwing-pg
+```
+
+> A future improvement is to bake both pieces into `lunarwing-mt-admin.sh` directly (render the
+> Postgres-start into the daemon's OpenRC `start_pre` and `rc-update add` on `start-tenant`) so no
+> manual steps are needed — see the discussion in the session notes.
 
 ---
 
