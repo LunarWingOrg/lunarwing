@@ -148,46 +148,34 @@ To enable the full documented `start-tenant` flow (incl. WeeChat) instead, insta
 `emerge net-irc/weechat dev-python/aiohttp` (this host already had `tmux` + `weechat`; only
 `aiohttp` was missing).
 
-### Boot persistence (implemented)
+### Boot persistence (baked into the admin script)
 
-Reboot survival on OpenRC needs two pieces:
+Boot persistence is handled automatically by `lunarwing-mt-admin.sh` on OpenRC — no manual steps:
 
-**1. Postgres containers.** The OpenRC units don't start the per-tenant Postgres container, and
-Podman (unlike Docker) has no daemon to honor `--restart unless-stopped` — so after a reboot the
-containers would stay stopped and the daemons couldn't connect. The fix is a small OpenRC service,
-`lunarwing-pg` (committed as [`../../ic/systemd/lunarwing-pg.openrc`](../../ic/systemd/lunarwing-pg.openrc)),
-that auto-discovers every `lunarwing-pg-*` container, `podman start`s them, and blocks until each
-accepts connections. It declares `before` the daemons so they start against a ready DB:
+- **Postgres containers** — `render_tenant_openrc_units` bakes a container bring-up into each tenant
+  daemon's OpenRC `start_pre()`. At render time it resolves the container runtime path
+  (`lunarwing_pg_runtime`) and the container name (`lunarwing_pg_container`); on every start
+  (including boot) `start_pre` runs `<runtime> start lunarwing-pg-<t>` and blocks on `pg_isready`
+  (up to `lunarwing_pg_wait`=60s) before launching the daemon. This covers the
+  Podman-has-no-restart-daemon gap and is idempotent on Docker. `start_pre` runs as root, so it can
+  manage the rootful container.
+- **Service enablement** — `start_tenant_openrc` auto-runs `rc-update add ... default` for each
+  service that actually started, so the stack returns after a reboot. Optional channels
+  (weechat/adapter) are now started *non-fatally*, so a missing `aiohttp`/`weechat` no longer
+  aborts the core stack (this also fixes the earlier `start-tenant` abort behavior).
 
-```bash
-sudo install -m 0755 ic/systemd/lunarwing-pg.openrc /etc/init.d/lunarwing-pg
-sudo rc-update add lunarwing-pg default
-```
-
-> The script ships with `before lunarwing-zeus lunarwing-mars lunarwing-ate`; edit that line (or
-> set `rc_before` in `/etc/conf.d/lunarwing-pg`) when your tenant set changes.
-
-**2. Per-tenant services.** Add each tenant's three core services to the default runlevel (skip
-weechat/adapter unless their deps are installed):
+So `add-tenant` → `build-tenant` → `start-tenant` on OpenRC is reboot-safe with no extra steps.
+Verify with:
 
 ```bash
-for t in zeus mars ate; do
-  sudo rc-update add lunarwing-proxy-$t default
-  sudo rc-update add xmpp-bridge-$t     default
-  sudo rc-update add lunarwing-$t       default
-done
+sudo rc-update show default | grep lunarwing               # services enabled at boot
+sudo grep lunarwing_pg_runtime /etc/init.d/lunarwing-<t>   # baked-in PG bring-up in the unit
 ```
 
-Verify ordering is PG → proxy/bridge → daemon:
-
-```bash
-sudo rc-service lunarwing-pg ibefore     # -> lunarwing-zeus lunarwing-mars lunarwing-ate
-sudo rc-service lunarwing-zeus iafter    # -> xmpp-bridge-zeus lunarwing-proxy-zeus lunarwing-pg
-```
-
-> A future improvement is to bake both pieces into `lunarwing-mt-admin.sh` directly (render the
-> Postgres-start into the daemon's OpenRC `start_pre` and `rc-update add` on `start-tenant`) so no
-> manual steps are needed — see the discussion in the session notes.
+**Verified** in this session: with all three tenants' Postgres containers stopped, restarting each
+daemon (`rc-service lunarwing-<t> restart`) brought its container back up via `start_pre` and the
+daemon reconnected (gateway healthy). The earlier standalone `lunarwing-pg` OpenRC service was
+removed once this baked-in path was proven.
 
 ---
 
