@@ -17,6 +17,14 @@ sessions=0
 status="healthy"
 exit_code=0
 
+# Allow disabling the OMEMO probe (e.g. multi-tenant hosts where the host-level
+# base dir has no omemo store and per-tenant stores live elsewhere). Non-"true"
+# => report healthy/disabled instead of degraded/critical.
+if [ "${HEALTH_OMEMO_ENABLED:-true}" != "true" ]; then
+    printf '{"component":"omemo","status":"healthy","timestamp":"%s","metrics":{"enabled":false},"issues":["omemo check disabled (HEALTH_OMEMO_ENABLED)"]}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    exit 0
+fi
+
 # Check OMEMO store exists
 if [ -d "$OMEMO_STORE" ]; then
   # Count device keys

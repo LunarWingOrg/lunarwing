@@ -60,6 +60,17 @@ HEALTH_CHECK_DIR="${SELF_HEAL_HEALTH_CHECK_DIR:-$SCRIPT_DIR}"
 # Prune non-escalated state entries untouched for this long. 0 disables pruning.
 STATE_PRUNE_TTL="${SELF_HEAL_STATE_PRUNE_TTL:-86400}"   # 24h
 
+# Logical-component remediation. In multi-tenant deployments the logical
+# components (gateway/xmpp/tensorzero/clickhouse) map to single-instance base
+# service names (lunarwing, xmpp-bridge, ...) that DON'T exist — only per-tenant
+# init units do. Set false to remediate ONLY the auto-discovered init sub-units
+# and avoid phantom restarts/escalations of nonexistent base services.
+REMEDY_LOGICAL="${SELF_HEAL_REMEDY_LOGICAL:-true}"
+
+# Report staleness guard: refuse to act on a report older than this many seconds
+# (0 = disabled). Prevents remediating on stale data if the scheduler stalls.
+MAX_REPORT_AGE="${SELF_HEAL_MAX_REPORT_AGE:-0}"
+
 # Multi-tenant registry (lunarwing-mt-admin.sh). Per-tenant systemd units are
 # USER units, restarted via sudo -u <user> systemctl --user.
 # Umbrel: /etc/ is non-persistent across app updates; prefer a data-volume path
@@ -237,6 +248,11 @@ _launchd_restart() {
 
 restart_service() {
     local svc="$1"
+    # Close the self-heal lock fd (200, opened in main()) for the restart and ALL
+    # its children. rc-service/systemctl spawn a long-lived supervise-daemon that
+    # would otherwise INHERIT fd 200 and hold the flock forever — wedging every
+    # later self-heal run with "another self-heal instance is running". The
+    # `200>&-` on the case compound closes it for the whole dispatch subtree.
     case "$SERVICE_MANAGER" in
         systemd)
             local user
@@ -250,7 +266,7 @@ restart_service() {
         openrc)  _openrc_restart "$svc" ;;
         launchd) _launchd_restart "$svc" ;;
         *)       log "WARNING: unknown service manager, cannot restart $svc"; return 1 ;;
-    esac
+    esac 200>&-
 }
 
 check_service_active() {
@@ -449,7 +465,13 @@ _send_notification() {
     local status="$1" report_path="$2"
     local notify_script="$SCRIPT_DIR/send-notification.sh"
     if [[ -x "$notify_script" ]]; then
-        "$notify_script" "$status" "$report_path"
+        # CRITICAL: redirect the notifier's stdout to stderr. escalate_service runs
+        # inside remediate_component, whose STDOUT is captured as the returned state
+        # JSON (state="$(remediate_component ...)"). Any stdout here corrupts that
+        # JSON, so the next prune_state jq aborts under `set -e` BEFORE save_state —
+        # silently losing escalated:true. Also tolerate a non-zero notify (e.g.
+        # Gotify non-200) so the escalated state still persists if the page fails.
+        "$notify_script" "$status" "$report_path" >&2 || log "WARNING: escalation notification failed (page may not have been delivered)"
     else
         log "WARNING: send-notification.sh not found at $notify_script; cannot escalate"
     fi
@@ -586,7 +608,9 @@ remediate_component() {
 
 find_latest_report() {
     local latest
-    latest="$(find "$REPORT_DIR" -maxdepth 1 -name '*.json' ! -name '*-summary*' -type f 2>/dev/null | xargs ls -t 2>/dev/null | head -1)"
+    # ISO-8601 report names sort chronologically; sort|tail avoids the empty-dir
+    # `xargs ls -t` foot-gun (with no matches, xargs would ls the CWD).
+    latest="$(find "$REPORT_DIR" -maxdepth 1 -name '*.json' ! -name '*-summary*' -type f 2>/dev/null | sort | tail -1)"
     printf '%s' "$latest"
 }
 
@@ -616,6 +640,16 @@ main() {
     [[ -z "$report" ]] && report="$(find_latest_report)"
     [[ -z "$report" || ! -f "$report" ]] && die "no health-check report found in $REPORT_DIR"
 
+    # Staleness guard: don't remediate on stale data (e.g. scheduler stalled).
+    if [[ "$MAX_REPORT_AGE" -gt 0 ]] 2>/dev/null; then
+        local mtime; mtime="$(stat -c %Y "$report" 2>/dev/null || stat -f %m "$report" 2>/dev/null || echo "$now_epoch")"
+        local report_age=$(( now_epoch - mtime ))
+        if [[ "$report_age" -gt "$MAX_REPORT_AGE" ]]; then
+            log "WARNING: latest report is ${report_age}s old (> MAX_REPORT_AGE=${MAX_REPORT_AGE}s); refusing to act on stale data"
+            exit 0
+        fi
+    fi
+
     log "=== Self-Healing Watchdog v$VERSION ==="
     log "report: $report"
     log "service manager: $SERVICE_MANAGER"
@@ -632,7 +666,8 @@ main() {
     local -A healthy=()
     local comp services svc
 
-    # 1) Standard logical components
+    # 1) Standard logical components (skipped in MT mode — see SELF_HEAL_REMEDY_LOGICAL).
+    if [[ "$REMEDY_LOGICAL" == "true" ]]; then
     while IFS=$'\t' read -r comp cstatus; do
         [[ -n "$comp" ]] || continue
         [[ "${NO_REMEDY[$comp]:-}" == "1" ]] && { [[ "$cstatus" != healthy ]] && log "SKIP: component '$comp' has no standalone service (feature/external)"; continue; }
@@ -648,6 +683,9 @@ main() {
             fi
         done
     done < <(jq -r '.components[] | "\(.component)\t\(.status)"' "$report" 2>/dev/null || true)
+    else
+        log "MT mode: logical-component remediation disabled (SELF_HEAL_REMEDY_LOGICAL=false); only init sub-units will be remediated"
+    fi
 
     # 2) Init-system sub-units (systemd/openrc/launchd). Healthy ones populate
     #    `healthy`; unhealthy ones become targets.

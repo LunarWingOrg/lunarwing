@@ -6,16 +6,13 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.4 |
-| Lunartica UI reskin | v1.1.4 |
-| LunarWing article webpage on lunarwing.org and 1st article will be released | v1.1.4 |
-| Documentation reorg and refresh | v1.1.4 |
 | XMPP OMEMO MUC fallback fix | v1.1.5 |
 | XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
 | Lunarvision K.E.R.S. system setup polishing | v1.1.5 |
 | External Worker planned enhancements | v1.1.6 |
-| Add rootless docker and rootless podman as mechanisms for mt-admin setup | v1.1.6 |
-| IC infra serious development begins, for both systemd and openrc | v1.1.6 |
+| Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.6 |
+| Lunartica UI reskin | v1.1.6 |
+| Documentation reorg and refresh | v1.1.7 |
 | Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero directly) — toggle to disable on existing tenants and by ensure by default disabled on new ones | v1.1.7 |
 | List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |
 | Additional WASM Channel Polishing | v1.1.7 |

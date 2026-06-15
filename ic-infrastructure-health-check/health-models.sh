@@ -14,6 +14,14 @@ LATENCY_CRITICAL_MS=10000
 overall_status="healthy"
 overall_exit_code=0
 
+# Allow disabling the model-provider probe (e.g. hosts with no external LLM
+# provider API keys that route via a local proxy/TensorZero). Non-"true" =>
+# report healthy/disabled instead of a false critical.
+if [ "${HEALTH_MODELS_ENABLED:-true}" != "true" ]; then
+    printf '{"component":"models","status":"healthy","timestamp":"%s","providers":[],"metrics":{"enabled":false}}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    exit 0
+fi
+
 # Check a single provider, output JSON object to stdout, return exit code
 check_provider() {
     local provider=$1

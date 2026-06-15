@@ -28,6 +28,25 @@ DEFAULT_LLM_BASE_URL="${LUNARWING_MT_LLM_BASE_URL:-}"
 DEFAULT_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 DEFAULT_GOTIFY_TITLE="${LUNARWING_MT_GOTIFY_TITLE:-}"
 
+# ── Health-check / self-heal pipeline (host-global) ──────────────────────────
+# The infra health-check + self-heal pipeline auto-discovers every tenant from
+# /etc/init.d and the port registry, so ONE host-global scheduled run covers all
+# current and future tenants. Enabled by default for new tenants on OpenRC; opt
+# out per add-tenant with --no-health, or fleet-wide with
+# LUNARWING_MT_HEALTH_ENABLED=false.
+DEFAULT_HEALTH_ENABLED="${LUNARWING_MT_HEALTH_ENABLED:-true}"
+HEALTH_INTERVAL_MIN="${LUNARWING_MT_HEALTH_INTERVAL_MIN:-15}"
+HEALTH_BASE_DIR="${LUNARWING_MT_HEALTH_BASE_DIR:-/var/lib/lunarwing-health}"
+HEALTH_SRC_DIR="$LUNARWING_ROOT/ic-infrastructure-health-check"
+HEALTH_LIB_DIR="/usr/local/lib/lunarwing-health"
+HEALTH_ENV_FILE="/etc/lunarwing/health.env"
+HEALTH_LAUNCHER="/usr/local/sbin/lunarwing-mt-health"
+# Gotify for self-heal escalations (token must NOT be committed — supply via env;
+# it is written only to $HEALTH_ENV_FILE, mode 0600).
+HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
+HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
+HEALTH_OPT_OUT=false   # set true by --no-health
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 say() { printf '%s\n' "$*"; }
@@ -77,6 +96,7 @@ Commands:
                                    Default: this tenant's local TensorZero proxy
     --tensorzero-url <url>         Upstream TensorZero URL
     --gotify-url <url>             Custom Gotify server URL (e.g. https://gotify.example.com)
+    --no-health                    Don't enable the host-global health/self-heal pipeline
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
     (same options as add-tenant apply to all)
@@ -886,11 +906,12 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token relay_password secrets_key
+  local gateway_token bridge_token relay_password secrets_key webhook_secret
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
+  webhook_secret="$(generate_token)"
 
   # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
   # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
@@ -949,8 +970,10 @@ GATEWAY_HOST=127.0.0.1
 GATEWAY_PORT=$gateway_port
 GATEWAY_AUTH_TOKEN=$gateway_token
 
-# HTTP webhook
+# HTTP webhook (bound to localhost only; secret-protected)
+HTTP_HOST=127.0.0.1
 HTTP_PORT=$http_port
+HTTP_WEBHOOK_SECRET=$webhook_secret
 
 # Orchestrator (sandbox container callback)
 ORCHESTRATOR_PORT=$orchestrator_port
@@ -963,7 +986,7 @@ PEBBLE_WSS_PORT=$pebble_wss_port
 
 # WeeChat relay + adapter
 # RELAY_URL / WS_ADAPTER_URL are full URLs consumed by the in-process WASM
-# channel (via the capabilities `env` source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
+# channel (via the capabilities 'env' source). ADAPTER_PORT/WEECHAT_ADAPTER_PORT
 # are the bare port consumed by the standalone ws_adapter.py process.
 RELAY_URL=http://127.0.0.1:${weechat_port}
 RELAY_PASSWORD=$relay_password
@@ -1761,6 +1784,12 @@ render_tenant_openrc_units() {
   local weechat_home
   weechat_home="$(tenant_home "$name")/.config/weechat"
 
+  # Resolve the container runtime path so the daemon's start_pre can bring up
+  # this tenant's Postgres container on boot (Podman has no daemon to honor
+  # --restart under OpenRC; idempotent on Docker). Empty -> start_pre skips it.
+  local pg_runtime_bin="" pg_container="lunarwing-pg-$name"
+  [[ -n "${CONTAINER_RT:-}" ]] && pg_runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
 #!/sbin/openrc-run
@@ -1784,6 +1813,9 @@ description="LunarWing AI assistant ($name)"
 : "\${lunarwing_respawn_max:=5}"
 : "\${lunarwing_respawn_period:=60}"
 : "\${lunarwing_retry:=SIGTERM/30/KILL/5}"
+: "\${lunarwing_pg_runtime:=$pg_runtime_bin}"
+: "\${lunarwing_pg_container:=$pg_container}"
+: "\${lunarwing_pg_wait:=60}"
 
 command="\${lunarwing_command}"
 command_args="\${lunarwing_args}"
@@ -1820,6 +1852,18 @@ start_pre() {
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${output_log}"
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${error_log}"
     load_env || return 1
+    # Podman has no daemon to honor --restart under OpenRC; ensure this tenant's
+    # Postgres container is up and accepting connections before the daemon starts
+    # (runs as root in start_pre; idempotent on Docker).
+    if [ -n "\${lunarwing_pg_runtime}" ] && [ -x "\${lunarwing_pg_runtime}" ] && "\${lunarwing_pg_runtime}" inspect "\${lunarwing_pg_container}" >/dev/null 2>&1; then
+        "\${lunarwing_pg_runtime}" start "\${lunarwing_pg_container}" >/dev/null 2>&1 || true
+        _lw_pg=0
+        while ! "\${lunarwing_pg_runtime}" exec "\${lunarwing_pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
+            _lw_pg=\$((_lw_pg + 1))
+            [ "\$_lw_pg" -lt "\${lunarwing_pg_wait}" ] || break
+            sleep 1
+        done
+    fi
     umask "\${lunarwing_umask}"
 }
 INITEOF
@@ -2081,12 +2125,24 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
-  rc-service "weechat-${name}" start
-  rc-service "lunarwing-weechat-adapter-${name}" start
+  # Optional channels first, non-fatal: a missing weechat/aiohttp must not abort
+  # the core stack (the main daemon does not depend on them).
+  rc-service "weechat-${name}" start 2>/dev/null || say "  (weechat-${name} skipped — optional)"
+  rc-service "lunarwing-weechat-adapter-${name}" start 2>/dev/null || say "  (lunarwing-weechat-adapter-${name} skipped — optional)"
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
   say "OpenRC services started for $name"
+
+  # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
+  local svc
+  for svc in "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+             "weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
+    if rc-service "$svc" status >/dev/null 2>&1; then
+      rc-update add "$svc" default >/dev/null 2>&1 || true
+    fi
+  done
+  say "enabled boot persistence (default runlevel) for $name's running services"
 }
 
 stop_tenant_openrc() {
@@ -2130,6 +2186,128 @@ warn_if_adapter_deps_missing() {
   say "             (Debian: sudo apt install python3-aiohttp  ·  Fedora: sudo dnf install python3-aiohttp)"
   say "           per-tenant fallback:     sudo -u ${name} pip install --user --break-system-packages aiohttp"
   say ""
+}
+
+# ── Host-global health-check / self-heal pipeline (OpenRC) ───────────────────
+
+_ensure_cron_runlevel() {
+  # Ensure a cron daemon is enabled at boot + running so the schedule fires.
+  local want="${1:-}" cron
+  for cron in ${want:+$want} fcron cronie dcron crond busybox-cron; do
+    if [[ -x "/etc/init.d/$cron" ]]; then
+      rc-update add "$cron" default >/dev/null 2>&1 || true
+      rc-service "$cron" start >/dev/null 2>&1 || true
+      say "cron daemon '$cron' enabled + running"
+      return 0
+    fi
+  done
+  say "WARNING: no cron daemon init script found; install fcron/cronie/dcron so the schedule runs"
+}
+
+_install_health_cron() {
+  local sched="*/${HEALTH_INTERVAL_MIN} * * * * $HEALTH_LAUNCHER"
+  local begin="# BEGIN lunarwing-mt-health managed block"
+  local end="# END lunarwing-mt-health managed block"
+  local cmd=""
+  command -v fcrontab >/dev/null 2>&1 && cmd="fcrontab"
+  [[ -z "$cmd" ]] && command -v crontab >/dev/null 2>&1 && cmd="crontab"
+  if [[ -z "$cmd" ]]; then
+    say "WARNING: no fcrontab/crontab found — cannot schedule the pipeline. Install a cron daemon or run $HEALTH_LAUNCHER periodically."
+    return 0
+  fi
+  local tmp; tmp="$(mktemp)"
+  "$cmd" -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" > "$tmp" || true
+  { printf '%s\n' "$begin" "$sched" "$end"; } >> "$tmp"
+  if "$cmd" "$tmp" 2>/dev/null; then
+    say "scheduled health pipeline via $cmd: every ${HEALTH_INTERVAL_MIN} min"
+  else
+    say "WARNING: failed to install $cmd schedule"
+  fi
+  rm -f "$tmp"
+  _ensure_cron_runlevel "$([[ "$cmd" == "fcrontab" ]] && echo fcron)"
+}
+
+ensure_health_pipeline() {
+  # Idempotently install + schedule the host-global health-check -> self-heal
+  # pipeline. Auto-discovers all tenants, so one install covers every tenant.
+  # OpenRC only for now.
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" != "openrc" ]]; then
+    say "health pipeline: only wired for OpenRC so far (INIT_SYSTEM=$INIT_SYSTEM); skipping"
+    return 0
+  fi
+  [[ -d "$HEALTH_SRC_DIR" ]] || { say "WARNING: health source dir not found ($HEALTH_SRC_DIR); skipping"; return 0; }
+
+  say "--- Ensuring host-global health/self-heal pipeline ---"
+
+  # 1) Stable copy of the pipeline scripts (survives repo/worktree moves).
+  mkdir -p "$HEALTH_LIB_DIR"
+  cp -a "$HEALTH_SRC_DIR/." "$HEALTH_LIB_DIR/"
+  chmod 0755 "$HEALTH_LIB_DIR"/*.sh 2>/dev/null || true
+  say "synced pipeline scripts -> $HEALTH_LIB_DIR"
+
+  # 2) Host-level report/state dir.
+  mkdir -p "$HEALTH_BASE_DIR/workspace/reports/health"
+
+  # 3) Config env file (write-if-absent so operator edits survive).
+  mkdir -p /etc/lunarwing
+  if [[ ! -f "$HEALTH_ENV_FILE" ]]; then
+    ( umask 077
+      cat >"$HEALTH_ENV_FILE" <<ENVEOF
+# /etc/lunarwing/health.env — host-global health/self-heal pipeline config.
+# Auto-generated by lunarwing-mt-admin.sh (write-if-absent; safe to edit).
+LUNARWING_BASE_DIR=$HEALTH_BASE_DIR
+LUNARWING_SERVICE_MANAGER=openrc
+SELF_HEAL_TENANTS_FILE=$PORTS_REGISTRY
+
+# MT hardening: remediate only auto-discovered per-tenant init units; disable
+# checks that are N/A host-globally; page only on self-heal escalation (not on
+# every non-healthy run); ignore stale reports.
+SELF_HEAL_REMEDY_LOGICAL=false
+HEALTH_XMPP_SERVER=
+HEALTH_MODELS_ENABLED=false
+HEALTH_OMEMO_ENABLED=false
+HEALTHCHECK_NOTIFY=false
+SELF_HEAL_MAX_REPORT_AGE=$(( HEALTH_INTERVAL_MIN * 60 * 4 ))
+
+# Escalation notifications (fill in to enable Gotify pushes).
+GOTIFY_URL=$HEALTH_GOTIFY_URL
+GOTIFY_TOKEN=$HEALTH_GOTIFY_TOKEN
+ENVEOF
+    )
+    chmod 0600 "$HEALTH_ENV_FILE"
+    say "wrote $HEALTH_ENV_FILE (mode 0600)"
+  else
+    say "$HEALTH_ENV_FILE already exists (preserving)"
+  fi
+
+  # 4) Launcher: source env, then run the pipeline (health-check -> self-heal LIVE).
+  cat >"$HEALTH_LAUNCHER" <<LAUNCHEOF
+#!/bin/sh
+# Auto-generated by lunarwing-mt-admin.sh. Host-global health/self-heal pipeline.
+set -a
+[ -r $HEALTH_ENV_FILE ] && . $HEALTH_ENV_FILE
+set +a
+exec $HEALTH_LIB_DIR/cron-wrapper.sh "\$@"
+LAUNCHEOF
+  chmod 0755 "$HEALTH_LAUNCHER"
+  say "wrote $HEALTH_LAUNCHER"
+
+  # 5) Schedule it.
+  _install_health_cron
+  say "health pipeline ready (every ${HEALTH_INTERVAL_MIN} min; covers all tenants)"
+}
+
+remove_health_pipeline() {
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  local begin="# BEGIN lunarwing-mt-health managed block"
+  local end="# END lunarwing-mt-health managed block"
+  command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | fcrontab - 2>/dev/null || true
+  command -v crontab  >/dev/null 2>&1 && crontab  -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | crontab  - 2>/dev/null || true
+  rm -f "$HEALTH_LAUNCHER"
+  say "retired host-global health pipeline schedule (no tenants remain)"
+  # $HEALTH_LIB_DIR + $HEALTH_ENV_FILE left in place (harmless; preserves config/state).
 }
 
 add_tenant() {
@@ -2181,6 +2359,14 @@ add_tenant() {
     render_tenant_systemd_units "$name"
   else
     render_tenant_openrc_units "$name"
+  fi
+  say ""
+
+  # Host-global health-check + self-heal pipeline (auto-covers every tenant).
+  if [[ "$DEFAULT_HEALTH_ENABLED" == "true" && "$HEALTH_OPT_OUT" != "true" ]]; then
+    ensure_health_pipeline
+  else
+    say "health pipeline: disabled (enabled=$DEFAULT_HEALTH_ENABLED, opt-out=$HEALTH_OPT_OUT)"
   fi
   say ""
 
@@ -2249,6 +2435,12 @@ remove_tenant() {
 
   remove_tenant_user "$name" "$purge"
   say ""
+
+  # If that was the last tenant, retire the host-global health pipeline schedule.
+  if [[ -z "$(all_tenant_names)" ]]; then
+    remove_health_pipeline
+    say ""
+  fi
 
   say "=== Tenant '$name' removed ==="
 }
@@ -2467,6 +2659,13 @@ doctor() {
   _check "port registry exists" test -f "$PORTS_REGISTRY"
   _check "source repo exists" test -d "$SOURCE_REPO/ic"
   _check "proxy script exists" test -f "$SOURCE_REPO/tensorzero-proxy-configurations/lunarwing-proxy.py"
+  _check "health-check orchestrator present" test -x "$HEALTH_SRC_DIR/infrastructure-health-check.sh"
+  _check "self-heal script present" test -x "$HEALTH_SRC_DIR/lunarwing-self-heal.sh"
+  _check "curl installed (self-heal/gotify)" command -v curl
+  _check "flock installed (self-heal lock)" command -v flock
+  if [[ "$DEFAULT_HEALTH_ENABLED" == "true" ]]; then
+    _check "health pipeline scheduled" bash -c 'crontab -l 2>/dev/null | grep -q lunarwing-mt-health || { command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | grep -q lunarwing-mt-health; }'
+  fi
   _check "nanocode worker dir exists" test -d "$LUNARWING_ROOT/lunarcode4lunarwing"
   _check "nanocode worker Dockerfile exists" test -f "$LUNARWING_ROOT/lunarcode4lunarwing/Dockerfile"
   _check "pebble worker dir exists" test -d "$LUNARWING_ROOT/pebble4lunarwing"
@@ -2504,6 +2703,7 @@ main() {
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-jid)        xmpp_jid="$2"; shift 2 ;;
+          --no-health)       HEALTH_OPT_OUT=true; shift ;;
           --xmpp-password)   xmpp_password="$2"; shift 2 ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
           --llm-base-url)    llm_base_url="$2"; shift 2 ;;
@@ -2530,6 +2730,7 @@ main() {
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-domain)     xmpp_domain="$2"; shift 2 ;;
+          --no-health)       HEALTH_OPT_OUT=true; shift ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
           --llm-base-url)    llm_base_url="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
