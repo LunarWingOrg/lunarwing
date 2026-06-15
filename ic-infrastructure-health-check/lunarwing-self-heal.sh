@@ -52,6 +52,11 @@ FLAP_WINDOW_SECS="${SELF_HEAL_FLAP_WINDOW_SECS:-3600}"
 # unbounded state growth. Must be ≥ FLAP_MAX_RESTARTS to preserve flap detection.
 HISTORY_MAX="${SELF_HEAL_HISTORY_MAX:-20}"
 
+# Escalation notifier timeout (seconds). Prevents a hung Gotify/notify endpoint
+# from stalling the entire self-heal tick. Falls back to no timeout if GNU
+# coreutils `timeout` is unavailable (macOS/launchd hosts).
+ESCALATE_TIMEOUT="${SELF_HEAL_ESCALATE_TIMEOUT:-30}"
+
 # Post-restart verification: re-run the component's health-*.sh and parse
 # .status (deeper than is-active). Set false to use is-active only.
 VERIFY_HEALTH="${SELF_HEAL_VERIFY_HEALTH:-true}"
@@ -471,7 +476,14 @@ _send_notification() {
         # JSON, so the next prune_state jq aborts under `set -e` BEFORE save_state —
         # silently losing escalated:true. Also tolerate a non-zero notify (e.g.
         # Gotify non-200) so the escalated state still persists if the page fails.
-        "$notify_script" "$status" "$report_path" >&2 || log "WARNING: escalation notification failed (page may not have been delivered)"
+        #
+        # Guard with timeout so a hung Gotify endpoint can't stall the self-heal tick.
+        if command -v timeout >/dev/null 2>&1; then
+            timeout "${ESCALATE_TIMEOUT}" "$notify_script" "$status" "$report_path" >&2 || log "WARNING: escalation notification failed (page may not have been delivered)"
+        else
+            # Fallback for macOS/launchd hosts without GNU coreutils timeout.
+            "$notify_script" "$status" "$report_path" >&2 || log "WARNING: escalation notification failed (page may not have been delivered)"
+        fi
     else
         log "WARNING: send-notification.sh not found at $notify_script; cannot escalate"
     fi
