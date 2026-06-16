@@ -119,7 +119,7 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 *In accordance with developer guidelines, a testing period precedes each release.*
 
-*Testing for this release has **NOT commenced**. The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The health-check/self-heal work was tested live on a real OpenRC multi-tenant host (recovery, escalation, reboot, Gotify); the broader automated release-test sweep and the crate-version bump remain open checklist items.
+*Testing for this release has **commenced**. The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The health-check/self-heal work was tested live on a real OpenRC multi-tenant host (recovery, escalation, reboot, Gotify); the broader automated release-test sweep and the crate-version bump remain open checklist items.
 
 *Once evaluation begins, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
 
