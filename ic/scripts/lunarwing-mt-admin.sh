@@ -1896,6 +1896,8 @@ render_pg_quadlet() {
 Description=LunarWing Postgres container ($name)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Container]
 ContainerName=lunarwing-pg-${name}
@@ -1912,7 +1914,7 @@ HealthRetries=5
 HealthStartPeriod=30s
 
 [Service]
-Restart=always
+Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120
 
@@ -1954,6 +1956,8 @@ render_worker_quadlet() {
 Description=LunarWing ${worker} worker ($name)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Container]
 ContainerName=lunarwing-${worker}-${name}
@@ -1982,7 +1986,7 @@ EOF
     cat <<EOF
 
 [Service]
-Restart=always
+Restart=on-failure
 RestartSec=5
 
 [Install]
