@@ -2329,7 +2329,12 @@ status() {
     # Emit the standard OpenRC "started"/"stopped" wording (not "running") so the
     # health-check parser (grep started|stopped) and the mt-admin status display
     # classify the container correctly instead of relying on the rc_exit fallback.
-    if [ "\$(_pg inspect -f '{{.State.Running}}' "\${pg_container}" 2>/dev/null)" = "true" ]; then
+    # "started" requires the container be running AND Postgres actually accept
+    # connections (pg_isready) — a Running-but-wedged DB (crash recovery, disk
+    # full, max_connections) otherwise reports healthy and is never remediated.
+    # Mirrors the worker units' _wk_healthy and this unit's own start() gate.
+    if [ "\$(_pg inspect -f '{{.State.Running}}' "\${pg_container}" 2>/dev/null)" = "true" ] \\
+       && _pg exec "\${pg_container}" pg_isready -U lunarwing -q -t 3 2>/dev/null; then
         einfo "\${pg_container}: started"; return 0
     fi
     einfo "\${pg_container}: stopped"; return 3

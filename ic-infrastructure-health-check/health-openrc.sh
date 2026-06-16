@@ -1,31 +1,44 @@
 #!/bin/bash
 # Health Check: OpenRC services
-# Checks: service state, PID liveness
+# Checks: per-unit service state, auto-discovered for multi-tenant hosts.
 # Output: JSON to stdout
 # Exit codes: 0=healthy, 1=degraded, 2=critical
 
 set -euo pipefail
 
-# Services to check (override via env: SERVICES="xmpp-bridge lunarwing")
-# Auto-discovers multi-tenant services from /etc/init.d/ when no override is set.
-discover_services() {
-  local svcs=()
+# Init-script directory. Overridable so the test suite can point at a fake
+# /etc/init.d without touching the host.
+INITD_DIR="${INITD_DIR:-/etc/init.d}"
 
-  # Single-instance defaults
-  for svc in lunarwing xmpp-bridge; do
-    if [ -x "/etc/init.d/$svc" ]; then
-      svcs+=("$svc")
+# Per-unit status-probe timeout (seconds). A container unit's status() shells out
+# to `podman inspect` as the tenant; with no bound, one wedged tenant could eat
+# the orchestrator's whole component budget (a single `timeout 30` around this
+# script) and blank remediation for EVERY tenant. 0 disables the wrapper.
+STATUS_TIMEOUT="${HEALTH_OPENRC_STATUS_TIMEOUT:-8}"
+
+# Services to check (override via env: SERVICES="xmpp-bridge lunarwing").
+# Auto-discovers multi-tenant services from $INITD_DIR when no override is set.
+discover_services() {
+  local -A seen=()
+  local svcs=() initscript name
+
+  # Single-instance defaults.
+  for name in lunarwing xmpp-bridge; do
+    if [ -x "$INITD_DIR/$name" ] && [ -z "${seen[$name]:-}" ]; then
+      seen[$name]=1; svcs+=("$name")
     fi
   done
 
-  # Multi-tenant: lunarwing-<tenant>, xmpp-bridge-<tenant>, lunarwing-proxy-<tenant>
-  for initscript in /etc/init.d/lunarwing-* /etc/init.d/xmpp-bridge-* /etc/init.d/lunarwing-proxy-*; do
+  # Multi-tenant. The `lunarwing-*` glob already covers lunarwing-<t> AND every
+  # per-service unit (lunarwing-proxy-<t>, lunarwing-pg-<t>, lunarwing-nanocode-<t>,
+  # lunarwing-pebble-<t>, lunarwing-weechat-<t>, lunarwing-weechat-adapter-<t>), so
+  # a separate lunarwing-proxy-* glob would only double-list it. Dedup via `seen`.
+  for initscript in "$INITD_DIR"/lunarwing-* "$INITD_DIR"/xmpp-bridge-*; do
     [ -x "$initscript" ] || continue
-    local name
     name=$(basename "$initscript")
-    # Skip the base single-instance names (already added above)
-    [[ "$name" = "lunarwing" || "$name" = "xmpp-bridge" ]] && continue
-    svcs+=("$name")
+    case "$name" in lunarwing|xmpp-bridge) continue ;; esac   # base names already handled
+    [ -n "${seen[$name]:-}" ] && continue
+    seen[$name]=1; svcs+=("$name")
   done
 
   if [ ${#svcs[@]} -eq 0 ]; then
@@ -47,75 +60,86 @@ overall_status="healthy"
 overall_exit=0
 
 svc_json() {
-  local name="$1" state="$2" pid="$3" status="$4"
+  local name="$1" state="$2" status="$3"
   cat <<EOF
   {
     "name": "$name",
     "state": "$state",
-    "pid": $pid,
     "status": "$status"
   }
 EOF
 }
 
+# Probe one unit, bounded by STATUS_TIMEOUT when `timeout` is available.
+# Sets globals STATUS_OUT (text) and STATUS_RC (the REAL exit code; 124/137 mean
+# the probe was killed for exceeding the timeout).
+probe_status() {
+  local svc="$1"
+  STATUS_RC=0
+  if [ "$STATUS_TIMEOUT" != "0" ] && command -v timeout >/dev/null 2>&1; then
+    STATUS_OUT=$(timeout -k 2 "$STATUS_TIMEOUT" rc-service "$svc" status 2>&1) || STATUS_RC=$?
+  else
+    STATUS_OUT=$(rc-service "$svc" status 2>&1) || STATUS_RC=$?
+  fi
+}
+
 for svc in "${SERVICES_ARR[@]}"; do
-  # Check if the init script exists
+  # Init script must exist.
   if ! rc-service --exists "$svc" >/dev/null 2>&1; then
     issues+=("service not found: $svc")
-    svc_results+=("$(svc_json "$svc" "missing" 0 "critical")")
+    svc_results+=("$(svc_json "$svc" "missing" "critical")")
     overall_status="critical"; overall_exit=2
     continue
   fi
 
-  # Get service status
   local_status="healthy"
   local_exit=0
   state="unknown"
-  pid=0
 
-  status_output=$(rc-service "$svc" status 2>&1) || true
-  rc_exit=$?
+  probe_status "$svc"
 
-  # Parse state from rc-service output (typically "* status: started" or "* status: stopped")
-  if echo "$status_output" | grep -qi "started"; then
+  # NOTE: STATUS_RC is the real exit code. Previously the script ran
+  # `status_output=$(rc-service … ) || true; rc_exit=$?`, which captured `true`'s
+  # exit (always 0) — so the `elif rc==0 → started` fallback fired for ANY
+  # non-keyword output and the `→ stopped`/`→ degraded` branches were dead,
+  # silently classifying ambiguous-but-down units as healthy (never remediated).
+  if [ "$STATUS_RC" -eq 124 ] || [ "$STATUS_RC" -eq 137 ]; then
+    state="timeout"
+  elif echo "$STATUS_OUT" | grep -qi "started"; then
     state="started"
-  elif echo "$status_output" | grep -qi "stopped"; then
+  elif echo "$STATUS_OUT" | grep -qi "stopped"; then
     state="stopped"
-  elif echo "$status_output" | grep -qi "crashed"; then
+  elif echo "$STATUS_OUT" | grep -qi "crashed"; then
     state="crashed"
-  elif [ $rc_exit -eq 0 ]; then
+  elif [ "$STATUS_RC" -eq 0 ]; then
     state="started"
   else
-    state="stopped"
+    state="stopped"   # non-keyword output AND non-zero exit → down/ambiguous
   fi
 
-  # Try to get PID from pidfile or supervise-daemon
-  for pidfile in "/run/${svc}.pid" "/run/${svc}/${svc}.pid" "/var/run/${svc}.pid"; do
-    if [ -f "$pidfile" ]; then
-      pid=$(cat "$pidfile" 2>/dev/null || echo 0)
-      pid=${pid:-0}
-      # Validate PID is numeric
-      if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-        pid=0
-      fi
-      break
-    fi
-  done
+  case "$state" in
+    stopped|crashed)
+      local_status="critical"; local_exit=2
+      issues+=("$svc not running: $state")
+      ;;
+    timeout)
+      # Degraded for THIS unit only — the loop continues, so one wedged tenant
+      # doesn't blank the whole component (GRACE then absorbs a one-off slow probe).
+      local_status="degraded"; local_exit=1
+      issues+=("$svc status probe timed out (>${STATUS_TIMEOUT}s)")
+      ;;
+    unknown)
+      local_status="degraded"; local_exit=1
+      issues+=("$svc in unexpected state: $state")
+      ;;
+  esac
 
-  if [ "$state" = "stopped" ] || [ "$state" = "crashed" ]; then
-    local_status="critical"; local_exit=2
-    issues+=("$svc not running: $state")
-  elif [ "$state" = "unknown" ]; then
-    local_status="degraded"; local_exit=1
-    issues+=("$svc in unexpected state: $state")
-  fi
-
-  if [ $local_exit -gt $overall_exit ]; then
+  if [ "$local_exit" -gt "$overall_exit" ]; then
     overall_exit=$local_exit
-    overall_status=$([ $overall_exit -eq 2 ] && echo critical || echo degraded)
+    overall_status=$([ "$overall_exit" -eq 2 ] && echo critical || echo degraded)
   fi
 
-  svc_results+=("$(svc_json "$svc" "$state" "$pid" "$local_status")")
+  svc_results+=("$(svc_json "$svc" "$state" "$local_status")")
 done
 
 issues_json="[]"
