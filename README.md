@@ -14,7 +14,7 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 - **Privacy-first channels** — DarkIRC, XMPP/OMEMO, and WeeChat relay support out of the box. No Slack, Discord, or Telegram — by design.
 - **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
 - **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
-- **Self-healing infrastructure** — advanced healthchecks and automatic recovery for channel bridges, the daemon itself, and scheduled routines.
+- **Self-healing infrastructure** — advanced healthchecks and automatic recovery for LunarWing, channel bridges, adapters, daemons, and even scheduled routines.
 - **TensorZero integration** — HTTP proxy with optimized tool_choice routing for local and remote model providers.
 - **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 

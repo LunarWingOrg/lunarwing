@@ -273,18 +273,25 @@ Exercise on a **systemd host with rootless podman ≥ 4.4** (the harness
 
 ## Docs to update / retire (follow-up)
 
-- **Fix (stale):** `MULTITENANCY-PRODUCTION.md` (unit counts 3→5 / 3→6; the `podman generate systemd`
-  punt; the "systemd just runs" health claim), `TENANT-CONFIGURATION.md` (systemd restart commands use
-  wrong system-level/`.target` names — should be user-level `systemctl --user`), `CLAUDE.md` MT line
-  (overstates systemd parity), `ic-infrastructure-health-check/README.md` (overstates discovery
-  equivalence).
-- **Aspirational → now implemented:** `ROOTLESS_DEFAULT_INIT_GATING.md`,
-  `ROOTLESS_WORKER_OPENRC_UNITS.md` (systemd-analog), `IC_REPAIR_FOLLOWUPS.md` #2,
-  `PER_TENANT_RANDOM_PG_PASSWORDS.md`.
-- **Correct claims:** `ROOTLESS_WORKER_OPENRC_UNITS.md` says workers lack a baked HEALTHCHECK — both
-  Dockerfiles have one (8443). `WORKER_HEALTHCHECK_PORT_MISMATCH.md` + `IC_REPAIR_FOLLOWUPS.md` line
-  anchors drifted ±250–400 lines (content correct).
-- **Stubs to consider deleting:** `SELF_REPAIR_IMPROVEMENTS.md`, `SELF_HEALING_IMPROVEMENTS_1.md`,
-  `NANOCODE_WORKER_SECRETS.md` (already implemented).
-- **Keep as OpenRC reference:** `MT-GENTOO-SETUP-AND-CHANGES-MADE.md`,
-  `SELF_HEAL_DEPLOYMENT_WIRING.md`, `RELEASE-v1.1.3.md`.
+*Audited 2026-06-16 (branch `mc-docs-refresh`). The original "Fix (stale)",
+"Aspirational", and most "Correct claims"/"Stubs" items already landed (commit
+`ee67453b`, the WS1–4 / random-pg work, and stub deletions in `8da1e251`). Only
+these 4 items remain:*
+
+1. **`docs/proposals/ROOTLESS_WORKER_OPENRC_UNITS.md:73`** — residual false claim
+   "The worker has no baked podman HEALTHCHECK". The Problem section (≈L26) was
+   corrected, but this "Health signal" bullet was missed. Reword: the image *does*
+   bake a HEALTHCHECK on 8443; it's just not scheduled under rootless podman
+   without systemd, so the OpenRC unit's own `status()` probe is what matters.
+2. **`docs/proposals/IC_REPAIR_FOLLOWUPS.md` item #2** (systemd `.timer/.service`
+   scheduling) — shipped as WS1 (`_install_health_systemd_timer`,
+   `lunarwing-mt-health.{service,timer}`), but the at-a-glance row (≈L19) still
+   says "do now" and the `#### 2.` heading (≈L66) lacks the ✅ FIXED marker. Mark
+   it done to match the 6b/6c style.
+3. **`docs/proposals/WORKER_HEALTHCHECK_PORT_MISMATCH.md`** — line-anchor drift
+   (content correct): `mt-admin.sh` refs `1145→1612`, `1239→1735` (symptom refs
+   `→1701/1813`). Source/code anchors are already exact.
+4. **`docs/proposals/IC_REPAIR_FOLLOWUPS.md`** — line-anchor drift: `self-heal.sh`
+   `474→510-523`, `send-notification.sh` `66→78`, `mt-admin.sh` WS1 region `→3070`.
+   The WS1 instruction anchors (`:2235-2238/:2260/:2297/:2301/:2667`) describe
+   already-implemented code — mark done / remove rather than re-point.

@@ -306,7 +306,7 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 
 ### Systemd (user-level with linger)
 
-Each tenant gets 3 user-level systemd units installed to `~/.config/systemd/user/`:
+Currently: Each tenant gets 5 user-level systemd units installed to `~/.config/systemd/user/`:
 
 | Unit | Description |
 |------|-------------|

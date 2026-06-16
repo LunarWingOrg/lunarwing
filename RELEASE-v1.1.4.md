@@ -82,9 +82,6 @@ All four self-heal bugs below were found via **live** bring-up/testing on a real
 
 ## Known Issues (not a complete list — see `docs/bugs` and `docs/proposals` for more)
 
-- **Self-heal pipeline integration is OpenRC-only so far.** `ensure_health_pipeline()` wires up scheduling + config on OpenRC; systemd/Docker hosts still receive the env-file and webhook fixes and the hardened scripts, but **not** the OpenRC-specific boot/health auto-wiring. Systemd-path wiring of the pipeline is future work.
-- **A single combined *live* escalation demo on real OpenRC is staging-limited.** Forcing a real `supervise-daemon` service to stay cleanly down-and-unfixable corrupts OpenRC's own stop/status tracking, and successful restarts clear flap history — so the end-to-end "unfixable service → escalate → page" flow was validated via the chaos harness (real self-heal script, fail-on-restart init) plus live Gotify delivery, rather than one continuous live demo. This is a test-staging limitation, not a self-heal defect.
-- *(Resolved)* The previously-failing `A2`/`N1` exit-code assertions were a test-harness `RC`-capture bug (not a product bug) and are now fixed — the self-heal suite is **180/0**.
 - **Carried forward from v1.1.3** (see `docs/ops/RELEASE-v1.1.3.md`): XMPP inbound file transfer awaits live e2e validation and has no SSRF guard; the Multica bridge remains pre-release/experimental; the `/api/logs/download` endpoint has no UI button yet; and the `e2e_advanced_traces` bootstrap-greeting tests remain among the pre-existing env-dependent e2e failures.
 
 ---
@@ -105,9 +102,12 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 | Feature | Target |
 |---------|--------|
-| Multica bridge/channel refinements; Lunartica UI reskin | v1.1.6 |
-| Systemd-path wiring of the MT health/self-heal pipeline; further self-healing hardening | v1.1.6 |
-| Self-healing epic (first-class, wired-in across init systems) | v1.2.0 |
+| XMPP OMEMO MUC fallback fix | v1.1.5 |                                                                                        
+| XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
+| Lunarvision K.E.R.S. system setup polishing | v1.1.5 |
+| External Worker planned enhancements | v1.1.6 |
+| Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.6 |
+| Lunartica UI reskin | v1.1.6 |
 
 ---
 
@@ -119,7 +119,7 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 *In accordance with developer guidelines, a testing period precedes each release.*
 
-The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The health-check/self-heal work was tested live on a real OpenRC multi-tenant host (recovery, escalation, reboot, Gotify); the broader automated release-test sweep and the crate-version bump remain open checklist items.
+*Testing for this release has **NOT commenced**. The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`. The health-check/self-heal work was tested live on a real OpenRC multi-tenant host (recovery, escalation, reboot, Gotify); the broader automated release-test sweep and the crate-version bump remain open checklist items.
 
 *Once evaluation begins, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
 
