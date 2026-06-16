@@ -415,7 +415,7 @@ start() {
 stop() {
     [ -n "\${wk_runtime}" ] && [ -x "\${wk_runtime}" ] || return 0
     ebegin "Stopping ${worker} worker (\${wk_container})"
-    _wk stop "\${wk_container}" >/dev/null 2>&1
+    _wk stop --time 30 "\${wk_container}" >/dev/null 2>&1
     eend 0
 }
 
@@ -2209,10 +2209,17 @@ EOF
     # nanocode takes a trailing CMD arg; pebble uses the image default.
     [[ "$worker" == "nanocode" ]] && printf 'Exec=--mode websocket\n'
     cat <<EOF
+HealthCmd=curl -sf http://127.0.0.1:${health_port}/health || exit 1
+HealthInterval=15s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=30s
 
 [Service]
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=120
+KillMode=process
 
 [Install]
 WantedBy=default.target
@@ -2546,7 +2553,7 @@ start() {
 stop() {
     [ -n "\${pg_runtime}" ] && [ -x "\${pg_runtime}" ] || return 0
     ebegin "Stopping Postgres container (\${pg_container})"
-    _pg stop "\${pg_container}" >/dev/null 2>&1
+    _pg stop --time 30 "\${pg_container}" >/dev/null 2>&1
     eend 0
 }
 
