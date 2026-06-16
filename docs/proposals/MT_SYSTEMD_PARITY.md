@@ -1,8 +1,8 @@
 # Multi-Tenant systemd Parity — Rootless Podman, Health Pipeline & Self-Heal
 
-**Status:** Proposed (approved, not yet implemented)
-**Branch:** `2026-06-16-vm-ic-2-feature-1.1.4-systemd`
-**Date:** 2026-06-15
+**Status:** ✅ **Largely implemented** (merged `2b471720`, 2026-06-16) — WS1–4 + fold-ins A & C landed; **fold-ins B (random PG passwords) & D (backups) still outstanding.** See the *Implementation status* section below. *(Original status: "Proposed (approved, not yet implemented)".)*
+**Branch:** `2026-06-16-vm-ic-2-feature-1.1.4-systemd` (merged into `…-unified`)
+**Date:** 2026-06-15 (status updated 2026-06-16)
 **Supersedes / closes:** the "Future: full systemd rootless support" section of
 [`ROOTLESS_DEFAULT_INIT_GATING.md`](./ROOTLESS_DEFAULT_INIT_GATING.md), the deferred systemd-analog
 in [`ROOTLESS_WORKER_OPENRC_UNITS.md`](./ROOTLESS_WORKER_OPENRC_UNITS.md), item **#2** of
@@ -10,6 +10,35 @@ in [`ROOTLESS_WORKER_OPENRC_UNITS.md`](./ROOTLESS_WORKER_OPENRC_UNITS.md), item 
 [`PER_TENANT_RANDOM_PG_PASSWORDS.md`](./PER_TENANT_RANDOM_PG_PASSWORDS.md).
 **Primary files:** `ic/scripts/lunarwing-mt-admin.sh`, `ic-infrastructure-health-check/*`.
 **Scope:** ops/provisioning scripts only — **no Rust/daemon changes.**
+
+---
+
+## ✅ Implementation status — 2026-06-16 (merged `2b471720`)
+
+*Added after the original proposal. Verified against the merged tree (greps +
+reads of the actual scripts, not the doc). Commits: WS1 `c8abd28e`, WS2
+`a919de20`/`8b028205`, WS3 `ebb11cdf`, WS4 + shared engine `dd4ec7e4`, fold-in C
+`e2d47f4a`, fold-in A `f42ef62c`.*
+
+| Workstream / fold-in | Status | Evidence |
+|---|---|---|
+| **WS1** — systemd health/self-heal scheduler | ✅ **done** | `_install_health_systemd_timer()` + `lunarwing-mt-health.{service,timer}`; `health.env` → `LUNARWING_SERVICE_MANAGER=$INIT_SYSTEM`; case-dispatch + teardown in `ensure/remove_health_pipeline` |
+| **WS2** — Quadlet supervision (PG + workers) | ✅ **done** | `render_pg_quadlet` / `render_worker_quadlet` / `podman_supports_quadlet`; `systemd && rootless` branch in `start_tenant_postgres`/`_nanocode`/`_pebble`; daemon `Requires=`/`After=lunarwing-pg-<t>.service` |
+| **WS3** — health-systemd discovery breadth | ✅ **done** | `health-systemd.sh` per-tenant `list-unit-files 'lunarwing-*' 'xmpp-bridge-*' 'weechat-*'`, base-unit existence-gate on MT hosts, **plus** a `.State.Health` container probe for pg/workers (beyond the OpenRC leg) |
+| **WS4** — self-heal parser correctness | ✅ **done** | `unit_tenant()` strips pg/worker/weechat infixes; `lunarwing-weechat-*` case; `sudo -n` consistency |
+| **Fold-in A** — weechat rename | ✅ **done** | `lunarwing-weechat-<t>` on both inits |
+| **Fold-in C** — status/doctor symmetry | ✅ **done** | `status_tenant` rows; doctor `podman ≥ 4.6 (Quadlet)` + per-tenant linger/`/run/user` checks |
+| **Fold-in B** — random per-tenant PG passwords | ❌ **NOT done** | `POSTGRES_PASSWORD=lunarwing` still hardcoded in the imperative path **and** the Quadlet; no `tenant_pg_password`/`openssl rand`/`rotate-pg-password`. **All tenants still share the PG password `lunarwing` on every leg** — needs a deliberate decision. |
+| **Fold-in D** — backups subcommand | ❌ **NOT done** | no `backup` verb in dispatch, no `pg_dump` anywhere |
+
+**Remaining work on this proposal:** fold-ins **B** and **D** only. The
+*Docs to update / retire* checklist at the end is **not yet actioned** — its target
+docs (`MULTITENANCY-PRODUCTION.md`, `TENANT-CONFIGURATION.md`, the `CLAUDE.md` MT
+line, `ic-infrastructure-health-check/README.md`) may still carry the stale
+"systemd just runs" framing; verify before relying on them.
+
+> The per-workstream sections below are kept as the original (approved) design
+> record — read them together with this status table.
 
 ---
 
@@ -61,7 +90,7 @@ parity with OpenRC, with the OpenRC and rootful-docker paths unchanged.
 
 ---
 
-## Workstream 1 — Health/self-heal scheduler on systemd (the #1 blocker)
+## Workstream 1 — Health/self-heal scheduler on systemd (the #1 blocker) — ✅ IMPLEMENTED
 
 Implements `IC_REPAIR_FOLLOWUPS.md` item #2. In `ic/scripts/lunarwing-mt-admin.sh`:
 
@@ -82,7 +111,7 @@ Implements `IC_REPAIR_FOLLOWUPS.md` item #2. In `ic/scripts/lunarwing-mt-admin.s
 
 ---
 
-## Workstream 2 — Quadlet supervision for PG + workers (rootless podman)
+## Workstream 2 — Quadlet supervision for PG + workers (rootless podman) — ✅ IMPLEMENTED
 
 **Reconciliation decision:** on **systemd + rootless podman only**, the Quadlet `.container` **owns
 container creation** — strip the imperative `_ctr run -d` and let the generated `.service` create+run
@@ -161,7 +190,7 @@ container (the OpenRC model). Docker-on-systemd needs nothing (already survives 
 
 ---
 
-## Workstream 3 — Health-check discovery breadth (`health-systemd.sh`)
+## Workstream 3 — Health-check discovery breadth (`health-systemd.sh`) — ✅ IMPLEMENTED
 
 - Replace the hardcoded 2-unit per-tenant probe with **enumeration of the tenant's
   `systemctl --user list-units 'lunarwing-*' 'xmpp-bridge-*'`** so it auto-discovers pg, workers,
@@ -174,7 +203,7 @@ container (the OpenRC model). Docker-on-systemd needs nothing (already survives 
 
 ---
 
-## Workstream 4 — Self-heal parser correctness (`lunarwing-self-heal.sh`)
+## Workstream 4 — Self-heal parser correctness (`lunarwing-self-heal.sh`) — ✅ IMPLEMENTED
 
 Engine already systemd-capable; fix only:
 
@@ -190,18 +219,18 @@ Engine already systemd-capable; fix only:
 
 ## Fold-ins
 
-- **A — `weechat-<t>` → `lunarwing-weechat-<t>` rename.** On **both** inits
+- **A — `weechat-<t>` → `lunarwing-weechat-<t>` rename.** ✅ *Done.* On **both** inits
   (`render_tenant_systemd_units`, `render_tenant_openrc_units`, start/stop/enable lists, daemon
   `After=`/`Wants=`, and `tmux -L` socket refs). Makes weechat discoverable by the `lunarwing-*` glob
   and resolvable by self-heal.
-- **B — Random per-tenant PG passwords.** Add `tenant_pg_password` (`openssl rand -hex 24`); thread it
+- **B — Random per-tenant PG passwords.** ❌ *Not done — `POSTGRES_PASSWORD=lunarwing` is still hardcoded (imperative + Quadlet) on every leg.* Add `tenant_pg_password` (`openssl rand -hex 24`); thread it
   into the PG `Environment=`/init env and `DATABASE_URL`; resolve **before first container init**
   (POSTGRES_PASSWORD only applies to an empty datadir). Store in the tenant env file (mode 0600).
   Optional `rotate-pg-password` verb. Uniform across OpenRC / systemd / docker.
-- **C — status/doctor symmetry.** `status_tenant`: add pg + worker (+ weechat/adapter) rows to both
+- **C — status/doctor symmetry.** ✅ *Done.* `status_tenant`: add pg + worker (+ weechat/adapter) rows to both
   branches. `doctor`: the systemd "pipeline scheduled" check (W1.6) + "podman ≥ 4.4 (quadlet)" check +
   "tenant user manager active (linger)" check.
-- **D — Backups subcommand.** Add a `backup` verb (`pg_dump` of each tenant's PG container via
+- **D — Backups subcommand.** ❌ *Not done — no `backup` verb / `pg_dump` exists.* Add a `backup` verb (`pg_dump` of each tenant's PG container via
   `_ctr exec`, to a host backup dir; init-agnostic). CLAUDE.md already instructs "back up the DB first"
   but no verb exists.
 
