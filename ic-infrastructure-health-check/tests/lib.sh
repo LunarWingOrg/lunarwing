@@ -101,12 +101,18 @@ run_raw() {
     while [[ $# -gt 0 && "$1" != "--" ]]; do envs+=("$1"); shift; done
     [[ "${1:-}" == "--" ]] && shift
     args=("$@")
-    local out
+    local out rc
     out="$(env LUNARWING_BASE_DIR="$sb" SELF_HEAL_STATE_DIR="$sb/self-heal" GOTIFY_TOKEN='' "${envs[@]}" \
         "$SH" "${args[@]}" 2>&1)"
-    # shellcheck disable=SC2034  # RC is read by the sourcing suites after run_raw
-    RC=$?
+    rc=$?
+    # NOTE: callers using out="$(run_raw ...)" invoke this in a SUBSHELL, so this
+    # RC assignment is lost in the parent — they must capture it themselves:
+    #   out="$(run_raw ...)"; RC=$?
+    # run_raw returns rc below so the command-substitution's $? IS the real code.
+    # shellcheck disable=SC2034
+    RC=$rc
     printf '%s' "$out"
+    return "$rc"
 }
 
 # ── Pure-function harness ────────────────────────────────────────────────────
@@ -271,3 +277,4 @@ run_chaos() {
         GOTIFY_TOKEN='' "${envs[@]}" \
         "$SH" --report "$sb/report.json" --backoff 0 "${args[@]}" 2>&1
 }
+

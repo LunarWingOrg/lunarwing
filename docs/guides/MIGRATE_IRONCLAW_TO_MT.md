@@ -302,7 +302,10 @@ sudo ic/scripts/lunarwing-mt-admin.sh add-tenant <name> --docker-group --xmpp-ji
 If the tenant starts but routines behave unexpectedly, verify that V18 was applied:
 
 ```bash
-PGPASSWORD=lunarwing psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing \
+# PG password is per-tenant random; read it from the tenant env (tenants created
+# before this change still use "lunarwing"):
+PGPASSWORD="$(sudo cat /home/<name>/lunarwing/env/pg.secret 2>/dev/null || echo lunarwing)" \
+  psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing \
   -c "SELECT version FROM refinery_schema_history ORDER BY version DESC LIMIT 1;"
 ```
 

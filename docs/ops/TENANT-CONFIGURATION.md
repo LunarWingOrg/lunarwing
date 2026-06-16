@@ -254,30 +254,55 @@ Environment variables always take precedence over `config.toml` values.
 
 ## Applying Changes
 
-After editing configuration files, restart the affected service. The exact commands depend on your init system.
+After editing configuration files, restart the affected service. The simplest,
+init-agnostic way is the admin script, which restarts the whole tenant stack in
+the correct order on either init system:
+
+```bash
+sudo lunarwing-mt-admin.sh restart-tenant <tenant>
+```
+
+For granular restarts, use the per-init commands below.
 
 ### Systemd
 
+Per-tenant units are **user** units owned by the tenant's OS user, so they are
+restarted on that user's bus — **not** with a system-level `systemctl restart`.
+For each unit:
+
 ```bash
-# Restart the main daemon
-sudo systemctl restart lunarwing-<tenant>.service
-
-# Restart the XMPP bridge
-sudo systemctl restart lunarwing-<tenant>-bridge.service
-
-# Restart the TensorZero proxy
-sudo systemctl restart lunarwing-<tenant>-proxy.service
-
-# Restart all tenant services
-sudo systemctl restart lunarwing-<tenant>.target
+sudo -u <tenant> XDG_RUNTIME_DIR=/run/user/$(id -u <tenant>) \
+  systemctl --user restart <unit>
 ```
+
+The per-tenant units are:
+
+```text
+lunarwing-<tenant>.service                  # main daemon
+xmpp-bridge-<tenant>.service                # XMPP bridge
+lunarwing-proxy-<tenant>.service            # TensorZero proxy
+lunarwing-weechat-<tenant>.service          # weechat backend
+lunarwing-weechat-adapter-<tenant>.service  # weechat WS adapter
+lunarwing-pg-<tenant>.service               # Postgres (rootless Quadlet)
+lunarwing-nanocode-<tenant>.service         # nanocode worker (rootless Quadlet)
+lunarwing-pebble-<tenant>.service           # pebble worker (rootless Quadlet)
+```
+
+There is no per-tenant `.target`; restart units individually, or use
+`restart-tenant` above for the whole stack.
 
 ### OpenRC
 
+Per-tenant units are system services under `/etc/init.d/`:
+
 ```bash
-sudo rc-service lunarwing-<tenant> restart
-sudo rc-service lunarwing-<tenant>-bridge restart
-sudo rc-service lunarwing-<tenant>-proxy restart
+sudo rc-service lunarwing-<tenant> restart                  # main daemon
+sudo rc-service xmpp-bridge-<tenant> restart                # XMPP bridge
+sudo rc-service lunarwing-proxy-<tenant> restart            # TensorZero proxy
+sudo rc-service lunarwing-pg-<tenant> restart               # Postgres container
+sudo rc-service lunarwing-weechat-<tenant> restart          # weechat backend
+sudo rc-service lunarwing-weechat-adapter-<tenant> restart  # weechat WS adapter
+# workers (if provisioned): lunarwing-nanocode-<tenant>, lunarwing-pebble-<tenant>
 ```
 
 ### Verifying

@@ -109,7 +109,7 @@ say "  build wasm:      yes (all channels + tools)"
 say "  ensure toolchain:$ENSURE_WASM_TOOLCHAIN (cargo-component for $TENANT)"
 say "  build nanocode:  $WITH_NANOCODE"
 say "  build pebble:    $WITH_PEBBLE"
-say "  weechat service: auto-rendered + started (weechat-$TENANT + adapter)"
+say "  weechat service: auto-rendered + started (lunarwing-weechat-$TENANT + adapter)"
 say "  source repo:     $(git -C "$SCRIPT_DIR/../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')@$(git -C "$SCRIPT_DIR/../.." rev-parse --short HEAD 2>/dev/null || echo '?')"
 confirm "Proceed?" || { say "aborted."; exit 0; }
 
@@ -192,7 +192,7 @@ fi
 # ---- WeeChat-via-tmux configuration instructions ----------------------------
 banner "WeeChat setup (via tmux)"
 cat <<EOF
-The weechat-$TENANT.service runs WeeChat inside a tmux session (socket
+The lunarwing-weechat-$TENANT.service runs WeeChat inside a tmux session (socket
 "weechat-$TENANT", session "weechat"). The adapter connects to WeeChat's *api*
 relay on 127.0.0.1:$weechat_port using RELAY_PASSWORD from the tenant env, and the
 in-process WASM channel polls the adapter on :$adapter_port.

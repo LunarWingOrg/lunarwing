@@ -1,5 +1,7 @@
 # Documentation Audit — Medium Priority Items
 
+## May be out of date
+
 **Date:** 2026-05-12
 **Branch:** staging
 **Last updated:** 2026-05-26 (branch `staging-documentation-reorg-may-26`)

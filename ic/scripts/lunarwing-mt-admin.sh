@@ -47,6 +47,12 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── Per-tenant PostgreSQL backups ────────────────────────────────────────────
+# pg_dump each tenant's DB (custom -Fc format) to $BACKUP_DIR/<tenant>/. Keep the
+# most recent $BACKUP_KEEP dumps per tenant (0 = keep all).
+BACKUP_DIR="${LUNARWING_MT_BACKUP_DIR:-/var/lib/lunarwing-backups}"
+BACKUP_KEEP="${LUNARWING_MT_BACKUP_KEEP:-7}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 say() { printf '%s\n' "$*"; }
@@ -73,9 +79,41 @@ tenant_home() { printf '/home/%s' "$1"; }
 tenant_lw_root() { printf '%s/lunarwing' "$(tenant_home "$1")"; }
 tenant_repo() { printf '%s/ic' "$(tenant_lw_root "$1")"; }
 tenant_env_dir() { printf '%s/env' "$(tenant_lw_root "$1")"; }
+tenant_quadlet_dir() { printf '%s/.config/containers/systemd' "$(tenant_home "$1")"; }
 tenant_state_dir() { printf '%s/state' "$(tenant_lw_root "$1")"; }
 tenant_log_dir() { printf '%s/logs' "$(tenant_lw_root "$1")"; }
 tenant_run_dir() { printf '%s/run' "$(tenant_lw_root "$1")"; }
+
+# Per-tenant PostgreSQL password. The source of truth is a 0600, tenant-owned
+# secret file, generated once (hex → URL-safe inside DATABASE_URL) and reused so
+# it stays STABLE across restarts/reconfigures — POSTGRES_PASSWORD only
+# initialises an EMPTY datadir, so the value must not drift after first init.
+# Migration-safe: if a tenant was already provisioned (its lunarwing.env carries a
+# DATABASE_URL password), that value is preserved so an already-initialised DB
+# keeps working; only brand-new tenants get a fresh random password. Use
+# `rotate-pg-password` to deliberately move an existing tenant onto a random one.
+# Never logged (repo rule).
+tenant_pg_password() {
+  local name="$1" f envf existing pw
+  f="$(tenant_env_dir "$name")/pg.secret"
+  if [[ -s "$f" ]]; then
+    cat "$f"   # callers use $(...), which strips the trailing newline
+    return 0
+  fi
+  envf="$(tenant_env_dir "$name")/lunarwing.env"
+  if [[ -f "$envf" ]]; then
+    existing="$(sed -n 's#^DATABASE_URL=postgres://lunarwing:\([^@]*\)@.*#\1#p' "$envf" | head -1)"
+  fi
+  if [[ -n "${existing:-}" ]]; then
+    pw="$existing"                       # preserve an already-initialised DB's password
+  else
+    pw="$(generate_token | cut -c1-32)"  # fresh tenant → random 128-bit hex
+  fi
+  mkdir -p "$(dirname "$f")"
+  ( umask 077; printf '%s\n' "$pw" > "$f" )
+  chown "$name:$name" "$f" 2>/dev/null || true
+  printf '%s\n' "$pw"
+}
 
 usage() {
   cat <<'EOF'
@@ -126,6 +164,9 @@ Commands:
   start-tenant <name>             Start all services for a tenant
   stop-tenant <name>              Stop all services for a tenant
   restart-tenant <name>           Stop then start
+  render-units <name>             Re-render a tenant's service units from the current
+                                  generator (no restart; applies init-script changes)
+  rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
                                    (updates workspace config + capabilities)
@@ -142,6 +183,14 @@ Commands:
   tokens [name]                    Print gateway auth tokens (all or one)
   doctor                           System dependency and health checks
 
+  backup-tenant <name>             pg_dump a tenant's DB (custom format) to
+                                   $LUNARWING_MT_BACKUP_DIR/<name>/
+  backup-all                       Back up every registered tenant
+  list-backups [name]              List existing backups (all tenants or one)
+  restore-tenant <name> <file>     Restore a tenant DB from a dump (DESTRUCTIVE)
+    --yes                          Required: confirm the DROP+recreate restore
+                                   (stop the tenant daemon first)
+
 Environment:
   LUNARWING_SERVICE_MANAGER        Override: systemd or openrc
   LUNARWING_CONTAINER_RUNTIME      Override: docker or podman
@@ -152,6 +201,8 @@ Environment:
                                    (empty = each tenant's local TensorZero proxy)
   LUNARWING_MT_GOTIFY_URL          Default Gotify server URL for new tenants
   LUNARWING_MT_GOTIFY_TITLE        Default Gotify notification title for new tenants
+  LUNARWING_MT_BACKUP_DIR          Backup directory (default /var/lib/lunarwing-backups)
+  LUNARWING_MT_BACKUP_KEEP         Keep last N dumps per tenant (default 7; 0 = keep all)
 EOF
 }
 
@@ -211,8 +262,195 @@ detect_container_runtime() {
 }
 
 CONTAINER_RT=""
+MT_ROOTLESS=""
 ensure_container_runtime() {
   [[ -n "$CONTAINER_RT" ]] || CONTAINER_RT="$(detect_container_runtime)"
+  if [[ -z "$MT_ROOTLESS" ]]; then
+    # Rootless-per-tenant is the default for podman (no daemon; each tenant owns
+    # its containers under ~/.local/share/containers). Docker keeps the legacy
+    # rootful-as-root model (it has a daemon). Override via LUNARWING_MT_ROOTLESS.
+    if [[ -n "${LUNARWING_MT_ROOTLESS:-}" ]]; then
+      MT_ROOTLESS="${LUNARWING_MT_ROOTLESS}"
+    elif [[ "$CONTAINER_RT" == "podman" ]]; then
+      MT_ROOTLESS="true"
+    else
+      MT_ROOTLESS="false"
+    fi
+  fi
+}
+
+# True if the active runtime is podman new enough for the Quadlet .container
+# features we emit. Floor is >= 4.6: Quadlet itself shipped in 4.4, but the
+# Health* keys render_pg_quadlet uses first exist in 4.5 (Quadlet hard-errors
+# and skips the whole unit on an unknown key), and 4.6 is the conservative
+# stable baseline. Gates the systemd rootless container-supervision path against
+# the imperative `podman run` fallback. Result is memoised in QUADLET_OK.
+QUADLET_OK=""
+podman_supports_quadlet() {
+  ensure_container_runtime
+  [[ "$CONTAINER_RT" == "podman" ]] || return 1
+  if [[ -z "$QUADLET_OK" ]]; then
+    local ver major minor
+    ver="$(podman version --format '{{.Client.Version}}' 2>/dev/null || true)"
+    [[ -n "$ver" ]] || ver="$(podman --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || true)"
+    major="${ver%%.*}"
+    minor="${ver#*.}"; minor="${minor%%.*}"
+    if [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] \
+       && { [[ "$major" -gt 4 ]] || { [[ "$major" -eq 4 ]] && [[ "$minor" -ge 6 ]]; }; }; then
+      QUADLET_OK="yes"
+    else
+      QUADLET_OK="no"
+    fi
+  fi
+  [[ "$QUADLET_OK" == "yes" ]]
+}
+
+# Run the container runtime for a TENANT's containers. When rootless (podman),
+# execute as the tenant user against their rootless store + runtime dir; when
+# rootful (docker), run as root unchanged. Every per-tenant pg/worker container
+# operation MUST go through this so inspect/start/stop/exec/rm hit the SAME store
+# that owns the container — root and rootless podman are separate universes.
+_ctr() {
+  local name="$1"; shift
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    local uid home
+    uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
+    home="$(getent passwd "$name" | cut -d: -f6)"
+    sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@"
+  else
+    "$CONTAINER_RT" "$@"
+  fi
+}
+
+# Ensure a worker image is available to whoever will run the tenant's container.
+# Rootful (docker): the shared root store already has it — just verify presence.
+# Rootless (podman): the image lives in the tenant's OWN store; if absent, copy it
+# from the admin (root) store via save|load (per-tenant, ~minutes for large images;
+# a shared additionalimagestore would avoid the N copies but isn't wired yet).
+# Returns non-zero if the image can't be made available (caller should skip).
+_ensure_tenant_image() {
+  local name="$1" image="$2"
+  if _ctr "$name" image inspect "$image" &>/dev/null; then
+    return 0
+  fi
+  if [[ "$MT_ROOTLESS" != "true" ]]; then
+    return 1   # rootful + not built yet -> caller skips (build first)
+  fi
+  if ! "$CONTAINER_RT" image inspect "$image" &>/dev/null; then
+    return 1   # rootless, but the admin store has no source image to copy
+  fi
+  say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  if "$CONTAINER_RT" save "$image" | _ctr "$name" load >/dev/null 2>&1; then
+    say "image $image available in ${name}'s store"
+    return 0
+  fi
+  say "WARNING: failed to load $image into ${name}'s store"
+  return 1
+}
+
+# Render a dedicated OpenRC unit for a tenant's external worker (nanocode/pebble),
+# modeled on the lunarwing-pg-<t> unit. Health-aware status() checks the worker's
+# /health endpoint (curl is present in both worker images) so the host self-heal
+# pipeline — which auto-discovers /etc/init.d/lunarwing-* units — can detect and
+# remediate a crashed OR hung worker, and so it survives reboot. OpenRC only.
+render_worker_openrc_unit() {
+  local name="$1" worker="$2" health_port="${3:-8443}"
+  ensure_container_runtime
+  local runtime_bin="" container="lunarwing-${worker}-${name}" uid home
+  [[ -n "${CONTAINER_RT:-}" ]] && runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  uid="$(id -u "$name" 2>/dev/null || echo "")"
+  home="$(tenant_home "$name")"
+
+  cat >"/etc/init.d/${container}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing ${worker} worker ($name)"
+
+: "\${wk_runtime:=$runtime_bin}"
+: "\${wk_container:=$container}"
+: "\${wk_rootless:=$MT_ROOTLESS}"
+: "\${wk_user:=$name}"
+: "\${wk_home:=$home}"
+: "\${wk_uid:=$uid}"
+: "\${wk_health_port:=$health_port}"
+: "\${wk_wait:=60}"
+
+depend() {
+    need net localmount
+    after firewall lunarwing-${name}
+}
+
+# Run the container runtime as the owning user (rootless) or root (rootful).
+_wk() {
+    if [ "\${wk_rootless}" = "true" ]; then
+        sudo -u "\${wk_user}" env HOME="\${wk_home}" XDG_RUNTIME_DIR="/run/user/\${wk_uid}" "\${wk_runtime}" "\$@"
+    else
+        "\${wk_runtime}" "\$@"
+    fi
+}
+
+# Healthy = container running AND its internal /health endpoint answers.
+_wk_healthy() {
+    [ "\$(_wk inspect -f '{{.State.Running}}' "\${wk_container}" 2>/dev/null)" = "true" ] || return 1
+    _wk exec "\${wk_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${wk_health_port}/health" 2>/dev/null
+}
+
+start() {
+    [ -n "\${wk_runtime}" ] && [ -x "\${wk_runtime}" ] || { ewarn "no container runtime; skipping ${worker} for $name"; return 0; }
+    ebegin "Starting ${worker} worker (\${wk_container})"
+    if [ "\${wk_rootless}" = "true" ]; then
+        checkpath -d -m 0700 -o "\${wk_user}:\${wk_user}" "/run/user/\${wk_uid}"
+    fi
+    _wk start "\${wk_container}" >/dev/null 2>&1 || { eend 1 "container start failed"; return 1; }
+    _w=0
+    while ! _wk_healthy; do
+        _w=\$((_w + 1))
+        [ "\$_w" -lt "\${wk_wait}" ] || { eend 1 "${worker} worker not healthy after \${wk_wait}s"; return 1; }
+        sleep 1
+    done
+    eend 0
+}
+
+stop() {
+    [ -n "\${wk_runtime}" ] && [ -x "\${wk_runtime}" ] || return 0
+    ebegin "Stopping ${worker} worker (\${wk_container})"
+    _wk stop "\${wk_container}" >/dev/null 2>&1
+    eend 0
+}
+
+status() {
+    # Standard OpenRC started/stopped wording so health-openrc.sh classifies it.
+    if _wk_healthy; then
+        einfo "\${wk_container}: started"; return 0
+    fi
+    einfo "\${wk_container}: stopped"; return 3
+}
+INITEOF
+  chmod 0755 "/etc/init.d/${container}"
+}
+
+# Promote a (rootless) worker container to a dedicated OpenRC unit so it is
+# health-monitored, self-healed, and boot-persistent. No-op unless OpenRC.
+_register_worker_unit() {
+  local name="$1" worker="$2"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  render_worker_openrc_unit "$name" "$worker"
+  rc-update add "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
+  rc-service "lunarwing-${worker}-${name}" start >/dev/null 2>&1 || true
+  say "registered OpenRC unit lunarwing-${worker}-${name} (health-monitored, boot-persistent)"
+}
+
+# Tear down a worker's OpenRC unit (boot-disable + remove the init script).
+_deregister_worker_unit() {
+  local name="$1" worker="$2"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  [[ -f "/etc/init.d/lunarwing-${worker}-${name}" ]] || return 0
+  rc-service "lunarwing-${worker}-${name}" stop >/dev/null 2>&1 || true
+  rc-update del "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
+  rm -f "/etc/init.d/lunarwing-${worker}-${name}" "/etc/conf.d/lunarwing-${worker}-${name}"
 }
 
 # ── Port registry ────────────────────────────────────────────────────────────
@@ -473,6 +711,40 @@ all_tenant_names() {
 
 # ── User management ──────────────────────────────────────────────────────────
 
+# Provision rootless-podman prerequisites for a tenant user. Idempotent: skips
+# anything already present, never overlaps existing subordinate-id ranges.
+ensure_rootless_prereqs() {
+  local name="$1" uid home start
+  ensure_container_runtime
+  uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
+  home="$(getent passwd "$name" | cut -d: -f6)"
+
+  # Subordinate uid/gid ranges for the user namespace. useradd may pre-allocate
+  # these (via /etc/login.defs); only add when absent, and append AFTER the
+  # current max so a new tenant never overlaps an existing range (or eris).
+  if ! grep -q "^${name}:" /etc/subuid 2>/dev/null; then
+    start="$(awk -F: 'BEGIN{m=100000}{e=$2+$3; if(e>m)m=e}END{print m}' /etc/subuid 2>/dev/null)"
+    usermod --add-subuids "${start}-$((start + 65535))" "$name" \
+      || die "failed to allocate subuid range for $name (shadow with subid support required)"
+    say "allocated subuid range ${start}-$((start + 65535)) for $name"
+  fi
+  if ! grep -q "^${name}:" /etc/subgid 2>/dev/null; then
+    start="$(awk -F: 'BEGIN{m=100000}{e=$2+$3; if(e>m)m=e}END{print m}' /etc/subgid 2>/dev/null)"
+    usermod --add-subgids "${start}-$((start + 65535))" "$name" \
+      || die "failed to allocate subgid range for $name"
+    say "allocated subgid range ${start}-$((start + 65535)) for $name"
+  fi
+
+  # Runtime dir (XDG_RUNTIME_DIR). linger (enabled in create_tenant_user)
+  # recreates it at boot; create it now for immediate use. tmpfs, 0700, owned.
+  install -d -m 0700 -o "$name" -g "$name" "/run/user/$uid"
+
+  # One-time rootless storage init (safe to re-run after subid changes).
+  sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
+    "$CONTAINER_RT" system migrate >/dev/null 2>&1 || true
+  say "rootless prerequisites ready for $name (subuid/subgid, /run/user/$uid, storage)"
+}
+
 create_tenant_user() {
   local name="$1"
   local add_docker_group="${2:-false}"
@@ -485,9 +757,21 @@ create_tenant_user() {
   fi
 
   ensure_init_system
-  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    loginctl enable-linger "$name"
-    say "enabled linger for $name"
+
+  # Rootless-podman prerequisites for the tenant (subuid/subgid, runtime dir,
+  # storage). No-op when rootful (docker).
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    ensure_rootless_prereqs "$name"
+  fi
+
+  # Persist a per-user runtime manager so /run/user/<uid> survives reboot. Works
+  # on both systemd-logind and elogind (OpenRC) — capability-gated, not
+  # systemd-only, so rootless podman keeps a runtime dir across reboots.
+  if command -v loginctl >/dev/null 2>&1; then
+    if loginctl enable-linger "$name" 2>/dev/null; then
+      say "enabled linger for $name"
+    fi
   fi
 
   if [[ "$add_docker_group" == "true" ]]; then
@@ -906,12 +1190,15 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token relay_password secrets_key webhook_secret
+  local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
   webhook_secret="$(generate_token)"
+  # Stable + migration-safe; resolved before the heredoc so it can read an
+  # existing DATABASE_URL (preserving an already-initialised DB's password).
+  pg_password="$(tenant_pg_password "$name")"
 
   # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
   # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
@@ -929,7 +1216,7 @@ IRONCLAW_SOCKET=$run_dir/lunarwing.sock
 
 # Database
 DATABASE_BACKEND=postgres
-DATABASE_URL=postgres://lunarwing:lunarwing@127.0.0.1:${pg_port}/lunarwing
+DATABASE_URL=postgres://lunarwing:${pg_password}@127.0.0.1:${pg_port}/lunarwing
 DATABASE_SSLMODE=disable
 PGSSLMODE=disable
 
@@ -1314,7 +1601,7 @@ configure_pebble() {
   say "pebble configured for tenant '$name' at $env_path"
 
   local container_name="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null 2>&1; then
+  if _ctr "$name" inspect "$container_name" &>/dev/null 2>&1; then
     say "note: restart the pebble worker to pick up new config:"
     say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
   fi
@@ -1336,19 +1623,36 @@ start_tenant_nanocode() {
     return 0
   fi
 
-  # Check if the image exists
-  if ! $CONTAINER_RT image inspect lunarwing-worker-nanocode:latest &>/dev/null; then
-    say "nanocode worker image not found; run 'build-nanocode-worker' first (skipping)"
+  # Ensure the image is available to whoever runs the container (rootless: load it
+  # into the tenant's store via save|load; rootful: must already be built in root).
+  if ! _ensure_tenant_image "$name" lunarwing-worker-nanocode:latest; then
+    say "nanocode worker image not available; run 'build-nanocode-worker' first (skipping)"
     return 0
   fi
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
-      say "nanocode worker already running ($container_name, WSS port $wss_port)"
-      return 0
+  # systemd + rootless podman: Quadlet .container owns the lifecycle (the unit's
+  # [Container] spec creates+runs it), so skip the imperative `_ctr run` below.
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    _wait_user_manager "$name"
+    render_worker_quadlet "$name" nanocode 8443
+    _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _systemctl_user "$name" start "lunarwing-nanocode-${name}.service" >/dev/null 2>&1; then
+      say "nanocode worker ready via quadlet (lunarwing-nanocode-${name}.service, WSS port $wss_port)"
+    else
+      say "WARNING: lunarwing-nanocode-${name}.service failed to start" >&2
+      _systemctl_user "$name" status "lunarwing-nanocode-${name}.service" --no-pager >&2 || true
     fi
-    say "starting existing nanocode worker container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    return 0
+  fi
+
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "nanocode worker already running ($container_name, WSS port $wss_port)"
+    else
+      say "starting existing nanocode worker container $container_name"
+      _ctr "$name" start "$container_name" >/dev/null
+    fi
   else
     say "creating nanocode worker container $container_name on WSS port $wss_port"
 
@@ -1388,7 +1692,9 @@ start_tenant_nanocode() {
     # the container's network namespace, so this needs no -p publish and never
     # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
     # container stuck "unhealthy" even though the WS bridge was fine.
-    $CONTAINER_RT run -d \
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
       -e WS_PORT="$wss_port" \
@@ -1400,11 +1706,12 @@ start_tenant_nanocode() {
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       -v "$workspace_dir:/workspace:z" \
-      --restart unless-stopped \
+      "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
       --mode websocket >/dev/null
   fi
 
+  _register_worker_unit "$name" nanocode
   say "nanocode worker ready ($container_name, WSS port $wss_port)"
 }
 
@@ -1413,8 +1720,12 @@ stop_tenant_nanocode() {
   ensure_container_runtime
 
   local container_name="lunarwing-nanocode-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "nanocode worker stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
   fi
 }
@@ -1434,18 +1745,34 @@ start_tenant_pebble() {
     return 0
   fi
 
-  if ! $CONTAINER_RT image inspect lunarwing-worker-pebble:latest &>/dev/null; then
-    say "pebble worker image not found; run 'build-pebble-worker' first (skipping)"
+  if ! _ensure_tenant_image "$name" lunarwing-worker-pebble:latest; then
+    say "pebble worker image not available; run 'build-pebble-worker' first (skipping)"
     return 0
   fi
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
-      say "pebble worker already running ($container_name, WSS port $wss_port)"
-      return 0
+  # systemd + rootless podman: Quadlet .container owns the lifecycle (the unit's
+  # [Container] spec creates+runs it), so skip the imperative `_ctr run` below.
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    _wait_user_manager "$name"
+    render_worker_quadlet "$name" pebble 8443
+    _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _systemctl_user "$name" start "lunarwing-pebble-${name}.service" >/dev/null 2>&1; then
+      say "pebble worker ready via quadlet (lunarwing-pebble-${name}.service, WSS port $wss_port)"
+    else
+      say "WARNING: lunarwing-pebble-${name}.service failed to start" >&2
+      _systemctl_user "$name" status "lunarwing-pebble-${name}.service" --no-pager >&2 || true
     fi
-    say "starting existing pebble worker container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    return 0
+  fi
+
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "pebble worker already running ($container_name, WSS port $wss_port)"
+    else
+      say "starting existing pebble worker container $container_name"
+      _ctr "$name" start "$container_name" >/dev/null
+    fi
   else
     say "creating pebble worker container $container_name on WSS port $wss_port"
 
@@ -1477,7 +1804,9 @@ start_tenant_pebble() {
     # container's network namespace, so this needs no -p publish and never
     # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
     # container stuck "unhealthy" even though the WS bridge was fine.
-    $CONTAINER_RT run -d \
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
       -e WS_PORT="$wss_port" \
@@ -1488,10 +1817,11 @@ start_tenant_pebble() {
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       -v "$workspace_dir:/workspace:z" \
-      --restart unless-stopped \
+      "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
   fi
 
+  _register_worker_unit "$name" pebble
   say "pebble worker ready ($container_name, WSS port $wss_port)"
 }
 
@@ -1500,8 +1830,12 @@ stop_tenant_pebble() {
   ensure_container_runtime
 
   local container_name="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "pebble worker stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "pebble worker stopped ($container_name)"
   fi
 }
@@ -1516,27 +1850,65 @@ start_tenant_postgres() {
   pg_port="$(ports_get "$name" postgres)"
   container_name="lunarwing-pg-$name"
 
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  # systemd + rootless podman: a Quadlet .container owns the lifecycle (boot-
+  # persistent, health-monitored, self-healable). Quadlet creates the container,
+  # so skip the imperative `_ctr run` below; keep the pg_isready gate (via exec).
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    _wait_user_manager "$name"
+    render_pg_quadlet "$name"
+    _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if ! _systemctl_user "$name" start "lunarwing-pg-${name}.service" >/dev/null 2>&1; then
+      say "WARNING: lunarwing-pg-${name}.service failed to start" >&2
+      _systemctl_user "$name" status "lunarwing-pg-${name}.service" --no-pager >&2 || true
+    fi
+    local q_attempts=0
+    while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
+      q_attempts=$((q_attempts + 1))
+      [[ $q_attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
+      sleep 1
+    done
+    say "PostgreSQL ready via quadlet ($container_name, port $pg_port)"
+    return 0
+  fi
+
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "PostgreSQL already running ($container_name, port $pg_port)"
       return 0
     fi
     say "starting existing PostgreSQL container $container_name"
-    $CONTAINER_RT start "$container_name" >/dev/null
+    _ctr "$name" start "$container_name" >/dev/null
   else
     say "creating PostgreSQL container $container_name on port $pg_port"
-    $CONTAINER_RT run -d \
+    # Named volume (not anonymous) so the data has a stable, inspectable,
+    # exportable identity for backups; rootless podman auto-chowns it inside the
+    # tenant user namespace. --restart is a no-op under rootless podman (no
+    # daemon — OpenRC owns lifecycle), so only set it for rootful docker.
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    # Pass POSTGRES_PASSWORD via a transient 0600 --env-file rather than `-e` so
+    # the per-tenant secret never lands on the container-runtime argv (readable in
+    # /proc/<pid>/cmdline by other local users). Removed right after creation; the
+    # Quadlet path keeps it in its own 0600 unit file for the same reason.
+    local pg_init_env
+    pg_init_env="$(tenant_env_dir "$name")/.pg-init.env"
+    ( umask 077; printf 'POSTGRES_PASSWORD=%s\n' "$(tenant_pg_password "$name")" >"$pg_init_env" )
+    chown "$name:$name" "$pg_init_env" 2>/dev/null || true
+    _ctr "$name" run -d \
       --name "$container_name" \
       -e POSTGRES_USER=lunarwing \
-      -e POSTGRES_PASSWORD=lunarwing \
+      --env-file "$pg_init_env" \
       -e POSTGRES_DB=lunarwing \
       -p "127.0.0.1:${pg_port}:5432" \
-      --restart unless-stopped \
+      -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
+      "${restart_arg[@]}" \
       pgvector/pgvector:pg16 >/dev/null
+    rm -f "$pg_init_env"
   fi
 
   local attempts=0
-  while ! $CONTAINER_RT exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
+  while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
     [[ $attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
     sleep 1
@@ -1549,8 +1921,8 @@ stop_tenant_postgres() {
   ensure_container_runtime
 
   local container_name="lunarwing-pg-$name"
-  if $CONTAINER_RT inspect "$container_name" &>/dev/null; then
-    $CONTAINER_RT stop "$container_name" >/dev/null 2>&1 || true
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "PostgreSQL stopped ($container_name)"
   fi
 }
@@ -1561,14 +1933,298 @@ reset_tenant_postgres() {
 
   local container_name="lunarwing-pg-$name"
   stop_tenant_postgres "$name"
-  $CONTAINER_RT rm -f "$container_name" >/dev/null 2>&1 || true
-  say "PostgreSQL removed ($container_name)"
+  _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+  # Remove the named data volume too so a subsequent create starts fresh (matches
+  # the pre-named-volume behaviour where the anonymous volume was orphaned on rm).
+  _ctr "$name" volume rm "lunarwing-pg-${name}" >/dev/null 2>&1 || true
+  say "PostgreSQL removed ($container_name, data volume cleared)"
+}
+
+# Rotate an existing tenant's PG password to a fresh random one. Unlike a new
+# tenant (where POSTGRES_PASSWORD seeds an empty datadir), an initialised DB needs
+# an in-place ALTER ROLE, then the persisted secret + DATABASE_URL updated, then a
+# daemon restart so it reconnects with the new credential. The new password is hex
+# (URL/SQL-safe) and is never echoed.
+rotate_tenant_pg_password() {
+  local name="$1"
+  ensure_container_runtime
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local container_name="lunarwing-pg-$name"
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL container $container_name is not running; start the tenant first"
+
+  local envf pg_port new_pw secret_file tmp
+  envf="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$envf" ]] || die "tenant env not found: $envf"
+  pg_port="$(ports_get "$name" postgres)"
+  new_pw="$(generate_token | cut -c1-32)"
+
+  # Change the live role password. psql connects over the container's local unix
+  # socket (trust auth in the postgres image), and the new value is fed on stdin —
+  # never on argv or in logs. A hex value carries no SQL-quoting hazard.
+  if ! printf "ALTER ROLE lunarwing PASSWORD '%s';\n" "$new_pw" \
+       | _ctr "$name" exec -i "$container_name" psql -v ON_ERROR_STOP=1 -U lunarwing -d lunarwing -q >/dev/null 2>&1; then
+    die "failed to ALTER ROLE password inside $container_name (is the DB healthy?)"
+  fi
+
+  # Persist the new secret (source of truth) ...
+  secret_file="$(tenant_env_dir "$name")/pg.secret"
+  ( umask 077; printf '%s\n' "$new_pw" > "$secret_file" )
+  chown "$name:$name" "$secret_file" 2>/dev/null || true
+
+  # ... and rewrite DATABASE_URL in place (preserving the env file's owner/perms).
+  # Temp lives beside the env file (0600), not in shared /tmp, so the cleartext
+  # password isn't briefly exposed there — matching the convention used elsewhere.
+  tmp="$(mktemp "$envf.tmp.XXXXXX")"
+  sed "s#^DATABASE_URL=.*#DATABASE_URL=postgres://lunarwing:${new_pw}@127.0.0.1:${pg_port}/lunarwing#" "$envf" >"$tmp"
+  cat "$tmp" >"$envf"
+  rm -f "$tmp"
+
+  say "Rotated PostgreSQL password for tenant '$name'."
+  say "IMPORTANT: the running daemon still holds the old credential — restart to apply:"
+  say "    lunarwing-mt-admin.sh restart-tenant $name"
+}
+
+# ── PostgreSQL backup / restore ──────────────────────────────────────────────
+
+# pg_dump a tenant's database to a timestamped custom-format file under
+# $BACKUP_DIR/<tenant>/. Runs pg_dump inside the tenant's pg container via _ctr,
+# so it is init- and runtime-agnostic (rootless podman or rootful docker). Safe
+# on a live database (MVCC snapshot). Prunes to the most recent $BACKUP_KEEP.
+backup_tenant_postgres() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_container_runtime
+  local container_name="lunarwing-pg-$name"
+
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' ($container_name) — start the tenant first"
+
+  local dir ts dest tmp
+  dir="$BACKUP_DIR/$name"
+  mkdir -p "$dir"
+  chmod 0700 "$BACKUP_DIR" "$dir" 2>/dev/null || true
+  ts="$(date +%Y%m%d%H%M%S)"
+  dest="$dir/${name}-${ts}.dump"
+  tmp="$dest.partial"
+
+  say "backing up '$name' -> $dest"
+  # -Fc: compressed custom format (restore via pg_restore). umask 077 so the
+  # .partial is never world-readable, even mid-dump; rename on success so an
+  # interrupted dump never looks complete.
+  if ( umask 077; _ctr "$name" exec "$container_name" pg_dump -U lunarwing -Fc lunarwing > "$tmp" ); then
+    mv "$tmp" "$dest"
+    say "backup complete: $dest ($(du -h "$dest" 2>/dev/null | cut -f1))"
+  else
+    rm -f "$tmp"
+    die "pg_dump failed for '$name'"
+  fi
+  _prune_tenant_backups "$name"
+}
+
+# Keep only the most recent $BACKUP_KEEP dumps for a tenant (0/unset = keep all).
+_prune_tenant_backups() {
+  local name="$1" dir="$BACKUP_DIR/$1"
+  [[ "${BACKUP_KEEP:-0}" =~ ^[0-9]+$ && "$BACKUP_KEEP" -gt 0 ]] || return 0
+  local -a dumps=("$dir"/*.dump)
+  [[ -e "${dumps[0]:-}" ]] || return 0          # glob did not match -> nothing to prune
+  local n=${#dumps[@]} i
+  (( n > BACKUP_KEEP )) || return 0
+  for (( i=0; i < n - BACKUP_KEEP; i++ )); do   # glob is ascending (timestamp) = oldest first
+    rm -f "${dumps[$i]}"
+    say "pruned old backup: ${dumps[$i]}"
+  done
+}
+
+# List existing backups for one tenant or all.
+list_tenant_backups() {
+  local filter="${1:-}" names
+  if [[ -n "$filter" ]]; then names="$(sanitize_name "$filter")"; else names="$(all_tenant_names)"; fi
+  [[ -n "$names" ]] || { say "no tenants"; return 0; }
+  say "=== Backups (under $BACKUP_DIR) ==="
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    say ""
+    say "$name:"
+    if compgen -G "$BACKUP_DIR/$name/*.dump" >/dev/null 2>&1; then
+      ls -1sh "$BACKUP_DIR/$name"/*.dump 2>/dev/null | sed 's/^/  /'
+    else
+      say "  (no backups)"
+    fi
+  done <<< "$names"
+}
+
+# Restore a tenant's database from a custom-format dump. DESTRUCTIVE: pg_restore
+# --clean --if-exists DROPs and recreates objects. Requires the tenant daemon to
+# be stopped (no concurrent writes) and an explicit --yes.
+restore_tenant_postgres() {
+  local name="$1" file="$2" confirmed="${3:-false}"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  [[ -f "$file" ]] || die "backup file not found: $file"
+  # Reject anything that is not a custom-format archive before touching the DB
+  # (custom-format pg_dump files begin with the magic "PGDMP").
+  [[ "$(head -c5 "$file" 2>/dev/null)" == "PGDMP" ]] \
+    || die "not a custom-format pg_dump archive (missing PGDMP header): $file"
+  [[ "$confirmed" == "true" ]] || die "restore DROPs and recreates the database for '$name'. Re-run with --yes to confirm."
+  ensure_container_runtime
+  ensure_init_system
+  local container_name="lunarwing-pg-$name"
+
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' — start the tenant's pg container first"
+
+  # Refuse unless we can POSITIVELY confirm the daemon is stopped (concurrent
+  # writes corrupt a restore). Fail closed: if the service tool is missing or the
+  # state is indeterminate, never assume "stopped".
+  local daemon_state="unknown"
+  if [[ "$INIT_SYSTEM" == "systemd" ]] && command -v systemctl >/dev/null 2>&1; then
+    if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service" 2>/dev/null; then daemon_state="active"; else daemon_state="stopped"; fi
+  elif [[ "$INIT_SYSTEM" == "openrc" ]] && command -v rc-service >/dev/null 2>&1; then
+    if rc-service "lunarwing-${name}" status >/dev/null 2>&1; then daemon_state="active"; else daemon_state="stopped"; fi
+  fi
+  case "$daemon_state" in
+    stopped) : ;;
+    active)  die "stop the daemon first: $0 stop-tenant $name  (restart after restore)" ;;
+    *)       die "cannot confirm the '$name' daemon is stopped (no $INIT_SYSTEM service tool?); stop it manually, then re-run" ;;
+  esac
+
+  say "restoring '$name' from $file (single transaction, DROP + recreate) ..."
+  # --single-transaction: all-or-nothing. A mid-restore failure rolls the whole
+  # DROP+recreate back, so a failed restore never leaves the DB half-dropped.
+  if _ctr "$name" exec -i "$container_name" pg_restore -U lunarwing -d lunarwing --single-transaction --clean --if-exists < "$file"; then
+    say "restore complete for '$name'. Restart the tenant: $0 start-tenant $name"
+  else
+    die "pg_restore failed for '$name' — rolled back (single transaction); the database is unchanged"
+  fi
 }
 
 # ── Systemd service units ────────────────────────────────────────────────────
 
+# Render a per-tenant Quadlet .container for the Postgres container. The podman
+# user-generator turns this into lunarwing-pg-<t>.service at `systemctl --user
+# daemon-reload`; [Install] makes the lingering user manager start it at boot.
+# Quadlet owns creation (the imperative `_ctr run` is skipped on this path), so
+# the named volume below preserves data across container replacement.
+render_pg_quadlet() {
+  local name="$1"
+  local qdir pg_port pg_password
+  qdir="$(tenant_quadlet_dir "$name")"
+  pg_port="$(ports_get "$name" postgres)"
+  pg_password="$(tenant_pg_password "$name")"   # inlined into the 0600 tenant-owned .container
+  mkdir -p "$qdir"
+  cat >"$qdir/lunarwing-pg-${name}.container" <<EOF
+[Unit]
+Description=LunarWing Postgres container ($name)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Container]
+ContainerName=lunarwing-pg-${name}
+Image=pgvector/pgvector:pg16
+PublishPort=127.0.0.1:${pg_port}:5432
+Volume=lunarwing-pg-${name}:/var/lib/postgresql/data
+Environment=POSTGRES_USER=lunarwing
+Environment=POSTGRES_PASSWORD=${pg_password}
+Environment=POSTGRES_DB=lunarwing
+HealthCmd=pg_isready -U lunarwing -q
+HealthInterval=10s
+HealthTimeout=3s
+HealthRetries=5
+HealthStartPeriod=30s
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
+EOF
+  chmod 0600 "$qdir/lunarwing-pg-${name}.container"
+  chown -R "$name:$name" "$(tenant_home "$name")/.config/containers"
+}
+
+# Render a per-tenant Quadlet .container for an external worker (nanocode/pebble).
+# Mirrors the imperative env from start_tenant_<worker>: the GATEWAY_AUTH_TOKEN ->
+# AGENT_AUTH_TOKEN and LLM_API_KEY -> TENSORZERO_API_KEY remap is resolved here and
+# inlined as Environment= in a 0600 tenant-owned unit (no secret leaves the file).
+# Returns early (no unit) when the worker has no allocated wss port.
+render_worker_quadlet() {
+  local name="$1" worker="$2" health_port="${3:-8443}"
+  local qdir wss_port workspace_dir env_dir tenant_env_path worker_env_path
+  qdir="$(tenant_quadlet_dir "$name")"
+  wss_port="$(ports_get "$name" "${worker}_wss")"
+  [[ -n "$wss_port" ]] || return 0
+  env_dir="$(tenant_env_dir "$name")"
+  tenant_env_path="$env_dir/lunarwing.env"
+  worker_env_path="$env_dir/${worker}.env"
+  workspace_dir="$(tenant_lw_root "$name")/${worker}-workspace"
+  mkdir -p "$workspace_dir"; chown "$name:$name" "$workspace_dir"; chmod 777 "$workspace_dir"
+  mkdir -p "$qdir"
+
+  local agent_token tz_key
+  agent_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  tz_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  # systemd treats % as a unit specifier; escape so a token containing % survives.
+  agent_token="${agent_token//%/%%}"
+  tz_key="${tz_key//%/%%}"
+
+  {
+    cat <<EOF
+[Unit]
+Description=LunarWing ${worker} worker ($name)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Container]
+ContainerName=lunarwing-${worker}-${name}
+Image=lunarwing-worker-${worker}:latest
+PublishPort=127.0.0.1:${wss_port}:${wss_port}
+Volume=${workspace_dir}:/workspace:z
+Environment=LUNARWING_WORKER_ID=worker-${worker}-${name}
+Environment=WS_PORT=${wss_port}
+Environment=HEALTH_PORT=${health_port}
+Environment=WS_BIND_HOST=0.0.0.0
+Environment=WS_PATH=/ws/agent
+EOF
+    if [[ "$worker" == "nanocode" ]]; then
+      printf 'Environment=NANOCODE_MODE=websocket\n'
+      printf 'Environment=WS_ROLE=server\n'
+    elif [[ "$worker" == "pebble" ]]; then
+      printf 'Environment=PEBBLE_MODE=websocket\n'
+    fi
+    [[ -n "$agent_token" ]] && printf 'Environment=AGENT_AUTH_TOKEN=%s\n' "$agent_token"
+    [[ "$worker" == "nanocode" && -n "$tz_key" ]] && printf 'Environment=TENSORZERO_API_KEY=%s\n' "$tz_key"
+    # Operator override file (optional). EnvironmentFile= has existed since the
+    # Quadlet 4.4 debut, so it is safe at our >= 4.6 floor.
+    [[ -f "$worker_env_path" ]] && printf 'EnvironmentFile=%s\n' "$worker_env_path"
+    # nanocode takes a trailing CMD arg; pebble uses the image default.
+    [[ "$worker" == "nanocode" ]] && printf 'Exec=--mode websocket\n'
+    cat <<EOF
+
+[Service]
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+  } >"$qdir/lunarwing-${worker}-${name}.container"
+  chmod 0600 "$qdir/lunarwing-${worker}-${name}.container"
+  chown -R "$name:$name" "$(tenant_home "$name")/.config/containers"
+}
+
 render_tenant_systemd_units() {
   local name="$1"
+  ensure_container_runtime
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
   mkdir -p "$user_unit_dir"
@@ -1614,7 +2270,7 @@ EOF
   mkdir -p "$weechat_home"
   chown "$name:$name" "$weechat_home"
 
-  cat >"$user_unit_dir/weechat-${name}.service" <<EOF
+  cat >"$user_unit_dir/lunarwing-weechat-${name}.service" <<EOF
 [Unit]
 Description=WeeChat IRC client ($name)
 After=network.target
@@ -1634,8 +2290,8 @@ EOF
   cat >"$user_unit_dir/lunarwing-weechat-adapter-${name}.service" <<EOF
 [Unit]
 Description=LunarWing WeeChat WS adapter ($name)
-After=network.target weechat-${name}.service
-Requires=weechat-${name}.service
+After=network.target lunarwing-weechat-${name}.service
+Requires=lunarwing-weechat-${name}.service
 PartOf=lunarwing-${name}.service
 
 [Service]
@@ -1671,12 +2327,23 @@ NoNewPrivileges=true
 WantedBy=default.target
 EOF
 
+  # Postgres dependency — only when the pg Quadlet is rendered (systemd + rootless
+  # podman with Quadlet support). Mirrors the OpenRC `need lunarwing-pg-<t>`.
+  # Rootful docker has no pg unit (the container survives via --restart), so the
+  # dependency is omitted there to avoid a Requires on a non-existent unit.
+  local pg_dep_after="" pg_dep_requires=""
+  if [[ "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    pg_dep_after="lunarwing-pg-${name}.service "
+    pg_dep_requires="Requires=lunarwing-pg-${name}.service"
+  fi
+
   # Main daemon unit
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target xmpp-bridge-${name}.service lunarwing-proxy-${name}.service weechat-${name}.service lunarwing-weechat-adapter-${name}.service
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service weechat-${name}.service lunarwing-weechat-adapter-${name}.service
+After=network.target ${pg_dep_after}xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service
+${pg_dep_requires}
 
 [Service]
 Type=simple
@@ -1697,6 +2364,12 @@ PrivateTmp=true
 WantedBy=default.target
 EOF
 
+  # The pg + worker Quadlet .container units are rendered by the start functions
+  # (start_tenant_postgres / start_tenant_<worker>), NOT here: those guard on
+  # image availability, so a not-yet-built worker image never produces a unit
+  # that would crash-loop at boot (Restart=always). The daemon's Requires= above
+  # still resolves because start_tenant_postgres renders + starts pg first.
+
   chown -R "$name:$name" "$user_unit_dir"
   say "rendered systemd units for $name in $user_unit_dir"
 }
@@ -1709,6 +2382,19 @@ _systemctl_user() {
   sudo -u "$name" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user "$@"
 }
 
+# Best-effort wait for the tenant's `systemd --user` manager + bus to be ready,
+# so `systemctl --user` and the Quadlet generator work right after enable-linger
+# (which can return before the user manager is fully up). Proceeds after ~10s.
+_wait_user_manager() {
+  local name="$1" uid i
+  uid="$(id -u "$name" 2>/dev/null)" || return 0
+  for i in $(seq 1 20); do
+    [[ -S "/run/user/$uid/bus" ]] && return 0
+    sleep 0.5
+  done
+  return 0
+}
+
 start_tenant_systemd() {
   local name="$1"
   _systemctl_user "$name" daemon-reload
@@ -1716,7 +2402,7 @@ start_tenant_systemd() {
     "lunarwing-${name}.service" \
     "xmpp-bridge-${name}.service" \
     "lunarwing-proxy-${name}.service" \
-    "weechat-${name}.service" \
+    "lunarwing-weechat-${name}.service" \
     "lunarwing-weechat-adapter-${name}.service"
   _systemctl_user "$name" start "lunarwing-${name}.service"
   sleep 2
@@ -1734,7 +2420,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "weechat-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-pg-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -1747,9 +2433,23 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "weechat-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
+
+  # Quadlet .container units (rootless pg + workers). Remove the worker containers
+  # (their workspace data is bind-mounted in the home); the pg container + named
+  # volume are handled by stop_tenant_postgres / reset_tenant_postgres so non-purge
+  # removals keep the data for a later re-add.
+  local qdir; qdir="$(tenant_quadlet_dir "$name")"
+  rm -f "$qdir/lunarwing-pg-${name}.container" \
+        "$qdir/lunarwing-nanocode-${name}.container" \
+        "$qdir/lunarwing-pebble-${name}.container"
+  if id -u "$name" >/dev/null 2>&1; then
+    for w in nanocode pebble; do
+      _ctr "$name" rm -f "lunarwing-${w}-${name}" >/dev/null 2>&1 || true
+    done
+  fi
 
   _systemctl_user "$name" daemon-reload 2>/dev/null || true
   say "uninstalled systemd units for $name"
@@ -1784,11 +2484,88 @@ render_tenant_openrc_units() {
   local weechat_home
   weechat_home="$(tenant_home "$name")/.config/weechat"
 
-  # Resolve the container runtime path so the daemon's start_pre can bring up
-  # this tenant's Postgres container on boot (Podman has no daemon to honor
-  # --restart under OpenRC; idempotent on Docker). Empty -> start_pre skips it.
+  # Resolve the container runtime path + tenant identity so the dedicated
+  # Postgres init service can bring the container up (rootless: as the tenant
+  # user; rootful docker: as root). Empty runtime -> the pg service no-ops.
+  ensure_container_runtime
   local pg_runtime_bin="" pg_container="lunarwing-pg-$name"
   [[ -n "${CONTAINER_RT:-}" ]] && pg_runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  local pg_uid pg_home
+  pg_uid="$(id -u "$name" 2>/dev/null || echo "")"
+  pg_home="$(tenant_home "$name")"
+
+  # ── Postgres container init script (dedicated service; the daemon needs it) ──
+  # A first-class unit (not a daemon start_pre side-effect) so the host self-heal
+  # pipeline — which auto-discovers /etc/init.d units — can remediate a crashed
+  # Postgres independently.
+  cat >"/etc/init.d/lunarwing-pg-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing Postgres container ($name)"
+
+: "\${pg_runtime:=$pg_runtime_bin}"
+: "\${pg_container:=$pg_container}"
+: "\${pg_rootless:=$MT_ROOTLESS}"
+: "\${pg_user:=$name}"
+: "\${pg_home:=$pg_home}"
+: "\${pg_uid:=$pg_uid}"
+: "\${pg_wait:=60}"
+
+depend() {
+    need net localmount
+    after firewall
+    before lunarwing-${name}
+}
+
+# Run the container runtime for this tenant's container: rootless -> as the
+# tenant user with their runtime dir + HOME; rootful -> as root unchanged.
+_pg() {
+    if [ "\${pg_rootless}" = "true" ]; then
+        sudo -u "\${pg_user}" env HOME="\${pg_home}" XDG_RUNTIME_DIR="/run/user/\${pg_uid}" "\${pg_runtime}" "\$@"
+    else
+        "\${pg_runtime}" "\$@"
+    fi
+}
+
+start() {
+    [ -n "\${pg_runtime}" ] && [ -x "\${pg_runtime}" ] || { ewarn "no container runtime; skipping Postgres for $name"; return 0; }
+    ebegin "Starting Postgres container (\${pg_container})"
+    if [ "\${pg_rootless}" = "true" ]; then
+        checkpath -d -m 0700 -o "\${pg_user}:\${pg_user}" "/run/user/\${pg_uid}"
+    fi
+    _pg start "\${pg_container}" >/dev/null 2>&1 || { eend 1 "container start failed"; return 1; }
+    _w=0
+    while ! _pg exec "\${pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
+        _w=\$((_w + 1))
+        [ "\$_w" -lt "\${pg_wait}" ] || { eend 1 "Postgres not ready after \${pg_wait}s"; return 1; }
+        sleep 1
+    done
+    eend 0
+}
+
+stop() {
+    [ -n "\${pg_runtime}" ] && [ -x "\${pg_runtime}" ] || return 0
+    ebegin "Stopping Postgres container (\${pg_container})"
+    _pg stop "\${pg_container}" >/dev/null 2>&1
+    eend 0
+}
+
+status() {
+    # Emit the standard OpenRC "started"/"stopped" wording (not "running") so the
+    # health-check parser (grep started|stopped) and the mt-admin status display
+    # classify the container correctly instead of relying on the rc_exit fallback.
+    # "started" requires the container be running AND Postgres actually accept
+    # connections (pg_isready) — a Running-but-wedged DB (crash recovery, disk
+    # full, max_connections) otherwise reports healthy and is never remediated.
+    # Mirrors the worker units' _wk_healthy and this unit's own start() gate.
+    if [ "\$(_pg inspect -f '{{.State.Running}}' "\${pg_container}" 2>/dev/null)" = "true" ] \\
+       && _pg exec "\${pg_container}" pg_isready -U lunarwing -q -t 3 2>/dev/null; then
+        einfo "\${pg_container}: started"; return 0
+    fi
+    einfo "\${pg_container}: stopped"; return 3
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-pg-${name}"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -1813,9 +2590,6 @@ description="LunarWing AI assistant ($name)"
 : "\${lunarwing_respawn_max:=5}"
 : "\${lunarwing_respawn_period:=60}"
 : "\${lunarwing_retry:=SIGTERM/30/KILL/5}"
-: "\${lunarwing_pg_runtime:=$pg_runtime_bin}"
-: "\${lunarwing_pg_container:=$pg_container}"
-: "\${lunarwing_pg_wait:=60}"
 
 command="\${lunarwing_command}"
 command_args="\${lunarwing_args}"
@@ -1832,9 +2606,9 @@ error_log="\${lunarwing_error_log}"
 required_files="\${command}"
 
 depend() {
-    need net localmount
+    need net localmount lunarwing-pg-${name}
     use dns logger
-    after firewall xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
+    after firewall lunarwing-pg-${name} xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
 }
 
 load_env() {
@@ -1852,18 +2626,8 @@ start_pre() {
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${output_log}"
     checkpath -f -m 0640 -o "\${lunarwing_user}:\${lunarwing_group}" "\${error_log}"
     load_env || return 1
-    # Podman has no daemon to honor --restart under OpenRC; ensure this tenant's
-    # Postgres container is up and accepting connections before the daemon starts
-    # (runs as root in start_pre; idempotent on Docker).
-    if [ -n "\${lunarwing_pg_runtime}" ] && [ -x "\${lunarwing_pg_runtime}" ] && "\${lunarwing_pg_runtime}" inspect "\${lunarwing_pg_container}" >/dev/null 2>&1; then
-        "\${lunarwing_pg_runtime}" start "\${lunarwing_pg_container}" >/dev/null 2>&1 || true
-        _lw_pg=0
-        while ! "\${lunarwing_pg_runtime}" exec "\${lunarwing_pg_container}" pg_isready -U lunarwing -q 2>/dev/null; do
-            _lw_pg=\$((_lw_pg + 1))
-            [ "\$_lw_pg" -lt "\${lunarwing_pg_wait}" ] || break
-            sleep 1
-        done
-    fi
+    # Postgres is brought up by the dedicated lunarwing-pg-${name} service, which
+    # this unit declares as a hard dependency (need), so the DB is already up.
     umask "\${lunarwing_umask}"
 }
 INITEOF
@@ -1993,7 +2757,7 @@ INITEOF
   chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
 
   # ── WeeChat init script (tmux-based) ──
-  cat >"/etc/init.d/weechat-${name}" <<INITEOF
+  cat >"/etc/init.d/lunarwing-weechat-${name}" <<INITEOF
 #!/sbin/openrc-run
 
 description="WeeChat IRC client ($name)"
@@ -2034,7 +2798,7 @@ stop() {
     eend 0
 }
 INITEOF
-  chmod 0755 "/etc/init.d/weechat-${name}"
+  chmod 0755 "/etc/init.d/lunarwing-weechat-${name}"
 
   # WeeChat WS adapter init script
   cat >"/etc/init.d/lunarwing-weechat-adapter-${name}" <<INITEOF
@@ -2072,9 +2836,9 @@ output_log="\${adapter_output_log}"
 error_log="\${adapter_error_log}"
 
 depend() {
-    need net weechat-${name}
+    need net lunarwing-weechat-${name}
     use dns
-    after firewall weechat-${name}
+    after firewall lunarwing-weechat-${name}
     before lunarwing-${name}
 }
 
@@ -2100,7 +2864,7 @@ INITEOF
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-${name} lunarwing-weechat-adapter-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -2112,7 +2876,7 @@ CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
-  cat >"/etc/conf.d/weechat-${name}" <<CONFD
+  cat >"/etc/conf.d/lunarwing-weechat-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
@@ -2125,9 +2889,11 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
-  # Optional channels first, non-fatal: a missing weechat/aiohttp must not abort
+  # Postgres first: the daemon `need`s it (and it's idempotent if already up).
+  rc-service "lunarwing-pg-${name}" start
+  # Optional channels next, non-fatal: a missing weechat/aiohttp must not abort
   # the core stack (the main daemon does not depend on them).
-  rc-service "weechat-${name}" start 2>/dev/null || say "  (weechat-${name} skipped — optional)"
+  rc-service "lunarwing-weechat-${name}" start 2>/dev/null || say "  (lunarwing-weechat-${name} skipped — optional)"
   rc-service "lunarwing-weechat-adapter-${name}" start 2>/dev/null || say "  (lunarwing-weechat-adapter-${name} skipped — optional)"
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
@@ -2136,8 +2902,8 @@ start_tenant_openrc() {
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  for svc in "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
-             "weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
+  for svc in "lunarwing-pg-${name}" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+             "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
     if rc-service "$svc" status >/dev/null 2>&1; then
       rc-update add "$svc" default >/dev/null 2>&1 || true
     fi
@@ -2151,13 +2917,15 @@ stop_tenant_openrc() {
   rc-service "xmpp-bridge-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
-  rc-service "weechat-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-weechat-${name}" stop 2>/dev/null || true
+  # Postgres last: the daemon depends on it, so it stops after its consumers.
+  rc-service "lunarwing-pg-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "weechat-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -2188,7 +2956,7 @@ warn_if_adapter_deps_missing() {
   say ""
 }
 
-# ── Host-global health-check / self-heal pipeline (OpenRC) ───────────────────
+# ── Host-global health-check / self-heal pipeline (OpenRC + systemd) ─────────
 
 _ensure_cron_runlevel() {
   # Ensure a cron daemon is enabled at boot + running so the schedule fires.
@@ -2227,15 +2995,57 @@ _install_health_cron() {
   _ensure_cron_runlevel "$([[ "$cmd" == "fcrontab" ]] && echo fcron)"
 }
 
+_install_health_systemd_timer() {
+  # systemd hosts: a root, system-level oneshot service + timer. Persistent=true
+  # provides the missed-run catch-up fcron gives on OpenRC; system-level (not
+  # --user) because one run remediates many tenants' user units via sudo.
+  local svc="/etc/systemd/system/lunarwing-mt-health.service"
+  local tmr="/etc/systemd/system/lunarwing-mt-health.timer"
+  if ! command -v systemctl >/dev/null 2>&1; then
+    say "WARNING: systemctl not found — cannot schedule the pipeline on systemd."
+    return 0
+  fi
+  cat >"$svc" <<UNITEOF
+[Unit]
+Description=LunarWing MT health-check + self-heal pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$HEALTH_LAUNCHER
+UNITEOF
+  cat >"$tmr" <<UNITEOF
+[Unit]
+Description=Schedule LunarWing MT health/self-heal pipeline (every ${HEALTH_INTERVAL_MIN} min)
+
+[Timer]
+OnBootSec=5min
+OnCalendar=*:0/${HEALTH_INTERVAL_MIN}
+Persistent=true
+AccuracySec=30s
+Unit=lunarwing-mt-health.service
+
+[Install]
+WantedBy=timers.target
+UNITEOF
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  if systemctl enable --now lunarwing-mt-health.timer >/dev/null 2>&1; then
+    say "scheduled health pipeline via systemd timer: every ${HEALTH_INTERVAL_MIN} min"
+  else
+    say "WARNING: failed to enable lunarwing-mt-health.timer"
+  fi
+}
+
 ensure_health_pipeline() {
   # Idempotently install + schedule the host-global health-check -> self-heal
   # pipeline. Auto-discovers all tenants, so one install covers every tenant.
-  # OpenRC only for now.
+  # Wired for OpenRC (fcron/cron) and systemd (timer); other inits are skipped.
   ensure_init_system
-  if [[ "$INIT_SYSTEM" != "openrc" ]]; then
-    say "health pipeline: only wired for OpenRC so far (INIT_SYSTEM=$INIT_SYSTEM); skipping"
-    return 0
-  fi
+  case "$INIT_SYSTEM" in
+    openrc|systemd) : ;;
+    *) say "health pipeline: not wired for INIT_SYSTEM=$INIT_SYSTEM; skipping"; return 0 ;;
+  esac
   [[ -d "$HEALTH_SRC_DIR" ]] || { say "WARNING: health source dir not found ($HEALTH_SRC_DIR); skipping"; return 0; }
 
   say "--- Ensuring host-global health/self-heal pipeline ---"
@@ -2257,7 +3067,7 @@ ensure_health_pipeline() {
 # /etc/lunarwing/health.env — host-global health/self-heal pipeline config.
 # Auto-generated by lunarwing-mt-admin.sh (write-if-absent; safe to edit).
 LUNARWING_BASE_DIR=$HEALTH_BASE_DIR
-LUNARWING_SERVICE_MANAGER=openrc
+LUNARWING_SERVICE_MANAGER=$INIT_SYSTEM
 SELF_HEAL_TENANTS_FILE=$PORTS_REGISTRY
 
 # MT hardening: remediate only auto-discovered per-tenant init units; disable
@@ -2279,6 +3089,22 @@ ENVEOF
     say "wrote $HEALTH_ENV_FILE (mode 0600)"
   else
     say "$HEALTH_ENV_FILE already exists (preserving)"
+    # Reconcile only the service-manager line in case a prior run wrote a
+    # different init system (self-heal honors LUNARWING_SERVICE_MANAGER ahead of
+    # its own autodetection, so a stale value silently misroutes remediation).
+    # Operator edits (e.g. Gotify tokens) are preserved — we rewrite one line.
+    if ! grep -q "^LUNARWING_SERVICE_MANAGER=${INIT_SYSTEM}$" "$HEALTH_ENV_FILE"; then
+      local _tmp; _tmp="$(mktemp)"
+      if grep -q '^LUNARWING_SERVICE_MANAGER=' "$HEALTH_ENV_FILE"; then
+        awk -v v="$INIT_SYSTEM" '/^LUNARWING_SERVICE_MANAGER=/{print "LUNARWING_SERVICE_MANAGER=" v; next} {print}' "$HEALTH_ENV_FILE" > "$_tmp"
+      else
+        cp "$HEALTH_ENV_FILE" "$_tmp"
+        printf 'LUNARWING_SERVICE_MANAGER=%s\n' "$INIT_SYSTEM" >> "$_tmp"
+      fi
+      cat "$_tmp" > "$HEALTH_ENV_FILE"   # overwrite content, preserve mode/owner
+      rm -f "$_tmp"
+      say "reconciled LUNARWING_SERVICE_MANAGER=$INIT_SYSTEM in $HEALTH_ENV_FILE"
+    fi
   fi
 
   # 4) Launcher: source env, then run the pipeline (health-check -> self-heal LIVE).
@@ -2293,18 +3119,32 @@ LAUNCHEOF
   chmod 0755 "$HEALTH_LAUNCHER"
   say "wrote $HEALTH_LAUNCHER"
 
-  # 5) Schedule it.
-  _install_health_cron
+  # 5) Schedule it (per init system).
+  case "$INIT_SYSTEM" in
+    openrc)  _install_health_cron ;;
+    systemd) _install_health_systemd_timer ;;
+  esac
   say "health pipeline ready (every ${HEALTH_INTERVAL_MIN} min; covers all tenants)"
 }
 
 remove_health_pipeline() {
   ensure_init_system
-  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   local begin="# BEGIN lunarwing-mt-health managed block"
   local end="# END lunarwing-mt-health managed block"
-  command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | fcrontab - 2>/dev/null || true
-  command -v crontab  >/dev/null 2>&1 && crontab  -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | crontab  - 2>/dev/null || true
+  case "$INIT_SYSTEM" in
+    openrc)
+      command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | fcrontab - 2>/dev/null || true
+      command -v crontab  >/dev/null 2>&1 && crontab  -l 2>/dev/null | sed "/^${begin}$/,/^${end}$/d" | crontab  - 2>/dev/null || true
+      ;;
+    systemd)
+      if command -v systemctl >/dev/null 2>&1; then
+        systemctl disable --now lunarwing-mt-health.timer >/dev/null 2>&1 || true
+        rm -f /etc/systemd/system/lunarwing-mt-health.timer /etc/systemd/system/lunarwing-mt-health.service
+        systemctl daemon-reload >/dev/null 2>&1 || true
+      fi
+      ;;
+    *) return 0 ;;
+  esac
   rm -f "$HEALTH_LAUNCHER"
   say "retired host-global health pipeline schedule (no tenants remain)"
   # $HEALTH_LIB_DIR + $HEALTH_ENV_FILE left in place (harmless; preserves config/state).
@@ -2445,6 +3285,27 @@ remove_tenant() {
   say "=== Tenant '$name' removed ==="
 }
 
+# Re-render a tenant's service units from the current generator WITHOUT touching
+# secrets/env or restarting anything — for applying a generator change (e.g. an
+# updated init-script status()) to an already-provisioned tenant. The systemd
+# renderer daemon-reloads internally; OpenRC reads the script per invocation. A
+# status()/health change takes effect immediately; a change to the run command
+# needs a restart.
+render_tenant_units() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_init_system
+  say "--- Re-rendering $INIT_SYSTEM units for $name ---"
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    render_tenant_systemd_units "$name"
+  else
+    render_tenant_openrc_units "$name"
+  fi
+  say "units re-rendered for '$name' (services NOT restarted)."
+  say "run-command changes need a restart to apply: $0 restart-tenant $name"
+}
+
 start_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -2514,25 +3375,25 @@ status_tenant() {
 
   ensure_container_runtime
   local container_name="lunarwing-pg-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
     say "PostgreSQL: running ($container_name)"
   else
     say "PostgreSQL: stopped ($container_name)"
   fi
 
   local nanocode_container="lunarwing-nanocode-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$nanocode_container" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$nanocode_container" 2>/dev/null | grep -q true; then
     say "Nanocode worker: running ($nanocode_container, WSS port $(ports_get "$name" nanocode_wss))"
-  elif $CONTAINER_RT inspect "$nanocode_container" &>/dev/null; then
+  elif _ctr "$name" inspect "$nanocode_container" &>/dev/null; then
     say "Nanocode worker: stopped ($nanocode_container)"
   else
     say "Nanocode worker: not created"
   fi
 
   local pebble_container="lunarwing-pebble-$name"
-  if $CONTAINER_RT inspect -f '{{.State.Running}}' "$pebble_container" 2>/dev/null | grep -q true; then
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$pebble_container" 2>/dev/null | grep -q true; then
     say "Pebble worker: running ($pebble_container, WSS port $(ports_get "$name" pebble_wss))"
-  elif $CONTAINER_RT inspect "$pebble_container" &>/dev/null; then
+  elif _ctr "$name" inspect "$pebble_container" &>/dev/null; then
     say "Pebble worker: stopped ($pebble_container)"
   else
     say "Pebble worker: not created"
@@ -2542,14 +3403,23 @@ status_tenant() {
   say ""
   say "Services ($INIT_SYSTEM):"
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
-      local state
+    local svcs=("lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
+                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}")
+    # pg + workers are Quadlet units only on rootless podman; on rootful docker
+    # they run as plain containers (shown above), not systemd units.
+    if [[ "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+      svcs+=("lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}")
+    fi
+    local svc state
+    for svc in "${svcs[@]}"; do
       state="$(_systemctl_user "$name" is-active "${svc}.service" 2>/dev/null || echo "inactive")"
       say "  ${svc}.service: $state"
     done
   else
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
-      local state
+    local svc state
+    for svc in "lunarwing-pg-${name}" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
+               "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
+               "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
       say "  $svc: $state"
     done
@@ -2646,11 +3516,38 @@ doctor() {
     _check "podman available" podman info
   fi
 
+  ensure_container_runtime
+  if [[ "$MT_ROOTLESS" == "true" ]]; then
+    _check "rootless: newuidmap setuid" bash -c '[ -u "$(command -v newuidmap 2>/dev/null)" ]'
+    _check "rootless: newgidmap setuid" bash -c '[ -u "$(command -v newgidmap 2>/dev/null)" ]'
+    _check "rootless: /etc/subuid populated" test -s /etc/subuid
+    _check "rootless: /etc/subgid populated" test -s /etc/subgid
+    # Every per-tenant container publishes 127.0.0.1:<port>:…, which under rootless
+    # needs a userspace port-forwarder (pasta or slirp4netns).
+    _check "rootless: pasta or slirp4netns (port-forward)" \
+      bash -c 'command -v pasta >/dev/null 2>&1 || command -v slirp4netns >/dev/null 2>&1'
+  fi
+
   ensure_init_system
   _check "init system detected ($INIT_SYSTEM)" true
 
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
     _check "loginctl available" command -v loginctl
+    if [[ "$MT_ROOTLESS" == "true" ]]; then
+      _check "podman >= 4.6 (Quadlet supervision)" podman_supports_quadlet
+    fi
+    # Per-tenant linger keeps /run/user/<uid> + the systemd --user manager alive
+    # across reboot — boot-persistent Quadlet/user units depend on it. (Highest-
+    # value rootless-on-systemd check.)
+    local _dt _du _duid
+    while IFS=$'\t' read -r _dt _du; do
+      [[ -n "$_du" ]] || continue
+      _duid="$(id -u "$_du" 2>/dev/null || echo "")"
+      [[ -n "$_duid" ]] || continue
+      _check "tenant $_dt: linger enabled" \
+        bash -c "loginctl show-user '$_du' -p Linger --value 2>/dev/null | grep -qx yes"
+      _check "tenant $_dt: /run/user/$_duid present" test -d "/run/user/$_duid"
+    done < <(jq -r '.tenants // {} | to_entries[] | "\(.key)\t\(.value.user)"' "$PORTS_REGISTRY" 2>/dev/null || true)
   else
     _check "rc-service available" command -v rc-service
     _check "rc-update available" command -v rc-update
@@ -2664,7 +3561,7 @@ doctor() {
   _check "curl installed (self-heal/gotify)" command -v curl
   _check "flock installed (self-heal lock)" command -v flock
   if [[ "$DEFAULT_HEALTH_ENABLED" == "true" ]]; then
-    _check "health pipeline scheduled" bash -c 'crontab -l 2>/dev/null | grep -q lunarwing-mt-health || { command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | grep -q lunarwing-mt-health; }'
+    _check "health pipeline scheduled" bash -c 'systemctl is-enabled lunarwing-mt-health.timer >/dev/null 2>&1 || crontab -l 2>/dev/null | grep -q lunarwing-mt-health || { command -v fcrontab >/dev/null 2>&1 && fcrontab -l 2>/dev/null | grep -q lunarwing-mt-health; }'
   fi
   _check "nanocode worker dir exists" test -d "$LUNARWING_ROOT/lunarcode4lunarwing"
   _check "nanocode worker Dockerfile exists" test -f "$LUNARWING_ROOT/lunarcode4lunarwing/Dockerfile"
@@ -2866,6 +3763,19 @@ main() {
       restart_tenant "$1"
       ;;
 
+    render-units)
+      require_root
+      [[ -n "${1:-}" ]] || die "usage: render-units <name>"
+      ports_registry_init
+      render_tenant_units "$1"
+      ;;
+
+    rotate-pg-password)
+      require_root
+      [[ -n "${1:-}" ]] || die "usage: rotate-pg-password <name>"
+      rotate_tenant_pg_password "$1"
+      ;;
+
     list-tenants|list)
       ports_registry_init
       list_tenants
@@ -2929,6 +3839,52 @@ main() {
       while IFS= read -r name; do
         patch_tenant_env "$name"
       done <<< "$names"
+      ;;
+
+    backup-tenant)
+      require_root
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "usage: backup-tenant <name>"
+      ports_registry_init
+      backup_tenant_postgres "$name"
+      ;;
+
+    backup-all)
+      require_root
+      ports_registry_init
+      local names
+      names="$(all_tenant_names)"
+      [[ -n "$names" ]] || { say "no tenants registered"; exit 0; }
+      while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        # Subshell so a per-tenant die() doesn't abort the whole fleet backup.
+        ( backup_tenant_postgres "$name" ) || say "WARNING: backup failed for $name (continuing)"
+      done <<< "$names"
+      ;;
+
+    list-backups)
+      ports_registry_init
+      list_tenant_backups "${1:-}"
+      ;;
+
+    restore-tenant)
+      require_root
+      local name="" file="" confirmed=false
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --yes) confirmed=true; shift ;;
+          -*)    die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            elif [[ -z "$file" ]]; then file="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" && -n "$file" ]] || die "usage: restore-tenant <name> <file> --yes"
+      ports_registry_init
+      restore_tenant_postgres "$name" "$file" "$confirmed"
       ;;
 
     doctor)

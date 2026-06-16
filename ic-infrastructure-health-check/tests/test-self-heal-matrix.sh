@@ -42,7 +42,7 @@ assert_eq "$a1rc" "1" "A1: exit 1 when no report"
 
 # A2 — malformed report JSON → die, exit 1.
 a2="$(sb)"; printf 'this is not json{' > "$a2/report.json"
-oA2="$(run_raw "$a2" LUNARWING_SERVICE_MANAGER=systemd -- --dry-run --report "$a2/report.json")"
+oA2="$(run_raw "$a2" LUNARWING_SERVICE_MANAGER=systemd -- --dry-run --report "$a2/report.json")"; RC=$?
 assert_contains "$oA2" "report is not valid JSON" "A2: invalid JSON dies"
 assert_eq "$RC" "1" "A2: exit 1 on malformed report"
 
@@ -156,7 +156,7 @@ d1="$(sb)"; d_ports "$d1"
 report "$d1" '{components:[{component:"systemd",status:"critical",metrics:{units:[
   {name:"ironclaw-proxy-acme.service",status:"critical"}]}}]}'
 oD1="$(run_dry "$d1" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$d1/ports.json")"
-assert_contains "$oD1" "sudo -u acme"                                          "D1: tenant proxy restarts as tenant user"
+assert_contains "$oD1" "sudo -n -u acme"                                       "D1: tenant proxy restarts as tenant user"
 assert_contains "$oD1" "systemctl --user restart ironclaw-proxy-acme.service"  "D1: uses systemd --user bus"
 
 # D2 — tenant bridge unit (xmpp-bridge-<t>).
@@ -164,7 +164,7 @@ d2="$(sb)"; d_ports "$d2"
 report "$d2" '{components:[{component:"systemd",status:"critical",metrics:{units:[
   {name:"xmpp-bridge-globex.service",status:"critical"}]}}]}'
 oD2="$(run_dry "$d2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$d2/ports.json")"
-assert_contains "$oD2" "sudo -u globex"                                          "D2: tenant bridge restarts as tenant user"
+assert_contains "$oD2" "sudo -n -u globex"                                       "D2: tenant bridge restarts as tenant user"
 assert_contains "$oD2" "systemctl --user restart xmpp-bridge-globex.service"     "D2: uses systemd --user bus"
 
 # D3 — unit names a tenant absent from the registry → falls through to the
@@ -414,7 +414,6 @@ assert_eq "$(state_of "$k5" 'has("lunarwing")')" "true"  "K5: currently-unhealth
 assert_eq "$(state_of "$k5" 'has("old-svc")')"   "false" "K5: unrelated stale entry still pruned"
 
 echo "=== Section L: Concurrency & locking ==="
-
 if command -v flock >/dev/null 2>&1; then
     l1="$(sb)"; report "$l1" "$GW"
     l1lock="$l1/self-heal/self-heal.lock"; : > "$l1lock"
@@ -434,6 +433,51 @@ oL2="$(run_dry "$l2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 
 assert_contains "$oL2" "Self-Healing complete"           "L2: normal run completes"
 assert_absent   "$oL2" "another self-heal instance is running" "L2: no false lock contention"
 
+echo "=== Section O: Truncated-state recovery (6b) ==="
+
+# The state dir under test is $sb/self-heal (run_dry sets SELF_HEAL_STATE_DIR);
+# state.json lives there, NOT at $sb. Seed corrupt bytes DIRECTLY — `seed_state`
+# pipes through `jq -n`, which would reject malformed JSON and write an empty
+# (and therefore valid) file, never exercising the corrupt path.
+seed_corrupt() { printf '%s' "$2" > "$1/self-heal/state.json"; }   # raw non-empty invalid JSON
+HEALTHY='{components:[{component:"gateway",status:"healthy",metrics:{}}]}'
+
+# O1 — a non-empty, truncated state.json is detected, renamed for forensics, and
+# the tick still completes (nothing-to-do path against a healthy report).
+o1="$(sb)"; report "$o1" "$HEALTHY"
+seed_corrupt "$o1" '{"lunarwing":{"conse'
+oO1="$(run_dry "$o1" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
+assert_contains "$oO1" "state.json is corrupt"                "O1: corrupt state is detected and logged"
+assert_contains "$oO1" "renamed to state.json.corrupt"        "O1: corrupt file is renamed (forensic slot)"
+assert_contains "$oO1" "Self-Healing complete"                "O1: run completes despite corrupt state"
+[[ -f "$o1/self-heal/state.json.corrupt" ]] && ok "O1: forensic .corrupt copy preserved" \
+    || bad "O1: forensic .corrupt copy preserved" "no state.json.corrupt in $o1/self-heal"
+[[ -f "$o1/self-heal/state.json" ]] && ok "O1: fresh state.json rewritten after recovery" \
+    || bad "O1: fresh state.json rewritten after recovery" "state.json missing post-run"
+
+# O2 — a genuinely empty (0-byte) state.json is NOT a valid JSON object, so it must
+# be quarantined to .corrupt and replaced with a fresh {} (like a truncated file),
+# NOT silently treated as valid-empty — otherwise backoff/flap/escalation counters
+# reset every tick and never accumulate. Mirrors O1's recovery contract.
+o2="$(sb)"; report "$o2" "$HEALTHY"
+: > "$o2/self-heal/state.json"
+oO2="$(run_dry "$o2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
+assert_contains "$oO2" "state.json is corrupt"                "O2: empty state quarantined (not silently reset)"
+assert_contains "$oO2" "Self-Healing complete"                "O2: empty state runs cleanly after recovery"
+[[ -f "$o2/self-heal/state.json.corrupt" ]] && ok "O2: empty state preserved as .corrupt" \
+    || bad "O2: empty state preserved as .corrupt" "no state.json.corrupt in $o2/self-heal"
+
+# O3 — the forensic rename is single-slot: a FIXED .corrupt name (no timestamp),
+# so repeated corruption overwrites last-wins and never accumulates. Corrupt,
+# run (heals state.json), corrupt again, run — exactly one .corrupt file remains.
+o3="$(sb)"; report "$o3" "$HEALTHY"
+seed_corrupt "$o3" '{"lunarwing":'
+run_dry "$o3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false >/dev/null
+seed_corrupt "$o3" '{"broken'
+run_dry "$o3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false >/dev/null
+corrupt_count="$(find "$o3/self-heal" -maxdepth 1 -name 'state.json.corrupt*' | wc -l | tr -d ' ')"
+assert_eq "$corrupt_count" "1" "O3: single-slot rename — exactly one .corrupt file after repeated corruption"
+
 echo "=== Section M: Dry-run mode ==="
 
 # M1 — dry-run emits [DRY-RUN] markers and no real restart.
@@ -450,13 +494,13 @@ echo "=== Section N: CLI argument validation ==="
 
 # N1 — unknown flag → die.
 n1="$(sb)"
-oN1="$(run_raw "$n1" LUNARWING_SERVICE_MANAGER=systemd -- --bogus)"
+oN1="$(run_raw "$n1" LUNARWING_SERVICE_MANAGER=systemd -- --bogus)"; RC=$?
 assert_contains "$oN1" "unknown arg: --bogus" "N1: unknown flag dies"
 assert_eq "$RC" "1" "N1: unknown flag exits 1"
 
 # N2 — --help → usage, exit 0.
 n2="$(sb)"
-oN2="$(run_raw "$n2" LUNARWING_SERVICE_MANAGER=systemd -- --help)"
+oN2="$(run_raw "$n2" LUNARWING_SERVICE_MANAGER=systemd -- --help)"; RC=$?
 assert_contains "$oN2" "Usage: lunarwing-self-heal.sh" "N2: --help prints usage"
 assert_eq "$RC" "0" "N2: --help exits 0"
 
@@ -472,3 +516,4 @@ assert_contains "$oN3" "base=123s"       "N3: --backoff-base parsed"
 assert_contains "$oN3" "verify=false"    "N3: --verify-health parsed"
 
 finish
+

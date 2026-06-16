@@ -117,6 +117,19 @@ sudo ic/scripts/lunarwing-mt-admin.sh stop-tenant sparkie
 # Restart a tenant
 sudo ic/scripts/lunarwing-mt-admin.sh restart-tenant sparkie
 
+# Rotate a tenant's PostgreSQL password (ALTER ROLE + pg.secret + DATABASE_URL; then restart)
+sudo ic/scripts/lunarwing-mt-admin.sh rotate-pg-password sparkie
+
+# Back up a tenant's DB (pg_dump custom format → $LUNARWING_MT_BACKUP_DIR/<name>/)
+sudo ic/scripts/lunarwing-mt-admin.sh backup-tenant sparkie
+sudo ic/scripts/lunarwing-mt-admin.sh backup-all
+sudo ic/scripts/lunarwing-mt-admin.sh list-backups sparkie
+
+# Restore a tenant's DB from a dump (DESTRUCTIVE: DROP+recreate; stop the daemon first)
+sudo ic/scripts/lunarwing-mt-admin.sh stop-tenant sparkie
+sudo ic/scripts/lunarwing-mt-admin.sh restore-tenant sparkie /var/lib/lunarwing-backups/sparkie/sparkie-<ts>.dump --yes
+sudo ic/scripts/lunarwing-mt-admin.sh start-tenant sparkie
+
 # Remove a tenant (stop services, deallocate ports, preserve user home)
 sudo ic/scripts/lunarwing-mt-admin.sh remove-tenant sparkie
 
@@ -333,9 +346,12 @@ rc-service lunarwing-<name> status
 
 ## PostgreSQL
 
-Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. Default credentials: `lunarwing/lunarwing/lunarwing` (user/password/database).
+Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. The user and database are both `lunarwing`; the **password is a per-tenant random hex string** generated at `add-tenant` time, stored in `…/env/pg.secret` (0600, tenant-owned) and woven into the daemon's `DATABASE_URL`. Tenants created before this change keep their original `lunarwing` password until rotated — run `lunarwing-mt-admin.sh rotate-pg-password <name>` to move them onto a random one (it runs `ALTER ROLE`, updates `pg.secret` + `DATABASE_URL`, and prompts for a restart).
 
-The container is created with `--restart unless-stopped` so it survives host reboots when using Docker. Podman has no daemon to honor that policy, so on **OpenRC** each tenant daemon's generated init script brings its container up in `start_pre` (and waits for `pg_isready`) before launching — see [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](MT-GENTOO-SETUP-AND-CHANGES-MADE.md). On Podman + systemd, generate a unit via `podman generate systemd` instead.
+The container is created with `--restart unless-stopped` so it survives host reboots when using Docker. Podman has no daemon to honor that policy, so each tenant's container gets a first-class **supervised unit** instead:
+
+- **OpenRC** — a dedicated `/etc/init.d/lunarwing-pg-<name>` service (which the main daemon `need`s) `podman start`s the container and waits for `pg_isready`; the workers get `/etc/init.d/lunarwing-{nanocode,pebble}-<name>` the same way. See [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](MT-GENTOO-SETUP-AND-CHANGES-MADE.md).
+- **Podman + systemd (rootless)** — a per-tenant **Quadlet** `.container` at `~/.config/containers/systemd/lunarwing-pg-<name>.container` (`Restart=on-failure`, `HealthCmd=pg_isready`), which the podman user-generator turns into `lunarwing-pg-<name>.service` at `daemon-reload`. This supersedes the older `podman generate systemd` approach. See [`../proposals/MT_SYSTEMD_PARITY.md`](../proposals/MT_SYSTEMD_PARITY.md).
 
 ## Container Runtime
 

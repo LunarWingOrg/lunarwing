@@ -37,8 +37,16 @@ The DB values always win. Editing capabilities.json alone won't fix a stale DB e
 
 Check what the DB has stored:
 
+> **PG password:** per-tenant PostgreSQL passwords are random (stored in
+> `/home/<TENANT>/lunarwing/env/pg.secret`). Export it first; tenants created
+> before this change still use `lunarwing` (the `${PG_PW:-lunarwing}` fallback):
+>
+> ```bash
+> export PG_PW="$(sudo cat /home/<TENANT>/lunarwing/env/pg.secret 2>/dev/null || echo lunarwing)"
+> ```
+
 ```bash
-psql "postgresql://lunarwing:lunarwing@127.0.0.1:<PG_PORT>/lunarwing" -c \
+psql "postgresql://lunarwing:${PG_PW:-lunarwing}@127.0.0.1:<PG_PORT>/lunarwing" -c \
   "SELECT value FROM settings WHERE key = 'extensions.weechat.setup_fields';"
 ```
 
@@ -53,7 +61,7 @@ jq '.tenants.<TENANT>.ports' /etc/lunarwing/ports.json
 Update relay_url and ws_adapter_url to the correct ports:
 
 ```bash
-psql "postgresql://lunarwing:lunarwing@127.0.0.1:<PG_PORT>/lunarwing" -c "
+psql "postgresql://lunarwing:${PG_PW:-lunarwing}@127.0.0.1:<PG_PORT>/lunarwing" -c "
 UPDATE settings 
 SET value = jsonb_set(
   jsonb_set(value::jsonb, '{relay_url}', '\"http://127.0.0.1:<WEECHAT_PORT>\"'),
@@ -108,7 +116,7 @@ Ensure the `weechat_relay_password` secret in the DB matches WeeChat's configure
 Update the secret:
 
 ```bash
-DATABASE_URL="postgresql://lunarwing:lunarwing@127.0.0.1:<PG_PORT>/lunarwing" \
+DATABASE_URL="postgresql://lunarwing:${PG_PW:-lunarwing}@127.0.0.1:<PG_PORT>/lunarwing" \
 SECRETS_MASTER_KEY="<tenant master key from env>" \
 python3 ic_sm/scripts_4_db/insert_secret_postgres.py weechat_relay_password "<password>"
 ```
@@ -130,7 +138,7 @@ The `setup_fields` DB row stores all values as strings. When fields like `verbos
 Remove the offending field from the DB — the WASM will use the serde default (`false`):
 
 ```bash
-psql "postgresql://lunarwing:lunarwing@127.0.0.1:<PG_PORT>/lunarwing" -c "
+psql "postgresql://lunarwing:${PG_PW:-lunarwing}@127.0.0.1:<PG_PORT>/lunarwing" -c "
 UPDATE settings 
 SET value = value::jsonb - 'verbose_drops'
 WHERE key = 'extensions.weechat.setup_fields';
@@ -140,7 +148,7 @@ WHERE key = 'extensions.weechat.setup_fields';
 If multiple boolean/numeric fields cause problems, keep only the string fields that matter:
 
 ```bash
-psql "postgresql://lunarwing:lunarwing@127.0.0.1:<PG_PORT>/lunarwing" -c "
+psql "postgresql://lunarwing:${PG_PW:-lunarwing}@127.0.0.1:<PG_PORT>/lunarwing" -c "
 UPDATE settings 
 SET value = '{
   \"relay_url\": \"http://127.0.0.1:<WEECHAT_PORT>\",
