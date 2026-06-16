@@ -191,6 +191,10 @@ assert_eq "$(src_fn -- unit_tenant xmpp-bridge-globex.service)"   "globex" "D: u
 assert_eq "$(src_fn -- unit_tenant lunarwing-acme.service)"       "acme"   "D: unit_tenant lunarwing-<t>"
 assert_eq "$(src_fn -- unit_tenant lunarwing.service)"            ""       "D: unit_tenant base unit → no tenant"
 assert_eq "$(src_fn -- unit_tenant clickhouse-server.service)"    ""       "D: unit_tenant foreign unit → no tenant"
+# D-unit-ctr — -ctr suffix stripped before prefix extraction.
+assert_eq "$(src_fn -- unit_tenant lunarwing-pg-acme-ctr)"        "acme"   "D-ctr: lunarwing-pg-<t>-ctr → acme"
+assert_eq "$(src_fn -- unit_tenant lunarwing-nanocode-acme-ctr)"   "acme"   "D-ctr: lunarwing-nanocode-<t>-ctr → acme"
+assert_eq "$(src_fn -- unit_tenant lunarwing-pebble-acme-ctr)"     "acme"   "D-ctr: lunarwing-pebble-<t>-ctr → acme"
 
 echo "=== Section E: Grace period ==="
 

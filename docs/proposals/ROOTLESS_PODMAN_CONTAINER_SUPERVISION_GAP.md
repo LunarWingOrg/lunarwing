@@ -6,8 +6,9 @@ leg (the `eris` deploy). Companion to
 self-healing series ([`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEMENTS_1.md),
 [`SELF_HEALING_IMPROVEMENTS_2.md`](./SELF_HEALING_IMPROVEMENTS_2.md)).*
 
-> **Status:** proposal / analysis. **OpenRC leg: still open.** The systemd leg has
-> since closed the equivalent gap (see Status update below).
+> **Status:** implemented on `prerelease-1.1.4-wrench` as a proposed change.
+> The systemd leg closed the equivalent gap via Quadlet; this branch closes the
+> OpenRC gap via supervised `podman wait` babysitter units (see §11).
 > **Scope:** rootless podman + OpenRC only. The rootful-docker leg is unaffected
 > (docker's `--restart unless-stopped` already covers it).
 > **TL;DR:** Per-tenant containers (`lunarwing-pg-<t>`, `lunarwing-nanocode-<t>`,
@@ -381,3 +382,24 @@ Extend the self-heal harness with a container-specific scenario:
   surface adjacent items (podman storage hygiene, XDG_RUNTIME_DIR-in-cron
   correctness, observability/alert dedup); cross-reference its output when it
   lands and fold any overlapping verdicts into §6 here.
+
+---
+
+## 11. Implementation (2026-06-XX — `prerelease-1.1.4-wrench`)
+
+**Option 1** (`podman wait` babysitter) implemented as a two-unit model on OpenRC:
+
+- **Existing units** retain their health-aware `status()` for `health-openrc.sh`
+  discovery and explicit start/stop control via `rc-service`.
+- **New babysitter units** (`lunarwing-pg-<t>-ctr`, `lunarwing-nanocode-<t>-ctr`,
+  `lunarwing-pebble-<t>-ctr`) are supervised by `supervise-daemon`, blocking on
+  `podman wait <ctr>`. Container exits trigger near-instant respawn (~5s).
+- Crash-loop containment: `respawn_max=10 respawn_period=120`. The `*/15`
+  self-heal sweep remains the backstop + escalation path.
+- Rootless env: `command_user` + `supervise_daemon_args` for HOME/XDG_RUNTIME_DIR.
+- Babysitter units excluded from `health-openrc.sh` discovery via `-ctr` filter.
+- `unit_tenant()` strips `-ctr` suffix before prefix extraction.
+- Full lifecycle wiring in `start_tenant_openrc`, `stop_tenant_openrc`,
+  `uninstall_tenant_openrc`, `_register_worker_unit`, `_deregister_worker_unit`.
+
+**Option 4** (`pg_isready` in `status()`) — already implemented on staging.

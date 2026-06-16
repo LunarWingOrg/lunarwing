@@ -1,0 +1,53 @@
+#!/bin/sh
+# LunarWing container babysitter — supervised wrapper for `<runtime> wait <ctr>`.
+#
+# Invoked by the OpenRC babysitter units (lunarwing-pg-<t>-ctr,
+# lunarwing-nanocode-<t>-ctr, lunarwing-pebble-<t>-ctr) under supervise-daemon.
+# Idempotently brings the container up, then blocks on `<runtime> wait <ctr>`.
+# When the container exits (crash or external stop), this wrapper exits, and
+# supervise-daemon respawns it — restarting the cycle and re-starting the
+# container. Net effect: ~5s recovery on container crashes instead of the
+# ~30 min worst case for the */15 self-heal sweep.
+#
+# Why a wrapper? OpenRC's `command_args=` is split on whitespace, NOT shell-
+# parsed. Embedding `sh -c '...'` directly in `command_args` produces a broken
+# argv (literal quotes, redirections-as-words). A small wrapper script with
+# positional args is the clean idiomatic pattern.
+#
+# Args: <runtime> <container>
+#   runtime    Absolute path to podman/docker binary (e.g. /usr/bin/podman)
+#   container  Container name (e.g. lunarwing-pg-zeus)
+#
+# Env (set by supervise-daemon via the unit's supervise_daemon_args):
+#   HOME              tenant home dir (required for rootless podman)
+#   XDG_RUNTIME_DIR   tenant XDG runtime dir, e.g. /run/user/<uid> (required
+#                     for rootless podman to find its socket)
+#
+# The babysitter unit also applies command_user=<tenant>:<tenant>, so this
+# script runs with the tenant's effective uid/gid for rootless mode.
+set -u
+
+RT="${1:-}"; CT="${2:-}"
+
+if [ -z "$RT" ] || [ -z "$CT" ]; then
+    echo "usage: $0 <runtime> <container>" >&2
+    exit 2
+fi
+
+if [ ! -x "$RT" ]; then
+    echo "lunarwing-ctr-babysit: runtime not executable: $RT" >&2
+    # Exit non-zero — supervise-daemon will respawn after respawn_delay. The
+    # respawn_max/respawn_period in the unit caps the crash loop if the runtime
+    # never becomes available.
+    exit 1
+fi
+
+# Idempotent start: fine if the container is already running (podman start
+# returns 0). Failure here is non-fatal — wait will exit immediately with an
+# error if the container truly doesn't exist, supervise-daemon will respawn,
+# and the crash-loop cap will eventually disable the unit.
+"$RT" start "$CT" >/dev/null 2>&1 || true
+
+# Block until the container exits. exec drops the shell out of the process
+# tree so supervise-daemon's pid tracking is on `<runtime> wait`, not on sh.
+exec "$RT" wait "$CT"

@@ -26,8 +26,9 @@ declare -A SUITES=(
     [matrix]="test-self-heal-matrix.sh"
     [chaos]="chaos-harness.sh"
     [openrc]="test-health-openrc.sh"
+    [babysit]="test-babysit-renderers.sh"
 )
-ORDER=(regression matrix chaos openrc)
+ORDER=(regression matrix chaos openrc babysit)
 
 # Resolve requested suites (default: all, in ORDER).
 requested=("$@"); [[ ${#requested[@]} -eq 0 ]] && requested=("${ORDER[@]}")

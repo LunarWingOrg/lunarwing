@@ -137,5 +137,20 @@ mk_unit "$s" lunarwing-acme; fix_set "$s" lunarwing-acme " * status: stopped" 3
 run_hc "$s"
 assert_eq "$(svc_field "$OUT" lunarwing-acme status)" "critical" "S6: stopped → critical"
 
+# ── S7: babysitter -ctr units excluded from discovery ─────────────────────────
+s="$(new_scenario)"
+for u in lunarwing-acme lunarwing-pg-acme lunarwing-pg-acme-ctr \
+         lunarwing-nanocode-acme lunarwing-nanocode-acme-ctr \
+         lunarwing-pebble-acme lunarwing-pebble-acme-ctr; do
+  mk_unit "$s" "$u"; fix_set "$s" "$u" " * status: started" 0
+done
+run_hc "$s"
+assert_eq "$(jq '[.metrics.services[].name] | map(select(endswith("-ctr"))) | length' <<<"$OUT")" 0 \
+  "S7: no -ctr units in health report (babysitter filtered)"
+assert_eq "$(svc_field "$OUT" lunarwing-pg-acme name)" "lunarwing-pg-acme" \
+  "S7: real PG unit still discovered"
+assert_eq "$(svc_field "$OUT" lunarwing-nanocode-acme name)" "lunarwing-nanocode-acme" \
+  "S7: real nanocode unit still discovered"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

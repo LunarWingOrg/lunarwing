@@ -47,6 +47,16 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── Container babysitter wrapper ─────────────────────────────────────────────
+# Tiny supervised wrapper (`<runtime> start && exec <runtime> wait`) invoked by
+# the OpenRC `-ctr` babysitter units under supervise-daemon. We install a
+# stable copy outside the repo so the units survive worktree/repo moves.
+# Source: ic/scripts/lunarwing-ctr-babysit (next to this admin script).
+# Install:  $BABYSIT_LIB_DIR/lunarwing-ctr-babysit
+BABYSIT_SRC="$SCRIPT_DIR/lunarwing-ctr-babysit"
+BABYSIT_LIB_DIR="/usr/local/lib/lunarwing"
+BABYSIT_BIN="$BABYSIT_LIB_DIR/lunarwing-ctr-babysit"
+
 # ── Per-tenant PostgreSQL backups ────────────────────────────────────────────
 # pg_dump each tenant's DB (custom -Fc format) to $BACKUP_DIR/<tenant>/. Keep the
 # most recent $BACKUP_KEEP dumps per tenant (0 = keep all).
@@ -440,17 +450,164 @@ _register_worker_unit() {
   rc-update add "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
   rc-service "lunarwing-${worker}-${name}" start >/dev/null 2>&1 || true
   say "registered OpenRC unit lunarwing-${worker}-${name} (health-monitored, boot-persistent)"
+  # Also register the supervised container babysitter for instant crash recovery.
+  render_worker_ctr_unit "$name" "$worker"
+  rc-update add "lunarwing-${worker}-${name}-ctr" default >/dev/null 2>&1 || true
+  rc-service "lunarwing-${worker}-${name}-ctr" start >/dev/null 2>&1 || true
+  say "registered supervised babysitter lunarwing-${worker}-${name}-ctr"
 }
 
 # Tear down a worker's OpenRC unit (boot-disable + remove the init script).
+# Also tears down the companion container babysitter unit.
 _deregister_worker_unit() {
   local name="$1" worker="$2"
   ensure_init_system
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ -f "/etc/init.d/lunarwing-${worker}-${name}" ]] || return 0
+  # Stop the babysitter first so it doesn't respawn the container after we
+  # `podman stop` from the imperative unit below.
+  rc-service "lunarwing-${worker}-${name}-ctr" stop >/dev/null 2>&1 || true
+  rc-update del "lunarwing-${worker}-${name}-ctr" default >/dev/null 2>&1 || true
+  rm -f "/etc/init.d/lunarwing-${worker}-${name}-ctr" "/etc/conf.d/lunarwing-${worker}-${name}-ctr"
   rc-service "lunarwing-${worker}-${name}" stop >/dev/null 2>&1 || true
   rc-update del "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
   rm -f "/etc/init.d/lunarwing-${worker}-${name}" "/etc/conf.d/lunarwing-${worker}-${name}"
+}
+
+# ── Container babysitter unit renderers (supervised OpenRC) ─────────────────
+
+# Install the babysitter wrapper to a stable path outside the repo. Idempotent:
+# safe to call from every render path. Called by the unit renderers below so
+# the units always have an executable target by the time supervise-daemon
+# tries to exec command=.
+ensure_babysit_wrapper() {
+  [[ -r "$BABYSIT_SRC" ]] || { say "WARNING: babysitter wrapper source not found ($BABYSIT_SRC); -ctr units will fail"; return 0; }
+  mkdir -p "$BABYSIT_LIB_DIR"
+  install -m 0755 "$BABYSIT_SRC" "$BABYSIT_BIN"
+}
+
+# Render a supervised babysitter unit for a PG container. Blocks on
+# `<runtime> wait <ctr>` under supervise-daemon so a container crash is
+# detected in ~5s instead of waiting for the */15 self-heal sweep.
+# The existing lunarwing-pg-<t> unit retains its health-aware status().
+#
+# NOTE on OpenRC argv: `command_args` is split on whitespace, NOT shell-parsed.
+# So we invoke a tiny wrapper ($BABYSIT_BIN) with positional args and let the
+# wrapper handle the start-then-wait shell logic. Embedding `sh -c '...'`
+# directly in command_args is broken (literal quotes, redirections-as-words).
+render_pg_ctr_unit() {
+  local name="$1" pg_container="$2" pg_runtime_bin="$3" pg_home="$4" pg_uid="$5"
+  ensure_babysit_wrapper
+  cat >"/etc/init.d/lunarwing-pg-${name}-ctr" <<CTREOF
+#!/sbin/openrc-run
+
+description="LunarWing Postgres container babysitter ($name)"
+
+: "\${pg_runtime:=$pg_runtime_bin}"
+: "\${pg_container:=$pg_container}"
+: "\${pg_rootless:=$MT_ROOTLESS}"
+: "\${pg_user:=$name}"
+: "\${pg_home:=$pg_home}"
+: "\${pg_uid:=$pg_uid}"
+: "\${babysit_bin:=$BABYSIT_BIN}"
+
+supervisor="supervise-daemon"
+command="\${babysit_bin}"
+command_args="\${pg_runtime} \${pg_container}"
+respawn_delay=2
+respawn_max=10
+respawn_period=120
+
+command_user="\${pg_user}:\${pg_user}"
+supervise_daemon_args="--env HOME=\${pg_home} --env XDG_RUNTIME_DIR=/run/user/\${pg_uid}"
+
+depend() {
+    need net localmount
+    after firewall
+    before lunarwing-${name}
+}
+
+start_pre() {
+    # Bail (non-fatal) if we can't supervise anything yet: no container runtime
+    # or no tenant uid. Respawn would loop on exec failures otherwise.
+    if [ -z "\${pg_runtime}" ] || [ ! -x "\${pg_runtime}" ]; then
+        ewarn "container runtime unavailable; not supervising"
+        return 1
+    fi
+    if [ "\${pg_rootless}" = "true" ]; then
+        if [ -z "\${pg_uid}" ]; then
+            ewarn "rootless mode but tenant uid unknown; not supervising"
+            return 1
+        fi
+        checkpath -d -m 0700 -o "\${pg_user}:\${pg_user}" "/run/user/\${pg_uid}"
+    fi
+    if [ ! -x "\${babysit_bin}" ]; then
+        ewarn "babysitter wrapper missing: \${babysit_bin}"
+        return 1
+    fi
+}
+CTREOF
+  chmod 0755 "/etc/init.d/lunarwing-pg-${name}-ctr"
+}
+
+# Render a supervised babysitter unit for a worker container (nanocode/pebble).
+# Same shape as render_pg_ctr_unit — calls the wrapper with positional args.
+render_worker_ctr_unit() {
+  local name="$1" worker="$2"
+  ensure_babysit_wrapper
+  ensure_container_runtime
+  local runtime_bin="" container="lunarwing-${worker}-${name}" uid home
+  [[ -n "${CONTAINER_RT:-}" ]] && runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  uid="$(id -u "$name" 2>/dev/null || echo "")"
+  home="$(tenant_home "$name")"
+
+  cat >"/etc/init.d/lunarwing-${worker}-${name}-ctr" <<CTREOF
+#!/sbin/openrc-run
+
+description="LunarWing ${worker} worker container babysitter ($name)"
+
+: "\${wk_runtime:=$runtime_bin}"
+: "\${wk_container:=$container}"
+: "\${wk_rootless:=$MT_ROOTLESS}"
+: "\${wk_user:=$name}"
+: "\${wk_home:=$home}"
+: "\${wk_uid:=$uid}"
+: "\${babysit_bin:=$BABYSIT_BIN}"
+
+supervisor="supervise-daemon"
+command="\${babysit_bin}"
+command_args="\${wk_runtime} \${wk_container}"
+respawn_delay=2
+respawn_max=10
+respawn_period=120
+
+command_user="\${wk_user}:\${wk_user}"
+supervise_daemon_args="--env HOME=\${wk_home} --env XDG_RUNTIME_DIR=/run/user/\${wk_uid}"
+
+depend() {
+    need net localmount
+    after firewall lunarwing-${name}
+}
+
+start_pre() {
+    if [ -z "\${wk_runtime}" ] || [ ! -x "\${wk_runtime}" ]; then
+        ewarn "container runtime unavailable; not supervising"
+        return 1
+    fi
+    if [ "\${wk_rootless}" = "true" ]; then
+        if [ -z "\${wk_uid}" ]; then
+            ewarn "rootless mode but tenant uid unknown; not supervising"
+            return 1
+        fi
+        checkpath -d -m 0700 -o "\${wk_user}:\${wk_user}" "/run/user/\${wk_uid}"
+    fi
+    if [ ! -x "\${babysit_bin}" ]; then
+        ewarn "babysitter wrapper missing: \${babysit_bin}"
+        return 1
+    fi
+}
+CTREOF
+  chmod 0755 "/etc/init.d/lunarwing-${worker}-${name}-ctr"
 }
 
 # ── Port registry ────────────────────────────────────────────────────────────
@@ -2574,6 +2731,16 @@ status() {
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-pg-${name}"
 
+  # ── PG container babysitter (supervised; respawns on container exit) ──
+  # A companion unit that gives the PG container near-instant crash recovery
+  # (~5s) instead of waiting for the */15 self-heal sweep. Runs as the tenant
+  # user under supervise-daemon, blocking on `podman wait <ctr>`. When the
+  # container exits, supervise-daemon respawns and does `podman start` again.
+  # The existing lunarwing-pg-<t> unit keeps its health-aware status() (read
+  # by health-openrc.sh) and explicit start/stop — this unit handles liveness
+  # supervision only.
+  render_pg_ctr_unit "$name" "$pg_container" "$pg_runtime_bin" "$pg_home" "$pg_uid"
+
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
 #!/sbin/openrc-run
@@ -2898,6 +3065,8 @@ start_tenant_openrc() {
   local name="$1"
   # Postgres first: the daemon `need`s it (and it's idempotent if already up).
   rc-service "lunarwing-pg-${name}" start
+  # Also start the PG babysitter (supervised, instant crash recovery).
+  rc-service "lunarwing-pg-${name}-ctr" start 2>/dev/null || true
   # Optional channels next, non-fatal: a missing weechat/aiohttp must not abort
   # the core stack (the main daemon does not depend on them).
   rc-service "lunarwing-weechat-${name}" start 2>/dev/null || say "  (lunarwing-weechat-${name} skipped — optional)"
@@ -2909,7 +3078,7 @@ start_tenant_openrc() {
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  for svc in "lunarwing-pg-${name}" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+  for svc in "lunarwing-pg-${name}" "lunarwing-pg-${name}-ctr" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
              "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
     if rc-service "$svc" status >/dev/null 2>&1; then
       rc-update add "$svc" default >/dev/null 2>&1 || true
@@ -2925,6 +3094,11 @@ stop_tenant_openrc() {
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-${name}" stop 2>/dev/null || true
+  # Stop the PG babysitter FIRST, before the imperative PG unit's `podman stop`.
+  # Otherwise supervise-daemon would see the container exit and respawn it
+  # (calling `podman start` again) in the 0–2s window before we kill the
+  # supervisor, leaving a "stopped" tenant with a running container.
+  rc-service "lunarwing-pg-${name}-ctr" stop 2>/dev/null || true
   # Postgres last: the daemon depends on it, so it stops after its consumers.
   rc-service "lunarwing-pg-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
@@ -2932,7 +3106,8 @@ stop_tenant_openrc() {
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" \
+             "lunarwing-pg-${name}-ctr" "lunarwing-nanocode-${name}-ctr" "lunarwing-pebble-${name}-ctr"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done

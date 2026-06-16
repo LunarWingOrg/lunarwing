@@ -173,6 +173,9 @@ log "detected service manager: $SERVICE_MANAGER"
 
 unit_tenant() {
     local u="${1%.service}"
+    # Strip the container-babysitter suffix so it resolves to the same tenant
+    # as the real unit (lunarwing-pg-zeus-ctr → lunarwing-pg-zeus → zeus).
+    u="${u%-ctr}"
     # Strip the service-type infix to recover the tenant name. Specific prefixes
     # MUST precede the generic `lunarwing-*` (first match wins), or e.g.
     # lunarwing-pg-<t> would resolve to the bogus tenant "pg-<t>" and self-heal

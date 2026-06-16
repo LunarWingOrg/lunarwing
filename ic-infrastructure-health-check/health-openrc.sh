@@ -36,7 +36,16 @@ discover_services() {
   for initscript in "$INITD_DIR"/lunarwing-* "$INITD_DIR"/xmpp-bridge-*; do
     [ -x "$initscript" ] || continue
     name=$(basename "$initscript")
-    case "$name" in lunarwing|xmpp-bridge) continue ;; esac   # base names already handled
+    case "$name" in
+      lunarwing|xmpp-bridge) continue ;;   # base names already handled
+      *-ctr) continue ;;                    # supervised container babysitters:
+                                            # always "started" while podman wait
+                                            # blocks, so they are health-report
+                                            # noise. supervise-daemon recovers
+                                            # them; the health probe watches the
+                                            # real lunarwing-pg/-nanocode/-pebble
+                                            # unit instead.
+    esac
     [ -n "${seen[$name]:-}" ] && continue
     seen[$name]=1; svcs+=("$name")
   done
