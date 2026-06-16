@@ -50,9 +50,18 @@ sudo ic/scripts/lunarwing-mt-admin.sh add-tenant <name> --docker-group
 
 This gives you a fresh PostgreSQL container with the full schema (all migrations applied). Verify:
 
+> **PG password:** per-tenant PostgreSQL passwords are random (stored in
+> `/home/<name>/lunarwing/env/pg.secret`). Export it once for the `psql` commands
+> below; tenants created before this change still use `lunarwing`, which is the
+> `${PG_PW:-lunarwing}` fallback:
+>
+> ```bash
+> export PG_PW="$(sudo cat /home/<name>/lunarwing/env/pg.secret 2>/dev/null || echo lunarwing)"
+> ```
+
 ```bash
 jq '.tenants.<name>.ports.postgres' /etc/lunarwing/ports.json
-PGPASSWORD=lunarwing psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing -c "\dt"
+PGPASSWORD="${PG_PW:-lunarwing}" psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing -c "\dt"
 ```
 
 ## Step 2: Identify Data to Migrate
@@ -137,7 +146,7 @@ In practice, most LunarWing tables use JSONB (not TEXT[]) for complex data, so t
 ```bash
 PG_PORT=<tenant_pg_port>  # from ports.json
 
-PGPASSWORD=lunarwing psql -h 127.0.0.1 -p "$PG_PORT" -U lunarwing -d lunarwing <<'SQL'
+PGPASSWORD="${PG_PW:-lunarwing}" psql -h 127.0.0.1 -p "$PG_PORT" -U lunarwing -d lunarwing <<'SQL'
 -- Disable triggers and constraints during import
 SET session_replication_role = 'replica';
 
@@ -187,7 +196,7 @@ FROM temp_import_table;
 After importing, PostgreSQL sequences need to be updated so new inserts don't collide with imported IDs:
 
 ```bash
-PGPASSWORD=lunarwing psql -h 127.0.0.1 -p "$PG_PORT" -U lunarwing -d lunarwing <<'SQL'
+PGPASSWORD="${PG_PW:-lunarwing}" psql -h 127.0.0.1 -p "$PG_PORT" -U lunarwing -d lunarwing <<'SQL'
 -- Reset all sequences to max(id) + 1
 DO $$
 DECLARE
@@ -258,7 +267,7 @@ sudo ic/scripts/lunarwing-mt-admin.sh status <name>
 
 ```bash
 # Check data is accessible
-PGPASSWORD=lunarwing psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing \
+PGPASSWORD="${PG_PW:-lunarwing}" psql -h 127.0.0.1 -p <tenant_pg_port> -U lunarwing -d lunarwing \
   -c "SELECT COUNT(*) FROM routines; SELECT COUNT(*) FROM memory_documents;"
 
 # Check gateway

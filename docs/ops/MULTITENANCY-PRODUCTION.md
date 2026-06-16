@@ -333,7 +333,7 @@ rc-service lunarwing-<name> status
 
 ## PostgreSQL
 
-Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. Default credentials: `lunarwing/lunarwing/lunarwing` (user/password/database).
+Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bound to `127.0.0.1:<allocated-port>:5432`. The user and database are both `lunarwing`; the **password is a per-tenant random hex string** generated at `add-tenant` time, stored in `…/env/pg.secret` (0600, tenant-owned) and woven into the daemon's `DATABASE_URL`. Tenants created before this change keep their original `lunarwing` password until rotated — run `lunarwing-mt-admin.sh rotate-pg-password <name>` to move them onto a random one (it runs `ALTER ROLE`, updates `pg.secret` + `DATABASE_URL`, and prompts for a restart).
 
 The container is created with `--restart unless-stopped` so it survives host reboots when using Docker. Podman has no daemon to honor that policy, so each tenant's container gets a first-class **supervised unit** instead:
 

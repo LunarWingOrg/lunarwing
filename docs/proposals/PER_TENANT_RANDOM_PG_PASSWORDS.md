@@ -2,6 +2,14 @@
 
 *Drafted 2026-06-16.*
 
+> **Status (2026-06-16):** ✅ **Implemented** on `2026-06-16-vm-ic-2-feature-1.1.4-unified-random-pg-passwords`.
+> `tenant_pg_password` (migration-safe) is the source of truth; `DATABASE_URL` and
+> `POSTGRES_PASSWORD` (imperative `_ctr run` **and** the systemd Quadlet) derive from
+> it; a `rotate-pg-password <name>` subcommand handles existing tenants
+> (`ALTER ROLE` + secret + `DATABASE_URL` update + restart prompt). New tenants get a
+> random password; tenants created earlier keep `lunarwing` until rotated. The
+> "Current behavior" below describes the pre-implementation state.
+
 ## Current behavior
 
 Every tenant's PostgreSQL container is created with the **same fixed credentials**
