@@ -3152,14 +3152,23 @@ status_tenant() {
   say ""
   say "Services ($INIT_SYSTEM):"
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
-      local state
+    local svcs=("lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
+                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}")
+    # pg + workers are Quadlet units only on rootless podman; on rootful docker
+    # they run as plain containers (shown above), not systemd units.
+    if [[ "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+      svcs+=("lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}")
+    fi
+    local svc state
+    for svc in "${svcs[@]}"; do
       state="$(_systemctl_user "$name" is-active "${svc}.service" 2>/dev/null || echo "inactive")"
       say "  ${svc}.service: $state"
     done
   else
-    for svc in "lunarwing-pg-${name}" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}"; do
-      local state
+    local svc state
+    for svc in "lunarwing-pg-${name}" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
+               "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
+               "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
       say "  $svc: $state"
     done
@@ -3262,6 +3271,10 @@ doctor() {
     _check "rootless: newgidmap setuid" bash -c '[ -u "$(command -v newgidmap 2>/dev/null)" ]'
     _check "rootless: /etc/subuid populated" test -s /etc/subuid
     _check "rootless: /etc/subgid populated" test -s /etc/subgid
+    # Every per-tenant container publishes 127.0.0.1:<port>:…, which under rootless
+    # needs a userspace port-forwarder (pasta or slirp4netns).
+    _check "rootless: pasta or slirp4netns (port-forward)" \
+      bash -c 'command -v pasta >/dev/null 2>&1 || command -v slirp4netns >/dev/null 2>&1'
   fi
 
   ensure_init_system
@@ -3269,6 +3282,21 @@ doctor() {
 
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
     _check "loginctl available" command -v loginctl
+    if [[ "$MT_ROOTLESS" == "true" ]]; then
+      _check "podman >= 4.6 (Quadlet supervision)" podman_supports_quadlet
+    fi
+    # Per-tenant linger keeps /run/user/<uid> + the systemd --user manager alive
+    # across reboot — boot-persistent Quadlet/user units depend on it. (Highest-
+    # value rootless-on-systemd check.)
+    local _dt _du _duid
+    while IFS=$'\t' read -r _dt _du; do
+      [[ -n "$_du" ]] || continue
+      _duid="$(id -u "$_du" 2>/dev/null || echo "")"
+      [[ -n "$_duid" ]] || continue
+      _check "tenant $_dt: linger enabled" \
+        bash -c "loginctl show-user '$_du' -p Linger --value 2>/dev/null | grep -qx yes"
+      _check "tenant $_dt: /run/user/$_duid present" test -d "/run/user/$_duid"
+    done < <(jq -r '.tenants // {} | to_entries[] | "\(.key)\t\(.value.user)"' "$PORTS_REGISTRY" 2>/dev/null || true)
   else
     _check "rc-service available" command -v rc-service
     _check "rc-update available" command -v rc-update
