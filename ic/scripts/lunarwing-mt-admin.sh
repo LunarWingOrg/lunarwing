@@ -164,6 +164,8 @@ Commands:
   start-tenant <name>             Start all services for a tenant
   stop-tenant <name>              Stop all services for a tenant
   restart-tenant <name>           Stop then start
+  render-units <name>             Re-render a tenant's service units from the current
+                                  generator (no restart; applies init-script changes)
   rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
@@ -3283,6 +3285,27 @@ remove_tenant() {
   say "=== Tenant '$name' removed ==="
 }
 
+# Re-render a tenant's service units from the current generator WITHOUT touching
+# secrets/env or restarting anything — for applying a generator change (e.g. an
+# updated init-script status()) to an already-provisioned tenant. The systemd
+# renderer daemon-reloads internally; OpenRC reads the script per invocation. A
+# status()/health change takes effect immediately; a change to the run command
+# needs a restart.
+render_tenant_units() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_init_system
+  say "--- Re-rendering $INIT_SYSTEM units for $name ---"
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    render_tenant_systemd_units "$name"
+  else
+    render_tenant_openrc_units "$name"
+  fi
+  say "units re-rendered for '$name' (services NOT restarted)."
+  say "run-command changes need a restart to apply: $0 restart-tenant $name"
+}
+
 start_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -3738,6 +3761,13 @@ main() {
       require_root
       [[ -n "${1:-}" ]] || die "usage: restart-tenant <name>"
       restart_tenant "$1"
+      ;;
+
+    render-units)
+      require_root
+      [[ -n "${1:-}" ]] || die "usage: render-units <name>"
+      ports_registry_init
+      render_tenant_units "$1"
       ;;
 
     rotate-pg-password)
