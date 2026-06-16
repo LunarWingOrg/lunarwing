@@ -156,7 +156,7 @@ d1="$(sb)"; d_ports "$d1"
 report "$d1" '{components:[{component:"systemd",status:"critical",metrics:{units:[
   {name:"ironclaw-proxy-acme.service",status:"critical"}]}}]}'
 oD1="$(run_dry "$d1" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$d1/ports.json")"
-assert_contains "$oD1" "sudo -u acme"                                          "D1: tenant proxy restarts as tenant user"
+assert_contains "$oD1" "sudo -n -u acme"                                       "D1: tenant proxy restarts as tenant user"
 assert_contains "$oD1" "systemctl --user restart ironclaw-proxy-acme.service"  "D1: uses systemd --user bus"
 
 # D2 — tenant bridge unit (xmpp-bridge-<t>).
@@ -164,7 +164,7 @@ d2="$(sb)"; d_ports "$d2"
 report "$d2" '{components:[{component:"systemd",status:"critical",metrics:{units:[
   {name:"xmpp-bridge-globex.service",status:"critical"}]}}]}'
 oD2="$(run_dry "$d2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$d2/ports.json")"
-assert_contains "$oD2" "sudo -u globex"                                          "D2: tenant bridge restarts as tenant user"
+assert_contains "$oD2" "sudo -n -u globex"                                       "D2: tenant bridge restarts as tenant user"
 assert_contains "$oD2" "systemctl --user restart xmpp-bridge-globex.service"     "D2: uses systemd --user bus"
 
 # D3 — unit names a tenant absent from the registry → falls through to the
@@ -455,13 +455,17 @@ assert_contains "$oO1" "Self-Healing complete"                "O1: run completes
 [[ -f "$o1/self-heal/state.json" ]] && ok "O1: fresh state.json rewritten after recovery" \
     || bad "O1: fresh state.json rewritten after recovery" "state.json missing post-run"
 
-# O2 — a genuinely empty (0-byte) state.json parses as valid empty state (jq exits
-# 0), so it must NOT be flagged corrupt; the tick completes normally.
+# O2 — a genuinely empty (0-byte) state.json is NOT a valid JSON object, so it must
+# be quarantined to .corrupt and replaced with a fresh {} (like a truncated file),
+# NOT silently treated as valid-empty — otherwise backoff/flap/escalation counters
+# reset every tick and never accumulate. Mirrors O1's recovery contract.
 o2="$(sb)"; report "$o2" "$HEALTHY"
 : > "$o2/self-heal/state.json"
 oO2="$(run_dry "$o2" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
-assert_absent   "$oO2" "state.json is corrupt"                "O2: empty state is valid, not flagged"
-assert_contains "$oO2" "Self-Healing complete"                "O2: empty state runs cleanly"
+assert_contains "$oO2" "state.json is corrupt"                "O2: empty state quarantined (not silently reset)"
+assert_contains "$oO2" "Self-Healing complete"                "O2: empty state runs cleanly after recovery"
+[[ -f "$o2/self-heal/state.json.corrupt" ]] && ok "O2: empty state preserved as .corrupt" \
+    || bad "O2: empty state preserved as .corrupt" "no state.json.corrupt in $o2/self-heal"
 
 # O3 — the forensic rename is single-slot: a FIXED .corrupt name (no timestamp),
 # so repeated corruption overwrites last-wins and never accumulates. Corrupt,

@@ -41,18 +41,30 @@ case $status in
         ;;
 esac
 
-# Build message from latest report
+# Build message from latest report. Two shapes are passed in: a full health
+# report (.overall_status/.components/.alerts) from infrastructure-health-check,
+# and a per-service escalation object ({escalated,service,reason,...}) from
+# self-heal's escalate_service. The escalation shape lacks .overall_status, so
+# the old renderer hit `null | ascii_upcase`, jq-aborted under set -e, and the
+# page was silently dropped. Branch on .escalated and null-default every field so
+# a malformed/unexpected shape can never abort before curl.
 if [ -n "$report_file" ] && [ -f "$report_file" ]; then
-    # --arg report_file: jq must be told about it (a bare $report_file is a
-    # compile error). [...] | join: a bare .components[] / .alerts[] yields N
-    # separate jq outputs; collect+join them into single strings instead.
     message=$(jq -r --arg report_file "$report_file" '
-        "Overall: " + (.overall_status | ascii_upcase) + "\n\n" +
-        "Components:\n" + ([.components[] | "- " + .component + ": " + .status] | join("\n")) +
-        "\n\n" +
-        (if (.alerts | length) > 0 then "Issues:\n" + ([.alerts[] | "- " + .message] | join("\n")) + "\n\n" else "" end) +
-        "Full report: " + $report_file
-    ' "$report_file")
+        if .escalated == true then
+            "🚨 Service escalation — manual intervention\n" +
+            "Service: " + (.service // "?") + "\n" +
+            "Reason:  " + (.reason // "?") + "\n" +
+            "Retries: " + ((.retries // 0) | tostring) + "\n" +
+            "Action:  " + (.action // "manual_intervention_required") + "\n" +
+            "Time:    " + (.timestamp // "?")
+        else
+            "Overall: " + ((.overall_status // "unknown") | ascii_upcase) + "\n\n" +
+            "Components:\n" + ([.components[]? | "- " + (.component // "?") + ": " + (.status // "?")] | join("\n")) +
+            "\n\n" +
+            (if ((.alerts // []) | length) > 0 then "Issues:\n" + ([.alerts[]? | "- " + (.message // "?")] | join("\n")) + "\n\n" else "" end) +
+            "Full report: " + $report_file
+        end
+    ' "$report_file" 2>/dev/null) || message="Infrastructure alert ($status); report at $report_file"
 else
     message="Infrastructure health check completed with status: $status"
 fi
