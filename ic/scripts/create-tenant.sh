@@ -9,7 +9,7 @@
 # Provisions, in order:
 #   1. add-tenant   — OS user (linger auto-enabled), next free 10-port block from
 #                     /etc/lunarwing/ports.json, repo clone, env, Postgres, and ALL
-#                     systemd units INCLUDING weechat-<name> + the WS adapter.
+#                     systemd units INCLUDING lunarwing-weechat-<name> + the WS adapter.
 #   2. wasm toolchain — ensure cargo-component + wasm32-wasip2 for the tenant so
 #                     build --with-wasm can actually compile every channel.
 #   3. build        — lunarwing + xmpp-bridge + (optionally) all WASM channels/tools
@@ -179,7 +179,7 @@ say "  build wasm:       $WITH_WASM (all channels + tools)"
 say "  ensure toolchain: $([[ "$WITH_WASM" == true ]] && echo "$ENSURE_WASM_TOOLCHAIN" || echo 'n/a (wasm off)')"
 say "  build nanocode:   $WITH_NANOCODE"
 say "  build pebble:     $WITH_PEBBLE"
-say "  weechat service:  auto-rendered + started (weechat-$TENANT + adapter)"
+say "  weechat service:  auto-rendered + started (lunarwing-weechat-$TENANT + adapter)"
 say "  source repo:      $(git -C "$SCRIPT_DIR/../.." rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')@$(git -C "$SCRIPT_DIR/../.." rev-parse --short HEAD 2>/dev/null || echo '?')"
 confirm "Proceed?" || { say "aborted."; exit 0; }
 
@@ -264,7 +264,7 @@ fi
 # ---- WeeChat-via-tmux configuration instructions ----------------------------
 banner "WeeChat setup (via tmux)"
 cat <<EOF
-The weechat-$TENANT.service runs WeeChat inside a tmux session (socket
+The lunarwing-weechat-$TENANT.service runs WeeChat inside a tmux session (socket
 "weechat-$TENANT", session "weechat"). The adapter connects to WeeChat's *api*
 relay on 127.0.0.1:$weechat_port using RELAY_PASSWORD from the tenant env, and the
 in-process WASM channel polls the adapter on :$adapter_port.
