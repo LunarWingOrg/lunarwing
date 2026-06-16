@@ -47,6 +47,12 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── Per-tenant PostgreSQL backups ────────────────────────────────────────────
+# pg_dump each tenant's DB (custom -Fc format) to $BACKUP_DIR/<tenant>/. Keep the
+# most recent $BACKUP_KEEP dumps per tenant (0 = keep all).
+BACKUP_DIR="${LUNARWING_MT_BACKUP_DIR:-/var/lib/lunarwing-backups}"
+BACKUP_KEEP="${LUNARWING_MT_BACKUP_KEEP:-7}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 say() { printf '%s\n' "$*"; }
@@ -175,6 +181,14 @@ Commands:
   tokens [name]                    Print gateway auth tokens (all or one)
   doctor                           System dependency and health checks
 
+  backup-tenant <name>             pg_dump a tenant's DB (custom format) to
+                                   $LUNARWING_MT_BACKUP_DIR/<name>/
+  backup-all                       Back up every registered tenant
+  list-backups [name]              List existing backups (all tenants or one)
+  restore-tenant <name> <file>     Restore a tenant DB from a dump (DESTRUCTIVE)
+    --yes                          Required: confirm the DROP+recreate restore
+                                   (stop the tenant daemon first)
+
 Environment:
   LUNARWING_SERVICE_MANAGER        Override: systemd or openrc
   LUNARWING_CONTAINER_RUNTIME      Override: docker or podman
@@ -185,6 +199,8 @@ Environment:
                                    (empty = each tenant's local TensorZero proxy)
   LUNARWING_MT_GOTIFY_URL          Default Gotify server URL for new tenants
   LUNARWING_MT_GOTIFY_TITLE        Default Gotify notification title for new tenants
+  LUNARWING_MT_BACKUP_DIR          Backup directory (default /var/lib/lunarwing-backups)
+  LUNARWING_MT_BACKUP_KEEP         Keep last N dumps per tenant (default 7; 0 = keep all)
 EOF
 }
 
@@ -1969,6 +1985,121 @@ rotate_tenant_pg_password() {
   say "    lunarwing-mt-admin.sh restart-tenant $name"
 }
 
+# ── PostgreSQL backup / restore ──────────────────────────────────────────────
+
+# pg_dump a tenant's database to a timestamped custom-format file under
+# $BACKUP_DIR/<tenant>/. Runs pg_dump inside the tenant's pg container via _ctr,
+# so it is init- and runtime-agnostic (rootless podman or rootful docker). Safe
+# on a live database (MVCC snapshot). Prunes to the most recent $BACKUP_KEEP.
+backup_tenant_postgres() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_container_runtime
+  local container_name="lunarwing-pg-$name"
+
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' ($container_name) — start the tenant first"
+
+  local dir ts dest tmp
+  dir="$BACKUP_DIR/$name"
+  mkdir -p "$dir"
+  chmod 0700 "$BACKUP_DIR" "$dir" 2>/dev/null || true
+  ts="$(date +%Y%m%d%H%M%S)"
+  dest="$dir/${name}-${ts}.dump"
+  tmp="$dest.partial"
+
+  say "backing up '$name' -> $dest"
+  # -Fc: compressed custom format (restore via pg_restore). umask 077 so the
+  # .partial is never world-readable, even mid-dump; rename on success so an
+  # interrupted dump never looks complete.
+  if ( umask 077; _ctr "$name" exec "$container_name" pg_dump -U lunarwing -Fc lunarwing > "$tmp" ); then
+    mv "$tmp" "$dest"
+    say "backup complete: $dest ($(du -h "$dest" 2>/dev/null | cut -f1))"
+  else
+    rm -f "$tmp"
+    die "pg_dump failed for '$name'"
+  fi
+  _prune_tenant_backups "$name"
+}
+
+# Keep only the most recent $BACKUP_KEEP dumps for a tenant (0/unset = keep all).
+_prune_tenant_backups() {
+  local name="$1" dir="$BACKUP_DIR/$1"
+  [[ "${BACKUP_KEEP:-0}" =~ ^[0-9]+$ && "$BACKUP_KEEP" -gt 0 ]] || return 0
+  local -a dumps=("$dir"/*.dump)
+  [[ -e "${dumps[0]:-}" ]] || return 0          # glob did not match -> nothing to prune
+  local n=${#dumps[@]} i
+  (( n > BACKUP_KEEP )) || return 0
+  for (( i=0; i < n - BACKUP_KEEP; i++ )); do   # glob is ascending (timestamp) = oldest first
+    rm -f "${dumps[$i]}"
+    say "pruned old backup: ${dumps[$i]}"
+  done
+}
+
+# List existing backups for one tenant or all.
+list_tenant_backups() {
+  local filter="${1:-}" names
+  if [[ -n "$filter" ]]; then names="$(sanitize_name "$filter")"; else names="$(all_tenant_names)"; fi
+  [[ -n "$names" ]] || { say "no tenants"; return 0; }
+  say "=== Backups (under $BACKUP_DIR) ==="
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    say ""
+    say "$name:"
+    if compgen -G "$BACKUP_DIR/$name/*.dump" >/dev/null 2>&1; then
+      ls -1sh "$BACKUP_DIR/$name"/*.dump 2>/dev/null | sed 's/^/  /'
+    else
+      say "  (no backups)"
+    fi
+  done <<< "$names"
+}
+
+# Restore a tenant's database from a custom-format dump. DESTRUCTIVE: pg_restore
+# --clean --if-exists DROPs and recreates objects. Requires the tenant daemon to
+# be stopped (no concurrent writes) and an explicit --yes.
+restore_tenant_postgres() {
+  local name="$1" file="$2" confirmed="${3:-false}"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  [[ -f "$file" ]] || die "backup file not found: $file"
+  # Reject anything that is not a custom-format archive before touching the DB
+  # (custom-format pg_dump files begin with the magic "PGDMP").
+  [[ "$(head -c5 "$file" 2>/dev/null)" == "PGDMP" ]] \
+    || die "not a custom-format pg_dump archive (missing PGDMP header): $file"
+  [[ "$confirmed" == "true" ]] || die "restore DROPs and recreates the database for '$name'. Re-run with --yes to confirm."
+  ensure_container_runtime
+  ensure_init_system
+  local container_name="lunarwing-pg-$name"
+
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' — start the tenant's pg container first"
+
+  # Refuse unless we can POSITIVELY confirm the daemon is stopped (concurrent
+  # writes corrupt a restore). Fail closed: if the service tool is missing or the
+  # state is indeterminate, never assume "stopped".
+  local daemon_state="unknown"
+  if [[ "$INIT_SYSTEM" == "systemd" ]] && command -v systemctl >/dev/null 2>&1; then
+    if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service" 2>/dev/null; then daemon_state="active"; else daemon_state="stopped"; fi
+  elif [[ "$INIT_SYSTEM" == "openrc" ]] && command -v rc-service >/dev/null 2>&1; then
+    if rc-service "lunarwing-${name}" status >/dev/null 2>&1; then daemon_state="active"; else daemon_state="stopped"; fi
+  fi
+  case "$daemon_state" in
+    stopped) : ;;
+    active)  die "stop the daemon first: $0 stop-tenant $name  (restart after restore)" ;;
+    *)       die "cannot confirm the '$name' daemon is stopped (no $INIT_SYSTEM service tool?); stop it manually, then re-run" ;;
+  esac
+
+  say "restoring '$name' from $file (single transaction, DROP + recreate) ..."
+  # --single-transaction: all-or-nothing. A mid-restore failure rolls the whole
+  # DROP+recreate back, so a failed restore never leaves the DB half-dropped.
+  if _ctr "$name" exec -i "$container_name" pg_restore -U lunarwing -d lunarwing --single-transaction --clean --if-exists < "$file"; then
+    say "restore complete for '$name'. Restart the tenant: $0 start-tenant $name"
+  else
+    die "pg_restore failed for '$name' — rolled back (single transaction); the database is unchanged"
+  fi
+}
+
 # ── Systemd service units ────────────────────────────────────────────────────
 
 # Render a per-tenant Quadlet .container for the Postgres container. The podman
@@ -3678,6 +3809,52 @@ main() {
       while IFS= read -r name; do
         patch_tenant_env "$name"
       done <<< "$names"
+      ;;
+
+    backup-tenant)
+      require_root
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "usage: backup-tenant <name>"
+      ports_registry_init
+      backup_tenant_postgres "$name"
+      ;;
+
+    backup-all)
+      require_root
+      ports_registry_init
+      local names
+      names="$(all_tenant_names)"
+      [[ -n "$names" ]] || { say "no tenants registered"; exit 0; }
+      while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        # Subshell so a per-tenant die() doesn't abort the whole fleet backup.
+        ( backup_tenant_postgres "$name" ) || say "WARNING: backup failed for $name (continuing)"
+      done <<< "$names"
+      ;;
+
+    list-backups)
+      ports_registry_init
+      list_tenant_backups "${1:-}"
+      ;;
+
+    restore-tenant)
+      require_root
+      local name="" file="" confirmed=false
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --yes) confirmed=true; shift ;;
+          -*)    die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            elif [[ -z "$file" ]]; then file="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" && -n "$file" ]] || die "usage: restore-tenant <name> <file> --yes"
+      ports_registry_init
+      restore_tenant_postgres "$name" "$file" "$confirmed"
       ;;
 
     doctor)
