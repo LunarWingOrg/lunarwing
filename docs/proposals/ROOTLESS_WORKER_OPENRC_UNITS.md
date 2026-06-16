@@ -2,6 +2,12 @@
 
 *Drafted 2026-06-15, after the rootless-Postgres migration (Stage A / A.2).*
 
+> **Status (2026-06-16):** ✅ **Implemented.** The worker OpenRC units now exist
+> (`render_worker_openrc_unit` / `_register_worker_unit` in `lunarwing-mt-admin.sh`),
+> and the systemd analog shipped as Quadlet `.container` units (see
+> [`MT_SYSTEMD_PARITY.md`](./MT_SYSTEMD_PARITY.md)). The "Problem" below describes
+> the pre-implementation state.
+
 ## Problem
 
 `nanocode` and `pebble` external workers are plain podman containers created
@@ -16,8 +22,11 @@ via `_ctr`). They are **not OpenRC services**. Consequences:
   podman (no daemon to honor it) and was dropped for the rootless path in A.2 —
   so a rootless worker has *nothing* keeping it up across a reboot or crash.
 - **The `/health` endpoint (8443, internal) and the WS port are unmonitored.**
-  The worker serves `/health` → 200 and a WS bridge on its `*_wss` port, but the
-  container has no baked podman HEALTHCHECK and nothing external probes it.
+  The worker serves `/health` → 200 and a WS bridge on its `*_wss` port. The image
+  *does* bake a podman `HEALTHCHECK` on 8443 (`lunarcode4lunarwing/Dockerfile`,
+  `pebble4lunarwing/Dockerfile`), but under **rootless podman without systemd**
+  nothing schedules it (podman healthchecks rely on systemd transient timers), so
+  it never runs — and nothing external probes the worker either.
 
 Postgres was already promoted to a dedicated unit (`lunarwing-pg-<t>`) during the
 rootless migration. This proposal extends the **same pattern** to the workers.
