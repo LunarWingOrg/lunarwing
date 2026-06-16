@@ -1,6 +1,8 @@
 # Proposal: Gate the rootless default to podman + OpenRC
 
-*Drafted 2026-06-15, after the rootless-Postgres migration (Stage A / A.2).*
+*SUPERSEEDED*
+
+**Gate was intentionally rejected; not built**
 
 ## Current behavior
 
