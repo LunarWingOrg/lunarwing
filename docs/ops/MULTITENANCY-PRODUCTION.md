@@ -117,6 +117,19 @@ sudo ic/scripts/lunarwing-mt-admin.sh stop-tenant sparkie
 # Restart a tenant
 sudo ic/scripts/lunarwing-mt-admin.sh restart-tenant sparkie
 
+# Rotate a tenant's PostgreSQL password (ALTER ROLE + pg.secret + DATABASE_URL; then restart)
+sudo ic/scripts/lunarwing-mt-admin.sh rotate-pg-password sparkie
+
+# Back up a tenant's DB (pg_dump custom format → $LUNARWING_MT_BACKUP_DIR/<name>/)
+sudo ic/scripts/lunarwing-mt-admin.sh backup-tenant sparkie
+sudo ic/scripts/lunarwing-mt-admin.sh backup-all
+sudo ic/scripts/lunarwing-mt-admin.sh list-backups sparkie
+
+# Restore a tenant's DB from a dump (DESTRUCTIVE: DROP+recreate; stop the daemon first)
+sudo ic/scripts/lunarwing-mt-admin.sh stop-tenant sparkie
+sudo ic/scripts/lunarwing-mt-admin.sh restore-tenant sparkie /var/lib/lunarwing-backups/sparkie/sparkie-<ts>.dump --yes
+sudo ic/scripts/lunarwing-mt-admin.sh start-tenant sparkie
+
 # Remove a tenant (stop services, deallocate ports, preserve user home)
 sudo ic/scripts/lunarwing-mt-admin.sh remove-tenant sparkie
 

@@ -1,6 +1,6 @@
 # Multi-Tenant systemd Parity — Rootless Podman, Health Pipeline & Self-Heal
 
-**Status:** ✅ **Largely implemented** (merged `2b471720`, 2026-06-16) — WS1–4 + fold-ins A & C landed; **fold-in B (random PG passwords) landed on `…-random-pg-passwords`; fold-in D (backups) still outstanding.** See the *Implementation status* section below. *(Original status: "Proposed (approved, not yet implemented)".)*
+**Status:** ✅ **Fully implemented** — WS1–4 + fold-ins A & C merged at `2b471720`; **fold-in B (random PG passwords) and fold-in D (backups) implemented on their feature branches and merged into `…-unified`.** See the *Implementation status* section below. *(Original status: "Proposed (approved, not yet implemented)".)*
 **Branch:** `2026-06-16-vm-ic-2-feature-1.1.4-systemd` (merged into `…-unified`)
 **Date:** 2026-06-15 (status updated 2026-06-16)
 **Supersedes / closes:** the "Future: full systemd rootless support" section of
@@ -29,9 +29,9 @@ reads of the actual scripts, not the doc). Commits: WS1 `c8abd28e`, WS2
 | **Fold-in A** — weechat rename | ✅ **done** | `lunarwing-weechat-<t>` on both inits |
 | **Fold-in C** — status/doctor symmetry | ✅ **done** | `status_tenant` rows; doctor `podman ≥ 4.6 (Quadlet)` + per-tenant linger/`/run/user` checks |
 | **Fold-in B** — random per-tenant PG passwords | ✅ **done** (`…-random-pg-passwords`) | `tenant_pg_password` (migration-safe) is the source of truth; `DATABASE_URL` + `POSTGRES_PASSWORD` (imperative `_ctr run` **and** the Quadlet) derive from it; `rotate-pg-password <name>` verb upgrades existing tenants. New tenants random; pre-existing keep `lunarwing` until rotated. |
-| **Fold-in D** — backups subcommand | ❌ **NOT done** | no `backup` verb in dispatch, no `pg_dump` anywhere |
+| **Fold-in D** — backups subcommand | ✅ **done** (`…-backups-verb`) | `backup-tenant`/`backup-all`/`list-backups`/`restore-tenant` verbs — `pg_dump -Fc` via `_ctr exec`, keep-last-N pruning, `pg_restore --single-transaction --clean` with a PGDMP-header check, daemon-stopped guard, and `--yes`-gated destructive restore |
 
-**Remaining work on this proposal:** fold-in **D** only (fold-in B landed on `…-random-pg-passwords`). The
+**Remaining work on this proposal:** none — all workstreams and fold-ins are merged into `…-unified`. The
 *Docs to update / retire* checklist at the end is **not yet actioned** — its target
 docs (`MULTITENANCY-PRODUCTION.md`, `TENANT-CONFIGURATION.md`, the `CLAUDE.md` MT
 line, `ic-infrastructure-health-check/README.md`) may still carry the stale
@@ -230,7 +230,7 @@ Engine already systemd-capable; fix only:
 - **C — status/doctor symmetry.** ✅ *Done.* `status_tenant`: add pg + worker (+ weechat/adapter) rows to both
   branches. `doctor`: the systemd "pipeline scheduled" check (W1.6) + "podman ≥ 4.4 (quadlet)" check +
   "tenant user manager active (linger)" check.
-- **D — Backups subcommand.** ❌ *Not done — no `backup` verb / `pg_dump` exists.* Add a `backup` verb (`pg_dump` of each tenant's PG container via
+- **D — Backups subcommand.** ✅ *Done (`…-backups-verb`) — `backup-tenant`/`backup-all`/`list-backups`/`restore-tenant`.* Add a `backup` verb (`pg_dump` of each tenant's PG container via
   `_ctr exec`, to a host backup dir; init-agnostic). CLAUDE.md already instructs "back up the DB first"
   but no verb exists.
 
