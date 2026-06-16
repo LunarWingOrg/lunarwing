@@ -103,11 +103,22 @@ All four self-heal bugs below were found via **live** bring-up/testing on a real
 
 The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects the release cadence. Near-term highlights:
 
-| Feature | Target |
-|---------|--------|
-| Multica bridge/channel refinements; Lunartica UI reskin | v1.1.6 |
-| Systemd-path wiring of the MT health/self-heal pipeline; further self-healing hardening | v1.1.6 |
-| Self-healing epic (first-class, wired-in across init systems) | v1.2.0 |
+| Feature | Target |                                                                                                            
+|---------|--------|                                                                                                            
+| XMPP OMEMO MUC fallback fix | v1.1.5 |                                                                                        
+| XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
+| Lunarvision K.E.R.S. system setup polishing | v1.1.5 |                                                                        
+| External Worker planned enhancements | v1.1.6 |                                                                               
+| Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.6 |                               
+| Lunartica UI reskin | v1.1.6 |                                                                                                
+| Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero
+ directly) — toggle to disable on existing tenants and by ensure by default disabled on new ones | v1.1.7 |                     
+| List of planned suggested features to pre-emptively improve security via input validation | v1.1.7 |                          
+| Additional WASM Channel Polishing | v1.1.7 |                                                                                  
+| Rename ironclaw references in WeeChat channel and adapter | v1.1.7 |                                                          
+| Rename ironclaw references in Gotify tool | v1.1.7 |                                                                          
+| Add the custom Git WASM workspace tool source code created months ago back to LunarWing, test again | v1.1.8 |                
+| Upgrade version of tensorzero, plus enable optional tighter integration with tensorzero across deployments. Can explain this idea more in a doc later. Also, expansion of healthcheck tests for Clickhouse Database | v1.1.8 |
 
 ---
 
