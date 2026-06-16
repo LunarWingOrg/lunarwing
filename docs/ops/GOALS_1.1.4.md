@@ -1,7 +1,7 @@
 # PRE-RELEASE CHECKLIST for 1.1.4 Codename `Phoenix`
 **Open TODOs (1.1.4) — Feature Release**
 1. [x] Finalize goals list
-2. [ ] Bump crate versions to 1.1.4 and subsequently run all cargo tests
+2. [x] Bump crate versions to 1.1.4 and subsequently run all cargo tests
 3. [x] Continue to make improvements to health check and self healing
 4. [x] Continue to test Healthcheck and Self-Healing Enhancements
 5. [ ] Test all changes ICHC changes on two existing development VMs
