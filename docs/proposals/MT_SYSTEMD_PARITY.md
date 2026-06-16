@@ -1,6 +1,6 @@
 # Multi-Tenant systemd Parity — Rootless Podman, Health Pipeline & Self-Heal
 
-**Status:** ✅ **Largely implemented** (merged `2b471720`, 2026-06-16) — WS1–4 + fold-ins A & C landed; **fold-ins B (random PG passwords) & D (backups) still outstanding.** See the *Implementation status* section below. *(Original status: "Proposed (approved, not yet implemented)".)*
+**Status:** ✅ **Largely implemented** (merged `2b471720`, 2026-06-16) — WS1–4 + fold-ins A & C landed; **fold-in B (random PG passwords) landed on `…-random-pg-passwords`; fold-in D (backups) still outstanding.** See the *Implementation status* section below. *(Original status: "Proposed (approved, not yet implemented)".)*
 **Branch:** `2026-06-16-vm-ic-2-feature-1.1.4-systemd` (merged into `…-unified`)
 **Date:** 2026-06-15 (status updated 2026-06-16)
 **Supersedes / closes:** the "Future: full systemd rootless support" section of
@@ -28,10 +28,10 @@ reads of the actual scripts, not the doc). Commits: WS1 `c8abd28e`, WS2
 | **WS4** — self-heal parser correctness | ✅ **done** | `unit_tenant()` strips pg/worker/weechat infixes; `lunarwing-weechat-*` case; `sudo -n` consistency |
 | **Fold-in A** — weechat rename | ✅ **done** | `lunarwing-weechat-<t>` on both inits |
 | **Fold-in C** — status/doctor symmetry | ✅ **done** | `status_tenant` rows; doctor `podman ≥ 4.6 (Quadlet)` + per-tenant linger/`/run/user` checks |
-| **Fold-in B** — random per-tenant PG passwords | ❌ **NOT done** | `POSTGRES_PASSWORD=lunarwing` still hardcoded in the imperative path **and** the Quadlet; no `tenant_pg_password`/`openssl rand`/`rotate-pg-password`. **All tenants still share the PG password `lunarwing` on every leg** — needs a deliberate decision. |
+| **Fold-in B** — random per-tenant PG passwords | ✅ **done** (`…-random-pg-passwords`) | `tenant_pg_password` (migration-safe) is the source of truth; `DATABASE_URL` + `POSTGRES_PASSWORD` (imperative `_ctr run` **and** the Quadlet) derive from it; `rotate-pg-password <name>` verb upgrades existing tenants. New tenants random; pre-existing keep `lunarwing` until rotated. |
 | **Fold-in D** — backups subcommand | ❌ **NOT done** | no `backup` verb in dispatch, no `pg_dump` anywhere |
 
-**Remaining work on this proposal:** fold-ins **B** and **D** only. The
+**Remaining work on this proposal:** fold-in **D** only (fold-in B landed on `…-random-pg-passwords`). The
 *Docs to update / retire* checklist at the end is **not yet actioned** — its target
 docs (`MULTITENANCY-PRODUCTION.md`, `TENANT-CONFIGURATION.md`, the `CLAUDE.md` MT
 line, `ic-infrastructure-health-check/README.md`) may still carry the stale
@@ -223,7 +223,7 @@ Engine already systemd-capable; fix only:
   (`render_tenant_systemd_units`, `render_tenant_openrc_units`, start/stop/enable lists, daemon
   `After=`/`Wants=`, and `tmux -L` socket refs). Makes weechat discoverable by the `lunarwing-*` glob
   and resolvable by self-heal.
-- **B — Random per-tenant PG passwords.** ❌ *Not done — `POSTGRES_PASSWORD=lunarwing` is still hardcoded (imperative + Quadlet) on every leg.* Add `tenant_pg_password` (`openssl rand -hex 24`); thread it
+- **B — Random per-tenant PG passwords.** ✅ *Done (`…-random-pg-passwords`) — `tenant_pg_password` + `rotate-pg-password`; migration-safe.* Add `tenant_pg_password` (`openssl rand -hex 24`); thread it
   into the PG `Environment=`/init env and `DATABASE_URL`; resolve **before first container init**
   (POSTGRES_PASSWORD only applies to an empty datadir). Store in the tenant env file (mode 0600).
   Optional `rotate-pg-password` verb. Uniform across OpenRC / systemd / docker.

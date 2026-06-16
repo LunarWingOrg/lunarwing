@@ -78,6 +78,37 @@ tenant_state_dir() { printf '%s/state' "$(tenant_lw_root "$1")"; }
 tenant_log_dir() { printf '%s/logs' "$(tenant_lw_root "$1")"; }
 tenant_run_dir() { printf '%s/run' "$(tenant_lw_root "$1")"; }
 
+# Per-tenant PostgreSQL password. The source of truth is a 0600, tenant-owned
+# secret file, generated once (hex → URL-safe inside DATABASE_URL) and reused so
+# it stays STABLE across restarts/reconfigures — POSTGRES_PASSWORD only
+# initialises an EMPTY datadir, so the value must not drift after first init.
+# Migration-safe: if a tenant was already provisioned (its lunarwing.env carries a
+# DATABASE_URL password), that value is preserved so an already-initialised DB
+# keeps working; only brand-new tenants get a fresh random password. Use
+# `rotate-pg-password` to deliberately move an existing tenant onto a random one.
+# Never logged (repo rule).
+tenant_pg_password() {
+  local name="$1" f envf existing pw
+  f="$(tenant_env_dir "$name")/pg.secret"
+  if [[ -s "$f" ]]; then
+    cat "$f"   # callers use $(...), which strips the trailing newline
+    return 0
+  fi
+  envf="$(tenant_env_dir "$name")/lunarwing.env"
+  if [[ -f "$envf" ]]; then
+    existing="$(sed -n 's#^DATABASE_URL=postgres://lunarwing:\([^@]*\)@.*#\1#p' "$envf" | head -1)"
+  fi
+  if [[ -n "${existing:-}" ]]; then
+    pw="$existing"                       # preserve an already-initialised DB's password
+  else
+    pw="$(generate_token | cut -c1-32)"  # fresh tenant → random 128-bit hex
+  fi
+  mkdir -p "$(dirname "$f")"
+  ( umask 077; printf '%s\n' "$pw" > "$f" )
+  chown "$name:$name" "$f" 2>/dev/null || true
+  printf '%s\n' "$pw"
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -127,6 +158,7 @@ Commands:
   start-tenant <name>             Start all services for a tenant
   stop-tenant <name>              Stop all services for a tenant
   restart-tenant <name>           Stop then start
+  rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
                                    (updates workspace config + capabilities)
@@ -1140,12 +1172,15 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
-  local gateway_token bridge_token relay_password secrets_key webhook_secret
+  local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password
   gateway_token="$(generate_token)"
   bridge_token="$(generate_token | cut -c1-32)"
   relay_password="$(generate_token | cut -c1-32)"
   secrets_key="$(generate_token)"
   webhook_secret="$(generate_token)"
+  # Stable + migration-safe; resolved before the heredoc so it can read an
+  # existing DATABASE_URL (preserving an already-initialised DB's password).
+  pg_password="$(tenant_pg_password "$name")"
 
   # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
   # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
@@ -1163,7 +1198,7 @@ IRONCLAW_SOCKET=$run_dir/lunarwing.sock
 
 # Database
 DATABASE_BACKEND=postgres
-DATABASE_URL=postgres://lunarwing:lunarwing@127.0.0.1:${pg_port}/lunarwing
+DATABASE_URL=postgres://lunarwing:${pg_password}@127.0.0.1:${pg_port}/lunarwing
 DATABASE_SSLMODE=disable
 PGSSLMODE=disable
 
@@ -1834,15 +1869,24 @@ start_tenant_postgres() {
     # daemon — OpenRC owns lifecycle), so only set it for rootful docker.
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    # Pass POSTGRES_PASSWORD via a transient 0600 --env-file rather than `-e` so
+    # the per-tenant secret never lands on the container-runtime argv (readable in
+    # /proc/<pid>/cmdline by other local users). Removed right after creation; the
+    # Quadlet path keeps it in its own 0600 unit file for the same reason.
+    local pg_init_env
+    pg_init_env="$(tenant_env_dir "$name")/.pg-init.env"
+    ( umask 077; printf 'POSTGRES_PASSWORD=%s\n' "$(tenant_pg_password "$name")" >"$pg_init_env" )
+    chown "$name:$name" "$pg_init_env" 2>/dev/null || true
     _ctr "$name" run -d \
       --name "$container_name" \
       -e POSTGRES_USER=lunarwing \
-      -e POSTGRES_PASSWORD=lunarwing \
+      --env-file "$pg_init_env" \
       -e POSTGRES_DB=lunarwing \
       -p "127.0.0.1:${pg_port}:5432" \
       -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
       "${restart_arg[@]}" \
       pgvector/pgvector:pg16 >/dev/null
+    rm -f "$pg_init_env"
   fi
 
   local attempts=0
@@ -1878,6 +1922,53 @@ reset_tenant_postgres() {
   say "PostgreSQL removed ($container_name, data volume cleared)"
 }
 
+# Rotate an existing tenant's PG password to a fresh random one. Unlike a new
+# tenant (where POSTGRES_PASSWORD seeds an empty datadir), an initialised DB needs
+# an in-place ALTER ROLE, then the persisted secret + DATABASE_URL updated, then a
+# daemon restart so it reconnects with the new credential. The new password is hex
+# (URL/SQL-safe) and is never echoed.
+rotate_tenant_pg_password() {
+  local name="$1"
+  ensure_container_runtime
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local container_name="lunarwing-pg-$name"
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL container $container_name is not running; start the tenant first"
+
+  local envf pg_port new_pw secret_file tmp
+  envf="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$envf" ]] || die "tenant env not found: $envf"
+  pg_port="$(ports_get "$name" postgres)"
+  new_pw="$(generate_token | cut -c1-32)"
+
+  # Change the live role password. psql connects over the container's local unix
+  # socket (trust auth in the postgres image), and the new value is fed on stdin —
+  # never on argv or in logs. A hex value carries no SQL-quoting hazard.
+  if ! printf "ALTER ROLE lunarwing PASSWORD '%s';\n" "$new_pw" \
+       | _ctr "$name" exec -i "$container_name" psql -v ON_ERROR_STOP=1 -U lunarwing -d lunarwing -q >/dev/null 2>&1; then
+    die "failed to ALTER ROLE password inside $container_name (is the DB healthy?)"
+  fi
+
+  # Persist the new secret (source of truth) ...
+  secret_file="$(tenant_env_dir "$name")/pg.secret"
+  ( umask 077; printf '%s\n' "$new_pw" > "$secret_file" )
+  chown "$name:$name" "$secret_file" 2>/dev/null || true
+
+  # ... and rewrite DATABASE_URL in place (preserving the env file's owner/perms).
+  # Temp lives beside the env file (0600), not in shared /tmp, so the cleartext
+  # password isn't briefly exposed there — matching the convention used elsewhere.
+  tmp="$(mktemp "$envf.tmp.XXXXXX")"
+  sed "s#^DATABASE_URL=.*#DATABASE_URL=postgres://lunarwing:${new_pw}@127.0.0.1:${pg_port}/lunarwing#" "$envf" >"$tmp"
+  cat "$tmp" >"$envf"
+  rm -f "$tmp"
+
+  say "Rotated PostgreSQL password for tenant '$name'."
+  say "IMPORTANT: the running daemon still holds the old credential — restart to apply:"
+  say "    lunarwing-mt-admin.sh restart-tenant $name"
+}
+
 # ── Systemd service units ────────────────────────────────────────────────────
 
 # Render a per-tenant Quadlet .container for the Postgres container. The podman
@@ -1887,9 +1978,10 @@ reset_tenant_postgres() {
 # the named volume below preserves data across container replacement.
 render_pg_quadlet() {
   local name="$1"
-  local qdir pg_port
+  local qdir pg_port pg_password
   qdir="$(tenant_quadlet_dir "$name")"
   pg_port="$(ports_get "$name" postgres)"
+  pg_password="$(tenant_pg_password "$name")"   # inlined into the 0600 tenant-owned .container
   mkdir -p "$qdir"
   cat >"$qdir/lunarwing-pg-${name}.container" <<EOF
 [Unit]
@@ -1905,7 +1997,7 @@ Image=pgvector/pgvector:pg16
 PublishPort=127.0.0.1:${pg_port}:5432
 Volume=lunarwing-pg-${name}:/var/lib/postgresql/data
 Environment=POSTGRES_USER=lunarwing
-Environment=POSTGRES_PASSWORD=lunarwing
+Environment=POSTGRES_PASSWORD=${pg_password}
 Environment=POSTGRES_DB=lunarwing
 HealthCmd=pg_isready -U lunarwing -q
 HealthInterval=10s
@@ -3510,6 +3602,12 @@ main() {
       require_root
       [[ -n "${1:-}" ]] || die "usage: restart-tenant <name>"
       restart_tenant "$1"
+      ;;
+
+    rotate-pg-password)
+      require_root
+      [[ -n "${1:-}" ]] || die "usage: rotate-pg-password <name>"
+      rotate_tenant_pg_password "$1"
       ;;
 
     list-tenants|list)
