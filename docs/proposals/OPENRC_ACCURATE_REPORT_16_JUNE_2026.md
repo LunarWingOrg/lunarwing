@@ -34,6 +34,71 @@ self-recovers the current state file.
 
 ---
 
+## ✅ Status update — 2026-06-16 (post-merge `2b471720`)
+
+*Added after the original report, reflecting code merged into
+`2026-06-16-vm-ic-2-feature-1.1.4-unified`. Most of this landed via the
+systemd-parity effort (commit `dd4ec7e4`, "self-heal: systemd remediation parity
++ shared engine fixes"), but the engine fixes are **init-agnostic** and apply to
+the OpenRC leg too.*
+
+**The curative trio + its test are now implemented in code — matching this
+report's proposals:**
+
+| Item | Proposed | Landed | Where |
+|------|----------|--------|-------|
+| **Rank 4** `load_state` object guard | `jq -e 'if type=="object" then . else error end'` | ✅ **exactly as proposed** | `lunarwing-self-heal.sh` `load_state()` |
+| **Rank 1** restart-stdout redirect | `esac >&2 200>&-` | ✅ **exactly as proposed** | `lunarwing-self-heal.sh` `restart_service()` |
+| **Rank 2** escalation renderer | page the escalation shape, don't abort | ✅ **closed** — `send-notification.sh` now branches on `.escalated`, null-defaults every field, and falls back to a plain message (`… 2>/dev/null \|\| message=…`). Differs from the proposed `--raw` flag (in-renderer branch instead); same outcome. | `send-notification.sh` |
+| **Rank 3** invert test O2 | assert empty state is quarantined | ✅ **done** — O2 now asserts `state.json is corrupt` + a `state.json.corrupt` sibling + `Self-Healing complete` (O2b whitespace not added separately; the empty-file case covers the live condition) | `tests/test-self-heal-matrix.sh` |
+
+**Related init-agnostic changes that also help the OpenRC leg:**
+
+- **`unit_tenant()` expanded** with specific prefixes (`lunarwing-pg-*`,
+  `-nanocode-*`, `-pebble-*`, `-weechat-adapter-*`, `-weechat-*`) **before** the
+  generic `lunarwing-*`. Fixes a *latent* mis-targeting bug where
+  `lunarwing-pg-<t>` resolved to the bogus tenant `pg-<t>` — strengthening **Rank
+  19**. Applies to OpenRC remediation.
+- **weechat unit renamed** `weechat-<t>` → `lunarwing-weechat-<t>` on **both**
+  systemd (`.service`) and OpenRC (`/etc/init.d/`). On OpenRC the existing
+  `health-openrc.sh` `lunarwing-*` discovery glob **now finds weechat**, partially
+  addressing **Rank 18** ("weechat invisible to self-heal"). The duplicate
+  `lunarwing-*` / `lunarwing-proxy-*` glob still remains.
+- **`doctor` per-tenant linger check** — `doctor` now verifies, per tenant, that
+  **linger is enabled** (`loginctl show-user … Linger`) and **`/run/user/<uid>`
+  exists**, for rootless hosts (added with the status/doctor symmetry work, gated
+  on `MT_ROOTLESS` so it runs on the OpenRC leg too). This is most of **Rank 11**;
+  the per-tenant `sudo -u <t> podman info` *store* check is still missing.
+
+**systemd-only — does NOT change the OpenRC leg, but closes the same gaps on the
+other leg** (see [`MT_SYSTEMD_PARITY.md`](./MT_SYSTEMD_PARITY.md)):
+
+- **Quadlet `.container` supervision** (`render_pg_quadlet` / `render_worker_quadlet`,
+  `Restart=on-failure` + start-limit) — the systemd analog of **Rank 30** and of
+  [`ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md`](./ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md).
+  **OpenRC container units remain unsupervised** — that gap is now confirmed
+  OpenRC-specific.
+- The systemd PG Quadlet uses **`HealthCmd=pg_isready`** — i.e. **Rank 15** on the
+  systemd path. The **OpenRC** pg `status()` still checks only `.State.Running`
+  (Rank 15 **open on OpenRC**).
+- `_systemd_restart` / `_systemd_user_restart` now `reset-failed` before restart
+  and use `sudo -n` (systemd start-limit handling); no OpenRC equivalent needed.
+
+**Still open for the OpenRC leg** (`health-openrc.sh` and the OpenRC pg/worker
+units were not modified): Ranks **5, 9, 10, 13, 15 (OpenRC), 18 (dup glob), 30,
+33**, plus the broader hardening items. (**Rank 11** is now *mostly* addressed —
+see the doctor linger bullet above — leaving only the per-tenant `podman info`
+store check.)
+
+**Live deployment note:** re-checked
+`/var/lib/lunarwing-health/workspace/reports/self-heal/state.json` at **03:15** —
+**still 1 byte, no `.corrupt` sibling.** The running host is still on the
+**pre-fix deployed copy**; the merged guard will quarantine the empty file and
+write a fresh `{}` on the first tick **after the updated `lunarwing-self-heal.sh`
+is deployed**. (Fix is in the branch, not yet on the box.)
+
+---
+
 ## 1. Live verification (read-only, 2026-06-16)
 
 Gathered directly from `/var/lib/lunarwing-health/workspace/reports/self-heal/`
@@ -66,6 +131,12 @@ on the running host (no mutations):
 bricked" framing is withdrawn; the verified state is "works, stateful features
 dormant."
 
+**Re-check (03:15, post-merge `2b471720`):** `state.json` is **still 1 byte** with
+no `.corrupt` sibling — the running host is still on the **pre-fix deployed copy**.
+The `load_state` guard is now merged (see the Status update above) but has not yet
+been deployed to this host; it will self-recover the file on the next tick after
+deploy.
+
 Tenants present: `zeus`, `creamheart` in `/etc/lunarwing/ports.json`; the action
 log also references `mars` and `ate` (weechat-adapter units).
 
@@ -75,14 +146,16 @@ log also references `mars` and `ate` (weechat-adapter units).
 
 | # | Item | Status on live host | Severity (calibrated) |
 |---|------|---------------------|------------------------|
-| A | `load_state` treats empty/whitespace file as valid-empty → state never persists → backoff/flap/escalation dormant | **LIVE** (`state.json` = 1 byte, `retries=0` everywhere) | High — but happy-path-safe; ~2-line fix, self-recovers |
-| B | Restart-command stdout banner can corrupt the captured state JSON (aborts before `save_state`) | **LIVE risk** (same class as the already-fixed notifier bug; reinforces A) | High — one-char fix (`esac >&2 200>&-`) |
-| C | Escalation page silently dropped (`send-notification.sh` can't render escalation JSON shape → jq abort) | **Latent** — only fires *if* `GOTIFY_TOKEN` is set *and* a service reaches escalation; with state dormant (A) escalation never triggers anyway | Medium — real, but masked by A; fix alongside |
+| A | `load_state` treats empty/whitespace file as valid-empty → state never persists → backoff/flap/escalation dormant | ✅ **FIXED in code** (`2b471720`); live host still on pre-fix copy (state.json 1 byte @ 03:15) → self-recovers on redeploy | High — *resolved*; was happy-path-safe |
+| B | Restart-command stdout banner can corrupt the captured state JSON (aborts before `save_state`) | ✅ **FIXED in code** (`esac >&2 200>&-`, `2b471720`) | High — *resolved* |
+| C | Escalation page silently dropped (`send-notification.sh` can't render escalation JSON shape → jq abort) | ✅ **FIXED in code** (`.escalated` branch + null-defaults + fallback, `2b471720`) | Medium — *resolved* (was latent, masked by A) |
 | D–… | The remaining 30 items | **Latent / hardening** — fire on a future incident, reboot, schema skew, or mass outage | Medium→Low |
 
-The two **curative** fixes are **A + B**. **C** is the right third fix so that once
-state persists, a genuine escalation actually pages. Everything else is hardening
-or test coverage — valuable, not urgent.
+The two **curative** fixes (A + B) and the escalation fix (C) have **all landed**
+in `2b471720` (init-agnostic, so they apply to OpenRC). The remaining items are
+hardening or test coverage — and most of the OpenRC-leg ones (Ranks
+5/9/10/11/13/30/33) are still open. **The one operational step left on the live
+host: deploy the updated `lunarwing-self-heal.sh`** so A self-recovers.
 
 ---
 
@@ -93,12 +166,18 @@ verification; 0 dropped). Live read-only verification then **recalibrated the
 severity** of the top cluster (it did not invalidate the findings). Impact/effort
 below reflect the calibrated view.
 
+> **Status (post-merge `2b471720`):** Ranks **1, 2, 3, 4** are now ✅ implemented;
+> Rank **19** is helped by the `unit_tenant()` fix and Rank **18** is partially
+> addressed by the weechat rename; Ranks **15/30** are addressed on the *systemd*
+> leg via Quadlet but **remain open on OpenRC**. See the Status update section
+> above. The table preserves the original review priorities.
+
 | Rank | Recommendation | Dimension | Impact | Effort | podman/OpenRC |
 |------|----------------|-----------|--------|--------|----------------|
-| 1 | Redirect restart-command stdout (`esac >&2 200>&-`) | selfheal-robustness | high | low | OpenRC |
-| 2 | Fix escalation renderer (jq abort → page) | observability-alerting | high | low | — |
-| 3 | Invert test O2 + ship `load_state` empty/whitespace guard together | testing / selfheal | high | low | — |
-| 4 | `load_state`: treat empty/whitespace/non-object as corrupt | selfheal-robustness | high | low | — |
+| 1 ✅ | Redirect restart-command stdout (`esac >&2 200>&-`) | selfheal-robustness | high | low | OpenRC |
+| 2 ✅ | Fix escalation renderer (jq abort → page) | observability-alerting | high | low | — |
+| 3 ✅ | Invert test O2 + ship `load_state` empty/whitespace guard together | testing / selfheal | high | low | — |
+| 4 ✅ | `load_state`: treat empty/whitespace/non-object as corrupt | selfheal-robustness | high | low | — |
 | 5 | Per-service `timeout` on `rc-service status` (no fleet-blanking) | health-accuracy | high | low | OpenRC+podman |
 | 6 | Realistic OpenRC restart mock + state-validity chaos case | testing-chaos | high | low | OpenRC |
 | 7 | fd-200 lock-inheritance regression test | testing-chaos | high | medium | OpenRC+podman |
@@ -135,8 +214,12 @@ below reflect the calibrated view.
 
 These three fix the one live issue and its co-cause, and re-arm escalation.
 
-### [Rank 4] `load_state`: quarantine empty/whitespace/non-object — *recovers the live host*
+### [Rank 4] `load_state`: quarantine empty/whitespace/non-object — ✅ IMPLEMENTED (`2b471720`)
 `ic-infrastructure-health-check/lunarwing-self-heal.sh:388-401`
+
+> **Landed exactly as proposed.** `load_state` now uses `jq -e 'if type=="object"
+> then . else error end'`. *Recovers the live host* on the next tick after the
+> updated script is deployed (still 1 byte as of 03:15).
 
 - **Problem (verified live):** `load_state` branches only on jq's exit code, but
   `jq -r '.'` on a 0-byte or whitespace-only file **exits 0 with empty output**
@@ -154,8 +237,10 @@ These three fix the one live issue and its co-cause, and re-arm escalation.
   strictly more correct. (Confirmed: an empty file fails the `type=="object"`
   guard.)
 
-### [Rank 1] Redirect restart-command stdout
+### [Rank 1] Redirect restart-command stdout — ✅ IMPLEMENTED (`2b471720`)
 `lunarwing-self-heal.sh:274` (dispatch), `:236` (`_openrc_restart`), `:767` (capture)
+
+> **Landed exactly as proposed:** `esac >&2 200>&-`.
 
 - **Problem:** `remediate_component` returns state via `printf '%s' "$state"`
   (`:633`), captured as `state="$(remediate_component …)"` (`:767`). Inside,
@@ -173,8 +258,13 @@ These three fix the one live issue and its co-cause, and re-arm escalation.
 - **Risk:** interactive runs no longer echo the banner on stdout (only logs) —
   acceptable; nothing consumes restart stdout today.
 
-### [Rank 2] Escalation pages are silently dropped
+### [Rank 2] Escalation pages are silently dropped — ✅ IMPLEMENTED (`2b471720`)
 `ic-infrastructure-health-check/send-notification.sh:45-58`, `lunarwing-self-heal.sh:519-527`
+
+> **Closed, via a different shape than proposed:** instead of a `--raw` flag, the
+> renderer now branches on `.escalated`, null-defaults every field, and falls back
+> to a plain message (`… 2>/dev/null || message="Infrastructure alert …"`). Same
+> outcome — escalation JSON can no longer abort the page.
 
 - **Problem (verified by reading the renderer):** `escalate_service` builds
   `{escalated,service,timestamp,retries,reason,action}` (`:519-523`) and calls
@@ -523,6 +613,14 @@ they'd test the wrong file or duplicate CH9.)
 
 ## 6. Quick wins (do this week)
 
+> **Update (post-merge `2b471720`):** items **1–4** below (the curative trio + the
+> O2 test) are now ✅ implemented. Items **5–8 and 11** remain — OpenRC-leg
+> (`health-openrc.sh` / tests / CI), unchanged by the merge. **#9 (Rank 11)** is
+> *mostly* done (per-tenant linger + `/run/user` checks added to `doctor`) and
+> **#10 (Rank 18)** is partially done (weechat rename). The one operational step
+> left is **deploying the updated self-heal script** to the live host so #1
+> self-recovers.
+
 1. **Rank 4** — `load_state` empty/object guard — *recovers the live 1-byte-state host.*
 2. **Rank 1** — `esac >&2 200>&-` (stops restart-stdout state corruption; co-cause of #1).
 3. **Rank 3** — invert O2 + add O2b in the same change (locks the fix).
@@ -555,11 +653,11 @@ instead of failing silently.
 - **mt-admin units emit canonical `started/stopped` wording** (so the
   "podman-rootless masks status" framing was corrected to false).
 
-**Latent vs live:** the only currently-*live* issue is the empty-`state.json`
-condition (Rank 4) and its co-cause (Rank 1). The escalation-render bug (Rank 2)
-is real in code but masked (needs `GOTIFY_TOKEN` set *and* an escalation that the
-dormant state never produces). Everything else fires on a future incident,
-reboot, schema skew, or mass outage — fix before that incident, not after.
+**Latent vs live (post-merge `2b471720`):** the curative trio (Ranks 1, 2, 4) is
+now **fixed in code**; the only thing still *live* is that the **deployed** host
+runs the pre-fix script, so its `state.json` stays empty until redeploy (it then
+self-recovers). Everything else is latent — fires on a future incident, reboot,
+schema skew, or mass outage — fix before that incident, not after.
 
 ---
 

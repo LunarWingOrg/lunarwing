@@ -6,15 +6,41 @@ leg (the `eris` deploy). Companion to
 self-healing series ([`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEMENTS_1.md),
 [`SELF_HEALING_IMPROVEMENTS_2.md`](./SELF_HEALING_IMPROVEMENTS_2.md)).*
 
-> **Status:** proposal / analysis. No code changed yet.
+> **Status:** proposal / analysis. **OpenRC leg: still open.** The systemd leg has
+> since closed the equivalent gap (see Status update below).
 > **Scope:** rootless podman + OpenRC only. The rootful-docker leg is unaffected
 > (docker's `--restart unless-stopped` already covers it).
 > **TL;DR:** Per-tenant containers (`lunarwing-pg-<t>`, `lunarwing-nanocode-<t>`,
-> `lunarwing-pebble-<t>`) now have OpenRC units and *are* health-monitored, but
-> they are **not supervised**. A container that crashes after `start()` returns
-> is only recovered by the `*/15` self-heal sweep — worst case **~30 minutes** of
-> downtime, versus ~5 seconds for the supervised Rust binaries. There is also a
-> false-healthy hole in the Postgres unit's `status()`.
+> `lunarwing-pebble-<t>`) have OpenRC units and *are* health-monitored, but on the
+> OpenRC leg they are **not supervised**. A container that crashes after `start()`
+> returns is only recovered by the `*/15` self-heal sweep — worst case **~30
+> minutes** of downtime, versus ~5 seconds for the supervised Rust binaries. There
+> is also a false-healthy hole in the Postgres unit's `status()`.
+
+---
+
+## ✅ Status update — 2026-06-16 (post-merge `2b471720`)
+
+The **systemd leg has since closed this exact gap** via **Quadlet `.container`
+units** (`render_pg_quadlet` / `render_worker_quadlet` in `lunarwing-mt-admin.sh`,
+commits `a919de20` / `8b028205`, WS2 of [`MT_SYSTEMD_PARITY.md`](./MT_SYSTEMD_PARITY.md)):
+on systemd + rootless podman the Quadlet-generated `.service` owns the container
+lifecycle with **`Restart=on-failure`** + a start-limit, and the PG Quadlet adds
+**`HealthCmd=pg_isready`** — i.e. systemd-native supervision *and* a real DB-level
+health probe (the §4 fix below, on that leg).
+
+**The OpenRC leg is unchanged** — the `/etc/init.d/lunarwing-pg-<t>` / worker units
+are still the unsupervised `start`/`stop`/`status` shape described below, and the
+PG `status()` still checks only `.State.Running`. **So this gap is now confirmed
+OpenRC-specific**, and the recommended fixes here (the `podman wait` babysitter in
+§6 Option 1, and the `pg_isready` check in §4) remain the open path for OpenRC.
+There is no Quadlet on OpenRC, so the OpenRC solution must be expressed in OpenRC
+terms (`supervise-daemon` / `podman wait`), exactly as §6 describes.
+
+*Tangential rename:* the weechat unit is now `lunarwing-weechat-<t>` (was
+`weechat-<t>`) and `unit_tenant()` in `lunarwing-self-heal.sh` was expanded to
+resolve the `pg`/`nanocode`/`pebble`/`weechat[-adapter]` prefixes correctly. The
+container unit names referenced below (`lunarwing-pg-<t>` etc.) are unchanged.
 
 ---
 
