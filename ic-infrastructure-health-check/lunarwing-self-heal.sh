@@ -173,12 +173,23 @@ log "detected service manager: $SERVICE_MANAGER"
 
 unit_tenant() {
     local u="${1%.service}"
+    # Strip the service-type infix to recover the tenant name. Specific prefixes
+    # MUST precede the generic `lunarwing-*` (first match wins), or e.g.
+    # lunarwing-pg-<t> would resolve to the bogus tenant "pg-<t>" and self-heal
+    # would target the wrong (or a non-existent) unit. weechat-adapter before
+    # weechat; bare weechat-* covers the pre-rename name.
     case "$u" in
-        lunarwing-proxy-*) printf '%s' "${u#lunarwing-proxy-}" ;;
-        ironclaw-proxy-*)  printf '%s' "${u#ironclaw-proxy-}" ;;
-        xmpp-bridge-*)     printf '%s' "${u#xmpp-bridge-}" ;;
-        lunarwing-*)       printf '%s' "${u#lunarwing-}" ;;
-        *)                 printf '' ;;
+        lunarwing-proxy-*)           printf '%s' "${u#lunarwing-proxy-}" ;;
+        ironclaw-proxy-*)            printf '%s' "${u#ironclaw-proxy-}" ;;
+        lunarwing-pg-*)              printf '%s' "${u#lunarwing-pg-}" ;;
+        lunarwing-nanocode-*)        printf '%s' "${u#lunarwing-nanocode-}" ;;
+        lunarwing-pebble-*)          printf '%s' "${u#lunarwing-pebble-}" ;;
+        lunarwing-weechat-adapter-*) printf '%s' "${u#lunarwing-weechat-adapter-}" ;;
+        lunarwing-weechat-*)         printf '%s' "${u#lunarwing-weechat-}" ;;
+        xmpp-bridge-*)               printf '%s' "${u#xmpp-bridge-}" ;;
+        weechat-*)                   printf '%s' "${u#weechat-}" ;;
+        lunarwing-*)                 printf '%s' "${u#lunarwing-}" ;;
+        *)                           printf '' ;;
     esac
 }
 
@@ -202,9 +213,13 @@ _systemd_active() { systemctl is-active --quiet "$1"; }
 _systemd_restart() {
     local svc="$1"
     if [[ "$DRY_RUN" == true ]]; then
-        log "[DRY-RUN] would run: systemctl restart $svc"
+        log "[DRY-RUN] would run: systemctl restart $svc (after reset-failed)"
         return 0
     fi
+    # A start-limited unit (StartLimitBurst hit) sits in `failed` and refuses
+    # `restart` until its failure counter is cleared. reset-failed is a no-op on
+    # a healthy unit, so it is always safe to run first.
+    systemctl reset-failed "$svc" 2>/dev/null || true
     systemctl restart "$svc"
 }
 
@@ -213,17 +228,21 @@ _systemd_user_restart() {
     local user="$1" unit="$2" uid
     uid="$(id -u "$user" 2>/dev/null || printf '?')"
     if [[ "$DRY_RUN" == true ]]; then
-        log "[DRY-RUN] would run: sudo -u $user env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart $unit"
+        log "[DRY-RUN] would run: sudo -n -u $user env XDG_RUNTIME_DIR=/run/user/$uid systemctl --user restart $unit (after reset-failed)"
         return 0
     fi
     [[ "$uid" == '?' ]] && { log "WARNING: cannot resolve uid for tenant user $user"; return 1; }
-    sudo -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user restart "$unit"
+    # `-n`: never prompt for a password in this non-interactive (timer/cron)
+    # context. reset-failed clears a start-limited (failed) unit so restart is
+    # honored; harmless on a healthy unit.
+    sudo -n -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user reset-failed "$unit" 2>/dev/null || true
+    sudo -n -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user restart "$unit"
 }
 _systemd_user_active() {
     local user="$1" unit="$2" uid
     uid="$(id -u "$user" 2>/dev/null || printf '?')"
     [[ "$uid" == '?' ]] && return 1
-    sudo -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user is-active --quiet "$unit"
+    sudo -n -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user is-active --quiet "$unit"
 }
 
 _openrc_active() { rc-service "$1" status >/dev/null 2>&1; }
@@ -271,7 +290,7 @@ restart_service() {
         openrc)  _openrc_restart "$svc" ;;
         launchd) _launchd_restart "$svc" ;;
         *)       log "WARNING: unknown service manager, cannot restart $svc"; return 1 ;;
-    esac 200>&-
+    esac >&2 200>&-
 }
 
 check_service_active() {
@@ -386,7 +405,12 @@ load_state() {
         echo '{}'; return 0
     fi
     local parsed
-    if parsed="$(jq -r '.' "$STATE_FILE" 2>/dev/null)"; then
+    # Require a non-empty JSON OBJECT. `jq -r '.'` exits 0 with EMPTY output on a
+    # 0-byte/whitespace file, which would silently yield empty state — so backoff,
+    # the flap circuit-breaker, and max-retries escalation never accumulate across
+    # ticks. The type-guard makes empty/whitespace/non-object all fail into the
+    # corrupt-rename path below and recover with a fresh {} on the next tick.
+    if parsed="$(jq -e 'if type=="object" then . else error end' "$STATE_FILE" 2>/dev/null)"; then
         printf '%s' "$parsed"
     else
         # State file is corrupt (truncated write, disk error, etc.). Preserve it

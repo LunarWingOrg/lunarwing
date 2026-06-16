@@ -118,7 +118,7 @@ assert_eq "$(state_of "$F2" 'keys')" '["old-svc"]' "F2: --prune-ttl 0 disables p
 G="$(sb)"; echo '{"tenants":{"summer":{"user":"summer"}}}' > "$G/ports.json"
 report "$G" '{components:[{component:"systemd",status:"degraded",metrics:{units:[{name:"lunarwing-summer.service",status:"critical"}]}}]}'
 oG="$(run_dry "$G" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$G/ports.json")"
-assert_contains "$oG" "sudo -u summer" "G1: systemd tenant unit restarts as tenant user"
+assert_contains "$oG" "sudo -n -u summer" "G1: systemd tenant unit restarts as tenant user"
 assert_contains "$oG" "systemctl --user restart lunarwing-summer.service" "G2: uses systemd --user bus"
 H_oc="$(sb)"; report "$H_oc" '{components:[{component:"openrc",status:"degraded",metrics:{services:[{name:"lunarwing-summer",status:"critical"}]}}]}'
 oGo="$(run_dry "$H_oc" LUNARWING_SERVICE_MANAGER=openrc SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
