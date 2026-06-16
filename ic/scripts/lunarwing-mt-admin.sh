@@ -2209,7 +2209,7 @@ EOF
     # nanocode takes a trailing CMD arg; pebble uses the image default.
     [[ "$worker" == "nanocode" ]] && printf 'Exec=--mode websocket\n'
     cat <<EOF
-HealthCmd=curl -sf http://localhost:${health_port}/health || exit 1
+HealthCmd=curl -sf http://127.0.0.1:${health_port}/health || exit 1
 HealthInterval=15s
 HealthTimeout=5s
 HealthRetries=3
