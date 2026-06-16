@@ -20,6 +20,12 @@ else
   UNITS_ARR=("${UNITS_DEFAULT[@]}")
 fi
 
+# Multi-tenant host? (a tenant registry exists). On MT hosts the base system-
+# level units (lunarwing.service, …) are not expected — tenants run per-user
+# units — so a missing base unit is skipped instead of flagged critical.
+TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-${LUNARWING_TENANTS_FILE:-/etc/lunarwing/ports.json}}"
+IS_MT=false; [ -r "$TENANTS_FILE" ] && IS_MT=true
+
 issues=()
 unit_results=()
 overall_status="healthy"
@@ -41,6 +47,9 @@ EOF
 
 for unit in "${UNITS_ARR[@]}"; do
   if ! systemctl list-unit-files "$unit" >/dev/null 2>&1 && ! systemctl status "$unit" >/dev/null 2>&1; then
+    # On a multi-tenant host the base system-level units don't exist (tenants run
+    # per-user units) — skip rather than emit a phantom critical.
+    [ "$IS_MT" = "true" ] && continue
     issues+=("unit not found: $unit")
     unit_results+=("$(unit_json "$unit" "missing" "missing" 0 "{}" "critical")")
     overall_status="critical"; overall_exit=2
@@ -88,32 +97,69 @@ done
 # file) — existing behavior is unchanged. Requires root to reach other users'
 # --user buses; any unit we cannot positively load is skipped (no false
 # criticals). Parallels the tenant discovery in health-openrc.sh.
-TENANTS_FILE="${SELF_HEAL_TENANTS_FILE:-${LUNARWING_TENANTS_FILE:-/etc/lunarwing/ports.json}}"
-if [ -r "$TENANTS_FILE" ] && command -v jq >/dev/null 2>&1; then
-  _tenant_uctl() {  # <user> <uid> <args...> -> systemctl --user output (empty on failure)
+if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
+  _tenant_uctl() {  # <user> <uid> <args...> -> systemctl --user output (failure-safe, bounded)
     local u="$1" uid="$2"; shift 2
-    sudo -n -u "$u" env XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user "$@" 2>/dev/null || true
+    timeout -k 2 5 sudo -n -u "$u" env XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user "$@" 2>/dev/null || true
   }
+  _tenant_ctr_health() {  # <user> <uid> <container> -> health status (healthy/unhealthy/starting/"")
+    local u="$1" uid="$2" ctr="$3"
+    timeout -k 2 5 sudo -n -u "$u" env HOME="/home/$u" XDG_RUNTIME_DIR="/run/user/$uid" \
+      podman inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$ctr" 2>/dev/null || true
+  }
+  # Overall wall-clock budget for the per-tenant sweep, comfortably under the
+  # outer `timeout 30` in infrastructure-health-check.sh: a few dead tenant buses
+  # (each bounded per-probe) must not consume the whole window and blank the
+  # component. Past the deadline we stop probing and emit a partial report.
+  _deadline=24
   while IFS=$'\t' read -r tname tuser; do
+    [ "$SECONDS" -lt "$_deadline" ] || break
     [ -n "$tname" ] && [ -n "$tuser" ] || continue
     tuid=$(id -u "$tuser" 2>/dev/null || echo "")
     [ -n "$tuid" ] || continue
-    for tunit in "lunarwing-$tname.service" "xmpp-bridge-$tname.service"; do
-      [ "$(_tenant_uctl "$tuser" "$tuid" show -p LoadState --value "$tunit")" = "loaded" ] || continue
-      uactive=$(_tenant_uctl "$tuser" "$tuid" show -p ActiveState --value "$tunit"); uactive=${uactive:-unknown}
-      usub=$(_tenant_uctl "$tuser" "$tuid" show -p SubState --value "$tunit"); usub=${usub:-unknown}
-      urestarts=$(_tenant_uctl "$tuser" "$tuid" show -p NRestarts --value "$tunit"); urestarts=${urestarts:-0}
+    # Enumerate ALL of this tenant's lunarwing-*/xmpp-bridge-*/weechat-* user
+    # units — the systemd analog of health-openrc.sh's /etc/init.d/lunarwing-*
+    # glob — instead of a hardcoded pair. Covers pg, the workers, proxy,
+    # weechat(-adapter), and the daemon. Generated Quadlet units (pg/workers)
+    # appear after daemon-reload. (weechat-* also catches the pre-Fold-in-A bare
+    # `weechat-<t>` name; post-rename `lunarwing-*` covers it.)
+    tunits=$(_tenant_uctl "$tuser" "$tuid" list-unit-files --no-legend 'lunarwing-*' 'xmpp-bridge-*' 'weechat-*' \
+             | awk '$1 ~ /\.service$/ {print $1}' | sort -u)
+    [ -n "$tunits" ] || tunits="lunarwing-$tname.service xmpp-bridge-$tname.service"
+    for tunit in $tunits; do
+      [ "$SECONDS" -lt "$_deadline" ] || break
+      # One show call per unit (LoadState/ActiveState/SubState/NRestarts, in
+      # systemd's canonical order for a .service) instead of four round-trips —
+      # leaner and bounds hang exposure on a slow tenant bus.
+      mapfile -t _uf < <(_tenant_uctl "$tuser" "$tuid" show --value \
+        -p LoadState -p ActiveState -p SubState -p NRestarts "$tunit")
+      [ "${_uf[0]:-}" = "loaded" ] || continue
+      uactive=${_uf[1]:-unknown}; usub=${_uf[2]:-unknown}; urestarts=${_uf[3]:-0}
+      [[ "$urestarts" =~ ^[0-9]+$ ]] || urestarts=0
       ustatus="healthy"; uexit=0
       if [ "$uactive" != "active" ]; then
         ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub")
       elif [ "$urestarts" -ge 3 ]; then
         ustatus="degraded"; uexit=1; issues+=("$tunit ($tuser) restart count elevated: $urestarts")
       fi
+      # Container units: `active` only means the container is running. Probe
+      # podman health so a Running-but-wedged Postgres/worker (is-active=active
+      # but not serving) is caught instead of reported healthy.
+      uhealth=""
+      case "$tunit" in
+        lunarwing-pg-*|lunarwing-nanocode-*|lunarwing-pebble-*)
+          uhealth=$(_tenant_ctr_health "$tuser" "$tuid" "${tunit%.service}")
+          if [ "$uhealth" = "unhealthy" ] && [ "$uexit" -lt 2 ]; then
+            ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) container unhealthy")
+          fi
+          ;;
+      esac
       if [ $uexit -gt $overall_exit ]; then
         overall_exit=$uexit
         overall_status=$([ $overall_exit -eq 2 ] && echo critical || echo degraded)
       fi
-      unit_results+=("$(unit_json "$tunit" "$uactive" "$usub" "$urestarts" "$(jq -n --arg u "$tuser" '{tenant_user:$u}')" "$ustatus")")
+      unit_results+=("$(unit_json "$tunit" "$uactive" "$usub" "$urestarts" \
+        "$(jq -n --arg u "$tuser" --arg h "$uhealth" '{tenant_user:$u} + (if $h=="" then {} else {container_health:$h} end)')" "$ustatus")")
     done
   done < <(jq -r '.tenants // {} | to_entries[] | "\(.key)\t\(.value.user)"' "$TENANTS_FILE" 2>/dev/null || true)
 fi
