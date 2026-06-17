@@ -9,7 +9,7 @@
 7. [ ] Test all changes on existing live tenant of MT PROD machine with tenant on version > 1.1.0 - via direct upgrade or migration
 8. [ ] Run automated testing scripts
 9. [ ] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-10. [ ] Write up release notes (at root of repo) for v1.1.4 explaining all changes since v1.1.3 as well as accurate known issues list (only first draft available presently)
+10. [x] Write up release notes (at root of repo) for v1.1.4 explaining all changes since v1.1.3 as well as accurate known issues list
 11. [ ] Create new branch to correspond with release
 12. [ ] Create GH release tag and add release notes to it like other releases already have
 
