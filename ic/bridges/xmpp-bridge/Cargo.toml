@@ -4,7 +4,7 @@ version = "1.1.4"
 edition = "2024"
 description = "Local XMPP bridge for the LunarWing installable XMPP channel"
 authors = ["LunarWing Team"]
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1"
