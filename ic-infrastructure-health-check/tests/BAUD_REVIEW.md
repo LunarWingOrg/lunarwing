@@ -7,6 +7,26 @@
 
 ---
 
+> **Maintainer addendum — 2026-06-16 (status update; Baud's review below is unchanged).**
+> The recommendations in this review have since been implemented:
+> - **P1 — `src_fn` fragility:** a `# HARNESS_ENTRY_POINT` sentinel now marks the
+>   extraction boundary in `lunarwing-self-heal.sh`; `lib.sh:_ensure_body` checks
+>   for it and aborts with a clear message if it ever moves.
+> - **P1 — mock `sudo` drift:** the mock now documents the exact expected
+>   invocations and warns loudly on any unrecognized flag instead of passing it
+>   through.
+> - **P2 — `restart_history` cap:** exposed as `SELF_HEAL_HISTORY_MAX` (default 20).
+> - **P3 — CI introspection:** `run-all.sh --list` prints the suite names.
+>
+> The suite has also grown since this review: the unit matrix now spans
+> **sections A–O (~120 assertions)**, and a fourth suite —
+> `test-health-openrc.sh` (`openrc`, scenarios S1–S6, covering `health-openrc.sh`
+> discovery/exit-code/timeout behavior) — is registered in `run-all.sh`'s order
+> (`regression → matrix → chaos → openrc`). The numbers in Baud's text below
+> reflect the suite as of 2026-06-13.
+
+---
+
 ## TL;DR
 
 The suite is well-architected, thorough (~107 dry-run assertions + 11 e2e chaos scenarios), and safe to run anywhere (dry-run + mock init system + `GOTIFY_TOKEN=''`). Four layers are cleanly separated: shared harness, unit matrix, chaos harness, and aggregate runner. The commit message and plan doc are honest about intentional divergences from the original matrix.
