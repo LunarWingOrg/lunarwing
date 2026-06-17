@@ -15,12 +15,6 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --list: print available suites and exit (for CI introspection)
-if [[ "${1:-}" == "--list" ]]; then
-    printf '%s\n' "regression matrix chaos"
-    exit 0
-fi
-
 declare -A SUITES=(
     [regression]="test-self-heal.sh"
     [matrix]="test-self-heal-matrix.sh"
@@ -28,6 +22,13 @@ declare -A SUITES=(
     [openrc]="test-health-openrc.sh"
 )
 ORDER=(regression matrix chaos openrc)
+
+# --list: print available suites and exit (for CI introspection). Derived from
+# ORDER so it can never drift out of sync with the registered suites.
+if [[ "${1:-}" == "--list" ]]; then
+    printf '%s\n' "${ORDER[*]}"
+    exit 0
+fi
 
 # Resolve requested suites (default: all, in ORDER).
 requested=("$@"); [[ ${#requested[@]} -eq 0 ]] && requested=("${ORDER[@]}")

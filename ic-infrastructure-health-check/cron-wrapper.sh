@@ -6,12 +6,17 @@
 # it works regardless of where the infrastructure health-check
 # directory is installed.
 #
+# Any arguments are forwarded verbatim to lunarwing-self-heal.sh, so
+# `./cron-wrapper.sh --dry-run` exercises the whole pipeline without restarting
+# anything.
+#
 # Usage:
-#   ./cron-wrapper.sh
+#   ./cron-wrapper.sh [self-heal args...]
 #
 # Environment:
-#   LUNARWING_BASE_DIR    Base directory for LunarWing data (default: $HOME/.lunarwing)
-#   LUNARWING_HEALTH_DIR  Override health-check script directory (default: auto-detect)
+#   LUNARWING_BASE_DIR  Base directory for LunarWing data (default: $HOME/.lunarwing).
+#                       Honored by the child scripts; the wrapper locates its own
+#                       siblings via BASH_SOURCE, so the install path is auto-detected.
 
 set -euo pipefail
 
