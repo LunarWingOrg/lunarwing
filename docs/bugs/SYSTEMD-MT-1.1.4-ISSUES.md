@@ -11,7 +11,12 @@ Gentoo/OpenRC path. This doc records issues found during the 1.1.4 pre-release p
 systemd units). New tenant `springfeather` provisioned with
 `LUNARWING_CONTAINER_RUNTIME=podman` to exercise the **new** Quadlet systemd-unit path.
 
-**Status legend:** 🔴 open · 🟡 workaround applied, code fix pending · 🟢 fixed
+**Status legend:** 🔴 open · 🟡 workaround applied, code fix pending · 🟢 fixed (code)
+
+**Fix status (2026-06-17):** all six fixed in code on `1.1.4-staging-goals`. ICHC test
+suite green at **215/215** (added F3 dry-run case + F5 `CH14` crash-loop chaos case + a
+`SubState` mock). End-to-end re-validation by provisioning a brand-new tenant (goal 13) is
+**deferred** ("later" per operator) — code is in place, live verification pending.
 
 ---
 
@@ -19,12 +24,12 @@ systemd units). New tenant `springfeather` provisioned with
 
 | # | Severity | Area | Status |
 |---|----------|------|--------|
-| F1 | High | pg/worker image uses **short name** → rootless podman can't resolve without `unqualified-search-registries` | 🟡 host drop-in applied; code fix pending |
-| F2 | High | `add-tenant` pg **readiness gate races** on the Quadlet path → aborts mid-provision, leaving a half-baked tenant | 🔴 |
-| F3 | Medium | Freshly-added (rendered-but-not-started, `disabled`) units reported **critical**; live self-heal churns on unbuilt units | 🔴 |
-| F4 | Medium | `add-tenant` is **not idempotent/resumable** — a mid-flow failure can't be re-run (`already has ports allocated`) | 🔴 |
-| F5 | Low–Med | self-heal `is-active` post-restart **verify false-positives** on a crash-looping (auto-restart) unit | 🔴 |
-| F6 | Medium | `remove-tenant --purge` **falsely reports user removal** — `userdel` races session teardown, failure swallowed | 🔴 |
+| F1 | High | pg/worker image uses **short name** → rootless podman can't resolve without `unqualified-search-registries` | 🟢 FQ image via `PG_IMAGE` (override `LUNARWING_MT_PG_IMAGE`); host drop-in also applied |
+| F2 | High | `add-tenant` pg **readiness gate races** on the Quadlet path → aborts mid-provision, leaving a half-baked tenant | 🟢 health-status gate, non-fatal (warn+continue, no `die`) |
+| F3 | Medium | Freshly-added (rendered-but-not-started, `disabled`) units reported **critical**; live self-heal churns on unbuilt units | 🟢 enable/active-state gating → `skipped`; self-heal ignores `skipped` |
+| F4 | Medium | `add-tenant` is **not idempotent/resumable** — a mid-flow failure can't be re-run (`already has ports allocated`) | 🟢 `ports_allocate` reuses existing block (resume) |
+| F5 | Low–Med | self-heal `is-active` post-restart **verify false-positives** on a crash-looping (auto-restart) unit | 🟢 verify rejects `auto-restart`/`failed` substate |
+| F6 | Medium | `remove-tenant --purge` **falsely reports user removal** — `userdel` races session teardown, failure swallowed | 🟢 terminate-user + wait + honest exit-code check |
 
 ---
 

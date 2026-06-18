@@ -47,6 +47,14 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── Per-tenant PostgreSQL image ──────────────────────────────────────────────
+# Fully-qualified (registry host included) so rootless podman resolves it WITHOUT
+# depending on the host's unqualified-search-registries: docker silently defaults
+# short names to docker.io, but rootless podman errors ("short-name ... did not
+# resolve to an alias and no unqualified-search registries are defined"). Override
+# for a local mirror via LUNARWING_MT_PG_IMAGE.
+PG_IMAGE="${LUNARWING_MT_PG_IMAGE:-docker.io/pgvector/pgvector:pg16}"
+
 # ── Per-tenant PostgreSQL backups ────────────────────────────────────────────
 # pg_dump each tenant's DB (custom -Fc format) to $BACKUP_DIR/<tenant>/. Keep the
 # most recent $BACKUP_KEEP dumps per tenant (0 = keep all).
@@ -613,8 +621,16 @@ ports_allocate() {
   local name="$1"
   require_cmd jq
 
-  if jq -e ".tenants[\"$name\"]" "$PORTS_REGISTRY" >/dev/null 2>&1; then
-    die "tenant '$name' already has ports allocated"
+  # Resumable (F4): if this tenant already has a block, reuse it (echo its
+  # base_port) instead of dying — so re-running add-tenant after a mid-flow failure
+  # resumes cleanly (clone/env/pg/render/pipeline are idempotent, and
+  # tenant_pg_password is stable). Use `remove-tenant` to truly start over.
+  local existing
+  existing="$(jq -r ".tenants[\"$name\"].base_port // empty" "$PORTS_REGISTRY" 2>/dev/null || true)"
+  if [[ -n "$existing" ]]; then
+    say "tenant '$name' already has ports allocated (base $existing); reusing for resume" >&2
+    printf '%s' "$existing"
+    return 0
   fi
 
   local base=-1
@@ -834,8 +850,26 @@ remove_tenant_user() {
   fi
 
   if [[ "$purge" == "true" ]]; then
-    userdel --remove "$name" 2>/dev/null || true
-    say "removed user and home directory: $name"
+    # Tear the user session down BEFORE userdel. Running userdel immediately after
+    # disable-linger races the still-stopping user@<uid>.service and fails with
+    # "user busy" (exit 8); previously that error was swallowed (2>/dev/null||true)
+    # and "removed user" printed anyway, leaving orphaned accounts/home dirs.
+    if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+      loginctl terminate-user "$name" 2>/dev/null || true
+      local _uid; _uid="$(id -u "$name" 2>/dev/null || true)"
+      if [[ -n "$_uid" ]]; then
+        local _w=0
+        while [[ -d "/run/user/$_uid" ]] && (( _w < 20 )); do sleep 0.5; _w=$((_w + 1)); done
+      fi
+    fi
+    pkill -KILL -u "$name" 2>/dev/null || true
+    # `userdel -r` prints a benign "mail spool not found" warning but still exits 0;
+    # a real failure (user busy) exits nonzero — surface it instead of hiding it.
+    if userdel -r "$name" 2>/dev/null || ! getent passwd "$name" >/dev/null 2>&1; then
+      say "removed user and home directory: $name"
+    else
+      say "WARNING: failed to remove user '$name' (still present); remove manually: userdel -r $name"
+    fi
   else
     say "user $name preserved (use --purge to remove)"
   fi
@@ -1862,13 +1896,27 @@ start_tenant_postgres() {
       say "WARNING: lunarwing-pg-${name}.service failed to start" >&2
       _systemctl_user "$name" status "lunarwing-pg-${name}.service" --no-pager >&2 || true
     fi
-    local q_attempts=0
-    while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
-      q_attempts=$((q_attempts + 1))
-      [[ $q_attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
-      sleep 1
+    # Gate on the container's own health (the Quadlet defines a pg_isready
+    # HealthCmd) OR a direct pg_isready, rather than a bare `exec` loop: on a fresh
+    # volume the initdb cycle (temp server up→down→restart) makes a single exec
+    # probe flap, which previously exhausted the budget and `die`d — aborting the
+    # WHOLE provision and leaving a half-baked tenant (F2). A slow first boot must
+    # NOT strand the tenant: warn and continue (the unit has Restart=on-failure and
+    # the host health pipeline/self-heal converge it), so add-tenant still renders
+    # units and installs the pipeline.
+    local q_attempts=0 q_ready=false q_health=""
+    while (( q_attempts < 120 )); do
+      q_health="$(_ctr "$name" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+      if [[ "$q_health" == healthy ]] || _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; then
+        q_ready=true; break
+      fi
+      q_attempts=$((q_attempts + 1)); sleep 1
     done
-    say "PostgreSQL ready via quadlet ($container_name, port $pg_port)"
+    if [[ "$q_ready" == true ]]; then
+      say "PostgreSQL ready via quadlet ($container_name, port $pg_port)"
+    else
+      say "WARNING: PostgreSQL for $name not confirmed ready after ${q_attempts}s (health=${q_health:-none}); continuing — pg has Restart=on-failure and the health pipeline will converge it." >&2
+    fi
     return 0
   fi
 
@@ -1903,14 +1951,17 @@ start_tenant_postgres() {
       -p "127.0.0.1:${pg_port}:5432" \
       -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
       "${restart_arg[@]}" \
-      pgvector/pgvector:pg16 >/dev/null
+      "$PG_IMAGE" >/dev/null
     rm -f "$pg_init_env"
   fi
 
   local attempts=0
   while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
-    [[ $attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
+    if (( attempts >= 90 )); then
+      say "WARNING: PostgreSQL for $name not confirmed ready after ${attempts}s; continuing (pg container has a restart policy; the health pipeline will converge it)." >&2
+      return 0
+    fi
     sleep 1
   done
   say "PostgreSQL ready ($container_name, port $pg_port)"
@@ -2126,7 +2177,7 @@ StartLimitBurst=5
 
 [Container]
 ContainerName=lunarwing-pg-${name}
-Image=pgvector/pgvector:pg16
+Image=${PG_IMAGE}
 PublishPort=127.0.0.1:${pg_port}:5432
 Volume=lunarwing-pg-${name}:/var/lib/postgresql/data
 Environment=POSTGRES_USER=lunarwing

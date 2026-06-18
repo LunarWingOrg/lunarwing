@@ -110,6 +110,15 @@ oC1="$(run_dry "$c1" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 
 assert_contains "$oC1" "would run: systemctl restart clickhouse-server.service" "C1: critical systemd sub-unit restarted"
 assert_absent   "$oC1" "restart lunarwing-watchdog.service"                     "C2: healthy sub-unit not restarted"
 
+# F3 — a 'skipped' status (a not-started/disabled unit, e.g. a freshly add-ed
+# tenant before start-tenant) must NOT be remediated; a critical sibling still is.
+cF3="$(sb)"; report "$cF3" '{components:[{component:"systemd",status:"degraded",metrics:{units:[
+  {name:"lunarwing-springfeather.service",status:"skipped"},
+  {name:"clickhouse-server.service",status:"critical"}]}}]}'
+oCF3="$(run_dry "$cF3" LUNARWING_SERVICE_MANAGER=systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false)"
+assert_absent   "$oCF3" "restart lunarwing-springfeather.service"                "F3: 'skipped' (not-started) unit not remediated"
+assert_contains "$oCF3" "would run: systemctl restart clickhouse-server.service" "F3: critical sibling still remediated"
+
 # C3 — OpenRC service critical → rc-service restart.
 c3="$(sb)"; report "$c3" '{components:[{component:"openrc",status:"critical",metrics:{services:[
   {name:"clickhouse-server",status:"critical"}]}}]}'

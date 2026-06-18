@@ -136,12 +136,36 @@ if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
       [ "${_uf[0]:-}" = "loaded" ] || continue
       uactive=${_uf[1]:-unknown}; usub=${_uf[2]:-unknown}; urestarts=${_uf[3]:-0}
       [[ "$urestarts" =~ ^[0-9]+$ ]] || urestarts=0
+      # Enabled-state distinguishes a genuine fault from an intentionally-stopped
+      # unit. Quadlet units report UnitFileState=generated (never "enabled"), so we
+      # branch on ActiveState/SubState first and consult enable-state only for the
+      # ambiguous inactive/dead case.
+      uenabled=$(_tenant_uctl "$tuser" "$tuid" show --value -p UnitFileState "$tunit")
       ustatus="healthy"; uexit=0
-      if [ "$uactive" != "active" ]; then
-        ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub")
-      elif [ "$urestarts" -ge 3 ]; then
-        ustatus="degraded"; uexit=1; issues+=("$tunit ($tuser) restart count elevated: $urestarts")
-      fi
+      case "$uactive/$usub" in
+        active/*)
+          if [ "$urestarts" -ge 3 ]; then
+            ustatus="degraded"; uexit=1; issues+=("$tunit ($tuser) restart count elevated: $urestarts")
+          fi
+          ;;
+        failed/*|*/auto-restart)
+          # Ran and broke (crashed / crash-looping) — a fault regardless of enable state.
+          ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not healthy: $uactive/$usub")
+          ;;
+        *)
+          # inactive/dead etc.: an ENABLED unit that should be up but isn't is a
+          # fault; a disabled/static/generated unit that is simply not running is the
+          # EXPECTED state for a freshly add-ed (not yet start-ed) tenant or an
+          # operator-disabled unit — report `skipped` so it neither flips
+          # overall->critical nor drives self-heal to start a tenant nobody started.
+          case "$uenabled" in
+            enabled|enabled-runtime)
+              ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub") ;;
+            *)
+              ustatus="skipped"; uexit=0 ;;
+          esac
+          ;;
+      esac
       # Container units: `active` only means the container is running. Probe
       # podman health so a Running-but-wedged Postgres/worker (is-active=active
       # but not serving) is caught instead of reported healthy.
