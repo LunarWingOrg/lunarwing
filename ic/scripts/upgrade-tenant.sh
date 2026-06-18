@@ -35,6 +35,8 @@
 #     --with-nanocode      also (re)build the nanocode worker
 #     --with-pebble        also (re)build the pebble worker
 #     --skip-build         tenant clone is already at --target and built
+#     --prune-old-root     (standalone) delete the orphaned v1.1.0 root-store PG
+#                          container AFTER the tenant is migrated + verified
 #     --dry-run            print the plan; make no changes
 #     --yes | -y           skip confirmation prompts (gates still enforced)
 #     --force              proceed even if preflight reports STOP (dangerous)
@@ -48,20 +50,22 @@ SKIP_BUILD=false
 DRY_RUN=false
 AUTO_YES=false
 FORCE=false
+PRUNE_OLD_ROOT=false
 TENANT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --target)        TARGET_REF="$2"; shift 2 ;;
-    --keep-rootful)  KEEP_ROOTFUL=true; shift ;;
-    --with-nanocode) WITH_NANOCODE=true; shift ;;
-    --with-pebble)   WITH_PEBBLE=true; shift ;;
-    --skip-build)    SKIP_BUILD=true; shift ;;
-    --dry-run)       DRY_RUN=true; shift ;;
-    --yes|-y)        AUTO_YES=true; shift ;;
-    --force)         FORCE=true; shift ;;
-    -*)              printf 'unknown arg: %s\n' "$1" >&2; exit 2 ;;
-    *)               TENANT="$1"; shift ;;
+    --target)         TARGET_REF="$2"; shift 2 ;;
+    --keep-rootful)   KEEP_ROOTFUL=true; shift ;;
+    --with-nanocode)  WITH_NANOCODE=true; shift ;;
+    --with-pebble)    WITH_PEBBLE=true; shift ;;
+    --skip-build)     SKIP_BUILD=true; shift ;;
+    --prune-old-root) PRUNE_OLD_ROOT=true; shift ;;
+    --dry-run)        DRY_RUN=true; shift ;;
+    --yes|-y)         AUTO_YES=true; shift ;;
+    --force)          FORCE=true; shift ;;
+    -*)               printf 'unknown arg: %s\n' "$1" >&2; exit 2 ;;
+    *)                TENANT="$1"; shift ;;
   esac
 done
 
@@ -106,6 +110,38 @@ mt()         { if $KEEP_ROOTFUL; then LUNARWING_MT_ROOTLESS=false "$MT" "$@"; el
 
 # tenant rootless podman (read-only verify in rootless-adopt mode)
 tctr() { ( cd / && exec sudo -u "$TENANT" env HOME="$HOME_T" XDG_RUNTIME_DIR="/run/user/$UID_T" "$RUNTIME" "$@" ); }
+
+# ---- --prune-old-root: reclaim the orphaned v1.1.0 ROOT-store PG container ----
+# Run this ONLY after the tenant has been migrated to rootless and verified. It
+# refuses to act unless the rootless PG is up and pg_isready (i.e. the migrated
+# data is live), so it can never delete your only copy. IRREVERSIBLE.
+if $PRUNE_OLD_ROOT; then
+  banner "Prune old root-store PG for '$TENANT'"
+  [[ "$RUNTIME" == podman ]] || die "--prune-old-root only applies to Podman (rootful root store)"
+
+  # the migrated rootless PG must be healthy first
+  rootless_state="$(tctr inspect -f '{{.State.Running}}' "lunarwing-pg-$TENANT" 2>/dev/null || true)"
+  [[ "$rootless_state" == true ]] || die "rootless PG for '$TENANT' is not running — refusing to prune (migrate + verify first)"
+  tctr exec "lunarwing-pg-$TENANT" pg_isready -U lunarwing -q 2>/dev/null \
+    || die "rootless PG for '$TENANT' is not accepting connections — refusing to prune"
+  note "rootless PG is up and ready (migrated data is live)"
+
+  # the old root-store container must exist to prune
+  if ! podman inspect "lunarwing-pg-$TENANT" >/dev/null 2>&1; then
+    say "no root-store container lunarwing-pg-$TENANT found — nothing to prune."
+    exit 0
+  fi
+  root_state="$(podman inspect -f '{{.State.Running}}' "lunarwing-pg-$TENANT" 2>/dev/null || true)"
+  note "root-store container present (Running=$root_state) — holds the pre-upgrade v1.1.0 data"
+
+  say ""
+  say "This permanently deletes the v1.1.0 data still in the ROOT store. After this,"
+  say "rollback to the pre-upgrade DB is only possible from your backup dump."
+  confirm "Permanently remove the old root-store lunarwing-pg-$TENANT?" || die "aborted by user"
+  run podman rm -f "lunarwing-pg-$TENANT"      # root store; v1.1.0 had no named volume (data in writable layer)
+  say "old root-store PG container for '$TENANT' removed."
+  exit 0
+fi
 
 MODE="rootless-adopt"; $KEEP_ROOTFUL && MODE="keep-rootful"
 banner "Upgrade tenant '$TENANT' -> $TARGET_REF  (mode: $MODE, runtime: $RUNTIME)"

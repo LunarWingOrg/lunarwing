@@ -312,19 +312,37 @@ Generalizes the hardcoded `upgrade-tenant-starforce.sh` / `-sunburst.sh`. Drives
 Runbook A by default (Podman rootless+Quadlet, dump→provision→restore) and Runbook B
 with `--keep-rootful`. Safety: runs the preflight as a **gate**, refuses to proceed
 unless the backup verifies (`PGDMP` header + non-zero size), `--dry-run` prints the
-plan, prints rollback instructions, never prunes the old root container.
+plan, prints rollback instructions, never prunes the old root container during the
+upgrade.
 
 ```
 upgrade-tenant.sh <tenant> [--target <rev|tag>] [--keep-rootful]
                            [--with-nanocode] [--with-pebble]
                            [--skip-build] [--dry-run] [--yes] [--force]
+upgrade-tenant.sh <tenant> --prune-old-root [--yes]   # standalone, post-verify cleanup
 ```
 
-### (Recommended follow-up, not in this proposal)
+The standalone `--prune-old-root` mode reclaims the orphaned v1.1.0 root-store PG
+container **after** the tenant is migrated and verified. It refuses to act unless the
+rootless PG is up and `pg_isready` (so it can never delete your only copy);
+**IRREVERSIBLE** once run.
 
-- `enable-health-fleet.sh` — install `lunarwing-mt-health.timer` + seed
-  `/etc/lunarwing/health.env` (Gotify token) **without** adding a tenant, to close
-  the "no standalone self-heal enable verb" gap.
+### `ic/scripts/enable-health-fleet.sh` — standalone self-heal enabler
+
+Closes the "no standalone enable verb" gap. Sources `lunarwing-mt-admin.sh` (whose
+`main` is guarded, so only functions/config load) and calls the real
+`ensure_health_pipeline` — no duplicated logic, can't drift. Adds the safety the
+implicit `add-tenant` path lacks: **refuses to arm the host-wide 15-min remediation
+timer while any tenant daemon is down** (so self-heal can't fight a maintenance).
+Seeds Gotify creds into a fresh `health.env` (preserves an existing one).
+
+```
+enable-health-fleet.sh [--gotify-url <url>] [--gotify-token <tok>]
+                       [--allow-down] [--dry-run] [--yes]
+```
+
+### (Recommended follow-up, not yet built)
+
 - A small mt-admin hardening PR: persist the chosen rootless model and emit a loud
   warning when a rootful root-store PG exists but `MT_ROOTLESS=true` — fixing the
   silent-orphan footgun at the source.
@@ -337,9 +355,9 @@ Do **not** let the upgrade enable self-heal implicitly. Every upgrade `add-tenan
 uses `--no-health`. Once **all** tenants are migrated and verified:
 
 ```bash
-# seed /etc/lunarwing/health.env (mode 0600) with the Gotify URL/token, then:
-sudo DEFAULT_HEALTH_ENABLED=true ic/scripts/lunarwing-mt-admin.sh ... # or run ensure_health_pipeline
-systemctl status lunarwing-mt-health.timer       # verify
+sudo ic/scripts/enable-health-fleet.sh \
+  --gotify-url <url> --gotify-token <tok>      # refuses if any tenant is down
+systemctl status lunarwing-mt-health.timer     # verify
 ```
 
 Prereqs once enabled: `jq` (and `curl`/`flock` if used), passwordless `sudo -n`
