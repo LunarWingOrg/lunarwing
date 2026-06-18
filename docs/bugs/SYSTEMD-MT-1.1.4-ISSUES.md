@@ -33,8 +33,8 @@ crash-loop chaos case + `SubState` mock, and a new `tests/test-health-systemd.sh
 | F5 | Low–Med | self-heal `is-active` post-restart **verify false-positives** on a crash-looping (auto-restart) unit | 🟢 verify rejects `auto-restart`/`failed` substate |
 | F6 | Medium | `remove-tenant --purge` **falsely reports user removal** — `userdel` races session teardown, failure swallowed | 🟢 terminate-user + wait + honest exit-code check |
 | F7 | Low | `--with-wasm` build breaks on the `telegram` tool — `core2 0.4.0` is **yanked** (transitive via `glass_pumpkin`); Telegram is an unsupported channel | 🔴 open (upstream dep) |
-| F8 | Medium | nanocode/pebble worker image build fails under **rootless podman** — the build-RUN container's `apt` can't reach the internet (host has no IPv6 route; build prefers IPv6 → unreachable, IPv4 times out) | 🔴 open |
-| F9 | Low | `build-tenant` exits **0** even when a worker-image build fails (failure not propagated to the exit code) | 🔴 open |
+| F8 | Medium | nanocode/pebble worker image build fails under podman — the build-RUN container's `apt` can't reach the internet (host has no IPv6 route; the default build network can't route IPv4 out) | 🟢 fixed — `--network=host` on the podman worker builds; both images now build (apt reaches the net via the host netns) |
+| F9 | — | ~~`build-tenant` exits 0 on a worker-build failure~~ — **NOT a bug**: `build-tenant` `die`s (exit 1) and propagates correctly. The observed "exit 0" was a test-harness artifact (a trailing `echo "...$?"` in the background wrapper masked the real exit). | 🟢 invalid |
 | F10 | Medium | `_ctr` runs `sudo -u <tenant>` without a tenant-traversable CWD → "cannot chdir" → the rootless pg readiness gate **always** times out (spurious 120s WARNING) | 🟢 fixed — `cd /` in `_ctr` (gate now ~3s, "ready via quadlet") |
 
 ---
@@ -287,9 +287,10 @@ workaround **removed** (so the FQ-image code fix alone must carry it): clean `ad
 - **F10 fixed + validated** — re-run `start-tenant` after the `_ctr` `cd /` fix: pg gate
   passes in ~3 s (`PostgreSQL ready via quadlet`), no spurious 120 s warning.
 
-New issues surfaced: **F7–F10** (above). nanocode/pebble worker **images** did NOT build
+New issues surfaced: **F7, F8, F10** (above). (F9 was investigated and found **invalid** —
+`build-tenant` does propagate the failure.) nanocode/pebble worker **images** did NOT build
 (**F8**, host/build network) — they are *external workers*, not part of the systemd unit
-set, so the core tenant is unaffected; closing them out needs the F8 build-network fix.
+set, so the core tenant is unaffected; F8 fix (`--network=host`) is being validated.
 
 ## Validation plan for the fixes
 

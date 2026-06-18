@@ -1030,7 +1030,10 @@ build_nanocode_worker() {
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    podman build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    # --network=host (F8): rootless/rootful podman's default build network can't
+    # reach the internet for RUN steps (apt) on hosts where the bridge/pasta path
+    # is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
+    podman build $cache_flag --network=host -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
@@ -1053,7 +1056,9 @@ build_pebble_worker() {
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    podman build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
+    # --network=host (F8): see build_nanocode_worker — podman build's default network
+    # can't reach the internet for RUN steps on this host; the host netns has IPv4.
+    podman build $cache_flag --network=host -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
       || die "pebble worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \

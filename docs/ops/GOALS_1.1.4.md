@@ -13,7 +13,7 @@
 11. [ ] Run automated testing scripts
 12. [ ] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 13. [ ] Record all Systemd MT / ICHC issues found during testing and propose fixes (tracked in `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`)
-14. [~] Fix the provisioning code so new tenants are no longer left half-baked (F1–F6 + F10 fixed; adversarial-reviewed; ICHC suite 229/229) — **verified by provisioning a brand-new tenant end-to-end**: clean add → build → start → **all-green ICHC** (core). Remaining: F8 (rootless worker-build network blocks nanocode/pebble images), F7 (telegram yanked dep), F9 (build-tenant exit code) — see `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`
+14. [~] Fix the provisioning code so new tenants are no longer left half-baked (F1–F6 + F10 fixed; adversarial-reviewed; ICHC suite 229/229) — **verified by provisioning a brand-new tenant end-to-end**: clean add → build → start → **all-green ICHC** (core). Remaining: F8 (podman worker-build network → nanocode/pebble images; fix `--network=host` being validated), F7 (telegram yanked dep). F9 investigated → invalid. See `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`
 15. [x] Write up release notes (at root of repo) for v1.1.4 explaining all changes since v1.1.3 as well as accurate known issues list
 16. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (after #15)
 17. [ ] Create new branch to correspond with release
