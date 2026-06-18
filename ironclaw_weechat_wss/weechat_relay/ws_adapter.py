@@ -167,7 +167,7 @@ async def ws_client_loop():
                 async with session.ws_connect(
                     ws_url,
                     headers={"Authorization": auth},
-                    heartbeat=None,
+                    heartbeat=25,  # send WS pings so silent/half-open drops are detected
                     max_msg_size=0,  # No size limit
                 ) as ws:
                     state.ws_connected = True
