@@ -47,6 +47,14 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── Per-tenant PostgreSQL image ──────────────────────────────────────────────
+# Fully-qualified (registry host included) so rootless podman resolves it WITHOUT
+# depending on the host's unqualified-search-registries: docker silently defaults
+# short names to docker.io, but rootless podman errors ("short-name ... did not
+# resolve to an alias and no unqualified-search registries are defined"). Override
+# for a local mirror via LUNARWING_MT_PG_IMAGE.
+PG_IMAGE="${LUNARWING_MT_PG_IMAGE:-docker.io/pgvector/pgvector:pg16}"
+
 # ── Per-tenant PostgreSQL backups ────────────────────────────────────────────
 # pg_dump each tenant's DB (custom -Fc format) to $BACKUP_DIR/<tenant>/. Keep the
 # most recent $BACKUP_KEEP dumps per tenant (0 = keep all).
@@ -317,7 +325,13 @@ _ctr() {
     local uid home
     uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
     home="$(getent passwd "$name" | cut -d: -f6)"
-    sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@"
+    # Run from a tenant-traversable CWD (F10): `sudo -u` keeps the caller's cwd, so
+    # when mt-admin runs from an admin dir the tenant can't enter (e.g. ~dame, 0700)
+    # `sudo -u` aborts with "cannot chdir ... Permission denied" BEFORE the runtime
+    # runs — which silently broke the rootless pg readiness gate (it always timed
+    # out). `/` is always traversable; no _ctr call passes a cwd-relative path. exec
+    # preserves the exit code and the stdin/stdout redirects used by exec/pg_dump.
+    ( cd / && exec sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@" )
   else
     "$CONTAINER_RT" "$@"
   fi
@@ -613,8 +627,16 @@ ports_allocate() {
   local name="$1"
   require_cmd jq
 
-  if jq -e ".tenants[\"$name\"]" "$PORTS_REGISTRY" >/dev/null 2>&1; then
-    die "tenant '$name' already has ports allocated"
+  # Resumable (F4): if this tenant already has a block, reuse it (echo its
+  # base_port) instead of dying — so re-running add-tenant after a mid-flow failure
+  # resumes cleanly (clone/env/pg/render/pipeline are idempotent, and
+  # tenant_pg_password is stable). Use `remove-tenant` to truly start over.
+  local existing
+  existing="$(jq -r ".tenants[\"$name\"].base_port // empty" "$PORTS_REGISTRY" 2>/dev/null || true)"
+  if [[ -n "$existing" ]]; then
+    say "tenant '$name' already has ports allocated (base $existing); reusing for resume" >&2
+    printf '%s' "$existing"
+    return 0
   fi
 
   local base=-1
@@ -834,8 +856,30 @@ remove_tenant_user() {
   fi
 
   if [[ "$purge" == "true" ]]; then
-    userdel --remove "$name" 2>/dev/null || true
-    say "removed user and home directory: $name"
+    # Tear the user session down BEFORE userdel. Running userdel immediately after
+    # disable-linger races the still-stopping user@<uid>.service and fails with
+    # "user busy" (exit 8); previously that error was swallowed (2>/dev/null||true)
+    # and "removed user" printed anyway, leaving orphaned accounts/home dirs.
+    if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+      loginctl terminate-user "$name" 2>/dev/null || true
+      local _uid; _uid="$(id -u "$name" 2>/dev/null || true)"
+      if [[ -n "$_uid" ]]; then
+        local _w=0
+        while [[ -d "/run/user/$_uid" ]] && (( _w < 20 )); do sleep 0.5; _w=$((_w + 1)); done
+      fi
+    fi
+    pkill -KILL -u "$name" 2>/dev/null || true
+    # `userdel -r` prints a benign "mail spool not found" warning but still exits 0;
+    # a real failure (user busy) exits nonzero — surface it instead of hiding it.
+    if userdel -r "$name" 2>/dev/null; then
+      say "removed user and home directory: $name"
+    elif ! getent passwd "$name" >/dev/null 2>&1; then
+      # Account gone but userdel exited nonzero (e.g. exit 12: home removal failed
+      # on a busy mount / immutable file). Don't overclaim the home dir was removed.
+      say "user '$name' account removed (userdel -r exited nonzero — home dir may persist; verify $(tenant_home "$name"))"
+    else
+      say "WARNING: failed to remove user '$name' (still present); remove manually: userdel -r $name"
+    fi
   else
     say "user $name preserved (use --purge to remove)"
   fi
@@ -986,7 +1030,10 @@ build_nanocode_worker() {
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    podman build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    # --network=host (F8): rootless/rootful podman's default build network can't
+    # reach the internet for RUN steps (apt) on hosts where the bridge/pasta path
+    # is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
+    podman build $cache_flag --network=host -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
@@ -1009,7 +1056,9 @@ build_pebble_worker() {
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    podman build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
+    # --network=host (F8): see build_nanocode_worker — podman build's default network
+    # can't reach the internet for RUN steps on this host; the host netns has IPv4.
+    podman build $cache_flag --network=host -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
       || die "pebble worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
@@ -1164,10 +1213,17 @@ install_wasm_all() {
 
 # ── Environment file generation ──────────────────────────────────────────────
 
+# Echo the existing VALUE of KEY from a tenant env file (empty if file/key absent).
+# Used to PRESERVE secrets across re-runs so re-provisioning never rotates them.
+_env_existing() {  # <env_file> <KEY>
+  [[ -f "$1" ]] || return 0
+  sed -n "s/^$2=//p" "$1" | head -1
+}
+
 write_tenant_lunarwing_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
-  local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
+  local xmpp_password="${3:-}"   # resolved below (preserve an existing one on re-run)
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
   local llm_base_url="${6:-}"
@@ -1190,12 +1246,20 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
+  # Idempotent on re-run (F4-A/F4-B): PRESERVE existing secrets when lunarwing.env
+  # already exists. Regenerating SECRETS_MASTER_KEY would permanently orphan the
+  # tenant's encrypted DB secrets (it is the AES-256-GCM vault key); rotating the
+  # tokens would break live clients/workers; minting a fresh XMPP_PASSWORD would
+  # break the already-registered XMPP account. Generate fresh ONLY on first write.
   local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password
-  gateway_token="$(generate_token)"
-  bridge_token="$(generate_token | cut -c1-32)"
-  relay_password="$(generate_token | cut -c1-32)"
-  secrets_key="$(generate_token)"
-  webhook_secret="$(generate_token)"
+  gateway_token="$(_env_existing "$path" GATEWAY_AUTH_TOKEN)";   gateway_token="${gateway_token:-$(generate_token)}"
+  bridge_token="$(_env_existing "$path" XMPP_BRIDGE_TOKEN)";     bridge_token="${bridge_token:-$(generate_token | cut -c1-32)}"
+  relay_password="$(_env_existing "$path" RELAY_PASSWORD)";      relay_password="${relay_password:-$(generate_token | cut -c1-32)}"
+  secrets_key="$(_env_existing "$path" SECRETS_MASTER_KEY)";     secrets_key="${secrets_key:-$(generate_token)}"
+  webhook_secret="$(_env_existing "$path" HTTP_WEBHOOK_SECRET)"; webhook_secret="${webhook_secret:-$(generate_token)}"
+  # XMPP password: an explicit --xmpp-password wins; else preserve an existing one;
+  # else mint a fresh one (first-time provision).
+  [[ -n "$xmpp_password" ]] || { xmpp_password="$(_env_existing "$path" XMPP_PASSWORD)"; xmpp_password="${xmpp_password:-$(generate_token | cut -c1-32)}"; }
   # Stable + migration-safe; resolved before the heredoc so it can read an
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
@@ -1862,13 +1926,27 @@ start_tenant_postgres() {
       say "WARNING: lunarwing-pg-${name}.service failed to start" >&2
       _systemctl_user "$name" status "lunarwing-pg-${name}.service" --no-pager >&2 || true
     fi
-    local q_attempts=0
-    while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
-      q_attempts=$((q_attempts + 1))
-      [[ $q_attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
-      sleep 1
+    # Gate on the container's own health (the Quadlet defines a pg_isready
+    # HealthCmd) OR a direct pg_isready, rather than a bare `exec` loop: on a fresh
+    # volume the initdb cycle (temp server up→down→restart) makes a single exec
+    # probe flap, which previously exhausted the budget and `die`d — aborting the
+    # WHOLE provision and leaving a half-baked tenant (F2). A slow first boot must
+    # NOT strand the tenant: warn and continue (the unit has Restart=on-failure and
+    # the host health pipeline/self-heal converge it), so add-tenant still renders
+    # units and installs the pipeline.
+    local q_attempts=0 q_ready=false q_health=""
+    while (( q_attempts < 120 )); do
+      q_health="$(_ctr "$name" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+      if [[ "$q_health" == healthy ]] || _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; then
+        q_ready=true; break
+      fi
+      q_attempts=$((q_attempts + 1)); sleep 1
     done
-    say "PostgreSQL ready via quadlet ($container_name, port $pg_port)"
+    if [[ "$q_ready" == true ]]; then
+      say "PostgreSQL ready via quadlet ($container_name, port $pg_port)"
+    else
+      say "WARNING: PostgreSQL for $name not confirmed ready after ${q_attempts}s (health=${q_health:-none}); continuing — pg has Restart=on-failure and the health pipeline will converge it." >&2
+    fi
     return 0
   fi
 
@@ -1903,14 +1981,17 @@ start_tenant_postgres() {
       -p "127.0.0.1:${pg_port}:5432" \
       -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
       "${restart_arg[@]}" \
-      pgvector/pgvector:pg16 >/dev/null
+      "$PG_IMAGE" >/dev/null
     rm -f "$pg_init_env"
   fi
 
   local attempts=0
   while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
-    [[ $attempts -lt 90 ]] || die "PostgreSQL for $name did not become ready"
+    if (( attempts >= 90 )); then
+      say "WARNING: PostgreSQL for $name not confirmed ready after ${attempts}s; continuing — the host health pipeline/self-heal will converge it." >&2
+      return 0
+    fi
     sleep 1
   done
   say "PostgreSQL ready ($container_name, port $pg_port)"
@@ -2126,7 +2207,7 @@ StartLimitBurst=5
 
 [Container]
 ContainerName=lunarwing-pg-${name}
-Image=pgvector/pgvector:pg16
+Image=${PG_IMAGE}
 PublishPort=127.0.0.1:${pg_port}:5432
 Volume=lunarwing-pg-${name}:/var/lib/postgresql/data
 Environment=POSTGRES_USER=lunarwing
@@ -2219,7 +2300,6 @@ HealthStartPeriod=30s
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120
-KillMode=process
 
 [Install]
 WantedBy=default.target

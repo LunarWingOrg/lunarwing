@@ -20,8 +20,9 @@ declare -A SUITES=(
     [matrix]="test-self-heal-matrix.sh"
     [chaos]="chaos-harness.sh"
     [openrc]="test-health-openrc.sh"
+    [systemd]="test-health-systemd.sh"
 )
-ORDER=(regression matrix chaos openrc)
+ORDER=(regression matrix chaos openrc systemd)
 
 # --list: print available suites and exit (for CI introspection). Derived from
 # ORDER so it can never drift out of sync with the registered suites.

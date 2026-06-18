@@ -176,7 +176,7 @@ src_fn() {
 
 mk_mockbin() {
     local sb="$1" bin="$1/bin" ss="$1/svcstate"
-    mkdir -p "$bin" "$ss/restarts" "$ss/fail" "$ss/stuck"
+    mkdir -p "$bin" "$ss/restarts" "$ss/fail" "$ss/stuck" "$ss/sub"
 
     cat > "$bin/systemctl" <<'EOF'
 #!/usr/bin/env bash
@@ -192,6 +192,17 @@ case "$sub" in
     [[ -f "$SS/fail/$svc" ]] && { echo "mock systemctl: restart $svc failed" >&2; exit 1; }
     n=$(cat "$SS/restarts/$svc" 2>/dev/null || echo 0); echo $((n+1)) > "$SS/restarts/$svc"
     [[ -f "$SS/stuck/$svc" ]] || echo up > "$SS/$svc" ;;
+  show)                                          # mock: only SubState is modeled (F5 crash-loop verify)
+    prop=""; svc=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -p) prop="$2"; shift 2 ;;
+        --value|--user) shift ;;
+        *) svc="$1"; shift ;;
+      esac
+    done
+    [[ "$prop" == SubState ]] && cat "$SS/sub/$svc" 2>/dev/null
+    exit 0 ;;
   *) exit 0 ;;
 esac
 EOF
@@ -261,6 +272,7 @@ svc_state() { cat "$1/svcstate/$2" 2>/dev/null || echo absent; }
 svc_fail()  { : > "$1/svcstate/fail/$2"; }     # restart command will fail
 svc_stuck() { : > "$1/svcstate/stuck/$2"; }    # restart "succeeds" but stays down
 restarts_of() { cat "$1/svcstate/restarts/$2" 2>/dev/null || echo 0; }
+svc_substate() { mkdir -p "$1/svcstate/sub"; echo "$3" > "$1/svcstate/sub/$2"; }  # SubState for crash-loop verify (F5)
 
 # run_chaos <sb> <manager> [ENV=VAL ...] [-- <script args>]
 #   Real run (NO --dry-run) against the mock init system. Settle 0 so verify is

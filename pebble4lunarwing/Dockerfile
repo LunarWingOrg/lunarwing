@@ -1,4 +1,4 @@
-FROM rust:1.92-bookworm AS builder
+FROM docker.io/library/rust:1.92-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
@@ -14,7 +14,7 @@ RUN git clone --depth 1 https://github.com/nanogpt-community/pebble.git ./pebble
 RUN cd pebble && cargo build --release --bin pebble
 
 # --- Runtime ---
-FROM debian:bookworm-slim
+FROM docker.io/library/debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git curl && \
