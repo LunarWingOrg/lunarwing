@@ -8,14 +8,14 @@
 6. [ ] Test all changes related to ICHC on an existing **OpenRC/Gentoo** development VM - adding new tenant
 7. [ ] Test all changes related to ICHC on a NEW **Systemd** development VM with same configuration - adding new tenants
 8. [ ] Test all changes related to ICHC on a NEW **OpenRC/Gentoo** development VM with same configuration - adding new tenants
-9. [ ] Test all changes on existing live tenant of MT PROD machine with tenant on version > 1.1.0 - via direct upgrade or migration (only after 5-8 are done)
-10. [ ] Test all changes on new tenant of MT PROD machine (only after 5-8 are done)
+9. [ ] Test all changes on existing live tenant of MT PROD machine with tenant on version > 1.1.0 - via direct upgrade or migration (only after #5-#8 are done)
+10. [ ] Test all changes on new tenant of MT PROD machine (only after #5-#8 are done)
 11. [ ] Run automated testing scripts
 12. [ ] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 13. [ ] Record all Systemd MT / ICHC issues found during testing and propose fixes (tracked in `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`)
 14. [ ] Fix the provisioning code so new tenants are no longer left half-baked (F2 readiness-gate abort, F3 not-started units flagged critical, F4 non-resumable add — see `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`), **then verify by provisioning a brand-new tenant end-to-end** (clean add → build → start → all-green ICHC)
 15. [x] Write up release notes (at root of repo) for v1.1.4 explaining all changes since v1.1.3 as well as accurate known issues list
-16. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved
+16. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (after #15)
 17. [ ] Create new branch to correspond with release
 18. [ ] Create GH release tag and add release notes to it like other releases already have
 
