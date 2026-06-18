@@ -1,5 +1,14 @@
 # Future / Unscheduled Ideas
 
+## This document is woefully out of date. Please see:
+
+* docs/ops/ROADMAP_2026.MD
+
+### instead
+
+
+#### Outdated stuff here
+
 > Scheduled, version-targeted work lives in the deferred-items roadmap in `RELEASE-v1.1.1.md`.
 > This file holds longer-horizon ideas that don't yet have a firm release target or plan.
 

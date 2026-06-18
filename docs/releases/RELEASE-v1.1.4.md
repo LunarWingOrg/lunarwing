@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.4 — Codename `Phoenix`
 
-**Release Date:** TBD
+**Release Date:** 2026-06-18
 
 > Codename *Phoenix*
 
@@ -159,7 +159,6 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 | Feature | Target |
 |---------|--------|
-| Rootless `podman wait` supervision babysitter (near-instant container crash recovery) | v1.1.5 |
 | Per-tenant WeeChat health-glob gate (fix fold-in A flap) | v1.1.5 |
 | XMPP OMEMO MUC fallback fix | v1.1.5 |
 | XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further hardening) | v1.1.5 |
@@ -178,8 +177,9 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 *In accordance with developer guidelines, a testing period precedes each release.*
 
-*Testing for this release has **commenced**. The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`.*
+*Testing for this release has **concluded**. The v1.1.4 pre-release checklist lives in `docs/ops/GOALS_1.1.4.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`.*
 
 *Completed so far: the crate-version bump + `cargo test` sweep (3944 lib unit tests pass; 2 pre-existing `e2e_advanced_traces` failures), the self-heal/health-check unit + chaos suites (188/0 self-heal, 36/0 chaos, new 21-assertion OpenRC health suite), and live validation of the health-check/self-heal pipeline on a real multi-tenant host (recovery, escalation, reboot, Gotify) on both inits. Still open: the cross-VM tenant add/upgrade matrix (existing + fresh systemd/OpenRC VMs), a live in-place upgrade of a production tenant > v1.1.0, and the broader automated `release-test.sh` sweep.*
 
 *Once evaluation begins in earnest, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
+
