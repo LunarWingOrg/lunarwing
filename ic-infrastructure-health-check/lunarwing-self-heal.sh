@@ -311,6 +311,21 @@ check_service_active() {
     esac
 }
 
+# Tenant-aware SubState for a systemd unit (crash-loop detection in verify).
+# Empty when unavailable (non-systemd, or a mock that doesn't model `show`).
+service_substate() {
+    local svc="$1" user uid
+    [[ "$SERVICE_MANAGER" == systemd ]] || return 0
+    user="$(_resolve_systemd_tenant_user "$svc")"
+    if [[ -n "$user" ]]; then
+        uid="$(id -u "$user" 2>/dev/null || echo '?')"
+        [[ "$uid" == '?' ]] && return 0
+        sudo -n -u "$user" env "XDG_RUNTIME_DIR=/run/user/$uid" systemctl --user show -p SubState --value "$svc" 2>/dev/null || true
+    else
+        systemctl show -p SubState --value "$svc" 2>/dev/null || true
+    fi
+}
+
 # ── Component → service mapping ─────────────────────────────────────────────
 
 declare -A SERVICE_MAP=(
@@ -568,7 +583,15 @@ verify_restart() {
             esac
         fi
     fi
-    check_service_active "$svc"
+    # is-active fallback. A crash-looping unit (Restart=) is briefly `active`
+    # between crashes, so a single is-active sample can false-positive; on systemd
+    # also reject an `auto-restart`/`failed` substate (the crash-loop signature).
+    check_service_active "$svc" || return 1
+    local _sub; _sub="$(service_substate "$svc")"
+    case "$_sub" in
+        auto-restart|failed) log "VERIFY: $svc not stable after restart (substate=$_sub)"; return 1 ;;
+    esac
+    return 0
 }
 
 # ── Main remediation logic ──────────────────────────────────────────────────
@@ -748,13 +771,14 @@ main() {
         svc_norm="$init_name"
         [[ "$SERVICE_MANAGER" == "openrc" ]] && svc_norm="${svc_norm%.service}"
         [[ "$SERVICE_MANAGER" == "systemd" && "$svc_norm" != *.* ]] && svc_norm="${svc_norm}.service"
-        if [[ "$init_status" == healthy ]]; then
-            healthy[$svc_norm]=1
-        else
-            [[ -n "${seen[$svc_norm]:-}" ]] && continue
-            seen[$svc_norm]=1
-            targets+=("$init_comp:$svc_norm")
-        fi
+        case "$init_status" in
+            healthy) healthy[$svc_norm]=1 ;;
+            skipped) log "SKIP: $svc_norm reported not-started/disabled (F3); not remediating" ;;
+            *)
+                [[ -n "${seen[$svc_norm]:-}" ]] && continue
+                seen[$svc_norm]=1
+                targets+=("$init_comp:$svc_norm") ;;
+        esac
     # NOTE: each init-system alternative MUST be fully parenthesized — jq's `|`
     # binds looser than `,`, so an unparenthesized trailing string gets piped
     # into the next alternative's `.metrics` and aborts the filter.

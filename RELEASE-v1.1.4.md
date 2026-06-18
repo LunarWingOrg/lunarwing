@@ -6,7 +6,7 @@
 
 ## Overview
 
-Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **even-numbered releases focus on features** — and v1.1.4 is a major feature release. Its centerpiece: the infrastructure **self-healing** system graduates from the long-standing v1.1.2 / v1.1.3 *Known Issue* — *"installed but dormant, not wired into provisioning, verified only by dry-run + unit tests"* — to **live, multi-tenant-aware, and enabled by default**.
+Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **even-numbered releases focus on features** — and v1.1.4 is a major feature release. Its centerpiece: the infrastructure **self-healing** system graduates from the long-standing v1.1.2 / v1.1.3 *Known Issue* — *"installed but dormant, not wired into provisioning, verified only by dry-run + unit tests"* — to **live, multi-tenant-aware, and enabled by default**. To date, this may be one of the most impactful releases since the initial 1.0.0 version. This release version introduces more changes than even 1.1.0 did.
 
 The second pillar is **multi-tenant supervision parity across both init systems**. v1.1.4 lands first-class multi-tenancy on **Gentoo / OpenRC / Podman** *and* brings the **systemd / rootless-Podman** path up to parity: per-tenant Postgres and worker containers are now supervised (OpenRC service units, or systemd **Quadlet** `.container` units), boot-persistent, health-monitored, and self-healed on both inits. Bringing the pipeline up against real running services surfaced (and fixed) several self-heal bugs that the mock-init test suite could never catch.
 

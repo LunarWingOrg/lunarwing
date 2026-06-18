@@ -138,6 +138,18 @@ assert_eq "$(restarts_of "$c" "lunarwing-acme.service")"   "1"  "CH11: affected 
 assert_eq "$(restarts_of "$c" "lunarwing-globex.service")" "0"  "CH11: healthy tenant NOT restarted"
 assert_eq "$(svc_state "$c" "lunarwing-globex.service")"   "up" "CH11: healthy tenant left untouched"
 
+echo "=== CH14: restart 'succeeds' but unit crash-loops (SubState=auto-restart) → verify rejects (F5) ==="
+c="$(sb)"; mk_mockbin "$c"
+jq -n --arg u "$me" '{tenants:{acme:{user:$u}}}' > "$c/ports.json"
+svc_down "$c" "lunarwing-acme.service"
+svc_substate "$c" "lunarwing-acme.service" auto-restart   # is-active will read 'up' post-restart, but it's flapping
+report "$c" '{components:[{component:"systemd",status:"critical",metrics:{units:[
+  {name:"lunarwing-acme.service",status:"critical"}]}}]}'
+o="$(run_chaos "$c" systemd SELF_HEAL_GRACE_CHECKS=1 SELF_HEAL_VERIFY_HEALTH=false SELF_HEAL_TENANTS_FILE="$c/ports.json")"
+assert_contains "$o" "not stable after restart (substate=auto-restart)" "CH14: verify rejects crash-looping unit"
+assert_ne "$(restarts_of "$c" "lunarwing-acme.service")" "0"  "CH14: a restart was attempted"
+assert_ne "$(state_of "$c")" "{}"                            "CH14: crash-looping unit kept in retry state (not cleared)"
+
 echo
 echo "Note: CH7 (DNS failure) is modeled by CH6's stuck-service escalation path."
 echo "Note: CH8 (disk full) requires real disk-fault injection and is out of scope"

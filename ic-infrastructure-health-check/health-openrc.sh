@@ -83,6 +83,53 @@ probe_status() {
   fi
 }
 
+# Runlevel dir (OpenRC enabled-service symlinks). Overridable so the test suite
+# can point at a fake runlevels tree without touching the host.
+RUNLEVELS_DIR="${RUNLEVELS_DIR:-/etc/runlevels}"
+
+# Extract the tenant name from a unit, or "" for single-instance / non-tenant
+# units. Known per-service roles are stripped so every unit maps to its tenant:
+#   lunarwing-acme -> acme   lunarwing-proxy-acme -> acme
+#   lunarwing-weechat-adapter-acme -> acme   xmpp-bridge-acme -> acme
+# (weechat-adapter MUST precede weechat in the case so the longer role wins.)
+unit_tenant() {
+  local svc="$1" rest
+  case "$svc" in
+    lunarwing|xmpp-bridge)  printf '' ;;
+    xmpp-bridge-*)          printf '%s' "${svc#xmpp-bridge-}" ;;
+    lunarwing-*)
+      rest="${svc#lunarwing-}"
+      case "$rest" in
+        proxy-*)           rest="${rest#proxy-}" ;;
+        pg-*)              rest="${rest#pg-}" ;;
+        nanocode-*)        rest="${rest#nanocode-}" ;;
+        pebble-*)          rest="${rest#pebble-}" ;;
+        weechat-adapter-*) rest="${rest#weechat-adapter-}" ;;
+        weechat-*)         rest="${rest#weechat-}" ;;
+      esac
+      printf '%s' "$rest" ;;
+    *)                      printf '' ;;
+  esac
+}
+
+# Has the operator STARTED this tenant? start-tenant `rc-update add`s the tenant's
+# primary daemon (lunarwing-<tenant>) to a runlevel, so an enabled primary marks a
+# started tenant. Single-instance / unknown units (empty tenant) count as started,
+# so their down state stays critical (unchanged behaviour).
+tenant_started() {
+  local tenant="$1" primary rl
+  [ -n "$tenant" ] || return 0
+  # Fail safe: if the runlevels tree is missing/misconfigured we cannot prove a
+  # tenant is NOT started — never mask a real outage, so treat it as started
+  # (a down unit then reads `critical`, not `skipped`).
+  [ -d "$RUNLEVELS_DIR" ] || return 0
+  primary="lunarwing-$tenant"
+  for rl in "$RUNLEVELS_DIR"/*/"$primary"; do
+    { [ -e "$rl" ] || [ -L "$rl" ]; } && return 0
+  done
+  return 1
+}
+
 for svc in "${SERVICES_ARR[@]}"; do
   # Init script must exist.
   if ! rc-service --exists "$svc" >/dev/null 2>&1; then
@@ -119,8 +166,17 @@ for svc in "${SERVICES_ARR[@]}"; do
 
   case "$state" in
     stopped|crashed)
-      local_status="critical"; local_exit=2
-      issues+=("$svc not running: $state")
+      if tenant_started "$(unit_tenant "$svc")"; then
+        local_status="critical"; local_exit=2
+        issues+=("$svc not running: $state")
+      else
+        # F3 / O5: this unit's tenant was add-ed (units rendered) but never
+        # start-ed (its primary daemon is in no runlevel). A down unit here is the
+        # EXPECTED pre-start state, not an outage — report `skipped` so self-heal
+        # does not start it (overriding operator intent) and the host report does
+        # not flip to critical mid-provision. self-heal honours `skipped`.
+        local_status="skipped"; local_exit=0
+      fi
       ;;
     timeout)
       # Degraded for THIS unit only — the loop continues, so one wedged tenant
