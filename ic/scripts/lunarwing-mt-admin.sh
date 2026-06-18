@@ -768,14 +768,22 @@ ensure_rootless_prereqs() {
   # pause.pid then makes EVERY podman call — including the `system migrate` just
   # below, and the first pg container start in add-tenant — fail with
   # "cannot re-exec process to join the existing user namespace". Clear it so podman
-  # spawns a fresh pause process — but ONLY when its PID is dead, so the
-  # "user already exists" resume path (ensure_rootless_prereqs re-runs from
-  # create_tenant_user) against a LIVE tenant never yanks a running pause process.
+  # spawns a fresh pause process — but KEEP it when it points to a live process
+  # actually OWNED BY THIS tenant (its own running pause process on the "user
+  # already exists" resume path, where ensure_rootless_prereqs re-runs from
+  # create_tenant_user against a live tenant). Everything else is stale: an
+  # empty/corrupt file, a dead pid, OR a pid since REUSED by another user's process
+  # (host-ns owner != tenant uid) — a bare `kill -0` (we run as root) would read
+  # that reused pid as "alive" and wrongly keep the stale file, leaving the O1 fault
+  # unfixed. The tenant's pause process (catatonit) runs as the tenant uid in the
+  # host ns, so /proc/<pid> ownership distinguishes it reliably.
   local pause_pid pause_owner
   pause_pid="/run/user/$uid/libpod/tmp/pause.pid"
   if [[ -f "$pause_pid" ]]; then
     pause_owner="$(cat "$pause_pid" 2>/dev/null || true)"
-    if [[ -z "$pause_owner" ]] || ! kill -0 "$pause_owner" 2>/dev/null; then
+    if [[ -z "$pause_owner" ]] \
+       || ! kill -0 "$pause_owner" 2>/dev/null \
+       || [[ "$(stat -c %u "/proc/$pause_owner" 2>/dev/null || echo -1)" != "$uid" ]]; then
       rm -f "$pause_pid" 2>/dev/null || true
     fi
   fi
