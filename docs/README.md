@@ -1,5 +1,7 @@
 # LunarWing Documentation
 
+### This document is out of date.
+
 ## Written by Starforce Nebula
 
 This directory contains all project documentation organized by category.
@@ -70,10 +72,8 @@ Deployment, operations, multitenancy, and production guides.
 | [`RELEASE-COMMANDS.md`](ops/RELEASE-COMMANDS.md) | Release git/GitHub command template |
 | [`GOALS_1.1.2.md`](ops/GOALS_1.1.2.md) | v1.1.2 release checklist (current) |
 | [`GOALS_1.1.2_INFRA_HEALTH_CHECK.md`](ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md) | v1.1.2 infra health-check + self-heal notes |
-| [`RELEASE-v1.1.0.md`](ops/RELEASE-v1.1.0.md) | v1.1.0 release notes |
-| [`RELEASE-v1.1.1.md`](ops/RELEASE-v1.1.1.md) | v1.1.1 release notes |
 
-Historical per-release prep checklists are archived in [`ops/history/`](ops/history/).
+Versioned release notes live in [`releases/`](releases/). Historical per-release prep checklists are archived in [`ops/history/`](ops/history/).
 
 ---
 
@@ -115,6 +115,11 @@ Release notes and changelogs.
 | File | Description |
 |------|-------------|
 | [`RELEASE-v1.0.7.md`](releases/RELEASE-v1.0.7.md) | v1.0.7 release notes (2026-05-17) |
+| [`RELEASE-v1.1.0.md`](releases/RELEASE-v1.1.0.md) | v1.1.0 release notes |
+| [`RELEASE-v1.1.1.md`](releases/RELEASE-v1.1.1.md) | v1.1.1 release notes |
+| [`RELEASE-v1.1.2.md`](releases/RELEASE-v1.1.2.md) | v1.1.2 release notes |
+| [`RELEASE-v1.1.3.md`](releases/RELEASE-v1.1.3.md) | v1.1.3 release notes |
+| [`RELEASE-v1.1.4.md`](releases/RELEASE-v1.1.4.md) | v1.1.4 release notes |
 | [`CHANGELOG-AGENTS.md`](releases/CHANGELOG-AGENTS.md) | AGENTS.md change history |
 
 ---
