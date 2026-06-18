@@ -138,6 +138,22 @@ parameter expansion — the password never reaches argv) and records them in `me
 
 ---
 
+## Post-review fixes (found in use)
+
+### PR-1. Gateway/HTTP bind address not carried → reset to `127.0.0.1` on the new host
+Found during real use: `export-tenant.sh`'s carry list omitted `GATEWAY_HOST`/`HTTP_HOST`,
+so on import `add-tenant` wrote the hardcoded `127.0.0.1` default and nothing overrode
+it — an operator who had bound the gateway to `0.0.0.0` (for remote access) on the old
+host came up localhost-only on the new host and had to hand-edit. Same clobber class as
+HIGH-4/MED (operator config reset to defaults), just not extended to the gateway/http
+bind.
+**Fix:** added `GATEWAY_HOST` + `HTTP_HOST` to the export carry list (the bind *address*
+is operator config; the *ports* stay host-specific and regenerated). `import-tenant.sh`'s
+`inject_keys` then applies them over the add-tenant default, so the binding survives the
+migration. *(Separately, mt-admin's `write_tenant_lunarwing_env` still hardcodes these on
+every write — a preserve-on-rewrite + override knob there is the broader fix if hand-edits
+should survive plain `add-tenant` re-runs; not yet done.)*
+
 ## Confirmed correct / not changed
 
 - `pg_dump` is MVCC-consistent (the DB half of the snapshot was never the torn-store
