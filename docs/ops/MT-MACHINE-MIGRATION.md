@@ -100,6 +100,59 @@ sudo ic/scripts/enable-health-fleet.sh --gotify-url <url> --gotify-token-file <p
 
 ---
 
+## Dry run & rehearsal
+
+Validate before you touch a real agent. There are two levels:
+
+### Level 1 — `--dry-run` (cheap, no changes)
+Every script accepts `--dry-run`: it prints the exact command plan and makes **no**
+changes (services are not stopped, no bundle is written, nothing is restored). It
+validates the *plan and arguments*, **not** the outcome — it does not execute
+`mt-admin`, so it cannot prove the migration succeeds.
+
+```bash
+sudo ic/scripts/export-tenant.sh <agent> --dry-run     # old host: preview (no stop, no bundle)
+sudo ic/scripts/import-tenant.sh <bundle>.tar --dry-run # new host: validate bundle + print plan
+```
+
+Asymmetry to know: `export --dry-run` writes **no** bundle, but `import --dry-run`
+**needs** a real bundle (it unpacks it and runs the real preconditions — postgres-only,
+`SECRETS_MASTER_KEY` present, tenant-not-already-registered). So to dry-run the import
+you need a real export first.
+
+### Level 2 — throwaway-tenant rehearsal (the real confidence)
+`--dry-run` can't prove correctness because it doesn't run `mt-admin`. Rehearse the
+**whole** flow on a disposable tenant first:
+
+```bash
+# old host — create + seed a throwaway tenant (see the helper note below)
+sudo ic/scripts/rehearse-testbot.sh
+# real export -> transfer -> real import -> start
+sudo ic/scripts/export-tenant.sh testbot
+rsync -av -e ssh old:/var/lib/lunarwing-migrate/testbot-migrate-*.tar /var/lib/lunarwing-migrate/   # to new host
+sudo ic/scripts/import-tenant.sh /var/lib/lunarwing-migrate/testbot-migrate-*.tar --dry-run         # plan check
+sudo ic/scripts/import-tenant.sh /var/lib/lunarwing-migrate/testbot-migrate-*.tar --start --old-stopped
+# verify the seeded marker survived (new host); then tear down
+sudo ic/scripts/rehearse-testbot.sh --cleanup
+```
+
+Then do the lowest-stakes real agent as the **canary** (real export → import → verify →
+**soak a day**) before migrating the other agents.
+
+**What to verify** after a rehearsal/canary (what `--dry-run` can't tell you):
+conversation history is present (DB restored), encrypted secrets decrypt
+(`SECRETS_MASTER_KEY` carried correctly — e.g. a stored API key still works), and OMEMO
+chat decrypts (may take a few messages after first start).
+
+> ⚠️ **`ic/scripts/rehearse-testbot.sh` is generated but NOT yet tested.** It is a
+> convenience helper to create + seed a throwaway tenant for the rehearsal above. Review
+> it before running, and treat its first run as part of the rehearsal (it has only been
+> syntax/shellcheck-validated, not executed). It seeds a DB marker that proves DB
+> round-trip only — it does not exercise OMEMO or encrypted-secret continuity, so still
+> send a real message + OMEMO chat through the testbot for a full test.
+
+---
+
 ## Cutover & rollback
 
 - **Cutover window:** the agent is offline from export (step 1) until start (step 3).
