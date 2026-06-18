@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 1: build nanocode from source
 # ──────────────────────────────────────────────────────────────────────────────
-FROM oven/bun:debian AS builder
+FROM docker.io/oven/bun:debian AS builder
 
 WORKDIR /build
 
@@ -32,7 +32,7 @@ RUN bun run build 2>/dev/null || true
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 2: runtime image
 # ──────────────────────────────────────────────────────────────────────────────
-FROM oven/bun:debian AS runtime
+FROM docker.io/oven/bun:debian AS runtime
 
 LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
       org.opencontainers.image.description="Persistent nanocode worker with WebSocket agent communication" \

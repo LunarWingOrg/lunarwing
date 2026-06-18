@@ -117,6 +117,12 @@ if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
     [ -n "$tname" ] && [ -n "$tuser" ] || continue
     tuid=$(id -u "$tuser" 2>/dev/null || echo "")
     [ -n "$tuid" ] || continue
+    # Is this tenant "started"? Its primary daemon being active means every other
+    # unit should be up too — so a down unit is a real outage (incl. a stopped
+    # `generated` Quadlet pg/worker), not a tenant that was add-ed but not yet
+    # start-ed (F3-A). One bounded show per tenant.
+    tdaemon_active=false
+    [ "$(_tenant_uctl "$tuser" "$tuid" show --value -p ActiveState "lunarwing-$tname.service")" = "active" ] && tdaemon_active=true
     # Enumerate ALL of this tenant's lunarwing-*/xmpp-bridge-*/weechat-* user
     # units — the systemd analog of health-openrc.sh's /etc/init.d/lunarwing-*
     # glob — instead of a hardcoded pair. Covers pg, the workers, proxy,
@@ -136,11 +142,6 @@ if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
       [ "${_uf[0]:-}" = "loaded" ] || continue
       uactive=${_uf[1]:-unknown}; usub=${_uf[2]:-unknown}; urestarts=${_uf[3]:-0}
       [[ "$urestarts" =~ ^[0-9]+$ ]] || urestarts=0
-      # Enabled-state distinguishes a genuine fault from an intentionally-stopped
-      # unit. Quadlet units report UnitFileState=generated (never "enabled"), so we
-      # branch on ActiveState/SubState first and consult enable-state only for the
-      # ambiguous inactive/dead case.
-      uenabled=$(_tenant_uctl "$tuser" "$tuid" show --value -p UnitFileState "$tunit")
       ustatus="healthy"; uexit=0
       case "$uactive/$usub" in
         active/*)
@@ -153,17 +154,24 @@ if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
           ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not healthy: $uactive/$usub")
           ;;
         *)
-          # inactive/dead etc.: an ENABLED unit that should be up but isn't is a
-          # fault; a disabled/static/generated unit that is simply not running is the
-          # EXPECTED state for a freshly add-ed (not yet start-ed) tenant or an
-          # operator-disabled unit — report `skipped` so it neither flips
-          # overall->critical nor drives self-heal to start a tenant nobody started.
-          case "$uenabled" in
-            enabled|enabled-runtime)
-              ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub") ;;
-            *)
-              ustatus="skipped"; uexit=0 ;;
-          esac
+          # inactive/dead etc. Distinguish a genuine outage from an intentionally-
+          # not-running unit. A down unit is a real fault when the tenant is started
+          # (primary daemon active — covers a stopped `generated` Quadlet pg/worker,
+          # F3-A). Otherwise probe enable-state LAZILY (only here, not per-unit — F3-B
+          # avoids doubling round-trips and the failure-bias of an unconditional
+          # probe): an enabled or inconclusive (empty/unknown) enable-state fails
+          # LOUD as critical (never mask); only a not-started tenant's
+          # disabled/static/generated unit is the expected `skipped` case.
+          if [ "$tdaemon_active" = "true" ]; then
+            ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) down while tenant running: $uactive/$usub")
+          else
+            case "$(_tenant_uctl "$tuser" "$tuid" show --value -p UnitFileState "$tunit")" in
+              disabled|static|masked|linked|linked-runtime|generated|transient|indirect)
+                ustatus="skipped"; uexit=0 ;;
+              *)
+                ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) not active: $uactive/$usub") ;;
+            esac
+          fi
           ;;
       esac
       # Container units: `active` only means the container is running. Probe

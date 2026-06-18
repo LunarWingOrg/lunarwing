@@ -865,8 +865,12 @@ remove_tenant_user() {
     pkill -KILL -u "$name" 2>/dev/null || true
     # `userdel -r` prints a benign "mail spool not found" warning but still exits 0;
     # a real failure (user busy) exits nonzero — surface it instead of hiding it.
-    if userdel -r "$name" 2>/dev/null || ! getent passwd "$name" >/dev/null 2>&1; then
+    if userdel -r "$name" 2>/dev/null; then
       say "removed user and home directory: $name"
+    elif ! getent passwd "$name" >/dev/null 2>&1; then
+      # Account gone but userdel exited nonzero (e.g. exit 12: home removal failed
+      # on a busy mount / immutable file). Don't overclaim the home dir was removed.
+      say "user '$name' account removed (userdel -r exited nonzero — home dir may persist; verify $(tenant_home "$name"))"
     else
       say "WARNING: failed to remove user '$name' (still present); remove manually: userdel -r $name"
     fi
@@ -1198,10 +1202,17 @@ install_wasm_all() {
 
 # ── Environment file generation ──────────────────────────────────────────────
 
+# Echo the existing VALUE of KEY from a tenant env file (empty if file/key absent).
+# Used to PRESERVE secrets across re-runs so re-provisioning never rotates them.
+_env_existing() {  # <env_file> <KEY>
+  [[ -f "$1" ]] || return 0
+  sed -n "s/^$2=//p" "$1" | head -1
+}
+
 write_tenant_lunarwing_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
-  local xmpp_password="${3:-$(generate_token | cut -c1-32)}"
+  local xmpp_password="${3:-}"   # resolved below (preserve an existing one on re-run)
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
   local llm_base_url="${6:-}"
@@ -1224,12 +1235,20 @@ write_tenant_lunarwing_env() {
   run_dir="$(tenant_run_dir "$name")"
   repo_dir="$(tenant_repo "$name")"
 
+  # Idempotent on re-run (F4-A/F4-B): PRESERVE existing secrets when lunarwing.env
+  # already exists. Regenerating SECRETS_MASTER_KEY would permanently orphan the
+  # tenant's encrypted DB secrets (it is the AES-256-GCM vault key); rotating the
+  # tokens would break live clients/workers; minting a fresh XMPP_PASSWORD would
+  # break the already-registered XMPP account. Generate fresh ONLY on first write.
   local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password
-  gateway_token="$(generate_token)"
-  bridge_token="$(generate_token | cut -c1-32)"
-  relay_password="$(generate_token | cut -c1-32)"
-  secrets_key="$(generate_token)"
-  webhook_secret="$(generate_token)"
+  gateway_token="$(_env_existing "$path" GATEWAY_AUTH_TOKEN)";   gateway_token="${gateway_token:-$(generate_token)}"
+  bridge_token="$(_env_existing "$path" XMPP_BRIDGE_TOKEN)";     bridge_token="${bridge_token:-$(generate_token | cut -c1-32)}"
+  relay_password="$(_env_existing "$path" RELAY_PASSWORD)";      relay_password="${relay_password:-$(generate_token | cut -c1-32)}"
+  secrets_key="$(_env_existing "$path" SECRETS_MASTER_KEY)";     secrets_key="${secrets_key:-$(generate_token)}"
+  webhook_secret="$(_env_existing "$path" HTTP_WEBHOOK_SECRET)"; webhook_secret="${webhook_secret:-$(generate_token)}"
+  # XMPP password: an explicit --xmpp-password wins; else preserve an existing one;
+  # else mint a fresh one (first-time provision).
+  [[ -n "$xmpp_password" ]] || { xmpp_password="$(_env_existing "$path" XMPP_PASSWORD)"; xmpp_password="${xmpp_password:-$(generate_token | cut -c1-32)}"; }
   # Stable + migration-safe; resolved before the heredoc so it can read an
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
@@ -1959,7 +1978,7 @@ start_tenant_postgres() {
   while ! _ctr "$name" exec "$container_name" pg_isready -U lunarwing -q 2>/dev/null; do
     attempts=$((attempts + 1))
     if (( attempts >= 90 )); then
-      say "WARNING: PostgreSQL for $name not confirmed ready after ${attempts}s; continuing (pg container has a restart policy; the health pipeline will converge it)." >&2
+      say "WARNING: PostgreSQL for $name not confirmed ready after ${attempts}s; continuing — the host health pipeline/self-heal will converge it." >&2
       return 0
     fi
     sleep 1

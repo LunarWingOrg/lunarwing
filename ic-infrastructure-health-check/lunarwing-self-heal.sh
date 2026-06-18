@@ -773,7 +773,7 @@ main() {
         [[ "$SERVICE_MANAGER" == "systemd" && "$svc_norm" != *.* ]] && svc_norm="${svc_norm}.service"
         case "$init_status" in
             healthy) healthy[$svc_norm]=1 ;;
-            skipped) : ;;   # not-started/disabled unit (F3): not a fault, don't remediate
+            skipped) log "SKIP: $svc_norm reported not-started/disabled (F3); not remediating" ;;
             *)
                 [[ -n "${seen[$svc_norm]:-}" ]] && continue
                 seen[$svc_norm]=1

@@ -13,9 +13,11 @@ systemd units). New tenant `springfeather` provisioned with
 
 **Status legend:** 🔴 open · 🟡 workaround applied, code fix pending · 🟢 fixed (code)
 
-**Fix status (2026-06-17):** all six fixed in code on `1.1.4-staging-goals`. ICHC test
-suite green at **215/215** (added F3 dry-run case + F5 `CH14` crash-loop chaos case + a
-`SubState` mock). End-to-end re-validation by provisioning a brand-new tenant (goal 13) is
+**Fix status (2026-06-17):** all six fixed in code on `1.1.4-staging-goals`, then a
+6-agent adversarial review (see below) returned NO-GO and a second hardening pass
+followed. ICHC test suite green at **229/229** (added F3 dry-run case, F5 `CH14`
+crash-loop chaos case + `SubState` mock, and a new `tests/test-health-systemd.sh`,
+14 cases). End-to-end re-validation by provisioning a brand-new tenant (goal 13) is
 **deferred** ("later" per operator) — code is in place, live verification pending.
 
 ---
@@ -229,6 +231,39 @@ code**, retrying/forcing as needed and reporting honestly on failure (don't prin
 unconditionally). Treat the `mail spool not found` warning as benign.
 
 ---
+
+## Adversarial review (post-fix) — 2026-06-17
+
+A 6-agent adversarial review of the F1–F6 commit returned **NO-GO** and caught follow-on
+issues; all were fixed in a second pass:
+
+- **F4-A [HIGH] data loss** — removing the `ports_allocate` guard exposed the non-idempotent
+  `write_tenant_lunarwing_env`, which regenerated `SECRETS_MASTER_KEY` (the AES-256-GCM vault
+  key — orphaning the tenant's encrypted DB secrets) and rotated `GATEWAY_AUTH_TOKEN` /
+  `HTTP_WEBHOOK_SECRET` / `RELAY_PASSWORD` / `XMPP_BRIDGE_TOKEN` on any re-add. **Fixed:** the
+  env writer now PRESERVES every existing secret when `lunarwing.env` exists (generates only on
+  first write), making resume genuinely safe and the F4 idempotency claim true.
+- **F4-B [HIGH]** — `XMPP_PASSWORD` re-minted on resume. **Fixed:** preserve the existing value
+  when no `--xmpp-password` is supplied.
+- **F3-A [MED] outage masking** — a down `generated` Quadlet pg/worker was classified
+  `skipped`, hiding a real outage. **Fixed:** classification now also keys on whether the tenant
+  is *started* (primary daemon active) — a down unit on a started tenant is `critical`; only a
+  not-started tenant's disabled/generated unit is `skipped`.
+- **F3-B [MED] failure bias** — the unconditional `UnitFileState` probe downgraded to `skipped`
+  on a timeout and doubled per-unit round-trips. **Fixed:** probe is now lazy (only in the
+  inactive branch); an enabled/empty/unknown enable-state fails LOUD as `critical`. (Gotcha:
+  `systemctl show --value` returns CANONICAL order, not `-p` order — folding `UnitFileState`
+  into the main 4-prop show would have shifted `NRestarts`; kept separate deliberately.)
+- Nits also fixed: self-heal `SKIP:` breadcrumb for skipped units; honest F6 message (no longer
+  claims "home directory" when `userdel` exits nonzero); F2 warning wording; and **F1-aux** —
+  fully-qualified the worker Dockerfile `FROM` lines (`lunarcode4lunarwing`, `pebble4lunarwing`,
+  `codex4lunarwing`) so rootless `build-workers` doesn't need `unqualified-search-registries`.
+- **New test:** `tests/test-health-systemd.sh` (14 cases) closes the health-systemd coverage
+  gap the review flagged. F1/F2/F5/F6 were reviewed **commit-ready**.
+
+Accepted residual nits (scoped, low risk): F5's `failed` verify-arm only covers the inter-sample
+race; with `VERIFY_HEALTH=true` a momentarily-healthy crash-looper can still record one SUCCESS,
+backstopped by the flapping guard.
 
 ## Validation plan for the fixes
 
