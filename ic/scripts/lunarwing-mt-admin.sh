@@ -1981,8 +1981,19 @@ start_tenant_postgres() {
   # rootless container absent), so fresh tenants and already-migrated tenants are
   # never affected. Escape hatches: migrate (upgrade-tenant.sh), keep rootful
   # (LUNARWING_MT_ROOTLESS=false), or acknowledge an intended fresh DB
-  # (LUNARWING_MT_ACK_ROOTLESS_FLIP=1 — set automatically by the migration tool
-  # once it has a verified backup in hand).
+  # (LUNARWING_MT_ACK_ROOTLESS_FLIP=<tenant> — set automatically by the migration
+  # tool once it has a verified backup in hand). The ack is a comma-separated list
+  # of tenant NAMES, not a global boolean, so a stray `export …=1` cannot silence
+  # the guard for OTHER un-migrated tenants in the same shell/CI session.
+  #
+  # Coverage note: this fires only when the rootless container is ABSENT. The
+  # "rootless exists but is EMPTY while a root orphan persists" case is deliberately
+  # NOT caught here — the post-migration steady state (live rootless DB + a root
+  # container kept as a rollback net) also has both present, and a start-time probe
+  # can't tell them apart without the container running, so guarding it here would
+  # break every legitimate restart. That case is surfaced by upgrade-preflight.sh
+  # and blocked by `upgrade-tenant.sh --prune-old-root` (refuses to delete the root
+  # copy while the rootless DB is empty).
   if [[ "$MT_ROOTLESS" == "true" && "$CONTAINER_RT" == "podman" ]] \
      && ! _ctr "$name" inspect "$container_name" &>/dev/null \
      && "$CONTAINER_RT" inspect "$container_name" &>/dev/null; then
@@ -1996,13 +2007,13 @@ start_tenant_postgres() {
       say "# Choose one:"
       say "#   migrate data:     sudo ic/scripts/upgrade-tenant.sh $name"
       say "#   keep rootful:     LUNARWING_MT_ROOTLESS=false <re-run this command>"
-      say "#   intended fresh DB: LUNARWING_MT_ACK_ROOTLESS_FLIP=1 <re-run>"
+      say "#   intended fresh DB: LUNARWING_MT_ACK_ROOTLESS_FLIP=$name <re-run>"
       say "############################################################"
     } >&2
-    if [[ -z "${LUNARWING_MT_ACK_ROOTLESS_FLIP:-}" ]]; then
+    if [[ ",${LUNARWING_MT_ACK_ROOTLESS_FLIP:-}," != *",$name,"* ]]; then
       die "refusing to create an empty rootless PG over existing root-store data for '$name' (see guard above)"
     fi
-    say "LUNARWING_MT_ACK_ROOTLESS_FLIP set — proceeding with a fresh rootless DB for '$name'; root-store data left intact." >&2
+    say "LUNARWING_MT_ACK_ROOTLESS_FLIP lists '$name' — proceeding with a fresh rootless DB; root-store data left intact." >&2
   fi
 
   # systemd + rootless podman: a Quadlet .container owns the lifecycle (boot-

@@ -99,7 +99,20 @@ UID_T="$(id -u "$TENANT")" || die "OS user '$TENANT' not found"
 HOME_T="$(getent passwd "$TENANT" | cut -d: -f6)"
 LWROOT="$HOME_T/lunarwing"
 ENVF="$LWROOT/env/lunarwing.env"
-RUNTIME="${LUNARWING_CONTAINER_RUNTIME:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}"
+# Mirror mt-admin's detect_container_runtime precedence EXACTLY (docker-first when
+# both are installed) so RUNTIME equals what mt-admin will actually drive; also
+# validate the override the same way mt-admin does, instead of echoing it verbatim.
+detect_runtime() {
+  local o="${LUNARWING_CONTAINER_RUNTIME:-}"
+  if [[ -n "$o" ]]; then
+    case "${o,,}" in docker|podman) printf '%s' "${o,,}"; return 0 ;;
+      *) die "unsupported LUNARWING_CONTAINER_RUNTIME='$o' (use docker or podman)" ;; esac
+  fi
+  command -v docker >/dev/null 2>&1 && { printf 'docker'; return 0; }
+  command -v podman >/dev/null 2>&1 && { printf 'podman'; return 0; }
+  die "neither docker nor podman found"
+}
+RUNTIME="$(detect_runtime)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 # In keep-rootful mode every mt-admin call must see MT_ROOTLESS=false. We also
@@ -111,20 +124,52 @@ mt()         { if $KEEP_ROOTFUL; then LUNARWING_MT_ROOTLESS=false "$MT" "$@"; el
 # tenant rootless podman (read-only verify in rootless-adopt mode)
 tctr() { ( cd / && exec sudo -u "$TENANT" env HOME="$HOME_T" XDG_RUNTIME_DIR="/run/user/$UID_T" "$RUNTIME" "$@" ); }
 
+# count application tables in a tenant's rootless DB (0/empty => looks unmigrated)
+rootless_table_count() { tctr exec "lunarwing-pg-$1" psql -U lunarwing -tAc \
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null | tr -cd '0-9'; }
+
+# Re-apply an operator-customizable env line from the pre-upgrade backup. add-tenant
+# preserves SECRETS but HARDCODES XMPP rooms/allowlist/OMEMO + LLM endpoint to
+# defaults on every write, which would silently wipe a tenant's MUC/OMEMO/LLM config.
+# awk (not sed) so JSON-array values with []"," can't break substitution. Preserves
+# the live file's inode/owner/mode (truncate-in-place).
+reapply_env_key() {  # <old_file> <live_file> <KEY>
+  local old="$1" live="$2" key="$3" line tmp
+  [[ -f "$old" && -f "$live" ]] || return 0
+  line="$(grep -m1 "^${key}=" "$old" 2>/dev/null || true)"
+  [[ -n "$line" ]] || return 0
+  grep -qxF "$line" "$live" 2>/dev/null && return 0   # live already matches; nothing to do
+  tmp="$(mktemp)"
+  if grep -q "^${key}=" "$live"; then
+    awk -v k="${key}=" -v repl="$line" 'index($0,k)==1{print repl;next}{print}' "$live" >"$tmp"
+  else
+    cp "$live" "$tmp"; printf '%s\n' "$line" >>"$tmp"
+  fi
+  cat "$tmp" >"$live"; rm -f "$tmp"
+  note "re-applied $key from pre-upgrade config"
+}
+
 # ---- --prune-old-root: reclaim the orphaned v1.1.0 ROOT-store PG container ----
 # Run this ONLY after the tenant has been migrated to rootless and verified. It
-# refuses to act unless the rootless PG is up and pg_isready (i.e. the migrated
-# data is live), so it can never delete your only copy. IRREVERSIBLE.
+# refuses unless the rootless PG is up, pg_isready, AND non-empty (so it can never
+# delete your only copy when the rootless DB is still the empty post-flip one).
+# IRREVERSIBLE.
 if $PRUNE_OLD_ROOT; then
   banner "Prune old root-store PG for '$TENANT'"
   [[ "$RUNTIME" == podman ]] || die "--prune-old-root only applies to Podman (rootful root store)"
+  if $DRY_RUN; then
+    note "[dry-run] would verify rootless lunarwing-pg-$TENANT is Running + pg_isready + non-empty, then: podman rm -f lunarwing-pg-$TENANT (root store)"
+    exit 0
+  fi
 
-  # the migrated rootless PG must be healthy first
+  # the migrated rootless PG must be healthy AND hold data first
   rootless_state="$(tctr inspect -f '{{.State.Running}}' "lunarwing-pg-$TENANT" 2>/dev/null || true)"
   [[ "$rootless_state" == true ]] || die "rootless PG for '$TENANT' is not running — refusing to prune (migrate + verify first)"
   tctr exec "lunarwing-pg-$TENANT" pg_isready -U lunarwing -q 2>/dev/null \
     || die "rootless PG for '$TENANT' is not accepting connections — refusing to prune"
-  note "rootless PG is up and ready (migrated data is live)"
+  tbl_count="$(rootless_table_count "$TENANT")"
+  [[ "${tbl_count:-0}" -gt 0 ]] || die "rootless DB for '$TENANT' has no application tables (count=${tbl_count:-0}) — it looks EMPTY/unmigrated; refusing to delete the root-store copy. Restore your backup into the rootless DB first."
+  note "rootless PG is up, ready, and holds $tbl_count tables (migrated data is live)"
 
   # the old root-store container must exist to prune
   if ! podman inspect "lunarwing-pg-$TENANT" >/dev/null 2>&1; then
@@ -146,9 +191,10 @@ fi
 MODE="rootless-adopt"; $KEEP_ROOTFUL && MODE="keep-rootful"
 # This tool backs up the root-store DB (step 1) and restores into the fresh
 # rootless DB (step 5), so the rootless flip is intended: acknowledge mt-admin's
-# data-orphan guard so step 4's add-tenant doesn't refuse. (Backup runs first and
-# the script dies if it fails, so this can't bypass the guard without a backup.)
-[[ "$KEEP_ROOTFUL" == false ]] && export LUNARWING_MT_ACK_ROOTLESS_FLIP=1
+# data-orphan guard (scoped to THIS tenant only) so step 4's add-tenant doesn't
+# refuse. (Backup runs first and the script dies if it fails, so this can't bypass
+# the guard without a backup.)
+[[ "$KEEP_ROOTFUL" == false ]] && export LUNARWING_MT_ACK_ROOTLESS_FLIP="$TENANT"
 banner "Upgrade tenant '$TENANT' -> $TARGET_REF  (mode: $MODE, runtime: $RUNTIME)"
 $DRY_RUN && say "*** DRY RUN — no changes will be made ***"
 
@@ -193,7 +239,7 @@ note "prior clone rev recorded for rollback: $PRIOR_REV"
 
 # ---- 2. STOP the OLD model (daemon + old PG); old container/volume preserved --
 banner "2/8  Stop tenant (old model)"
-mt_rootful stop-tenant "$TENANT"
+run mt_rootful stop-tenant "$TENANT"
 
 # ---- 3. UPDATE the tenant clone + REBUILD (mt-admin does NOT auto-update) -----
 banner "3/8  Update clone + build"
@@ -221,6 +267,20 @@ add_args=(add-tenant "$TENANT" --no-health)
 [[ -n "$XMPP_JID" ]] && add_args+=(--xmpp-jid "$XMPP_JID")
 run mt "${add_args[@]}"      # rootless: ensure_rootless_prereqs + empty PG quadlet + render; daemon NOT started
                              # keep-rootful: reuses existing root PG; back-fills HTTP_HOST/secret
+
+# add-tenant rewrote the env files and reset operator-customizable XMPP/LLM config
+# to defaults. Re-apply those specific keys from the step-1 backup (both modes).
+if ! $DRY_RUN; then
+  OLD_ENV_DIR="$BACKUP_DIR/${TENANT}-env.$STAMP"
+  BRIDGE_ENV="$LWROOT/env/xmpp-bridge.env"
+  for k in XMPP_ALLOW_FROM XMPP_ALLOW_ROOMS XMPP_ENCRYPTED_ROOMS XMPP_DM_POLICY XMPP_OMEMO_DEVICE_ID LLM_BASE_URL LLM_API_KEY LLM_MODEL; do
+    reapply_env_key "$OLD_ENV_DIR/lunarwing.env" "$ENVF" "$k"
+  done
+  for k in XMPP_ALLOW_FROM_JSON XMPP_ALLOW_ROOMS_JSON XMPP_ENCRYPTED_ROOMS_JSON XMPP_DEVICE_ID; do
+    reapply_env_key "$OLD_ENV_DIR/xmpp-bridge.env" "$BRIDGE_ENV" "$k"
+  done
+  chown "$TENANT:$TENANT" "$ENVF" "$BRIDGE_ENV" 2>/dev/null || true
+fi
 
 if [[ "$KEEP_ROOTFUL" == false ]] && ! $DRY_RUN; then
   pg_state="$(tctr inspect -f '{{.State.Running}}' "lunarwing-pg-$TENANT" 2>/dev/null || true)"
@@ -260,6 +320,11 @@ fi
 # ---- 8. VERIFY ---------------------------------------------------------------
 banner "8/8  Verify"
 run mt status-tenant "$TENANT"
+if [[ "$KEEP_ROOTFUL" == false ]] && ! $DRY_RUN; then
+  vtbl="$(rootless_table_count "$TENANT")"
+  if [[ "${vtbl:-0}" -gt 0 ]]; then note "rootless DB holds $vtbl application tables — restore looks good."
+  else say "WARNING: rootless DB for '$TENANT' has NO application tables — the restore may have failed. Do NOT run --prune-old-root; investigate (your backup + the old root container are intact)." >&2; fi
+fi
 note "Now smoke-test: message round-trips, conversation history present, routines intact, channels load."
 note "Run the infra health check once: ic-infrastructure-health-check/infrastructure-health-check.sh"
 

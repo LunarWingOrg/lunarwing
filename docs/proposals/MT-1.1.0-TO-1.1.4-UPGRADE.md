@@ -337,9 +337,12 @@ timer while any tenant daemon is down** (so self-heal can't fight a maintenance)
 Seeds Gotify creds into a fresh `health.env` (preserves an existing one).
 
 ```
-enable-health-fleet.sh [--gotify-url <url>] [--gotify-token <tok>]
+enable-health-fleet.sh [--gotify-url <url>] [--gotify-token-file <path>]
                        [--allow-down] [--dry-run] [--yes]
 ```
+The escalation token is a secret, so it is **not** accepted on argv (which is
+world-readable via `/proc/<pid>/cmdline`): pass `--gotify-token-file`, set
+`LUNARWING_MT_GOTIFY_TOKEN`, or edit `health.env` after.
 
 ### mt-admin source-level hardening (shipped)
 
@@ -369,7 +372,7 @@ uses `--no-health`. Once **all** tenants are migrated and verified:
 
 ```bash
 sudo ic/scripts/enable-health-fleet.sh \
-  --gotify-url <url> --gotify-token <tok>      # refuses if any tenant is down
+  --gotify-url <url> --gotify-token-file /etc/lunarwing/gotify.token   # refuses if any tenant is down
 systemctl status lunarwing-mt-health.timer     # verify
 ```
 

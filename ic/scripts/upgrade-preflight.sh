@@ -15,8 +15,11 @@
 # EMPTY database. This script detects whether the old root-store PG still holds
 # the live data so you migrate it (dump -> restore) instead of orphaning it.
 #
-# It makes NO changes: only `inspect`/`ps`/`rev-parse`/`grep`/`pg_isready`/
-# `is-enabled`/`show-user`. Safe to run on a live production fleet at any time.
+# It makes no DESTRUCTIVE changes: only `inspect`/`ps`/`rev-parse`/`grep`/
+# `pg_isready`/`is-enabled`/`show-user` reads. (One benign side effect: probing
+# rootless podman as a tenant initializes that tenant's empty container-store
+# directory under its $HOME — harmless, and a no-op for tenants already running
+# rootless podman.) Safe to run on a live production fleet at any time.
 #
 # Usage (run as root — it reads root's container store and tenants' files):
 #   sudo ic/scripts/upgrade-preflight.sh <tenant>
@@ -43,8 +46,9 @@ for a in "$@"; do
   esac
 done
 
+WARN_COUNT=0
 say()    { printf '%s\n' "$*"; }
-warn()   { printf '  CAUTION: %s\n' "$*"; }
+warn()   { WARN_COUNT=$((WARN_COUNT + 1)); printf '  CAUTION: %s\n' "$*"; }
 stop()   { printf '  STOP:    %s\n' "$*"; }
 ok()     { printf '  ok:      %s\n' "$*"; }
 note()   { printf '  note:    %s\n' "$*"; }
@@ -66,11 +70,17 @@ HOST_STOP=0
 # tenant-level tallies (set by assess_tenant, read by the summary)
 declare -A VERDICT
 
-# ---- container runtime detection (mirrors mt-admin's logic, read-only) --------
+# ---- container runtime detection (mirrors mt-admin's detect_container_runtime) -
+# Same precedence as mt-admin (docker-first when both are installed) and same
+# override validation, so the verdict reflects what mt-admin will actually drive.
 detect_runtime() {
-  if [[ -n "${LUNARWING_CONTAINER_RUNTIME:-}" ]]; then echo "$LUNARWING_CONTAINER_RUNTIME"; return; fi
-  if command -v podman >/dev/null 2>&1; then echo podman; return; fi
+  local o="${LUNARWING_CONTAINER_RUNTIME:-}"
+  if [[ -n "$o" ]]; then
+    case "${o,,}" in docker|podman) echo "${o,,}"; return ;;
+      *) die "unsupported LUNARWING_CONTAINER_RUNTIME='$o' (use docker or podman)" ;; esac
+  fi
   if command -v docker >/dev/null 2>&1; then echo docker; return; fi
+  if command -v podman >/dev/null 2>&1; then echo podman; return; fi
   echo none
 }
 
@@ -78,6 +88,8 @@ podman_ge_46() {
   local v; v="$(probe podman --version | awk '{print $3}')" || return 1
   [[ -n "$v" ]] || return 1
   local maj min; maj="${v%%.*}"; min="${v#*.}"; min="${min%%.*}"
+  min="${min//[!0-9]/}"; min="${min:-0}"   # tolerate '4.6.0-rc1' / odd suffixes
+  maj="${maj//[!0-9]/}"; maj="${maj:-0}"
   (( maj > 4 || (maj == 4 && min >= 6) ))
 }
 
@@ -135,6 +147,7 @@ host_checks() {
 assess_tenant() {
   local name="$1"
   local verdict="GO"
+  local w0=$WARN_COUNT          # snapshot warn count; any tenant-scope warn -> CAUTION
   banner "Tenant: $name"
 
   if ! jq -e ".tenants[\"$name\"]" "$PORTS_REGISTRY" >/dev/null 2>&1; then
@@ -206,7 +219,20 @@ assess_tenant() {
       fi
       [[ -n "$rootless_state" ]] && warn "a ROOTLESS PG container ALSO exists (Running=$rootless_state) — a prior partial start may have created an empty rootless DB; verify before restore"
     elif [[ -n "$rootless_state" ]]; then
-      warn "no root-store PG, but a rootless PG exists (Running=$rootless_state) — the flip may have already happened; confirm whether it is the empty post-flip DB or already-migrated before proceeding"
+      # No root-store PG, only a rootless one: either already-migrated (has data)
+      # or the empty post-flip orphan. Probe to tell them apart instead of a vague
+      # CAUTION that the summary would print as GO.
+      if [[ "$rootless_state" == true ]]; then
+        local tbl
+        tbl="$(probe _tctr "$name" exec "$pg" psql -U lunarwing -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" | tr -cd '0-9' || true)"
+        if [[ "${tbl:-0}" -gt 0 ]]; then
+          ok "rootless PG holds $tbl application tables — already migrated; no action needed"
+        else
+          stop "rootless PG exists but has NO application tables (count=${tbl:-0}) — looks like the EMPTY post-flip DB and no root-store copy remains. Restore from a backup before proceeding."; verdict="STOP"
+        fi
+      else
+        warn "a rootless PG exists but is STOPPED and there's no root-store PG — start it and re-check whether it holds data before proceeding"
+      fi
     else
       stop "no PG container found in EITHER store for $name — cannot locate the tenant's data; investigate before upgrading"; verdict="STOP"
     fi
@@ -237,7 +263,13 @@ assess_tenant() {
   probe sudo -n -u "$name" true && ok "passwordless sudo -n root->$name works" \
     || warn "sudo -n -u $name failed — rootless container ops and self-heal restarts need passwordless root->tenant sudo"
 
-  [[ "$verdict" == "STOP" ]] && stop "tenant '$name' is NOT ready (see STOP items above)"
+  # finalize three-state: STOP wins; otherwise any tenant-scope CAUTION -> CAUTION
+  if [[ "$verdict" != "STOP" && $WARN_COUNT -gt $w0 ]]; then verdict="CAUTION"; fi
+  case "$verdict" in
+    STOP)    stop "tenant '$name' is NOT ready (see STOP items above)" ;;
+    CAUTION) say "  => CAUTION: tenant '$name' can proceed, but review the CAUTION items above" ;;
+    GO)      ok "tenant '$name' is ready (GO)" ;;
+  esac
   VERDICT[$name]="$verdict"
 }
 

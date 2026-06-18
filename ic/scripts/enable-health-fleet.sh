@@ -20,27 +20,39 @@
 #   sudo ic/scripts/enable-health-fleet.sh [options]
 #     --gotify-url <url>     Gotify base URL for escalation pages (only baked into
 #     --gotify-token <tok>   health.env if it does not already exist)
+#     --gotify-token-file <p> read the escalation token from file <p> (preferred;
+#                             avoids exposing it on argv / in /proc/<pid>/cmdline)
 #     --allow-down           proceed even if some tenant daemons are down
 #     --dry-run              show what would happen; make no changes
 #     --yes | -y             skip the confirmation prompt
+#
+# The Gotify TOKEN is a secret, so it is NOT accepted on the command line (argv is
+# world-readable via /proc/<pid>/cmdline). Supply it via --gotify-token-file, or
+# via the LUNARWING_MT_GOTIFY_TOKEN env var, or edit /etc/lunarwing/health.env after.
 set -euo pipefail
 
 GOTIFY_URL=""
-GOTIFY_TOKEN=""
+GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
+GOTIFY_TOKEN_FILE=""
 ALLOW_DOWN=false
 DRY_RUN=false
 AUTO_YES=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --gotify-url)   GOTIFY_URL="$2"; shift 2 ;;
-    --gotify-token) GOTIFY_TOKEN="$2"; shift 2 ;;
-    --allow-down)   ALLOW_DOWN=true; shift ;;
-    --dry-run)      DRY_RUN=true; shift ;;
-    --yes|-y)       AUTO_YES=true; shift ;;
-    *)              printf 'unknown arg: %s\n' "$1" >&2; exit 2 ;;
+    --gotify-url)        GOTIFY_URL="$2"; shift 2 ;;
+    --gotify-token-file) GOTIFY_TOKEN_FILE="$2"; shift 2 ;;
+    --gotify-token)      printf 'refusing --gotify-token on argv (leaks via /proc/<pid>/cmdline); use --gotify-token-file or LUNARWING_MT_GOTIFY_TOKEN\n' >&2; exit 2 ;;
+    --allow-down)        ALLOW_DOWN=true; shift ;;
+    --dry-run)           DRY_RUN=true; shift ;;
+    --yes|-y)            AUTO_YES=true; shift ;;
+    *)                   printf 'unknown arg: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
+if [[ -n "$GOTIFY_TOKEN_FILE" ]]; then
+  [[ -r "$GOTIFY_TOKEN_FILE" ]] || { printf 'token file not readable: %s\n' "$GOTIFY_TOKEN_FILE" >&2; exit 2; }
+  GOTIFY_TOKEN="$(< "$GOTIFY_TOKEN_FILE")"; GOTIFY_TOKEN="${GOTIFY_TOKEN//[$'\r\n']/}"
+fi
 
 # minimal helpers (mt-admin defines say/die too; we source it below and reuse them)
 _say()    { printf '%s\n' "$*"; }
@@ -78,7 +90,7 @@ _banner "Enable host-global health/self-heal pipeline ($INIT_SYSTEM)"
 _say "Tenants discovered: ${TENANTS[*]}"
 $DRY_RUN && _say "*** DRY RUN — no changes will be made ***"
 
-# --- Safety: don't arm self-heal while a tenant daemon is down ----------------
+# --- Which tenant daemons are down? (read-only; reported in all modes) --------
 DOWN=()
 for t in "${TENANTS[@]}"; do
   [[ -n "$t" ]] || continue
@@ -90,6 +102,23 @@ for t in "${TENANTS[@]}"; do
   fi
   $active || DOWN+=("$t")
 done
+
+# --- Dry-run: print the plan and exit BEFORE any gate (_die / confirm) --------
+if $DRY_RUN; then
+  _banner "[dry-run] would run: ensure_health_pipeline"
+  [[ ${#DOWN[@]} -gt 0 ]] && _say "  (note: tenant daemons currently down: ${DOWN[*]} — a real run would refuse without --allow-down)"
+  _say "  - sync $HEALTH_SRC_DIR -> $HEALTH_LIB_DIR"
+  _say "  - write $HEALTH_ENV_FILE (mode 0600) if absent"
+  _say "  - install launcher $HEALTH_LAUNCHER"
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    _say "  - enable --now lunarwing-mt-health.timer (every ${HEALTH_INTERVAL_MIN} min)"
+  else
+    _say "  - install fcron/cron schedule (every ${HEALTH_INTERVAL_MIN} min)"
+  fi
+  exit 0
+fi
+
+# --- Safety: don't arm self-heal while a tenant daemon is down ----------------
 if [[ ${#DOWN[@]} -gt 0 ]]; then
   _say ""
   _say "WARNING: these tenant daemons are NOT active: ${DOWN[*]}"
@@ -105,30 +134,17 @@ if [[ -f "$HEALTH_ENV_FILE" ]]; then
   _say ""
   _say "note: $HEALTH_ENV_FILE already exists and will be PRESERVED."
   if [[ -n "$GOTIFY_URL$GOTIFY_TOKEN" ]]; then
-    _say "      --gotify-* will NOT overwrite it; edit GOTIFY_URL/GOTIFY_TOKEN in that file by hand."
+    _say "      supplied creds will NOT overwrite it; edit GOTIFY_URL/GOTIFY_TOKEN in that file by hand."
   fi
 elif [[ -z "$GOTIFY_URL$GOTIFY_TOKEN" ]]; then
   _say ""
   _say "note: no Gotify URL/token supplied — escalations will be dropped silently."
-  _say "      Pass --gotify-url/--gotify-token, or edit $HEALTH_ENV_FILE after."
+  _say "      Pass --gotify-url / --gotify-token-file (or set LUNARWING_MT_GOTIFY_TOKEN), or edit $HEALTH_ENV_FILE after."
 fi
 
 _say ""
 confirm "Install + schedule the host-global self-heal pipeline (remediates ALL tenant units every ${HEALTH_INTERVAL_MIN} min)?" \
   || _die "aborted by user"
-
-if $DRY_RUN; then
-  _banner "[dry-run] would run: ensure_health_pipeline"
-  _say "  - sync $HEALTH_SRC_DIR -> $HEALTH_LIB_DIR"
-  _say "  - write $HEALTH_ENV_FILE (mode 0600) if absent"
-  _say "  - install launcher $HEALTH_LAUNCHER"
-  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-    _say "  - enable --now lunarwing-mt-health.timer (every ${HEALTH_INTERVAL_MIN} min)"
-  else
-    _say "  - install fcron/cron schedule (every ${HEALTH_INTERVAL_MIN} min)"
-  fi
-  exit 0
-fi
 
 _banner "Installing"
 ensure_health_pipeline
