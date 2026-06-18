@@ -325,7 +325,13 @@ _ctr() {
     local uid home
     uid="$(id -u "$name")" || die "cannot resolve uid for tenant '$name'"
     home="$(getent passwd "$name" | cut -d: -f6)"
-    sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@"
+    # Run from a tenant-traversable CWD (F10): `sudo -u` keeps the caller's cwd, so
+    # when mt-admin runs from an admin dir the tenant can't enter (e.g. ~dame, 0700)
+    # `sudo -u` aborts with "cannot chdir ... Permission denied" BEFORE the runtime
+    # runs — which silently broke the rootless pg readiness gate (it always timed
+    # out). `/` is always traversable; no _ctr call passes a cwd-relative path. exec
+    # preserves the exit code and the stdin/stdout redirects used by exec/pg_dump.
+    ( cd / && exec sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$CONTAINER_RT" "$@" )
   else
     "$CONTAINER_RT" "$@"
   fi

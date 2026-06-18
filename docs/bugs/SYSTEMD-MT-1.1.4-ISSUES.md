@@ -32,6 +32,10 @@ crash-loop chaos case + `SubState` mock, and a new `tests/test-health-systemd.sh
 | F4 | Medium | `add-tenant` is **not idempotent/resumable** — a mid-flow failure can't be re-run (`already has ports allocated`) | 🟢 `ports_allocate` reuses existing block (resume) |
 | F5 | Low–Med | self-heal `is-active` post-restart **verify false-positives** on a crash-looping (auto-restart) unit | 🟢 verify rejects `auto-restart`/`failed` substate |
 | F6 | Medium | `remove-tenant --purge` **falsely reports user removal** — `userdel` races session teardown, failure swallowed | 🟢 terminate-user + wait + honest exit-code check |
+| F7 | Low | `--with-wasm` build breaks on the `telegram` tool — `core2 0.4.0` is **yanked** (transitive via `glass_pumpkin`); Telegram is an unsupported channel | 🔴 open (upstream dep) |
+| F8 | Medium | nanocode/pebble worker image build fails under **rootless podman** — the build-RUN container's `apt` can't reach the internet (host has no IPv6 route; build prefers IPv6 → unreachable, IPv4 times out) | 🔴 open |
+| F9 | Low | `build-tenant` exits **0** even when a worker-image build fails (failure not propagated to the exit code) | 🔴 open |
+| F10 | Medium | `_ctr` runs `sudo -u <tenant>` without a tenant-traversable CWD → "cannot chdir" → the rootless pg readiness gate **always** times out (spurious 120s WARNING) | 🟢 fixed — `cd /` in `_ctr` (gate now ~3s, "ready via quadlet") |
 
 ---
 
@@ -264,6 +268,28 @@ issues; all were fixed in a second pass:
 Accepted residual nits (scoped, low risk): F5's `failed` verify-arm only covers the inter-sample
 race; with `VERIFY_HEALTH=true` a momentarily-healthy crash-looper can still record one SUCCESS,
 backstopped by the flapping guard.
+
+## E2E validation (fresh tenant `springfeather`) — 2026-06-18
+
+Provisioned a brand-new 1.1.4 tenant on the Arch systemd VM with the F1 registries
+workaround **removed** (so the FQ-image code fix alone must carry it): clean `add` →
+`build` → `start` → ICHC. Result: **all-green core tenant** (goal: fix + verify).
+
+- **F1 ✓** — `docker.io/pgvector/pgvector:pg16` pulled and pg came up healthy with no
+  registries drop-in.
+- **F2 ✓** — `add-tenant` hit the gate timeout (fresh pull + F10) but **warned and
+  continued** instead of aborting; pg converged.
+- **F3 ✓** — between `add` and `start`, the not-started units reported `skipped`,
+  overall `healthy`, and self-heal logged "nothing to do" (no churn / no auto-start).
+- **F1-aux ✓** — `FROM docker.io/oven/bun:debian` resolved + pulled without the drop-in.
+- After `start-tenant`: all **6 core units** (`pg`, daemon, `proxy`, `weechat`,
+  `weechat-adapter`, `xmpp-bridge`) `active/running/healthy`; ICHC overall **healthy**.
+- **F10 fixed + validated** — re-run `start-tenant` after the `_ctr` `cd /` fix: pg gate
+  passes in ~3 s (`PostgreSQL ready via quadlet`), no spurious 120 s warning.
+
+New issues surfaced: **F7–F10** (above). nanocode/pebble worker **images** did NOT build
+(**F8**, host/build network) — they are *external workers*, not part of the systemd unit
+set, so the core tenant is unaffected; closing them out needs the F8 build-network fix.
 
 ## Validation plan for the fixes
 
