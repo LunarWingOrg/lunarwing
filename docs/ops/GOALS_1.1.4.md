@@ -5,12 +5,12 @@
 3. [x] Continue to make improvements to health check and self healing
 4. [x] Continue to test Healthcheck and Self-Healing Enhancements
 5. [x] Test all changes related to ICHC on an existing **Systemd** development VM - adding new tenant *(✓ Arch VM: fresh tenant `springfeather` clean add → build → start → **all-green ICHC (8/8 incl. nanocode + pebble workers)**; F1/F2/F3 validated live; F8/F10/F12 found + fixed. See `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`)*
-6. [ ] Test all changes related to ICHC on an existing **OpenRC/Gentoo** development VM - adding new tenant
-7. [ ] go over issues from OPENRC-MT-1.1.4-ISSUES.md and anything else pending for #6
+6. [x] Test all changes related to ICHC on an existing **OpenRC/Gentoo** development VM - adding new tenant
+7. [x] go over issues from OPENRC-MT-1.1.4-ISSUES.md and anything else pending for #6
 8. [ ] Test all changes related to ICHC on a NEW **Systemd** development VM with same configuration - adding new tenants
 9. [ ] Test all changes related to ICHC on a NEW **OpenRC/Gentoo** development VM with same configuration - adding new tenants
-10. [ ] Test all changes on existing live tenant of MT PROD machine with tenant on version > 1.1.0 - via direct upgrade or migration (only after #5-#9 are done)
-11. [ ] Test all changes on new tenant of MT PROD machine (only after #5-#9 are done)
+10. [ ] Test all changes on new tenant of MT PROD machine (only after #5-#9 are done)
+11. [ ] Test all changes on existing live tenant of MT PROD machine with tenant on version > 1.1.0 - via direct upgrade or migration (only after #5-#9 are done)
 12. [ ] Run automated testing scripts
 13. [ ] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 14. [x] Record all Systemd MT / ICHC issues found during testing and propose fixes (tracked in `docs/bugs/SYSTEMD-MT-1.1.4-ISSUES.md`)
