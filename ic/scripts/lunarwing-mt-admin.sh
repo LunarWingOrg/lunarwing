@@ -1971,6 +1971,40 @@ start_tenant_postgres() {
   pg_port="$(ports_get "$name" postgres)"
   container_name="lunarwing-pg-$name"
 
+  # ── Rootful→rootless data-orphan guard ──────────────────────────────────────
+  # v1.1.0 ran PG ROOTFUL (root's container store, data in the container writable
+  # layer, no named volume); v1.1.4 defaults MT_ROOTLESS=true (rootless, tenant
+  # store). If a legacy ROOT-store container still exists and the tenant has NO
+  # rootless container yet, creating the rootless PG here would silently bring the
+  # tenant up on an EMPTY database and orphan the v1.1.0 data. Refuse by default.
+  # Fires ONLY in this exact window (rootless target + root container present +
+  # rootless container absent), so fresh tenants and already-migrated tenants are
+  # never affected. Escape hatches: migrate (upgrade-tenant.sh), keep rootful
+  # (LUNARWING_MT_ROOTLESS=false), or acknowledge an intended fresh DB
+  # (LUNARWING_MT_ACK_ROOTLESS_FLIP=1 — set automatically by the migration tool
+  # once it has a verified backup in hand).
+  if [[ "$MT_ROOTLESS" == "true" && "$CONTAINER_RT" == "podman" ]] \
+     && ! _ctr "$name" inspect "$container_name" &>/dev/null \
+     && "$CONTAINER_RT" inspect "$container_name" &>/dev/null; then
+    {
+      say "############################################################"
+      say "# DATA-ORPHAN GUARD — tenant '$name'"
+      say "# A ROOTFUL (root-store) '$container_name' exists, but MT_ROOTLESS=true"
+      say "# would create a NEW, EMPTY rootless database and orphan the existing"
+      say "# v1.1.0 data (still recoverable from the root container until removed)."
+      say "#"
+      say "# Choose one:"
+      say "#   migrate data:     sudo ic/scripts/upgrade-tenant.sh $name"
+      say "#   keep rootful:     LUNARWING_MT_ROOTLESS=false <re-run this command>"
+      say "#   intended fresh DB: LUNARWING_MT_ACK_ROOTLESS_FLIP=1 <re-run>"
+      say "############################################################"
+    } >&2
+    if [[ -z "${LUNARWING_MT_ACK_ROOTLESS_FLIP:-}" ]]; then
+      die "refusing to create an empty rootless PG over existing root-store data for '$name' (see guard above)"
+    fi
+    say "LUNARWING_MT_ACK_ROOTLESS_FLIP set — proceeding with a fresh rootless DB for '$name'; root-store data left intact." >&2
+  fi
+
   # systemd + rootless podman: a Quadlet .container owns the lifecycle (boot-
   # persistent, health-monitored, self-healable). Quadlet creates the container,
   # so skip the imperative `_ctr run` below; keep the pg_isready gate (via exec).

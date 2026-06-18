@@ -341,11 +341,24 @@ enable-health-fleet.sh [--gotify-url <url>] [--gotify-token <tok>]
                        [--allow-down] [--dry-run] [--yes]
 ```
 
+### mt-admin source-level hardening (shipped)
+
+`start_tenant_postgres` now has a **data-orphan guard**: when the target is rootless
+(`MT_ROOTLESS=true`, Podman) and a legacy **root-store** `lunarwing-pg-<t>` container
+exists while the tenant has **no rootless container yet**, it prints a loud warning
+and **refuses by default** rather than silently creating an empty rootless DB. Three
+escape hatches: migrate (`upgrade-tenant.sh`), keep rootful
+(`LUNARWING_MT_ROOTLESS=false`), or acknowledge an intended fresh DB
+(`LUNARWING_MT_ACK_ROOTLESS_FLIP=1`). The guard fires **only** in that exact window,
+so fresh tenants and already-migrated tenants are unaffected; `upgrade-tenant.sh`
+sets the ack automatically once it holds a verified backup.
+
 ### (Recommended follow-up, not yet built)
 
-- A small mt-admin hardening PR: persist the chosen rootless model and emit a loud
-  warning when a rootful root-store PG exists but `MT_ROOTLESS=true` — fixing the
-  silent-orphan footgun at the source.
+- Persist the chosen rootless/rootful model in `ports.json` (or a host config) so it
+  survives across mt-admin invocations instead of relying on a per-call env var.
+- A `doctor` check that flags any tenant currently in the root-store-present +
+  `MT_ROOTLESS=true` state across the fleet.
 
 ---
 

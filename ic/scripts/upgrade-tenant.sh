@@ -144,6 +144,11 @@ if $PRUNE_OLD_ROOT; then
 fi
 
 MODE="rootless-adopt"; $KEEP_ROOTFUL && MODE="keep-rootful"
+# This tool backs up the root-store DB (step 1) and restores into the fresh
+# rootless DB (step 5), so the rootless flip is intended: acknowledge mt-admin's
+# data-orphan guard so step 4's add-tenant doesn't refuse. (Backup runs first and
+# the script dies if it fails, so this can't bypass the guard without a backup.)
+[[ "$KEEP_ROOTFUL" == false ]] && export LUNARWING_MT_ACK_ROOTLESS_FLIP=1
 banner "Upgrade tenant '$TENANT' -> $TARGET_REF  (mode: $MODE, runtime: $RUNTIME)"
 $DRY_RUN && say "*** DRY RUN — no changes will be made ***"
 
