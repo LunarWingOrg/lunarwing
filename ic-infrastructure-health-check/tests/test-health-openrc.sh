@@ -33,7 +33,7 @@ assert_json() { if jq -e . >/dev/null 2>&1 <<<"$1"; then ok "$2"; else bad "$2" 
 # $s/bin/rc-service (mock). Echoes $s.
 new_scenario() {
   local s; s="$(mktemp -d "$ROOT/s.XXXXXX")"
-  mkdir -p "$s/initd" "$s/fix" "$s/bin"
+  mkdir -p "$s/initd" "$s/fix" "$s/bin" "$s/runlevels/default"
   cat >"$s/bin/rc-service" <<'MOCK'
 #!/usr/bin/env bash
 # Mock OpenRC rc-service: honours $INITD_DIR for --exists and $RC_FIX for status.
@@ -55,6 +55,9 @@ MOCK
 }
 
 mk_unit() { : >"$1/initd/$2"; chmod +x "$1/initd/$2"; }                  # <s> <name>
+# Mark a unit as enabled in the default runlevel — i.e. the tenant was start-ed
+# (start-tenant `rc-update add`s the primary daemon). <s> <name>
+enable_unit() { : >"$1/runlevels/default/$2"; }
 # <s> <svc> <status-text> <exit-code> [sleep-secs]
 fix_set() {
   printf '%s' "$3" >"$1/fix/$2.out"
@@ -66,7 +69,7 @@ fix_set() {
 # run_hc <s> [ENV=VAL ...] -> sets OUT (stdout+stderr) and RC (exit code).
 run_hc() {
   local s="$1"; shift
-  OUT="$(env PATH="$s/bin:$PATH" INITD_DIR="$s/initd" RC_FIX="$s/fix" SERVICES='' "$@" bash "$HC" 2>&1)"
+  OUT="$(env PATH="$s/bin:$PATH" INITD_DIR="$s/initd" RUNLEVELS_DIR="$s/runlevels" RC_FIX="$s/fix" SERVICES='' "$@" bash "$HC" 2>&1)"
   RC=$?
 }
 svc_field() { jq -r --arg n "$2" '.metrics.services[] | select(.name==$n) | .'"$3" <<<"$1"; }
@@ -94,6 +97,7 @@ else bad "S1: dead pid field removed (Rank 33)" "a service object still has a pi
 s="$(new_scenario)"
 mk_unit "$s" lunarwing-acme;       fix_set "$s" lunarwing-acme " * status: started" 0
 mk_unit "$s" lunarwing-proxy-acme; fix_set "$s" lunarwing-proxy-acme " * weird diagnostic output" 3
+enable_unit "$s" lunarwing-acme    # tenant 'acme' is start-ed → its down units are real outages (F3 gate)
 run_hc "$s"
 assert_eq "$(svc_field "$OUT" lunarwing-proxy-acme state)"  "stopped"  "S2: ambiguous+nonzero → state stopped (Rank 10)"
 assert_eq "$(svc_field "$OUT" lunarwing-proxy-acme status)" "critical" "S2: ambiguous+nonzero → critical (Rank 10)"
@@ -131,11 +135,39 @@ run_hc "$s" SERVICES=ghost
 assert_eq "$(svc_field "$OUT" ghost status)" "critical" "S5: missing unit → critical"
 assert_eq "$RC" 2 "S5: exit 2"
 
-# ── S6: cleanly stopped unit → critical ──────────────────────────────────────
+# ── S6: cleanly stopped unit on a STARTED tenant → critical ──────────────────
 s="$(new_scenario)"
 mk_unit "$s" lunarwing-acme; fix_set "$s" lunarwing-acme " * status: stopped" 3
+enable_unit "$s" lunarwing-acme    # started tenant → a stopped primary is a real outage
 run_hc "$s"
-assert_eq "$(svc_field "$OUT" lunarwing-acme status)" "critical" "S6: stopped → critical"
+assert_eq "$(svc_field "$OUT" lunarwing-acme status)" "critical" "S6: stopped (started tenant) → critical"
+assert_eq "$(jq -r '.status' <<<"$OUT")" "critical" "S6: overall critical"
+
+# ── S7: NOT-yet-started tenant (no runlevel entry) → skipped, not critical (F3/O5) ──
+# A tenant that was add-ed (units rendered) but never start-ed: its down units must
+# NOT flip the host report to critical, and self-heal must not auto-start them.
+s="$(new_scenario)"
+mk_unit "$s" lunarwing-fresh;       fix_set "$s" lunarwing-fresh       " * status: stopped" 3
+mk_unit "$s" lunarwing-proxy-fresh; fix_set "$s" lunarwing-proxy-fresh " * status: stopped" 3
+mk_unit "$s" lunarwing-weechat-adapter-fresh; fix_set "$s" lunarwing-weechat-adapter-fresh " * status: stopped" 3
+# (deliberately NOT enabled — tenant 'fresh' is mid-provision)
+run_hc "$s"
+assert_eq "$(svc_field "$OUT" lunarwing-fresh status)"       "skipped" "S7: not-started tenant primary → skipped (F3/O5)"
+assert_eq "$(svc_field "$OUT" lunarwing-proxy-fresh status)" "skipped" "S7: not-started tenant sub-unit → skipped (F3/O5)"
+assert_eq "$(svc_field "$OUT" lunarwing-weechat-adapter-fresh status)" "skipped" "S7: weechat-adapter role maps to tenant → skipped"
+assert_eq "$(jq -r '.status' <<<"$OUT")" "healthy" "S7: overall stays healthy (not flipped to critical)"
+assert_eq "$RC" 0 "S7: exit 0"
+
+# ── S8: started tenant's down unit stays critical alongside a skipped one (per-tenant gate) ──
+s="$(new_scenario)"
+mk_unit "$s" lunarwing-live;       fix_set "$s" lunarwing-live       " * status: started" 0; enable_unit "$s" lunarwing-live
+mk_unit "$s" lunarwing-proxy-live; fix_set "$s" lunarwing-proxy-live " * status: stopped" 3
+mk_unit "$s" lunarwing-fresh;      fix_set "$s" lunarwing-fresh      " * status: stopped" 3   # not enabled
+run_hc "$s"
+assert_eq "$(svc_field "$OUT" lunarwing-proxy-live status)" "critical" "S8: started tenant's down unit → critical"
+assert_eq "$(svc_field "$OUT" lunarwing-fresh status)"      "skipped"  "S8: not-started tenant's down unit → skipped"
+assert_eq "$(jq -r '.status' <<<"$OUT")" "critical" "S8: overall critical (driven by the started tenant)"
+assert_eq "$RC" 2 "S8: exit 2"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

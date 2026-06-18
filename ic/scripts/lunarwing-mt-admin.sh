@@ -761,6 +761,25 @@ ensure_rootless_prereqs() {
   # recreates it at boot; create it now for immediate use. tmpfs, 0700, owned.
   install -d -m 0700 -o "$name" -g "$name" "/run/user/$uid"
 
+  # A freshly (re)created tenant may REUSE a uid whose previous holder left
+  # rootless-podman runtime state behind in /run/user/$uid: that dir is created by
+  # `install -d` above (not by a login session), so logind/elogind never reaps it
+  # when the prior tenant is removed (see remove_tenant_user). A stale libpod
+  # pause.pid then makes EVERY podman call — including the `system migrate` just
+  # below, and the first pg container start in add-tenant — fail with
+  # "cannot re-exec process to join the existing user namespace". Clear it so podman
+  # spawns a fresh pause process — but ONLY when its PID is dead, so the
+  # "user already exists" resume path (ensure_rootless_prereqs re-runs from
+  # create_tenant_user) against a LIVE tenant never yanks a running pause process.
+  local pause_pid pause_owner
+  pause_pid="/run/user/$uid/libpod/tmp/pause.pid"
+  if [[ -f "$pause_pid" ]]; then
+    pause_owner="$(cat "$pause_pid" 2>/dev/null || true)"
+    if [[ -z "$pause_owner" ]] || ! kill -0 "$pause_owner" 2>/dev/null; then
+      rm -f "$pause_pid" 2>/dev/null || true
+    fi
+  fi
+
   # One-time rootless storage init (safe to re-run after subid changes).
   sudo -u "$name" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
     "$CONTAINER_RT" system migrate >/dev/null 2>&1 || true
@@ -851,7 +870,15 @@ remove_tenant_user() {
   local purge="${2:-false}"
 
   ensure_init_system
-  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+
+  # Capture the uid BEFORE userdel removes the passwd entry — needed below to
+  # reap the rootless runtime dir (/run/user/<uid>) once the account is gone.
+  local _uid; _uid="$(id -u "$name" 2>/dev/null || true)"
+
+  # Stop the per-user runtime manager so it doesn't keep/recreate /run/user/<uid>.
+  # loginctl is provided by systemd-logind AND elogind (OpenRC), so gate on the
+  # binary, not the init system — otherwise linger is never disabled on OpenRC.
+  if command -v loginctl >/dev/null 2>&1; then
     loginctl disable-linger "$name" 2>/dev/null || true
   fi
 
@@ -862,7 +889,6 @@ remove_tenant_user() {
     # and "removed user" printed anyway, leaving orphaned accounts/home dirs.
     if [[ "$INIT_SYSTEM" == "systemd" ]]; then
       loginctl terminate-user "$name" 2>/dev/null || true
-      local _uid; _uid="$(id -u "$name" 2>/dev/null || true)"
       if [[ -n "$_uid" ]]; then
         local _w=0
         while [[ -d "/run/user/$_uid" ]] && (( _w < 20 )); do sleep 0.5; _w=$((_w + 1)); done
@@ -879,6 +905,24 @@ remove_tenant_user() {
       say "user '$name' account removed (userdel -r exited nonzero — home dir may persist; verify $(tenant_home "$name"))"
     else
       say "WARNING: failed to remove user '$name' (still present); remove manually: userdel -r $name"
+    fi
+
+    # O1 teardown half: /run/user/<uid> is created by `install -d` in
+    # ensure_rootless_prereqs (not by a login session), so logind/elogind never
+    # reaps it on disable-linger/terminate-user. Left behind, its stale libpod
+    # pause.pid breaks the NEXT tenant that REUSES this uid. Remove it explicitly
+    # once the account is gone. Guard on a real tenant uid (>=1000) so we never
+    # touch root's or a system user's runtime dir.
+    if [[ -n "$_uid" ]] && (( _uid >= 1000 )) \
+       && ! getent passwd "$name" >/dev/null 2>&1 \
+       && ! getent passwd "$_uid" >/dev/null 2>&1 \
+       && [[ -d "/run/user/$_uid" ]]; then
+      rm -rf "/run/user/$_uid" 2>/dev/null || true
+      if [[ -d "/run/user/$_uid" ]]; then
+        say "WARNING: could not fully remove rootless runtime dir /run/user/$_uid (busy mounts?); remove manually once released" >&2
+      else
+        say "reaped stale rootless runtime dir /run/user/$_uid"
+      fi
     fi
   else
     say "user $name preserved (use --purge to remove)"
@@ -1033,7 +1077,11 @@ build_nanocode_worker() {
     # --network=host (F8): rootless/rootful podman's default build network can't
     # reach the internet for RUN steps (apt) on hosts where the bridge/pasta path
     # is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
-    podman build $cache_flag --network=host -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
+    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
+    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct
+    # if the image is ever run directly / under a healthcheck-honouring runtime).
+    podman build $cache_flag --network=host --format docker -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
@@ -1058,7 +1106,8 @@ build_pebble_worker() {
   if [[ "$CONTAINER_RT" == "podman" ]]; then
     # --network=host (F8): see build_nanocode_worker — podman build's default network
     # can't reach the internet for RUN steps on this host; the host netns has IPv4.
-    podman build $cache_flag --network=host -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
+    # --format docker (O4): preserve the Dockerfile HEALTHCHECK (podman OCI drops it).
+    podman build $cache_flag --network=host --format docker -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
       || die "pebble worker image build failed"
   else
     docker build $cache_flag -t lunarwing-worker-pebble:latest -f "$pebble_dir/Dockerfile" "$LUNARWING_ROOT" \
@@ -1956,7 +2005,10 @@ start_tenant_postgres() {
       return 0
     fi
     say "starting existing PostgreSQL container $container_name"
-    _ctr "$name" start "$container_name" >/dev/null
+    if ! _ctr "$name" start "$container_name" >/dev/null; then
+      say "WARNING: could not start existing PostgreSQL container $container_name for $name; continuing — re-run start-tenant or let the health pipeline converge it." >&2
+      return 0
+    fi
   else
     say "creating PostgreSQL container $container_name on port $pg_port"
     # Named volume (not anonymous) so the data has a stable, inspectable,
@@ -1973,7 +2025,12 @@ start_tenant_postgres() {
     pg_init_env="$(tenant_env_dir "$name")/.pg-init.env"
     ( umask 077; printf 'POSTGRES_PASSWORD=%s\n' "$(tenant_pg_password "$name")" >"$pg_init_env" )
     chown "$name:$name" "$pg_init_env" 2>/dev/null || true
-    _ctr "$name" run -d \
+    # O2: don't let a pg CREATE failure abort the whole provision (set -e). The F2
+    # gate already downgrades a slow-readiness race to warn+continue; mirror that
+    # for the create call (and the start above) so a transient runtime hiccup
+    # doesn't strand the tenant half-baked (no units rendered, no health pipeline
+    # installed). add-tenant is resumable (F4): fix the cause and re-run.
+    if ! _ctr "$name" run -d \
       --name "$container_name" \
       -e POSTGRES_USER=lunarwing \
       --env-file "$pg_init_env" \
@@ -1981,7 +2038,14 @@ start_tenant_postgres() {
       -p "127.0.0.1:${pg_port}:5432" \
       -v "lunarwing-pg-${name}:/var/lib/postgresql/data" \
       "${restart_arg[@]}" \
-      "$PG_IMAGE" >/dev/null
+      "$PG_IMAGE" >/dev/null; then
+      rm -f "$pg_init_env"
+      # Remove the partial/failed container so a resumed start-tenant re-creates it
+      # cleanly, rather than taking the "start existing" branch on a broken shell.
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+      say "WARNING: PostgreSQL container create failed for $name; add-tenant still renders units + installs the health pipeline (so exit 0 does NOT imply pg is up). Fix the cause and re-run start-tenant." >&2
+      return 0
+    fi
     rm -f "$pg_init_env"
   fi
 
@@ -2976,6 +3040,15 @@ CONFD
 
 start_tenant_openrc() {
   local name="$1"
+  # Record operator intent UP FRONT: enabling the primary daemon in the default
+  # runlevel marks this tenant as "started" (boot-persistent) regardless of whether
+  # any unit's FIRST start succeeds. health-openrc.sh's started-gate
+  # (tenant_started) keys on exactly this, so a daemon that crashes on its first
+  # start is still reported `critical` (a real outage) and remediated — not masked
+  # as `skipped`. The selective rc-update-add loop below additionally boot-enables
+  # the optional units that actually came up. Idempotent.
+  rc-update add "lunarwing-${name}" default >/dev/null 2>&1 || true
+
   # Postgres first: the daemon `need`s it (and it's idempotent if already up).
   rc-service "lunarwing-pg-${name}" start
   # Optional channels next, non-fatal: a missing weechat/aiohttp must not abort
@@ -3250,6 +3323,17 @@ add_tenant() {
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
+  # A tenant whose name begins with a reserved per-service prefix would make its
+  # primary daemon unit (lunarwing-<name>) collide with another tenant's
+  # per-service unit — e.g. tenant 'pebble-1' -> lunarwing-pebble-1, byte-identical
+  # to tenant '1's pebble worker unit (lunarwing-pebble-1). That collision is
+  # undisambiguatable downstream (health-openrc.sh's started-gate would mis-key the
+  # unit and could mask a real outage as `skipped`), so forbid such names at the
+  # source. (weechat-* also covers weechat-adapter-*.)
+  case "$name" in
+    pg-*|proxy-*|nanocode-*|pebble-*|weechat-*)
+      die "tenant name '$name' collides with a reserved per-service unit prefix (pg-/proxy-/nanocode-/pebble-/weechat-/weechat-adapter-); choose another name" ;;
+  esac
 
   say "=== Adding tenant: $name ==="
   say ""

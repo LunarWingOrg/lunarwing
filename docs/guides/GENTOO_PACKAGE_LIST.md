@@ -111,6 +111,24 @@ echo 'unqualified-search-registries = ["docker.io"]' \
 `rustup`, `cargo-component`, `wasm-tools`, and the wasm32 targets are handled per-tenant by
 `add-tenant`, so they're intentionally omitted above.
 
+### Recommended: make `/` a shared mount (rootless podman)
+
+Rootless podman sets up a per-container mount namespace and warns
+`"/" is not a shared mount, this could cause issues or missing mounts with rootless
+containers` when `/` has `private` propagation (the OpenRC default on some hosts;
+systemd makes `/` `rshared` at boot). Containers still run, but to clear the warning
+and avoid mount-propagation edge cases, mark `/` shared:
+
+```bash
+sudo mount --make-rshared /
+# persist across reboots (OpenRC local service):
+echo 'mount --make-rshared /' | sudo tee -a /etc/local.d/00-rshared.start
+sudo chmod +x /etc/local.d/00-rshared.start
+sudo rc-update add local default
+```
+
+Check current propagation with `findmnt -no TARGET,PROPAGATION /`.
+
 ## Already expected on a Gentoo/OpenRC host
 
 `bash` (>= 4), `coreutils`, `findutils`, `sed`, `gawk`, `gcc`, OpenRC (`rc-service`, `rc-update`),

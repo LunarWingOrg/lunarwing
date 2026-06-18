@@ -21,11 +21,63 @@ tenant `snapfeather` provisioned — and **reused creamheart's uid 1001**, which
 
 | # | Severity | Area | Status |
 |---|----------|------|--------|
-| O1 | **High** | `remove-tenant --purge` leaves stale rootless runtime at `/run/user/<uid>`; a new tenant that **reuses the freed uid** can't start podman → `add-tenant` dies at pg creation (exit 125) → half-baked tenant | 🟡 workaround (`rm` stale `pause.pid`); 2-part code fix proposed |
-| O2 | Low–Med | `add-tenant`'s pg readiness gate (F2) warns-and-continues on a *readiness* race, but a pg **creation** failure (`podman run` exit 125) still `die`s the whole provision | 🔴 note |
-| O3 | Low | Host `/` mount propagation is `private` (not `rshared`); rootless podman warns `"/" is not a shared mount` on every invocation (non-fatal here) | 🔴 note (host/ops) |
-| O4 | Low | `podman build` produces **OCI**-format worker images, so the Dockerfile `HEALTHCHECK` is dropped (`HEALTHCHECK is not supported for OCI image format`). Harmless on OpenRC (worker health = init-unit status + in-container `/health` probe), but the image's baked healthcheck is gone | 🔴 note |
-| O5 | **Medium** | On OpenRC the self-heal pipeline **auto-starts a tenant that was `add`-ed but not yet `start`-ed** (F3-analog): it restarted snapfeather's proxy/daemon/weechat/adapter/xmpp-bridge mid-build, overriding operator intent. The systemd F3 enabled-state/started-gate is not mirrored in `health-openrc.sh` | 🔴 open |
+| O1 | **High** | `remove-tenant --purge` leaves stale rootless runtime at `/run/user/<uid>`; a new tenant that **reuses the freed uid** can't start podman → `add-tenant` dies at pg creation (exit 125) → half-baked tenant | 🟢 fixed (code) |
+| O2 | Low–Med | `add-tenant`'s pg readiness gate (F2) warns-and-continues on a *readiness* race, but a pg **creation** failure (`podman run` exit 125) still `die`s the whole provision | 🟢 fixed (code) |
+| O3 | Low | Host `/` mount propagation is `private` (not `rshared`); rootless podman warns `"/" is not a shared mount` on every invocation (non-fatal here) | 🟢 documented |
+| O4 | Low | `podman build` produces **OCI**-format worker images, so the Dockerfile `HEALTHCHECK` is dropped (`HEALTHCHECK is not supported for OCI image format`). Harmless on OpenRC (worker health = init-unit status + in-container `/health` probe), but the image's baked healthcheck is gone | 🟢 fixed (code) |
+| O5 | **Medium** | On OpenRC the self-heal pipeline **auto-starts a tenant that was `add`-ed but not yet `start`-ed** (F3-analog): it restarted snapfeather's proxy/daemon/weechat/adapter/xmpp-bridge mid-build, overriding operator intent. The systemd F3 enabled-state/started-gate is not mirrored in `health-openrc.sh` | 🟢 fixed (code) |
+
+## Fixes applied (goal #7) — branch `openrc-and-systemd-ichc-fixes-testing-and-goals-1`
+
+- **O1** `ic/scripts/lunarwing-mt-admin.sh` — (B, primary) `ensure_rootless_prereqs()` clears any
+  stale `/run/user/$uid/libpod/tmp/pause.pid` right after creating the runtime dir and **before**
+  the existing `podman system migrate` call (which itself failed on the stale pidfile);
+  (A, hygiene) `remove_tenant_user()` captures the uid before `userdel`, broadens linger teardown
+  to gate on `command -v loginctl` (so OpenRC/elogind also disables linger), and on `--purge`
+  reaps the manually-created `/run/user/<uid>` (guarded on a real tenant uid ≥ 1000 + the account
+  being gone) since logind/elogind never owns/reaps it.
+- **O2** `start_tenant_postgres()` — the imperative pg **create** and **start** calls are now
+  non-fatal (warn + `return 0`), matching the F2 readiness gate and the systemd Quadlet path, so a
+  transient runtime hiccup no longer aborts the whole provision (units still render, health
+  pipeline still installs; `add-tenant` is resumable). The transient `POSTGRES_PASSWORD`
+  env-file is removed on the failure path too.
+- **O3** `docs/guides/GENTOO_PACKAGE_LIST.md` — documents the optional `mount --make-rshared /`
+  rootless-podman recommendation (+ an OpenRC `/etc/local.d` persistence snippet).
+- **O4** `build_nanocode_worker()`/`build_pebble_worker()` — podman worker builds use
+  `--format docker` so the Dockerfile `HEALTHCHECK` survives (clears the OCI warning).
+- **O5** `ic-infrastructure-health-check/health-openrc.sh` — new `unit_tenant()`/`tenant_started()`
+  helpers; a `stopped`/`crashed` unit whose tenant's primary daemon (`lunarwing-<tenant>`) is in
+  no runlevel is reported **`skipped`** (not `critical`), so the host report doesn't flip to
+  critical mid-provision and self-heal (which already honours `skipped`) doesn't auto-start the
+  tenant. `RUNLEVELS_DIR` is overridable for tests. `tests/test-health-openrc.sh` extended
+  (S6 made a started-tenant case; S7/S8 added). **Full ICHC/self-heal suite: 239/239 green.**
+
+### Adversarial review (5-lens) — caught 2 O5 regressions, both fixed
+
+A 5-lens adversarial review (shell-safety / O1 / O5 / O2 / regression → synthesis) returned
+**NO-GO** on the first cut, flagging two ways the new O5 gate could **silently mask a real
+outage** (self-heal then never remediates). Both fixed before commit:
+
+- **O5-R1 [reserved-prefix names]** — a tenant named with a reserved role prefix (`pebble-1`,
+  `pg-prod`, `proxy-eu`) makes its primary unit `lunarwing-<name>` byte-identical to another
+  tenant's per-service unit, so `unit_tenant()` mis-keys it and a *started* such tenant's down
+  primary reads `skipped`. The collision is undisambiguatable downstream, so `add-tenant` now
+  **rejects** these names at the source (`die` on `pg-*|proxy-*|nanocode-*|pebble-*|weechat-*`).
+  Verified live: `add-tenant pebble-1` → exit 1, no state allocated.
+- **O5-R2 [crash-on-first-start]** — `tenant_started()` keyed on the primary being in a
+  runlevel, but `start_tenant_openrc` only `rc-update add`-ed *after* a successful start, so a
+  daemon that crashed on its first start was never enabled → masked as `skipped`.
+  `start_tenant_openrc` now records the started marker (`rc-update add lunarwing-<name>`)
+  **up front**, before the start calls. Verified live: snapfeather's primary is in the default
+  runlevel and all 8 units classify `started/healthy`.
+
+Review nits also addressed: pause.pid is cleared only when its PID is **dead** (don't yank a
+live tenant's pause process on the resume path); the purge `rm -rf /run/user/<uid>` is guarded
+on the uid not being reassigned and reports honestly if it can't fully remove; `tenant_started`
+**fails safe toward `critical`** if `RUNLEVELS_DIR` is missing; a failed pg create now `rm -f`s
+the partial container so a resumed `start-tenant` recreates cleanly; and the pg-create warning
+states that `add-tenant` exit 0 does **not** imply pg is up. (Low-priority residual: a non-tenant
+`lunarwing-*` unit must be runlevel-enabled to avoid `skipped`.)
 
 ### Positive findings (regressions NOT observed on OpenRC)
 
