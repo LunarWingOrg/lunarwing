@@ -2300,7 +2300,6 @@ HealthStartPeriod=30s
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120
-KillMode=process
 
 [Install]
 WantedBy=default.target

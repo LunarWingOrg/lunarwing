@@ -36,6 +36,8 @@ crash-loop chaos case + `SubState` mock, and a new `tests/test-health-systemd.sh
 | F8 | Medium | nanocode/pebble worker image build fails under podman — the build-RUN container's `apt` can't reach the internet (host has no IPv6 route; the default build network can't route IPv4 out) | 🟢 fixed — `--network=host` on the podman worker builds; both images now build (apt reaches the net via the host netns) |
 | F9 | — | ~~`build-tenant` exits 0 on a worker-build failure~~ — **NOT a bug**: `build-tenant` `die`s (exit 1) and propagates correctly. The observed "exit 0" was a test-harness artifact (a trailing `echo "...$?"` in the background wrapper masked the real exit). | 🟢 invalid |
 | F10 | Medium | `_ctr` runs `sudo -u <tenant>` without a tenant-traversable CWD → "cannot chdir" → the rootless pg readiness gate **always** times out (spurious 120s WARNING) | 🟢 fixed — `cd /` in `_ctr` (gate now ~3s, "ready via quadlet") |
+| F11 | Low | nanocode worker image is **~6 GB**; per-tenant `save\|load` distribution into the rootless store is slow + disk-heavy and can fail under disk pressure (succeeded on retry) | 🟡 mitigated (retry); follow-up: trim the image / shared additionalimagestore |
+| F12 | Medium | worker Quadlet emitted `KillMode=process` in `[Service]` → the Quadlet generator **rejected** the `.container` ("invalid KillMode") → no `.service` generated → workers never started (pg's quadlet has no `KillMode`, so it worked) | 🟢 fixed — removed `KillMode=process` from `render_worker_quadlet` |
 
 ---
 
@@ -287,10 +289,14 @@ workaround **removed** (so the FQ-image code fix alone must carry it): clean `ad
 - **F10 fixed + validated** — re-run `start-tenant` after the `_ctr` `cd /` fix: pg gate
   passes in ~3 s (`PostgreSQL ready via quadlet`), no spurious 120 s warning.
 
-New issues surfaced: **F7, F8, F10** (above). (F9 was investigated and found **invalid** —
-`build-tenant` does propagate the failure.) nanocode/pebble worker **images** did NOT build
-(**F8**, host/build network) — they are *external workers*, not part of the systemd unit
-set, so the core tenant is unaffected; F8 fix (`--network=host`) is being validated.
+New issues surfaced: **F7, F8, F10, F11, F12** (F9 investigated → **invalid**). After
+fixing **F8** (`--network=host`) the worker images built; bringing the workers *up* then
+surfaced **F11** (6 GB nanocode image / `save\|load` distribution under disk pressure —
+succeeded on retry) and **F12** (worker Quadlet `KillMode=process` rejected by the
+generator → no `.service`). With F8 + F12 fixed (and the images distributed), the **full
+tenant is all-green: 8/8 units healthy** — `pg`, `proxy`, daemon, `weechat`,
+`weechat-adapter`, `xmpp-bridge`, **nanocode**, **pebble**. Only F7 (telegram, unsupported)
+and the F11 image-size follow-up remain.
 
 ## Validation plan for the fixes
 
