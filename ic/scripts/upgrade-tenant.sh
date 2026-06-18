@@ -124,14 +124,22 @@ mt()         { if $KEEP_ROOTFUL; then LUNARWING_MT_ROOTLESS=false "$MT" "$@"; el
 # tenant rootless podman (read-only verify in rootless-adopt mode)
 tctr() { ( cd / && exec sudo -u "$TENANT" env HOME="$HOME_T" XDG_RUNTIME_DIR="/run/user/$UID_T" "$RUNTIME" "$@" ); }
 
-# count application tables in a tenant's rootless DB (0/empty => looks unmigrated)
-rootless_table_count() { tctr exec "lunarwing-pg-$1" psql -U lunarwing -tAc \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null | tr -cd '0-9'; }
+# Count ACTUAL DATA ROWS in a tenant's rootless DB (not just schema). The daemon's
+# migrations create public tables on first connect regardless of any restore, so a
+# table-existence check would say "data present" for a schema-only DB. We count rows
+# in the core conversation tables (present since V1__initial; unchanged v1.1.0..v1.1.4)
+# instead — that is the signal that v1.1.0 data was actually loaded. `|| true` keeps
+# it fail-safe under `set -e`/pipefail: an exec/psql failure yields empty -> 0 ->
+# callers treat it as "no data" (refuse to prune / warn), never an abort.
+rootless_data_rows() { tctr exec "lunarwing-pg-$1" psql -U lunarwing -tAc \
+  "SELECT (SELECT count(*) FROM conversations) + (SELECT count(*) FROM conversation_messages)" \
+  2>/dev/null | tr -cd '0-9' || true; }
 
 # Re-apply an operator-customizable env line from the pre-upgrade backup. add-tenant
-# preserves SECRETS but HARDCODES XMPP rooms/allowlist/OMEMO + LLM endpoint to
-# defaults on every write, which would silently wipe a tenant's MUC/OMEMO/LLM config.
-# awk (not sed) so JSON-array values with []"," can't break substitution. Preserves
+# preserves SECRETS but HARDCODES XMPP rooms/allowlist/OMEMO/plaintext-fallback + LLM
+# endpoint to defaults on every write, which would silently wipe a tenant's
+# MUC/OMEMO/LLM config. Values are passed via the environment and read with awk's
+# ENVIRON (NOT `-v`, which C-escape-processes backslashes in the value). Preserves
 # the live file's inode/owner/mode (truncate-in-place).
 reapply_env_key() {  # <old_file> <live_file> <KEY>
   local old="$1" live="$2" key="$3" line tmp
@@ -141,7 +149,7 @@ reapply_env_key() {  # <old_file> <live_file> <KEY>
   grep -qxF "$line" "$live" 2>/dev/null && return 0   # live already matches; nothing to do
   tmp="$(mktemp)"
   if grep -q "^${key}=" "$live"; then
-    awk -v k="${key}=" -v repl="$line" 'index($0,k)==1{print repl;next}{print}' "$live" >"$tmp"
+    _rk_repl="$line" awk -v k="${key}=" 'index($0,k)==1{print ENVIRON["_rk_repl"];next}{print}' "$live" >"$tmp"
   else
     cp "$live" "$tmp"; printf '%s\n' "$line" >>"$tmp"
   fi
@@ -162,14 +170,16 @@ if $PRUNE_OLD_ROOT; then
     exit 0
   fi
 
-  # the migrated rootless PG must be healthy AND hold data first
+  # the migrated rootless PG must be healthy AND actually hold restored DATA first
+  # (row count, not table count: migrations create the schema with zero data, so a
+  # never-restored DB would otherwise pass and we'd delete the only copy).
   rootless_state="$(tctr inspect -f '{{.State.Running}}' "lunarwing-pg-$TENANT" 2>/dev/null || true)"
   [[ "$rootless_state" == true ]] || die "rootless PG for '$TENANT' is not running — refusing to prune (migrate + verify first)"
   tctr exec "lunarwing-pg-$TENANT" pg_isready -U lunarwing -q 2>/dev/null \
     || die "rootless PG for '$TENANT' is not accepting connections — refusing to prune"
-  tbl_count="$(rootless_table_count "$TENANT")"
-  [[ "${tbl_count:-0}" -gt 0 ]] || die "rootless DB for '$TENANT' has no application tables (count=${tbl_count:-0}) — it looks EMPTY/unmigrated; refusing to delete the root-store copy. Restore your backup into the rootless DB first."
-  note "rootless PG is up, ready, and holds $tbl_count tables (migrated data is live)"
+  data_rows="$(rootless_data_rows "$TENANT")"
+  [[ "${data_rows:-0}" -gt 0 ]] || die "rootless DB for '$TENANT' has 0 conversation rows (got '${data_rows:-0}') — it looks EMPTY/unrestored; refusing to delete the root-store copy. Restore your backup into the rootless DB first, then re-run."
+  note "rootless PG is up, ready, and holds $data_rows conversation rows (restored data is live)"
 
   # the old root-store container must exist to prune
   if ! podman inspect "lunarwing-pg-$TENANT" >/dev/null 2>&1; then
@@ -234,6 +244,18 @@ fi
 # registry + env snapshots (cheap insurance)
 run cp -a "$PORTS_REGISTRY" "$BACKUP_DIR/ports.json.$STAMP"
 run cp -a "$LWROOT/env" "$BACKUP_DIR/${TENANT}-env.$STAMP"
+# Write-once pre-upgrade env snapshot — the source-of-truth for step-4 reapply. If a
+# prior run was interrupted AFTER add-tenant reset the env (live env now holds
+# defaults), re-deriving the source from the live env would bake those defaults in
+# permanently. So snapshot once and never overwrite; reapply always reads from here.
+PREUP_ENV_DIR="$BACKUP_DIR/${TENANT}-env.preupgrade"
+if $DRY_RUN; then
+  note "[dry-run] would snapshot $LWROOT/env -> $PREUP_ENV_DIR (write-once)"
+elif [[ -d "$PREUP_ENV_DIR" ]]; then
+  note "pre-upgrade env snapshot already exists ($PREUP_ENV_DIR) — keeping the ORIGINAL"
+else
+  cp -a "$LWROOT/env" "$PREUP_ENV_DIR"; note "snapshotted pre-upgrade env -> $PREUP_ENV_DIR"
+fi
 PRIOR_REV="$(sudo -u "$TENANT" git -C "$LWROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 note "prior clone rev recorded for rollback: $PRIOR_REV"
 
@@ -271,9 +293,9 @@ run mt "${add_args[@]}"      # rootless: ensure_rootless_prereqs + empty PG quad
 # add-tenant rewrote the env files and reset operator-customizable XMPP/LLM config
 # to defaults. Re-apply those specific keys from the step-1 backup (both modes).
 if ! $DRY_RUN; then
-  OLD_ENV_DIR="$BACKUP_DIR/${TENANT}-env.$STAMP"
+  OLD_ENV_DIR="$PREUP_ENV_DIR"          # the write-once original, not this run's timestamped copy
   BRIDGE_ENV="$LWROOT/env/xmpp-bridge.env"
-  for k in XMPP_ALLOW_FROM XMPP_ALLOW_ROOMS XMPP_ENCRYPTED_ROOMS XMPP_DM_POLICY XMPP_OMEMO_DEVICE_ID LLM_BASE_URL LLM_API_KEY LLM_MODEL; do
+  for k in XMPP_ALLOW_FROM XMPP_ALLOW_ROOMS XMPP_ENCRYPTED_ROOMS XMPP_DM_POLICY XMPP_ALLOW_PLAINTEXT_FALLBACK XMPP_OMEMO_DEVICE_ID LLM_BASE_URL LLM_API_KEY LLM_MODEL; do
     reapply_env_key "$OLD_ENV_DIR/lunarwing.env" "$ENVF" "$k"
   done
   for k in XMPP_ALLOW_FROM_JSON XMPP_ALLOW_ROOMS_JSON XMPP_ENCRYPTED_ROOMS_JSON XMPP_DEVICE_ID; do
@@ -321,9 +343,9 @@ fi
 banner "8/8  Verify"
 run mt status-tenant "$TENANT"
 if [[ "$KEEP_ROOTFUL" == false ]] && ! $DRY_RUN; then
-  vtbl="$(rootless_table_count "$TENANT")"
-  if [[ "${vtbl:-0}" -gt 0 ]]; then note "rootless DB holds $vtbl application tables — restore looks good."
-  else say "WARNING: rootless DB for '$TENANT' has NO application tables — the restore may have failed. Do NOT run --prune-old-root; investigate (your backup + the old root container are intact)." >&2; fi
+  vrows="$(rootless_data_rows "$TENANT")"   # row count, not table count (schema exists regardless of restore)
+  if [[ "${vrows:-0}" -gt 0 ]]; then note "rootless DB holds $vrows conversation rows — restored data is present."
+  else say "WARNING: rootless DB for '$TENANT' has 0 conversation rows — the restore may have failed (or this agent genuinely had none). Do NOT run --prune-old-root until you confirm; your backup + the old root container are intact." >&2; fi
 fi
 note "Now smoke-test: message round-trips, conversation history present, routines intact, channels load."
 note "Run the infra health check once: ic-infrastructure-health-check/infrastructure-health-check.sh"

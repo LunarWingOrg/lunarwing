@@ -352,9 +352,11 @@ exists while the tenant has **no rootless container yet**, it prints a loud warn
 and **refuses by default** rather than silently creating an empty rootless DB. Three
 escape hatches: migrate (`upgrade-tenant.sh`), keep rootful
 (`LUNARWING_MT_ROOTLESS=false`), or acknowledge an intended fresh DB
-(`LUNARWING_MT_ACK_ROOTLESS_FLIP=1`). The guard fires **only** in that exact window,
-so fresh tenants and already-migrated tenants are unaffected; `upgrade-tenant.sh`
-sets the ack automatically once it holds a verified backup.
+(`LUNARWING_MT_ACK_ROOTLESS_FLIP=<tenant>` — a comma-separated list of tenant names,
+e.g. `acme,beta`; a global `=1` is intentionally rejected so it can't silence the
+guard for other tenants). The guard fires **only** in that exact window, so fresh
+tenants and already-migrated tenants are unaffected; `upgrade-tenant.sh` sets the ack
+(scoped to the tenant) automatically once it holds a verified backup.
 
 ### (Recommended follow-up, not yet built)
 

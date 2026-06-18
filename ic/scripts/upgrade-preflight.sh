@@ -220,15 +220,20 @@ assess_tenant() {
       [[ -n "$rootless_state" ]] && warn "a ROOTLESS PG container ALSO exists (Running=$rootless_state) — a prior partial start may have created an empty rootless DB; verify before restore"
     elif [[ -n "$rootless_state" ]]; then
       # No root-store PG, only a rootless one: either already-migrated (has data)
-      # or the empty post-flip orphan. Probe to tell them apart instead of a vague
-      # CAUTION that the summary would print as GO.
+      # or the empty post-flip orphan. Probe DATA ROWS (not table existence — the
+      # daemon's migrations create the schema regardless of any restore) to tell
+      # them apart, gating on reachability first so "unreachable" != "empty".
       if [[ "$rootless_state" == true ]]; then
-        local tbl
-        tbl="$(probe _tctr "$name" exec "$pg" psql -U lunarwing -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" | tr -cd '0-9' || true)"
-        if [[ "${tbl:-0}" -gt 0 ]]; then
-          ok "rootless PG holds $tbl application tables — already migrated; no action needed"
+        if probe _tctr "$name" exec "$pg" pg_isready -U lunarwing -q; then
+          local rows
+          rows="$(probe _tctr "$name" exec "$pg" psql -U lunarwing -tAc "SELECT (SELECT count(*) FROM conversations)+(SELECT count(*) FROM conversation_messages)" | tr -cd '0-9' || true)"
+          if [[ "${rows:-0}" -gt 0 ]]; then
+            ok "rootless PG holds $rows conversation rows — already migrated; no action needed"
+          else
+            stop "rootless PG is reachable but has 0 conversation rows — looks like the EMPTY post-flip DB and no root-store copy remains. Restore from a backup before proceeding."; verdict="STOP"
+          fi
         else
-          stop "rootless PG exists but has NO application tables (count=${tbl:-0}) — looks like the EMPTY post-flip DB and no root-store copy remains. Restore from a backup before proceeding."; verdict="STOP"
+          warn "a rootless PG exists and is Running but pg_isready failed — can't tell whether it holds data; recheck it before proceeding (do NOT assume empty)"
         fi
       else
         warn "a rootless PG exists but is STOPPED and there's no root-store PG — start it and re-check whether it holds data before proceeding"
@@ -275,6 +280,7 @@ assess_tenant() {
 
 # ================================ MAIN ========================================
 host_checks
+HOST_WARN=$WARN_COUNT          # host-scope CAUTIONs (podman<4.6, ports.json<6, ...)
 
 declare -a TENANTS=()
 if [[ "$ALL" == true ]]; then
@@ -291,7 +297,9 @@ for t in "${TENANTS[@]}"; do
 done
 
 banner "Summary"
-say "Host: $([[ $HOST_STOP -eq 0 ]] && echo OK || echo 'STOP (prerequisite failed)')"
+if [[ $HOST_STOP -ne 0 ]]; then say "Host: STOP (prerequisite failed)"
+elif [[ $HOST_WARN -gt 0 ]]; then say "Host: CAUTION ($HOST_WARN item(s) — see host checks above)"
+else say "Host: OK"; fi
 exit_code=$HOST_STOP
 for t in "${TENANTS[@]}"; do
   [[ -n "$t" ]] || continue
