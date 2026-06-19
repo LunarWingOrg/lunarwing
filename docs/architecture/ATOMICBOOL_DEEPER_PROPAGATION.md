@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19  
 **Status:** Design Note - Not Implemented  
-**Related:** RESPONSE_SUPPRESSION_IMPLEMENTATION.md, HANDLE_MESSAGE_FIX.md
+**Related:** RESPONSE_SUPPRESSION_IMPLEMENTATION.md, HANDLE_MESSAGE_FIX.md (both archived under ../internal/history/architecture/)
 
 ## Current State (as of 2026-05-18)
 

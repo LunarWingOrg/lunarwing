@@ -45,9 +45,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`reference/`** — Kept `custom_bridges/XMPP.md` (current, accurate). Moved
       vendored `nanocode-config/` subtree (3 orphaned files) to `internal/vendored/`.
       `reference/` now contains only genuine LunarWing references.
-- [ ] ⬜ **`architecture/`** — 19 files. Several tiny stub/fragment files
-      (`REBORN.md` 9 B, `PORT_REGISTRY_V5.md`, `DATABASE_MIGRATIONS.md` 88 B,
-      `WEECHAT-DOUBLE-REPLY-FIX.MD`) likely to consolidate or drop.
+- [x] ✅ **`architecture/`** — 19 → 6 files. Kept the 6 genuine specs/design notes;
+      archived 8 raw session-logs/fix-notes to `internal/history/architecture/`;
+      deleted 5 empty/scratch stubs. See work log.
 - [ ] ⬜ **`bugs/`** — 19 files. Has its own `README.md` index; reconcile Open/Fixed
       status, fold fixed bugs, verify index matches contents.
 - [ ] ⬜ **`guides/`** — 56 files. Includes 18 vendored nanocode files + many
@@ -82,3 +82,36 @@ Findings:
 
 Result: `reference/` becomes a clean directory containing only genuine LunarWing
 protocol/contract references (currently just the XMPP custom bridge).
+
+### `architecture/` (done)
+
+19 → 6 files.
+
+**Kept (6)** — genuine specs / design notes:
+`ENGINE-V2.md`, `SEMANTIC-MEMORY-SEARCH.md`, `WEECHAT-CHANNEL-ARCHITECTURE.md`,
+`XMPP_FILE_TRANSFERS.md`, `SELF_HEAL_DEPLOYMENT_WIRING.md`,
+`ATOMICBOOL_DEEPER_PROPAGATION.md`.
+
+**Archived → `internal/history/architecture/` (8)** — raw session logs / resolved fix notes:
+`HANDLE_MESSAGE_FIX.md`, `RESPONSE_SUPPRESSION_IMPLEMENTATION.md`,
+`WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md`, `FIXED_NON_UUID_SCOPE_LEAKAGE.md`,
+`SECURITY_ENHANCEMENTS.md` (misnamed — actually a compile-fix log),
+`MULTICA-PT1PT2.md`, `MULTICA-SEC.md`, `MULTICA-WILDCARD.md`.
+
+**Deleted (5)** — empty/scratch stubs: `REBORN.md`, `WEECHAT-DOUBLE-REPLY-FIX.MD`,
+`PORT_REGISTRY_V5.md`, `DATABASE_MIGRATIONS.md`, `WEECHAT.md` (superseded redirect).
+
+**Links repointed (in-scope):** `docs/README.md` (dropped 2 archived rows),
+`architecture/ATOMICBOOL_DEEPER_PROPAGATION.md` (`Related:` line),
+`bugs/XMPP-OMEMO-BUG-TO-DO.md`.
+
+**Stale links left intentionally (release notes kept immutable, per decision):**
+- `releases/RELEASE-v1.1.0.md` → `MULTICA-SEC.md`
+- `releases/RELEASE-v1.1.1.md` → `FIXED_NON_UUID_SCOPE_LEAKAGE.md`, `SECURITY_ENHANCEMENTS.md`,
+  `WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md`
+
+These four now point at `architecture/…` paths that have moved to
+`internal/history/architecture/…`. Re-evaluate during the `releases/` pass.
+
+**Note for the `proposals/` pass:** `WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` is duplicated
+in `proposals/` (larger copy, 5.7 KB) — reconcile then.
