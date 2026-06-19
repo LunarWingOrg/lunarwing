@@ -134,7 +134,7 @@ Bug reports, analyses, and proposed fixes.
 | [`BUG-LAPSE.md`](bugs/BUG-LAPSE.md) | Agent "lapse" — `<function=NAME>` tool-call dialect recovery (fixed) |
 | [`WEECHAT-NO-SECRET-ACCESS.md`](bugs/WEECHAT-NO-SECRET-ACCESS.md) | WeeChat tool secret access (fixed) |
 
-See [`bugs/README.md`](bugs/README.md) for the full Open/Fixed bug index (15 docs).
+See [`bugs/README.md`](bugs/README.md) for the full Open/Fixed bug index (18 docs).
 
 ---
 

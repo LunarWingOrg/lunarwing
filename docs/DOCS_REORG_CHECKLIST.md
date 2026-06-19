@@ -48,8 +48,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`architecture/`** — 19 → 6 files. Kept the 6 genuine specs/design notes;
       archived 8 raw session-logs/fix-notes to `internal/history/architecture/`;
       deleted 5 empty/scratch stubs. See work log.
-- [ ] ⬜ **`bugs/`** — 19 files. Has its own `README.md` index; reconcile Open/Fixed
-      status, fold fixed bugs, verify index matches contents.
+- [x] ✅ **`bugs/`** — kept all 18 bug docs (deliberate Open/Fixed tracker; fixed bugs
+      stay). Reconciled the index: added 4 previously-untracked docs, upgraded a 315 B
+      transcript stub into a proper bug doc, new section for the 1.1.4 MT issue logs.
 - [ ] ⬜ **`guides/`** — 56 files. Includes 18 vendored nanocode files + many
       worker/channel subdir READMEs swept in from source repos. Heavy consolidation.
 - [ ] ⬜ **`internal/`** — 76 files. Includes 46 vendored nanocode files. Drafts,
@@ -115,3 +116,21 @@ These four now point at `architecture/…` paths that have moved to
 
 **Note for the `proposals/` pass:** `WEBSOCKET_KEEPALIVE_IMPLEMENTATION.md` is duplicated
 in `proposals/` (larger copy, 5.7 KB) — reconcile then.
+
+### `bugs/` (done)
+
+No files moved or deleted — `bugs/` is a deliberate Open/Fixed tracker (its `README.md` keeps
+fixed bugs "retained for history with a status banner"), so this pass was index reconciliation,
+not relocation.
+
+- The directory had **18 bug docs but the index listed only 14**. Added the 4 missing:
+  - `BUG-FIXED-wasm-tools-not-found-on-build.md` → **Fixed** (MT wasm-tools PATH fix, v1.1.3).
+  - `BUG-WEECHAT-WARNINGS.md` → **Open (Low)** — rewrote the 315 B transcript snippet into a
+    proper bug doc after **verifying** the flagged `rand_check` latent bug is still live
+    (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:1766` ignores `probability`, always returns
+    `false`).
+  - `SYSTEMD-MT-1.1.4-ISSUES.md` + `OPENRC-MT-1.1.4-ISSUES.md` → new **"1.1.4 MT pre-release
+    issue logs"** section (multi-issue logs, not single bugs; all fixed except F7 = telegram).
+- Updated the index header (2026-06-19 note) and the top-level `docs/README.md` bug count (→ 18).
+- **Flagged for `ops/` pass:** the two 1.1.4 MT issue logs are operational records
+  cross-referenced from `ops/GOALS_1.1.4.md`; decide then whether they belong in `ops/`.
