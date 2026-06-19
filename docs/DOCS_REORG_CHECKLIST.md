@@ -28,9 +28,9 @@ history via `git mv`. **Stale LunarWing-authored docs** (not vendored) go to
 | Location | Vendored nanocode files | Status |
 |----------|------------------------:|--------|
 | `docs/reference/nanocode-config/` | 3 | ✅ moved to `internal/vendored/` |
-| `docs/guides/nanocode-config/` | 18 | ⬜ pending (guides pass) |
+| `docs/guides/nanocode-config/` | 19 | ✅ moved to `internal/vendored/` (2 LW config docs kept) |
 | `docs/internal/nanocode-config/` | 46 | ⬜ pending (internal pass) |
-| **Total** | **67** | |
+| **Total** | **68** | |
 
 Includes a 384 KB `nanogpt.md`, 17-language UI glossaries, per-package READMEs, and
 test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
@@ -51,8 +51,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`bugs/`** — kept all 18 bug docs (deliberate Open/Fixed tracker; fixed bugs
       stay). Reconciled the index: added 4 previously-untracked docs, upgraded a 315 B
       transcript stub into a proper bug doc, new section for the 1.1.4 MT issue logs.
-- [ ] ⬜ **`guides/`** — 56 files. Includes 18 vendored nanocode files + many
-      worker/channel subdir READMEs swept in from source repos. Heavy consolidation.
+- [x] ✅ **`guides/`** — 56 → 23 files. Archived 19 vendored nanocode files; moved 6
+      deprecated/divergent component docs to `internal/history/guides/`; deleted 8
+      stubs/junk/duplicates; kept 23 real guides + canonical component docs.
 - [ ] ⬜ **`internal/`** — 76 files. Includes 46 vendored nanocode files. Drafts,
       historical notes, vendored content. Largest cleanup target.
 - [ ] ⬜ **`ops/`** — 38 files. Many `GOALS_*` per-release checklists; `history/`
@@ -134,3 +135,25 @@ not relocation.
 - Updated the index header (2026-06-19 note) and the top-level `docs/README.md` bug count (→ 18).
 - **Flagged for `ops/` pass:** the two 1.1.4 MT issue logs are operational records
   cross-referenced from `ops/GOALS_1.1.4.md`; decide then whether they belong in `ops/`.
+
+### `guides/` (done)
+
+56 → 23 files.
+
+- **Archived → `internal/vendored/nanocode-config/` (19)** — the vendored `nanocode/` (18) +
+  `nanocode.nvim/` (1) upstream subtrees, merged with the `reference/`-pass copy. Kept the 2
+  genuine LunarWing files (`nanocode-config/README.md`, `SETUP_NANOCODE_FOR_TENSORZERO.md`).
+- **Archived → `internal/history/guides/` (6)** — deprecated/divergent component docs:
+  `codex4ironclaw/{README, HOW_TO_CONNECT_LUNARWING, KAGEHO_INTEGRATION_GUIDE}.md` (deprecated
+  worker), `nanocode4ironclaw/README.md` (deprecated), `ic-infrastructure-health-check/README.md`
+  (divergent stale snapshot of the live root copy), `git-ironclaw-systemd/README.md` (unfilled
+  GitLab template).
+- **Deleted (8)** — stubs/junk/duplicates: `QUICK_BUILD.md`, `REFLEX_COMPILER_TESTING.md`,
+  `codex4ironclaw/INTEGRATION.md`, `darkirc_channel_for_ironclaw/{BUILD_REQUIREMENTS,README}.md`,
+  `git-ironclaw-unix-socket-client-repo/README.md`, and the redundant `replv2git/` nesting (2 exact
+  duplicates of the flat copies).
+- **Kept (23)** — 12 top-level guides + canonical component docs (`darkirc` 2 build guides,
+  `ironclaw_weechat_wss` 3, `gotify-wasm`, `ic_sm`, `tensorzero-proxy-configurations`,
+  `git-ironclaw-unix-socket-repl-server-repo`) + `nanocode-config/{README, SETUP…}`.
+- **Links:** removed 5 dead rows from `docs/README.md`'s guides table. Left stale (out of scope):
+  `RELEASE-v1.1.4.md` → `QUICK_BUILD.md`.

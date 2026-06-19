@@ -29,13 +29,8 @@ How-to guides, build instructions, and setup walkthroughs.
 |------|-------------|
 | [`EMBEDDINGS_SETUP.md`](guides/EMBEDDINGS_SETUP.md) | Embedding provider configuration (OpenAI-compatible, Ollama, NEAR AI) |
 | [`VISION_OCR_SIDECAR.md`](guides/VISION_OCR_SIDECAR.md) | Vision/OCR sidecar service overview |
-| [`REFLEX_COMPILER_TESTING.md`](guides/REFLEX_COMPILER_TESTING.md) | Reflex compiler testing guide |
 | [`MIGRATE_IRONCLAW_TO_LUNARWING.md`](guides/MIGRATE_IRONCLAW_TO_LUNARWING.md) | Migrating an existing IronClaw PostgreSQL instance to LunarWing |
-| [`codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md`](guides/codex4ironclaw/HOW_TO_CONNECT_LUNARWING.md) | Connecting to LunarWing via Codex |
-| [`codex4ironclaw/INTEGRATION.md`](guides/codex4ironclaw/INTEGRATION.md) | Codex integration guide |
-| [`codex4ironclaw/KAGEHO_INTEGRATION_GUIDE.md`](guides/codex4ironclaw/KAGEHO_INTEGRATION_GUIDE.md) | Kageho integration walkthrough |
 | [`darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
-| [`darkirc_channel_for_ironclaw/BUILD_REQUIREMENTS.md`](guides/darkirc_channel_for_ironclaw/BUILD_REQUIREMENTS.md) | DarkIRC build dependencies |
 | [`darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
 | [`ironclaw_weechat_wss/weechat_relay/INSTALL.md`](guides/ironclaw_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
 | [`nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md`](guides/nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md) | Nanocode setup for TensorZero |
