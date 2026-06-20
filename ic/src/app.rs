@@ -84,6 +84,23 @@ pub struct AppBuilder {
     handles: Option<crate::db::DatabaseHandles>,
 }
 
+/// Outcome of reconciling the configured LLM turn budget against the agent's
+/// `handle_message` turn timeout. The `TimeoutProvider` must fire before the
+/// hard-kill (soft timeout + grace), otherwise a hung backend can ride past the
+/// turn budget into the message-dropping hard-kill path
+/// (see `llm/timeout.rs`, `agent/agent_loop.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TurnBudgetOutcome {
+    /// Budget is safe as configured (or `0` = `TimeoutProvider` disabled).
+    Ok,
+    /// Budget sits too close to / over the timeout; clamp down to this ceiling.
+    Clamp(u64),
+    /// `handle_message_timeout` is below the hard-kill grace, so no positive
+    /// budget can be positioned to fire first — left unchanged; the operator
+    /// must raise the timeout (or disable the budget).
+    TimeoutTooSmall,
+}
+
 impl AppBuilder {
     /// Create a new builder.
     ///
@@ -107,6 +124,46 @@ impl AppBuilder {
             secrets_store: None,
             llm_override: None,
             handles: None,
+        }
+    }
+
+    /// Reconcile the configured LLM turn budget against the agent's
+    /// `handle_message` turn timeout so the `TimeoutProvider` is guaranteed to
+    /// fire before the hard-kill.
+    ///
+    /// The budget must leave at least `MARGIN` (the hard-kill grace) of headroom
+    /// below the timeout, i.e. `budget <= timeout - MARGIN` (the "ceiling").
+    /// A budget of `0` disables the cap and is always [`TurnBudgetOutcome::Ok`].
+    /// Otherwise:
+    /// - `budget <= ceiling` → [`Ok`] (the default 270 vs 300 sits exactly at
+    ///   the ceiling and is safe — no spurious warning);
+    /// - `budget > ceiling`  → [`Clamp`] down to `ceiling`;
+    /// - `timeout <= MARGIN` (ceiling saturates to 0) → [`TimeoutTooSmall`].
+    ///
+    /// Pure / side-effect free for testability; `build_all` applies the result.
+    ///
+    /// [`Ok`]: TurnBudgetOutcome::Ok
+    /// [`Clamp`]: TurnBudgetOutcome::Clamp
+    /// [`TimeoutTooSmall`]: TurnBudgetOutcome::TimeoutTooSmall
+    fn resolve_turn_budget(
+        budget_secs: u64,
+        handle_message_timeout: std::time::Duration,
+    ) -> TurnBudgetOutcome {
+        // Hard-kill grace after the soft `handle_message` timeout. Sourced
+        // directly from `agent::HARD_KILL_GRACE_SECS` (re-exported from
+        // `agent_loop`) so the two files can't drift if the grace changes.
+        const MARGIN: u64 = crate::agent::HARD_KILL_GRACE_SECS;
+        if budget_secs == 0 {
+            return TurnBudgetOutcome::Ok; // TimeoutProvider disabled
+        }
+        let ceiling = handle_message_timeout.as_secs().saturating_sub(MARGIN);
+        if ceiling == 0 {
+            return TurnBudgetOutcome::TimeoutTooSmall;
+        }
+        if budget_secs > ceiling {
+            TurnBudgetOutcome::Clamp(ceiling)
+        } else {
+            TurnBudgetOutcome::Ok
         }
     }
 
@@ -807,6 +864,40 @@ impl AppBuilder {
             );
         }
 
+        // Reconcile the LLM turn budget with the agent's handle_message timeout.
+        // The TimeoutProvider caps total LLM time at `llm_turn_budget_secs` so
+        // stacked retries/failover can't exceed the turn budget and trigger the
+        // message-dropping hard-kill. If the configured budget sits too close to
+        // (or over) the timeout, clamp it down to a safe ceiling so the cap is
+        // GUARANTEED to fire first — self-correcting rather than warn-only.
+        // See: llm/timeout.rs, config/llm.rs (`LLM_TURN_BUDGET_SECS`, default 270),
+        // config/agent.rs (`HANDLE_MESSAGE_TIMEOUT_SECS`, default 300).
+        let budget = self.config.llm.llm_turn_budget_secs;
+        let timeout_secs = self.config.agent.handle_message_timeout.as_secs();
+        match Self::resolve_turn_budget(budget, self.config.agent.handle_message_timeout) {
+            TurnBudgetOutcome::Ok => {}
+            TurnBudgetOutcome::Clamp(safe) => {
+                tracing::warn!(
+                    configured_budget_secs = budget,
+                    effective_budget_secs = safe,
+                    handle_message_timeout_secs = timeout_secs,
+                    "LLM_TURN_BUDGET_SECS was too close to/over the handle_message \
+                     timeout; clamped to the safe ceiling so the TimeoutProvider fires \
+                     before the hard-kill. Raise HANDLE_MESSAGE_TIMEOUT_SECS for a larger budget."
+                );
+                self.config.llm.llm_turn_budget_secs = safe;
+            }
+            TurnBudgetOutcome::TimeoutTooSmall => {
+                tracing::warn!(
+                    budget_secs = budget,
+                    handle_message_timeout_secs = timeout_secs,
+                    "HANDLE_MESSAGE_TIMEOUT_SECS is below the hard-kill grace; the LLM \
+                     turn budget can't be positioned to fire first. Raise the timeout \
+                     or set LLM_TURN_BUDGET_SECS=0 to disable the cap."
+                );
+            }
+        }
+
         let (llm, cheap_llm, recording_handle) = if let Some(llm) = self.llm_override.take() {
             (llm, None, None)
         } else {
@@ -1101,6 +1192,8 @@ async fn cleanup_ghost_seeded_tool_permissions(
 mod tests {
     use std::sync::Arc;
 
+    use super::{AppBuilder, TurnBudgetOutcome};
+
     use async_trait::async_trait;
     use tokio::sync::mpsc;
 
@@ -1250,6 +1343,62 @@ mod tests {
             map_final.get("tool_permissions.echo"),
             Some(&disabled_json),
             "state should be unchanged after second re-cleanup"
+        );
+    }
+
+    #[test]
+    fn turn_budget_default_is_safe() {
+        // Defaults: budget=270, timeout=300s, margin=30 → ceiling=270.
+        // 270 sits exactly AT the ceiling (not over), so it is safe — no clamp,
+        // no warning. (The prior warn-only check flagged this on every startup.)
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(270, std::time::Duration::from_secs(300)),
+            TurnBudgetOutcome::Ok
+        );
+    }
+
+    #[test]
+    fn turn_budget_healthy_gap_is_safe() {
+        // budget=180, timeout=300s → 120s headroom → safe.
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(180, std::time::Duration::from_secs(300)),
+            TurnBudgetOutcome::Ok
+        );
+    }
+
+    #[test]
+    fn turn_budget_zero_is_disabled_and_safe() {
+        // budget=0 disables the TimeoutProvider → always Ok.
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(0, std::time::Duration::from_secs(300)),
+            TurnBudgetOutcome::Ok
+        );
+    }
+
+    #[test]
+    fn turn_budget_just_over_ceiling_clamps() {
+        // budget=271, timeout=300s → ceiling=270 → 271 > 270 → clamp to 270.
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(271, std::time::Duration::from_secs(300)),
+            TurnBudgetOutcome::Clamp(270)
+        );
+    }
+
+    #[test]
+    fn turn_budget_over_timeout_clamps_to_ceiling() {
+        // budget=400 > timeout=300s (nonsensical) → clamp to ceiling 270.
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(400, std::time::Duration::from_secs(300)),
+            TurnBudgetOutcome::Clamp(270)
+        );
+    }
+
+    #[test]
+    fn turn_budget_timeout_below_margin_is_unpositionable() {
+        // timeout=10s < margin=30s → ceiling saturates to 0 → can't position.
+        assert_eq!(
+            AppBuilder::resolve_turn_budget(5, std::time::Duration::from_secs(10)),
+            TurnBudgetOutcome::TimeoutTooSmall
         );
     }
 }

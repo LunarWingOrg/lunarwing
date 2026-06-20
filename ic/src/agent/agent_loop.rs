@@ -38,7 +38,12 @@ use crate::workspace::Workspace;
 /// Grace period after soft timeout before the hard-kill timer aborts
 /// the orphaned task and force-resets thread state. Kept short to
 /// minimize the window where new messages queue indefinitely.
-const HARD_KILL_GRACE_SECS: u64 = 30;
+///
+/// Single source of truth for the hard-kill grace: `AppBuilder` reads this
+/// (via `crate::agent::HARD_KILL_GRACE_SECS`) to size the LLM turn-budget
+/// margin, so the `TimeoutProvider` is guaranteed to fire before this grace
+/// elapses. Keeping one constant prevents the two files from drifting.
+pub(crate) const HARD_KILL_GRACE_SECS: u64 = 30;
 
 /// Static greeting persisted to DB and broadcast on first launch.
 ///
@@ -995,12 +1000,22 @@ impl Agent {
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
                             let pre_state = thread.state;
                             if thread.state == ThreadState::Processing {
-                                thread.fail_turn_hard("handle_message hard timeout");
+                                // Preserve the pending queue. The `abort()` above
+                                // guarantees the orphaned task can no longer emit a
+                                // response, so the "confusing concurrent response"
+                                // risk that originally justified clearing no longer
+                                // applies at the hard-kill. `fail_turn` (unlike the
+                                // removed `fail_turn_hard`) leaves `pending_messages`
+                                // intact, so the user's queued follow-up is drained by
+                                // their next turn instead of being silently dropped.
+                                let preserved = thread.pending_messages.len();
+                                thread.fail_turn("handle_message hard timeout");
                                 tracing::warn!(
                                     thread_id = %thread_id,
                                     ?pre_state,
                                     new_state = ?thread.state,
-                                    "HARD TIMEOUT: aborted task, reset thread, cleared pending messages"
+                                    preserved_pending = preserved,
+                                    "HARD TIMEOUT: aborted task, reset thread, preserved pending messages for next turn"
                                 );
                             } else {
                                 tracing::debug!(

@@ -45,4 +45,13 @@ Transfer the bundle, then:
   sudo -u testbot env XDG_RUNTIME_DIR=/run/user/$(id -u testbot) podman exec lunarwing-pg-testbot \
     psql -U lunarwing -d lunarwing -tAc \
     "SELECT note FROM migration_rehearsal_marker ORDER BY id DESC LIMIT 1"
+
+---
+
+Update (2026-06-20): the capture above is the original SOURCE-SIDE testbot rehearsal
+(2026-06-18). The full export -> import -> start cutover has SINCE been live-validated
+end-to-end on a production tenant -- the migrated tenant came up operational on the new
+host. OMEMO encrypted-chat continuity and SECRETS_MASTER_KEY-decryptable secret
+continuity were not separately spot-checked during that run; confirm them on the next
+migration.
   

@@ -1,6 +1,6 @@
 # Multi-Tenant Upgrade: v1.1.0 → v1.1.4 ("Phoenix") on systemd
 
-**Status:** Proposal / runbook (pending operator go-ahead before any service mutation)
+**Status:** Proposal / runbook for the **rootless-adopt v1.1.0 → v1.1.4 flip** — still **pending operator go-ahead / not yet live-validated**. (Separately, the *same-host* v1.0.9 → v1.1.2 upgrade via `ic/scripts/upgrade-tenant-version.sh` has been **live-validated on a production tenant** — that is a different mechanism from the rootful → rootless flip this proposal covers.)
 **Date:** 2026-06-18
 **Source version:** `v1.1.0` (`17d0feb1`)
 **Target version:** `v1.1.4` (`700406d9`, = `release/v1.1.4`; contained in `staging`)
@@ -36,8 +36,8 @@ Postgres → `pg_restore` into it → start the daemon. This proposal specifies 
 flow precisely against the real verb contracts, plus the tooling to automate it
 safely.
 
-**This exact scenario (in-place upgrade of a >v1.1.0 production tenant) is flagged
-by the team's own checklist (`docs/ops/GOALS_1.1.4.md` #10) as not yet validated.**
+**This exact scenario (in-place upgrade of a >v1.1.0 production tenant via the rootful → rootless flip) is flagged
+by the team's own checklist (`docs/ops/GOALS_1.1.4.md` #11) as not yet validated.**
 Only fresh-tenant provisioning has 8/8 green QA. Treat the first tenant as a
 canary, with full backups, before touching the fleet.
 
@@ -151,8 +151,10 @@ tenant's encrypted DB secrets.** Always invoke the v1.1.4 script.
 
 ### ⚪ Validation gap (not a code blocker)
 
-`docs/ops/GOALS_1.1.4.md` #10 + the RELEASE "Testing" section flag the live in-place
-upgrade of a >v1.1.0 production tenant as **still open**. You are first to run it →
+`docs/ops/GOALS_1.1.4.md` #11 + the RELEASE "Testing" section flag the live in-place
+upgrade of a >v1.1.0 production tenant **via the rootful → rootless flip** as **still
+open**. (The separate same-host v1.0.9 → v1.1.2 path via `upgrade-tenant-version.sh` is
+already live-validated — see *Status* at the top.) You are first to run *this* flip →
 canary, backups, soak.
 
 ---
