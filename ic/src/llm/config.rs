@@ -173,6 +173,13 @@ pub struct LlmConfig {
     /// Default: 120. Increase for local LLMs (Ollama, vLLM, LM Studio) that
     /// need more time for prompt evaluation on consumer hardware.
     pub request_timeout_secs: u64,
+    /// Total wall-clock budget (seconds) for ONE logical LLM call, *including*
+    /// all internal retries/backoff/failover. Keeps the call below the agent's
+    /// `handle_message` turn timeout (300s) so a hung backend fails gracefully
+    /// instead of stacking retries past the turn budget and triggering a
+    /// hard-kill that drops the user's queued follow-up. Default: 270. 0 disables.
+    /// Set via `LLM_TURN_BUDGET_SECS`. Must stay below the turn timeout.
+    pub llm_turn_budget_secs: u64,
     /// Generic cheap/fast model for lightweight tasks (heartbeat, routing, evaluation).
     /// Works with any backend. Set via `LLM_CHEAP_MODEL` env var.
     /// When set, takes priority over the NearAI-specific `NEARAI_CHEAP_MODEL`.

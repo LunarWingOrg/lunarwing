@@ -34,6 +34,7 @@ pub mod retry;
 mod rig_adapter;
 pub mod session;
 pub mod smart_routing;
+mod timeout;
 mod token_refreshing;
 pub mod transcription;
 
@@ -73,6 +74,7 @@ pub use retry::{RetryConfig, RetryProvider};
 pub use rig_adapter::RigAdapter;
 pub use session::{SessionConfig, SessionManager, create_session_manager};
 pub use smart_routing::{SmartRoutingConfig, SmartRoutingProvider, TaskComplexity};
+pub use timeout::TimeoutProvider;
 pub use token_refreshing::TokenRefreshingProvider;
 
 use std::sync::Arc;
@@ -706,6 +708,23 @@ pub async fn build_provider_chain(
         llm
     };
 
+    // 5b. Total turn-budget timeout — caps the ENTIRE call (retries + failover)
+    //     so a hung backend can't stack N × request_timeout past the agent's
+    //     handle_message turn budget and trigger a hard-kill that drops queued
+    //     follow-up messages. 0 disables. See llm/timeout.rs.
+    let llm: Arc<dyn LlmProvider> = if config.llm_turn_budget_secs > 0 {
+        tracing::debug!(
+            budget_secs = config.llm_turn_budget_secs,
+            "LLM total turn-budget timeout enabled"
+        );
+        Arc::new(TimeoutProvider::new(
+            llm,
+            std::time::Duration::from_secs(config.llm_turn_budget_secs),
+        ))
+    } else {
+        llm
+    };
+
     // 6. Recording (trace capture for replay testing)
     let recording_handle = RecordingLlm::from_env(llm.clone());
     let llm: Arc<dyn LlmProvider> = if let Some(ref recorder) = recording_handle {
@@ -774,6 +793,7 @@ mod tests {
             bedrock: None,
             gemini_oauth: None,
             request_timeout_secs: 120,
+            llm_turn_budget_secs: 270,
             cheap_model: None,
             smart_routing_cascade: true,
             openai_codex: None,
