@@ -3,8 +3,8 @@
 1. [x] Run automated testing scripts.
 2. [x] Need a full extensive test using my testing_guide and other testing scripts. can also try docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh   
 3. [x] Bump crate versions to 1.1.2
-4. [x] Make improvements to health check and self healing. See: docs/ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
-5. [x] Test Healthcheck and Self-Healing Enhancements. See: docs/ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
+4. [x] Make improvements to health check and self healing. See: docs/ops/history/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
+5. [x] Test Healthcheck and Self-Healing Enhancements. See: docs/ops/history/GOALS_1.1.2_INFRA_HEALTH_CHECK.md
 6. [x] Remove other non-supported extensions from the LW repo, specifically Google related ones
 7. [x] Test Better implementation of memory lapse bug fix
 8. [x] Write up rest of release notes for v1.1.2 explaining all changes since v1.1.1

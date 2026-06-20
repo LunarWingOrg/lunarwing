@@ -63,8 +63,8 @@ Deployment, operations, multitenancy, and production guides.
 | [`PRE-RELEASE-TESTING.md`](ops/PRE-RELEASE-TESTING.md) | Pre-release test status + test landscape |
 | [`RELEASE_CADENCE.md`](ops/RELEASE_CADENCE.md) | Release cadence policy |
 | [`RELEASE-COMMANDS.md`](ops/RELEASE-COMMANDS.md) | Release git/GitHub command template |
-| [`GOALS_1.1.2.md`](ops/GOALS_1.1.2.md) | v1.1.2 release checklist (current) |
-| [`GOALS_1.1.2_INFRA_HEALTH_CHECK.md`](ops/GOALS_1.1.2_INFRA_HEALTH_CHECK.md) | v1.1.2 infra health-check + self-heal notes |
+| [`GOALS_1.1.5.md`](ops/GOALS_1.1.5.md) | v1.1.5 release checklist (current) |
+| [`GOALS_1.1.4.md`](ops/GOALS_1.1.4.md) | v1.1.4 release checklist (shipped; kept — still referenced by MT work) |
 
 Versioned release notes live in [`releases/`](releases/). Historical per-release prep checklists are archived in [`ops/history/`](ops/history/).
 

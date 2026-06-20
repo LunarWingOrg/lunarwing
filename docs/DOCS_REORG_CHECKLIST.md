@@ -57,8 +57,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`internal/`** — folded 48 vendored nanocode files into `internal/vendored/`;
       archived 23 stub/notes to `internal/history/internal/` (no hard deletes, per request);
       kept 5 substantial docs. Active `internal/` is now 5 files + the two archives.
-- [ ] ⬜ **`ops/`** — 38 files. Many `GOALS_*` per-release checklists; `history/`
-      already exists for archiving. Consolidate stale ops scratchpads.
+- [x] ✅ **`ops/`** — light pass. `ops/` is mostly current/authoritative + active MT work.
+      Archived 3 shipped `GOALS_*` to the existing `ops/history/`; kept everything else
+      (incl. `GOALS_1.1.4`/`1.1.5` and `XMPP_TRANSFERS.md`). No deletions.
 - [x] ✅ **`proposals/`** — 61 → 32 files. Archived 29 shipped/superseded/historical
       proposals to `internal/history/proposals/`; kept 32 active/forward-looking ones
       (incl. `OLDPROJECT_PORT_ANALYSES/`). No deletions (per request).
@@ -232,3 +233,21 @@ Broken in-repo links found (left as-is per the immutability rule):
 - **`docs/README.md`:** trimmed the proposals table — removed 3 dead links (`GITHUB_ACCS`,
   `VisionProject/KAGEHO_LOG`, `NANOCODE_WORKER_SECRETS`; never existed) plus the archived rows, and
   added a pointer to the history archive.
+
+### `ops/` (done)
+
+Light pass — `ops/` is mostly current, well-maintained operational docs (many `CLAUDE.md`-pinned)
+plus active MT work, so almost everything stayed.
+
+- **Archived → `ops/history/` (3)** — shipped release checklists `GOALS_1.1.2.md`,
+  `GOALS_1.1.2_INFRA_HEALTH_CHECK.md`, `GOALS_1.1.3.md`, extending the existing `ops/history/`
+  convention (which already held `GOALS_1.0.6`–`1.1.0`). Repointed their internal cross-links to
+  the new location and refreshed `ops/history/README.md`.
+- **Kept (~30)** — all current ops docs, active MT notes (Gentoo/machine-migration in progress),
+  forward planning (`ROADMAP_2026`, `FUTURE_RELEASE_ITEMS`, `PENDING_CLEANUP`), `XMPP_TRANSFERS.md`
+  (current v1.1.5 quick-ref), and small notes.
+- **Deliberately kept (per discussion):** `GOALS_1.1.4.md` (shipped but still referenced by the
+  active MT-1.1.0→1.1.4 upgrade proposal + the MT-1.1.4 bug logs) and `GOALS_1.1.5.md` (current).
+  The two `*-MT-1.1.4-ISSUES.md` logs stay in `bugs/` (already indexed there; not relocated).
+- **`docs/README.md`:** swapped the two archived `GOALS_1.1.2*` rows for current `GOALS_1.1.5` /
+  `GOALS_1.1.4` rows. Release-note links to the archived GOALS left stale (immutable).
