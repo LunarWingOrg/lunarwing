@@ -114,6 +114,15 @@ fn api_url(base: &str, path: &str) -> String {
     format!("{base}{path}")
 }
 
+/// Append a query parameter, choosing `?` or `&` automatically. Used to attach
+/// `workspace_id` to user-scoped routes (`/api/issues`, `/api/skills`) which sit
+/// behind the server's RequireWorkspaceMember middleware. Values here are UUIDs,
+/// so no percent-encoding is needed.
+fn with_query(url: &str, key: &str, val: &str) -> String {
+    let sep = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{sep}{key}={val}")
+}
+
 fn json_headers() -> String {
     serde_json::json!({"Content-Type": "application/json"}).to_string()
 }
@@ -139,7 +148,7 @@ fn http_put(url: &str, body: &[u8]) -> Result<(u16, String), String> {
 }
 
 fn require_ok(status: u16, body: &str, action: &str) -> Result<(), String> {
-    if status >= 200 && status < 300 {
+    if (200..300).contains(&status) {
         Ok(())
     } else {
         Err(format!("{action} failed (HTTP {status}): {body}"))
@@ -237,7 +246,10 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         serde_json::from_str(params_json).map_err(|e| format!("invalid parameters: {e}"))?;
 
     if !near::agent::host::secret_exists("multica_api_token") {
-        return Err("Secret 'multica_api_token' not configured. Run: lunarwing tool auth multica-bridge".into());
+        return Err(
+            "Secret 'multica_api_token' not configured. Run: lunarwing tool auth multica-bridge"
+                .into(),
+        );
     }
 
     let config = load_config()?;
@@ -251,15 +263,15 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         "complete_task" => action_complete_task(base, &input),
         "fail_task" => action_fail_task(base, &input),
         "report_progress" => action_report_progress(base, &input),
-        "list_issues" => action_list_issues(base, &input),
-        "get_issue" => action_get_issue(base, &input),
-        "update_issue" => action_update_issue(base, &input),
-        "post_comment" => action_post_comment(base, &input),
+        "list_issues" => action_list_issues(base, &config, &input),
+        "get_issue" => action_get_issue(base, &config, &input),
+        "update_issue" => action_update_issue(base, &config, &input),
+        "post_comment" => action_post_comment(base, &config, &input),
         "recover_orphans" => action_recover_orphans(base, &config),
         "report_messages" => action_report_messages(base, &input),
-        "list_skills" => action_list_skills(base),
-        "get_skill" => action_get_skill(base, &input),
-        "export_skill" => action_export_skill(base, &input),
+        "list_skills" => action_list_skills(base, &config),
+        "get_skill" => action_get_skill(base, &config, &input),
+        "export_skill" => action_export_skill(base, &config, &input),
         other => Err(format!("unknown action: '{other}'")),
     }
 }
@@ -285,7 +297,10 @@ fn action_register(base: &str, config: &MulticaConfig) -> Result<String, String>
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "register")?;
 
-    near::agent::host::log(near::agent::host::LogLevel::Info, "Multica registration successful");
+    near::agent::host::log(
+        near::agent::host::LogLevel::Info,
+        "Multica registration successful",
+    );
     Ok(resp_body)
 }
 
@@ -361,10 +376,7 @@ fn action_report_progress(base: &str, input: &ToolInput) -> Result<String, Strin
     let task_id = require_field(&input.task_id, "task_id")?;
     let mut body = serde_json::Map::new();
     if let Some(output) = &input.output {
-        body.insert(
-            "summary".into(),
-            serde_json::Value::String(output.clone()),
-        );
+        body.insert("summary".into(), serde_json::Value::String(output.clone()));
     }
     if let Some(step) = input.step {
         body.insert("step".into(), serde_json::Value::Number(step.into()));
@@ -379,34 +391,48 @@ fn action_report_progress(base: &str, input: &ToolInput) -> Result<String, Strin
     Ok(resp_body)
 }
 
-fn action_list_issues(base: &str, input: &ToolInput) -> Result<String, String> {
-    let mut query_parts = Vec::new();
+fn action_list_issues(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
+    // /api/issues is user-scoped (RequireWorkspaceMember) and needs the
+    // workspace identifier on the request — daemon routes resolve it from the
+    // token, but these user routes do not.
+    let mut query_parts = vec![format!("workspace_id={}", config.workspace_id)];
     if let Some(status) = &input.status {
         query_parts.push(format!("status={status}"));
     }
     if let Some(assignee) = &input.assignee_id {
         query_parts.push(format!("assignee_id={assignee}"));
     }
-    let query = if query_parts.is_empty() {
-        String::new()
-    } else {
-        format!("?{}", query_parts.join("&"))
-    };
-    let url = api_url(base, &format!("/api/issues{query}"));
+    let url = api_url(base, &format!("/api/issues?{}", query_parts.join("&")));
     let (status, resp_body) = http_get(&url)?;
     require_ok(status, &resp_body, "list_issues")?;
     Ok(resp_body)
 }
 
-fn action_get_issue(base: &str, input: &ToolInput) -> Result<String, String> {
+fn action_get_issue(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
     let issue_id = require_field(&input.issue_id, "issue_id")?;
-    let url = api_url(base, &format!("/api/issues/{issue_id}"));
+    let url = with_query(
+        &api_url(base, &format!("/api/issues/{issue_id}")),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let (status, resp_body) = http_get(&url)?;
     require_ok(status, &resp_body, "get_issue")?;
     Ok(resp_body)
 }
 
-fn action_update_issue(base: &str, input: &ToolInput) -> Result<String, String> {
+fn action_update_issue(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
     let issue_id = require_field(&input.issue_id, "issue_id")?;
     let mut body = serde_json::Map::new();
     if let Some(status) = &input.status {
@@ -421,21 +447,33 @@ fn action_update_issue(base: &str, input: &ToolInput) -> Result<String, String> 
     if body.is_empty() {
         return Err("update_issue requires at least one of: status, priority".into());
     }
-    let url = api_url(base, &format!("/api/issues/{issue_id}"));
+    let url = with_query(
+        &api_url(base, &format!("/api/issues/{issue_id}")),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let payload = serde_json::Value::Object(body).to_string();
     let (status, resp_body) = http_put(&url, payload.as_bytes())?;
     require_ok(status, &resp_body, "update_issue")?;
     Ok(resp_body)
 }
 
-fn action_post_comment(base: &str, input: &ToolInput) -> Result<String, String> {
+fn action_post_comment(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
     let issue_id = require_field(&input.issue_id, "issue_id")?;
     let comment_text = require_field(&input.comment, "comment")?;
     let body = serde_json::json!({
         "content": comment_text,
         "type": "comment"
     });
-    let url = api_url(base, &format!("/api/issues/{issue_id}/comments"));
+    let url = with_query(
+        &api_url(base, &format!("/api/issues/{issue_id}/comments")),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "post_comment")?;
     Ok(resp_body)
@@ -492,22 +530,38 @@ fn action_report_messages(base: &str, input: &ToolInput) -> Result<String, Strin
 
 // ── Skill actions ─────────────────────────────────────────────
 
-fn action_list_skills(base: &str) -> Result<String, String> {
-    let url = api_url(base, "/api/skills");
+fn action_list_skills(base: &str, config: &MulticaConfig) -> Result<String, String> {
+    let url = with_query(
+        &api_url(base, "/api/skills"),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let (status, resp_body) = http_get(&url)?;
     require_ok(status, &resp_body, "list_skills")?;
     Ok(resp_body)
 }
 
-fn action_get_skill(base: &str, input: &ToolInput) -> Result<String, String> {
+fn action_get_skill(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
     let skill_id = require_field(&input.skill_id, "skill_id")?;
-    let url = api_url(base, &format!("/api/skills/{skill_id}"));
+    let url = with_query(
+        &api_url(base, &format!("/api/skills/{skill_id}")),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let (status, resp_body) = http_get(&url)?;
     require_ok(status, &resp_body, "get_skill")?;
     Ok(resp_body)
 }
 
-fn action_export_skill(base: &str, input: &ToolInput) -> Result<String, String> {
+fn action_export_skill(
+    base: &str,
+    config: &MulticaConfig,
+    input: &ToolInput,
+) -> Result<String, String> {
     let name = require_field(&input.skill_name, "skill_name")?;
     let content = input.skill_content.as_deref().unwrap_or("");
     let description = input.skill_description.as_deref().unwrap_or("");
@@ -532,7 +586,11 @@ fn action_export_skill(base: &str, input: &ToolInput) -> Result<String, String> 
         }
     }
 
-    let url = api_url(base, "/api/skills");
+    let url = with_query(
+        &api_url(base, "/api/skills"),
+        "workspace_id",
+        &config.workspace_id,
+    );
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "export_skill")?;
 

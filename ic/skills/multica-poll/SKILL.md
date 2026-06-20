@@ -21,7 +21,9 @@ You are connected to a Multica/Lunartica task board via the `multica` tool. Foll
 ## Startup (first run only)
 
 1. Call `multica(action: "register")` to register this LunarWing instance as a runtime.
-2. Save the returned `runtime_id` — it identifies this runtime for all subsequent calls.
+2. The response is a JSON object with a `runtimes` array. Take the `id` of the first
+   entry (`response.runtimes[0].id`) and save it to `config/multica.json` as `runtime_id`
+   — this value identifies the runtime for all subsequent calls (heartbeat, claim, etc.).
 3. Call `multica(action: "recover_orphans")` to recover any tasks orphaned by a prior crash.
 
 ## Poll Cycle

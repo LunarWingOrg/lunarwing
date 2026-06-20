@@ -8,7 +8,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| External Worker planned enhancements; Multica bridge/channel refinements and agent orchestration workflow improvements; Lunartica UI reskin | v1.1.6 |
+| External Worker planned enhancements; Multica bridge/channel refinements and agent orchestration workflow improvements; Lunartica UI reskin continuation | v1.1.7 |
 | Remaining migration/upgrade work (live-validate the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh`; extend `upgrade-tenant-version.sh` to source versions older than v1.0.9; spot-check OMEMO/secret continuity on a migration) | v1.1.7 |
 | XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.7 |
 | XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.7 |
