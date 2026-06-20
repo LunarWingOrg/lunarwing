@@ -88,16 +88,12 @@ Feature proposals, design documents, and project planning.
 |------|-------------|
 | [`MULTICA_SUPPORT.md`](proposals/MULTICA_SUPPORT.md) | Multica/Lunartica integration proposal |
 | [`LOREBOOKS.md`](proposals/LOREBOOKS.md) | Lorebooks feature proposal |
-| [`GITHUB_ACCS.md`](proposals/GITHUB_ACCS.md) | GitHub accounts proposal |
 | [`GITWASM/README.md`](proposals/GITWASM/README.md) | Git WASM tool proposal |
-| [`VisionProject/README.md`](proposals/VisionProject/README.md) | Vision service project overview |
-| [`VisionProject/KAGEHO_SUMMARY.md`](proposals/VisionProject/KAGEHO_SUMMARY.md) | OCR/Vision integration discussion summary |
-| [`VisionProject/KAGEHO_BUILD_PLAN.md`](proposals/VisionProject/KAGEHO_BUILD_PLAN.md) | Kageho vision build plan |
-| [`VisionProject/KAGEHO_LOG.md`](proposals/VisionProject/KAGEHO_LOG.md) | Kageho vision implementation log |
-| [`VisionProject/VISION-SERVICE.md`](proposals/VisionProject/VISION-SERVICE.md) | Vision service design spec |
-| [`VisionProject/LunarWingVisionServicev1.1.md`](proposals/VisionProject/LunarWingVisionServicev1.1.md) | Vision service v1.1 spec |
-| [`reflex-compiler.md`](proposals/reflex-compiler.md) | Reflex compiler design proposal |
-| [`NANOCODE_WORKER_SECRETS.md`](proposals/NANOCODE_WORKER_SECRETS.md) | Nanocode worker secrets integration |
+| [`COOL_THINGS_THAT_HERMES_AGENT_HAS.md`](proposals/COOL_THINGS_THAT_HERMES_AGENT_HAS.md) | Roadmap/wishlist of agent capabilities |
+| [`FUTURE_OF_ICHC.md`](proposals/FUTURE_OF_ICHC.md) | Infra health-check roadmap (v1.1.6+) |
+| [`OLDPROJECT_PORT_ANALYSES/`](proposals/OLDPROJECT_PORT_ANALYSES/) | Pre-fork IronClaw 0.28–0.29 port analyses |
+
+Only active/forward-looking proposals remain here; shipped or superseded ones were archived under [`internal/history/proposals/`](internal/history/proposals/) during the docs reorg. (Full index to be rebuilt.)
 
 ---
 

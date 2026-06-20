@@ -59,8 +59,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
       kept 5 substantial docs. Active `internal/` is now 5 files + the two archives.
 - [ ] ⬜ **`ops/`** — 38 files. Many `GOALS_*` per-release checklists; `history/`
       already exists for archiving. Consolidate stale ops scratchpads.
-- [ ] ⬜ **`proposals/`** — 61 files. Many superseded/implemented proposals and
-      one-line stubs; archive shipped ones, drop dead stubs.
+- [x] ✅ **`proposals/`** — 61 → 32 files. Archived 29 shipped/superseded/historical
+      proposals to `internal/history/proposals/`; kept 32 active/forward-looking ones
+      (incl. `OLDPROJECT_PORT_ANALYSES/`). No deletions (per request).
 - [x] ✅ **`releases/`** — all 7 kept (immutable historical records). Audited via a
       7-agent workflow for broken in-repo links; no file changes. Catalog in work log.
 - [ ] ⬜ **`DOCS_AUDIT.md`** — reconcile against current reality (many M/L items are
@@ -210,3 +211,24 @@ Broken in-repo links found (left as-is per the immutability rule):
 - `RELEASE-v1.1.1` → `ops/STATUS_OF_REMOVAL_OF_PROPRIETARY_CHANNELS.md` (in `ops/history/`),
   `proposals/SELF_HEALING_IMPROVEMENTS_1.md` (only `_2` exists).
 - `RELEASE-v1.1.4` → `reference/TENANT-CONFIGURATION.md` (always lived at `ops/TENANT-CONFIGURATION.md`).
+
+### `proposals/` (done)
+
+61 → 32 files. **No deletions** (per request) — everything was moved or kept.
+
+- **Classification:** 44 substantive proposals were classified by a 44-agent workflow (each
+  verifying shipped-status against the code + release notes); the 17 others (tiny stubs + the port
+  analyses) were handled directly.
+- **Archived → `internal/history/proposals/` (29)** — shipped features (CHAOS test plan,
+  `MT_SYSTEMD_PARITY`, `PER_TENANT_RANDOM_PG_PASSWORDS`, `reflex-compiler`, `ROOTLESS_WORKER_OPENRC_UNITS`,
+  `SYSTEMD_QUADLET_IMPROVEMENTS`, `WEBSOCKET_KEEPALIVE_IMPLEMENTATION`, several WEECHAT/WORKER fixes,
+  `MULTICA_RAW`, `PEBBLE`, and the **entire `VisionProject/`** — OCR/vision service shipped),
+  superseded designs (`MULTICA_POSSIBLE_CONSIDERATIONS`, `ROOTLESS_DEFAULT_INIT_GATING`,
+  `KAGEHO_BUILD_PLAN`), historical records (`MULTICA_SERVER_COMPATIBILITY_CONFIRMED`,
+  `SELF_HEALING_IMPROVEMENTS_2`, `OLDRELNOTES`), and two done/personal notes
+  (`LAST_THREE_FEATURES_FOR_8`, `House`).
+- **Kept (32)** — active roadmaps/work, conservatively-kept low-confidence/partial items, forward
+  idea stubs, and **`OLDPROJECT_PORT_ANALYSES/`** (kept in place per request).
+- **`docs/README.md`:** trimmed the proposals table — removed 3 dead links (`GITHUB_ACCS`,
+  `VisionProject/KAGEHO_LOG`, `NANOCODE_WORKER_SECRETS`; never existed) plus the archived rows, and
+  added a pointer to the history archive.
