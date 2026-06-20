@@ -8,4 +8,6 @@
 
 Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), **odd-numbered releases focus on polishing, fixes, enhancements**
 
-# WRITE ABOUT THE NEW MIGRATION AND UPGRADE MECHANISMS
+### Things to do:
+
+* WRITE ABOUT THE NEW MIGRATION AND UPGRADE MECHANISMS
