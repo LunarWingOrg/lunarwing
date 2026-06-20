@@ -15,7 +15,7 @@
 .todos/
 
 target/
-
+.logs/
 # Python
 __pycache__/
 *.pyc
