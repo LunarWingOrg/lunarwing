@@ -6,6 +6,7 @@ lives under [`internal/history/`](internal/history/) (superseded LunarWing docs)
 [`internal/vendored/`](internal/vendored/) (third-party upstream copies).
 
 * Original Author: Starforce Nebula *
+* Updated on June 19th by humans and agents to reflect changes in a semi-total document re-organization pass (only re-organized the documents in docs/ directory and nothing outside of this directory has been re-organized or updated as of the time of writing this edit).*
 
 ## Directory Structure
 
