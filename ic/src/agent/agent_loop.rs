@@ -995,12 +995,22 @@ impl Agent {
                         if let Some(thread) = sess.threads.get_mut(&thread_id) {
                             let pre_state = thread.state;
                             if thread.state == ThreadState::Processing {
-                                thread.fail_turn_hard("handle_message hard timeout");
+                                // Preserve the pending queue. The `abort()` above
+                                // guarantees the orphaned task can no longer emit a
+                                // response, so the "confusing concurrent response"
+                                // risk that originally justified clearing no longer
+                                // applies at the hard-kill. `fail_turn` (unlike the
+                                // removed `fail_turn_hard`) leaves `pending_messages`
+                                // intact, so the user's queued follow-up is drained by
+                                // their next turn instead of being silently dropped.
+                                let preserved = thread.pending_messages.len();
+                                thread.fail_turn("handle_message hard timeout");
                                 tracing::warn!(
                                     thread_id = %thread_id,
                                     ?pre_state,
                                     new_state = ?thread.state,
-                                    "HARD TIMEOUT: aborted task, reset thread, cleared pending messages"
+                                    preserved_pending = preserved,
+                                    "HARD TIMEOUT: aborted task, reset thread, preserved pending messages for next turn"
                                 );
                             } else {
                                 tracing::debug!(
