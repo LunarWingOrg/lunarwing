@@ -5,6 +5,8 @@ All project documentation, organized by category. This index reflects the tree a
 lives under [`internal/history/`](internal/history/) (superseded LunarWing docs) and
 [`internal/vendored/`](internal/vendored/) (third-party upstream copies).
 
+* Original Author: Starforce Nebula *
+
 ## Directory Structure
 
 ### 📐 [`architecture/`](architecture/)
