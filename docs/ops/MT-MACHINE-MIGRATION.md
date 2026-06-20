@@ -26,6 +26,13 @@ match the old host's.
 > window. This is deliberate: it prevents a torn OMEMO store and prevents losing
 > anything written between snapshot and cutover.
 
+> **Validation status (2026-06-20).** The `export → import → start` migration path has
+> been **live-validated end-to-end on a production tenant** — the migrated tenant came
+> up operational on the new host. OMEMO encrypted-chat and `SECRETS_MASTER_KEY` secret
+> continuity were **not separately spot-checked** during that run; confirm them on the
+> next migration. (The `rehearse-testbot.sh` helper itself remains untested — see *Dry
+> run & rehearsal*.)
+
 ---
 
 ## What moves, and why

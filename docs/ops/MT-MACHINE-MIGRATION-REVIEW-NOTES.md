@@ -8,6 +8,11 @@
 commit, `4d1943cd`, now in history via PR #65). This doc is a reference in case the
 tooling is revisited.
 
+**Post-review validation (2026-06-20):** the full `export → import → start` cutover has
+since been **live-validated end-to-end on a production tenant** (the migrated tenant
+came up operational on the new host; OMEMO encrypted-chat and `SECRETS_MASTER_KEY`
+secret continuity were not separately spot-checked).
+
 ## Review method
 
 One multi-agent adversarial pass (4 lenses: export correctness, import
