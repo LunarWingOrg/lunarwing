@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-
-# Requires a little re-factoring and ensuring that upgrades from v1.1.0 to v1.1.5 are supported
-# NOTE: A seperate upgrade harness to update an tenant in place must be created for v1.0.3 era instances to v1.1.0 era
-# This NOTE is reflected in the internal feature tracking board
 #
 # upgrade-tenant.sh — generalized in-place upgrade of ONE multi-tenant tenant
 # from a v1.1.0-era deployment to v1.1.4 ("Phoenix") on systemd.
@@ -379,4 +375,3 @@ say "    sudo LUNARWING_MT_ROOTLESS=false $MT restart-tenant $TENANT"
 fi
 say "    # env backup: $BACKUP_DIR/${TENANT}-env.$STAMP   ports: $BACKUP_DIR/ports.json.$STAMP"
 [[ -n "$DUMP" ]] && say "    # DB dump:  $DUMP"
-
