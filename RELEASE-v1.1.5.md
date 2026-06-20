@@ -196,6 +196,8 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 *Testing for this release is **pending**. The pre-release checklist lives in `docs/ops/GOALS_1.1.5.md`; the full checklist is in `docs/ops/PRE-RELEASE-TESTING.md`; automated coverage is driven by `ic/scripts/release-test.sh` and `docs/guides/TESTING_GUIDE.md`.*
 
+*Please review release readiness section.*
+
 *Completed: a live end-to-end `export → import → start` cutover of a production tenant via the machine-migration route (OMEMO/secret continuity not separately spot-checked during that run), and a live same-host v1.0.9 → v1.1.2 upgrade of a production tenant via `upgrade-tenant-version.sh`. Still open at the time these notes were drafted: the crate-version bump to 1.1.5 + `cargo test` sweep, a live run of the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh` flip on a canary tenant, and the broader automated `release-test.sh` sweep. The release date is **TBD** until these conclude.*
 
 *Once evaluation begins in earnest, no new changes besides urgent fixes will be accepted into staging during the evaluation period.*
