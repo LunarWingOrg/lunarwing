@@ -6,10 +6,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| XMPP OMEMO MUC fallback fix | v1.1.5 |                                                                                        
-| XMPP file transfer — remaining polish (live end-to-end validation, optional SSRF guard, further round of hardening) | v1.1.5 |
-| Lunarvision K.E.R.S. system setup polishing | v1.1.5 |
-| External Worker planned enhancements | v1.1.6 |
 | Multica bridge and channel refinements and agent orchestration workflow improvements | v1.1.6 |
 | Lunartica UI reskin | v1.1.6 |
 | Drop support for the custom TensorZero proxy (verified no longer necessary; local models handle all tool calls over TensorZero
@@ -31,3 +27,5 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Additional WASM Channel Polishing | v1.2.5 |
 | LunarVoice (further planning required) | v1.2.6 |
 | Stabilization & polish buffer — reserved for v2 engine, LunarVoice, other new features from after 1.1.8 | v1.2.7 |
+
+
