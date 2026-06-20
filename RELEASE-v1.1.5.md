@@ -1,3 +1,5 @@
+up
+
 # Release Notes for LunarWing v1.1.5 — Codename `Kawarimi`
 
 **Release Date:** TBD
