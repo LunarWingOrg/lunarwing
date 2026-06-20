@@ -65,8 +65,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
       (incl. `OLDPROJECT_PORT_ANALYSES/`). No deletions (per request).
 - [x] ✅ **`releases/`** — all 7 kept (immutable historical records). Audited via a
       7-agent workflow for broken in-repo links; no file changes. Catalog in work log.
-- [ ] ⬜ **`DOCS_AUDIT.md`** — reconcile against current reality (many M/L items are
-      done or now out-of-scope since they touch files outside `docs/`).
+- [x] ✅ **`DOCS_AUDIT.md`** — reconciled against current reality via a 17-agent verify
+      workflow. Closed 6 more items; 11 remain (all but M13/M16 are rename fixes outside
+      `docs/`, out of scope). No out-of-`docs/` files modified.
 - [ ] ⬜ **`README.md`** — the `docs/` index. Currently self-declared "out of date."
       Rebuild as the accurate table of contents once the tree is reorganized. (Do last.)
 
@@ -251,3 +252,20 @@ plus active MT work, so almost everything stayed.
   The two `*-MT-1.1.4-ISSUES.md` logs stay in `bugs/` (already indexed there; not relocated).
 - **`docs/README.md`:** swapped the two archived `GOALS_1.1.2*` rows for current `GOALS_1.1.5` /
   `GOALS_1.1.4` rows. Release-note links to the archived GOALS left stale (immutable).
+
+### `DOCS_AUDIT.md` (done)
+
+Re-verified all 17 still-"Remaining" items against the current tree via a 17-agent workflow
+(status-only — the actual fixes mostly live outside `docs/` and are out of scope).
+
+- **Newly closed (6):** M11 (Discord README — source removed), M20 (`codex4ironclaw/CLAUDE.md` —
+  dir removed, superseded by `codex4lunarwing/`), L7 (Slack README — source removed), L10
+  (`RELEASE-v1.0.6` placeholder — gone; releases start at v1.0.7), L12 (`REPLv2_Client_and_Server` —
+  archived by this reorg), L5 (`FORK_CONTEXT.md` — stale refs already fixed).
+- **Still open (11):** M2 (partial), M3, M10, M12, M13, M16, M22, L6, L9, L11, L13. All but M13 and
+  M16 are IronClaw→LunarWing rename fixes in files **outside `docs/`** (out of scope here). M16
+  (the README index) closes with the final rebuild; **M13**
+  (`darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`) is the one doc under `docs/` still carrying
+  stale `~/ironclaw/` paths — flagged for an optional follow-up content rename.
+- Updated the audit header: added a 2026-06-19 "Also closed" block, slimmed "Remaining", added a
+  scope note. No files outside `docs/` were modified.

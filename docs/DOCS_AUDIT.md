@@ -4,14 +4,30 @@
 
 **Date:** 2026-05-12
 **Branch:** staging
-**Last updated:** 2026-05-26 (branch `staging-documentation-reorg-may-26`)
+**Last updated:** 2026-05-26 (branch `staging-documentation-reorg-may-26`); **reconciled 2026-06-19** during the `docs/` reorg (branch `1.1.5-docs-update-reorg`)
 **Context:** These items were identified during a full docs audit. They are stale but not immediately harmful — they cause confusion but don't directly break workflows or production deployments.
 
 **Completed items:** M1, M4, M5, M6, M7, M8, M9, M14, M17, M19 + L1, L2, L3, L4, L8, L14 (all addressed in `staging-documentation-reorg-may-26`).
 
 **Also closed (reconciled 2026-06-07):** M15 — the Discord/Slack/Feishu channel+tool sources (and their READMEs) were deleted in v1.1.1, so the stale-README items are moot. M18 — all Cargo.tomls (`ic/` + the four crates) now declare `AGPL-3.0-or-later`, matching the LICENSE file. M21 — `ic/src/bootstrap.rs` comments corrected: the base dir comes from `LUNARWING_BASE_DIR` (deployments typically use `/home/<user>/lunarwing`, holding `env/` + `state/`); `~/.ironclaw` is only the no-env fallback (the comment had wrongly said `~/.lunarwing`). The lone remaining skill `display_name` "IronClaw Workflow Orchestrator" (M17 follow-on) was also renamed.
 
-**Remaining:** M2, M3, M10, M11, M12, M13, M16, M20, M22, L5-L7, L9-L13.
+**Also closed (reconciled 2026-06-19, during the `docs/` reorg):**
+- **M11** — `ic/channels-src/discord/README.md` no longer exists; the Discord channel source was removed (Discord is intentionally unsupported). Moot.
+- **M20** — `codex4ironclaw/` was removed and superseded by `codex4lunarwing/`; the audited `codex4ironclaw/CLAUDE.md` no longer exists. (The root `CLAUDE.md` Repo-Structure list still mentions `codex4ironclaw/` — a separate, out-of-`docs/` cleanup.)
+- **L5** — `docs/internal/FORK_CONTEXT.md` is fixed: the "IronClaw watchdog"/"Main IronClaw daemon" wording and stale `.env` path are corrected; the one remaining `ironclaw` string is the intentional, explicitly-labelled "(old path)" legacy `.env` location.
+- **L7** — `ic/tools-src/slack/README.md` no longer exists; the Slack tool source was removed (Slack is intentionally unsupported). Moot.
+- **L10** — the placeholder `RELEASE-v1.0.6.md` was removed; `docs/releases/` now begins at `v1.0.7`, exactly as the item anticipated.
+- **L12** — `docs/internal/REPLv2_Client_and_Server.md` was archived to `docs/internal/history/internal/` by the reorg; nothing remains at the old path.
+
+**Remaining:** M2 (*partial* — title is now "LunarWing ↔ OpenClaw", but `~/.ironclaw/` paths and `ironclaw pairing` commands remain), M3, M10, M12, M13, M16, M22, L6, L9, L11, L13.
+
+> **Scope note (2026-06-19):** every remaining item except **M13** and **M16** is an
+> IronClaw→LunarWing rename fix in a file **outside `docs/`** (`ic/…`, repo root) — out of scope
+> for the `docs/` reorganization and left for a separate rename sweep. **M16** (the `docs/README.md`
+> index) is being rebuilt as the final reorg step. **M13**
+> (`docs/guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`) is the one doc *under* `docs/`
+> still carrying stale `~/ironclaw/` / `ironclaw.db` / `target/release/ironclaw` paths — a content
+> rename rather than an organization change; flagged for optional follow-up.
 
 ---
 
