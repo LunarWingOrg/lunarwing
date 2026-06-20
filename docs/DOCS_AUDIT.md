@@ -18,13 +18,13 @@
 - **L7** — `ic/tools-src/slack/README.md` no longer exists; the Slack tool source was removed (Slack is intentionally unsupported). Moot.
 - **L10** — the placeholder `RELEASE-v1.0.6.md` was removed; `docs/releases/` now begins at `v1.0.7`, exactly as the item anticipated.
 - **L12** — `docs/internal/REPLv2_Client_and_Server.md` was archived to `docs/internal/history/internal/` by the reorg; nothing remains at the old path.
+- **M16** — `docs/README.md` was rebuilt as a complete, accurate index of the reorganized tree (every active file listed, archives pointed to, all links verified); it no longer self-labels "out of date".
 
-**Remaining:** M2 (*partial* — title is now "LunarWing ↔ OpenClaw", but `~/.ironclaw/` paths and `ironclaw pairing` commands remain), M3, M10, M12, M13, M16, M22, L6, L9, L11, L13.
+**Remaining:** M2 (*partial* — title is now "LunarWing ↔ OpenClaw", but `~/.ironclaw/` paths and `ironclaw pairing` commands remain), M3, M10, M12, M13, M22, L6, L9, L11, L13.
 
-> **Scope note (2026-06-19):** every remaining item except **M13** and **M16** is an
-> IronClaw→LunarWing rename fix in a file **outside `docs/`** (`ic/…`, repo root) — out of scope
-> for the `docs/` reorganization and left for a separate rename sweep. **M16** (the `docs/README.md`
-> index) is being rebuilt as the final reorg step. **M13**
+> **Scope note (2026-06-19):** every remaining item except **M13** is an IronClaw→LunarWing
+> rename fix in a file **outside `docs/`** (`ic/…`, repo root) — out of scope for the `docs/`
+> reorganization and left for a separate rename sweep. **M13**
 > (`docs/guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`) is the one doc *under* `docs/`
 > still carrying stale `~/ironclaw/` / `ironclaw.db` / `target/release/ironclaw` paths — a content
 > rename rather than an organization change; flagged for optional follow-up.

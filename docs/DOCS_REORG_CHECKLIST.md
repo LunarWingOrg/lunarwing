@@ -4,6 +4,7 @@
 **Branch:** `1.1.5-docs-update-reorg`
 **Goal:** Re-organize and consolidate scattered/outdated documentation. Make `docs/`
 a clean, current, navigable tree.
+**Status:** ✅ **All 10 areas complete (2026-06-19).**
 
 ## Scope rule (important)
 
@@ -68,8 +69,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`DOCS_AUDIT.md`** — reconciled against current reality via a 17-agent verify
       workflow. Closed 6 more items; 11 remain (all but M13/M16 are rename fixes outside
       `docs/`, out of scope). No out-of-`docs/` files modified.
-- [ ] ⬜ **`README.md`** — the `docs/` index. Currently self-declared "out of date."
-      Rebuild as the accurate table of contents once the tree is reorganized. (Do last.)
+- [x] ✅ **`README.md`** — rebuilt from scratch as a complete, accurate index of the
+      reorganized tree (every active file listed, archives pointed to, all links verified).
+      Closes audit item M16.
 
 ---
 
@@ -269,3 +271,33 @@ Re-verified all 17 still-"Remaining" items against the current tree via a 17-age
   stale `~/ironclaw/` paths — flagged for an optional follow-up content rename.
 - Updated the audit header: added a 2026-06-19 "Also closed" block, slimmed "Remaining", added a
   scope note. No files outside `docs/` were modified.
+
+### `README.md` (done)
+
+Rebuilt `docs/README.md` from scratch as a complete, accurate index of the reorganized tree:
+
+- Dropped the self-declared "out of date" banner.
+- Complete per-category tables — architecture (6), guides (23), ops (27), reference (1),
+  proposals (32, with `OLDPROJECT_PORT_ANALYSES/` as one dir entry), releases (7). `bugs/` points to
+  its maintained `bugs/README.md`; `internal/` lists the 5 active docs + the `vendored/`/`history/`
+  archive pointers.
+- Added a **Top-level docs** section (`DOCS_AUDIT.md`, this checklist) and refreshed
+  "What Stays Outside `docs/`" — fixed the stale `codex4ironclaw/` entry to the current
+  `codex4lunarwing/` / `lunarcode4lunarwing/` / `pebble4lunarwing/` worker dirs.
+- **All internal links verified — zero broken.** Closes audit item **M16**.
+
+---
+
+## ✅ Reorg complete
+
+All ten areas done. `docs/` is now organized as: current/active docs per category, a maintained
+`bugs/` tracker, immutable `releases/`, and two archives — `internal/vendored/` (third-party
+upstream) and `internal/history/` (superseded LunarWing docs, by source area). Nothing was lost:
+every removed item from the conservative passes was *moved*, not deleted, and is recoverable.
+
+**Open follow-ups (out of scope for this reorg):**
+- Revisit `internal/history/internal/` and restore any still-relevant notes (the `internal/` pass
+  was intentionally aggressive; all recoverable).
+- `DOCS_AUDIT.md` still lists IronClaw→LunarWing rename fixes in files **outside `docs/`**
+  (M2/M3/M10/M12/M22, L6/L9/L11/L13) plus **M13** (`darkirc/BUILD_INSTRUCTIONS.md`, the one stale
+  doc still under `docs/`) — a separate rename sweep.
