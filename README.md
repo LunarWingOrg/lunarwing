@@ -313,11 +313,18 @@ LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
 
 ## Further Reading
 
-- Architecture docs: see [docs/](docs/)
-- Vision service: see [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
-- Testing guide: see [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
-- Release notes: see [docs/releases/](docs/releases/)
-- REPLv2 server and client: see [docs/internal/REPLv2_Client_and_Server.md](docs/internal/REPLv2_Client_and_Server.md)
+Full documentation index: [docs/README.md](docs/README.md)
+
+### By topic
+
+- **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
+- **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
+- **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
+- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.4
+- **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
+- **Active proposals:** [docs/proposals/](docs/proposals/)
+- **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
+- **Testing guide:** [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
 
 ## Community
 
