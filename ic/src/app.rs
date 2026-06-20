@@ -110,6 +110,27 @@ impl AppBuilder {
         }
     }
 
+    /// Returns true when the LLM turn budget is too close to the
+    /// `handle_message` turn timeout to guarantee the TimeoutProvider fires
+    /// before the agent's hard-kill.
+    ///
+    /// `budget_secs == 0` means the timeout is disabled, which is always safe.
+    /// Otherwise, warn if `budget >= timeout - 30s` (the hard-kill grace
+    /// period). When `timeout < 30s` we treat the threshold as zero so the
+    /// operator is told whenever the budget is configured at all under an
+    /// aggressive timeout.
+    fn should_warn_turn_budget_coupling(
+        budget_secs: u64,
+        handle_message_timeout: std::time::Duration,
+    ) -> bool {
+        const MARGIN: u64 = 30; // hard-kill grace period
+        if budget_secs == 0 {
+            return false;
+        }
+        let timeout_secs = handle_message_timeout.as_secs();
+        budget_secs >= timeout_secs.saturating_sub(MARGIN)
+    }
+
     /// Inject a pre-created database, skipping `init_database()`.
     pub fn with_database(&mut self, db: Arc<dyn Database>) {
         self.db = Some(db);
@@ -807,6 +828,27 @@ impl AppBuilder {
             );
         }
 
+        // Validate LLM turn budget vs handle_message timeout coupling.
+        // The TimeoutProvider caps total LLM time at `llm_turn_budget_secs`
+        // to prevent stacked retries/failover from exceeding the agent's
+        // handle_message turn budget. If the budget is too close to the
+        // turn timeout, the cap may not fire before the hard-kill — warn so
+        // operators can reconfigure before the symptom shows up in production.
+        // See: llm/timeout.rs, config/llm.rs (`LLM_TURN_BUDGET_SECS`, default 270),
+        // config/agent.rs (`HANDLE_MESSAGE_TIMEOUT_SECS`, default 300).
+        let budget = self.config.llm.llm_turn_budget_secs;
+        let timeout_secs = self.config.agent.handle_message_timeout.as_secs();
+        if should_warn_turn_budget_coupling(budget, self.config.agent.handle_message_timeout) {
+            tracing::warn!(
+                budget_secs = budget,
+                handle_message_timeout_secs = timeout_secs,
+                "LLM turn budget is too close to handle_message timeout; \
+                 TimeoutProvider may not fire before hard-kill. \
+                 Lower LLM_TURN_BUDGET_SECS, raise HANDLE_MESSAGE_TIMEOUT_SECS, \
+                 or set budget=0 to disable."
+            );
+        }
+
         let (llm, cheap_llm, recording_handle) = if let Some(llm) = self.llm_override.take() {
             (llm, None, None)
         } else {
@@ -1251,5 +1293,63 @@ mod tests {
             Some(&disabled_json),
             "state should be unchanged after second re-cleanup"
         );
+    }
+
+    #[test]
+    fn turn_budget_coupling_default_warns() {
+        // Defaults: budget=270, timeout=300s → gap=30s → exactly at margin.
+        // `budget >= timeout - margin` → 270 >= 270 → true, so this warns.
+        // This is intentional: the default sits right at the edge and should
+        // surface so operators know the coupling exists.
+        assert!(AppBuilder::should_warn_turn_budget_coupling(
+            270,
+            std::time::Duration::from_secs(300),
+        ));
+    }
+
+    #[test]
+    fn turn_budget_coupling_one_below_margin_is_safe() {
+        // budget=269, timeout=300s → gap=31s → just below margin → no warn.
+        assert!(!AppBuilder::should_warn_turn_budget_coupling(
+            269,
+            std::time::Duration::from_secs(300),
+        ));
+    }
+
+    #[test]
+    fn turn_budget_coupling_healthy_gap_no_warn() {
+        // budget=180, timeout=300s → gap=120s → well below margin → no warn.
+        assert!(!AppBuilder::should_warn_turn_budget_coupling(
+            180,
+            std::time::Duration::from_secs(300),
+        ));
+    }
+
+    #[test]
+    fn turn_budget_coupling_disabled_no_warn() {
+        // budget=0 means TimeoutProvider is disabled → never warn.
+        assert!(!AppBuilder::should_warn_turn_budget_coupling(
+            0,
+            std::time::Duration::from_secs(300),
+        ));
+    }
+
+    #[test]
+    fn turn_budget_coupling_budget_exceeds_timeout_warns() {
+        // budget=400 > timeout=300s → nonsensical config → must warn.
+        assert!(AppBuilder::should_warn_turn_budget_coupling(
+            400,
+            std::time::Duration::from_secs(300),
+        ));
+    }
+
+    #[test]
+    fn turn_budget_coupling_timeout_below_margin_warns_on_any_budget() {
+        // timeout=10s, margin=30s → saturating_sub gives 0.
+        // Any budget > 0 should warn (threshold is 0).
+        assert!(AppBuilder::should_warn_turn_budget_coupling(
+            5,
+            std::time::Duration::from_secs(10),
+        ));
     }
 }
