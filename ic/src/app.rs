@@ -149,9 +149,10 @@ impl AppBuilder {
         budget_secs: u64,
         handle_message_timeout: std::time::Duration,
     ) -> TurnBudgetOutcome {
-        // Hard-kill grace after the soft `handle_message` timeout; mirrors
-        // `agent::agent_loop::HARD_KILL_GRACE_SECS`.
-        const MARGIN: u64 = 30;
+        // Hard-kill grace after the soft `handle_message` timeout. Sourced
+        // directly from `agent::HARD_KILL_GRACE_SECS` (re-exported from
+        // `agent_loop`) so the two files can't drift if the grace changes.
+        const MARGIN: u64 = crate::agent::HARD_KILL_GRACE_SECS;
         if budget_secs == 0 {
             return TurnBudgetOutcome::Ok; // TimeoutProvider disabled
         }
