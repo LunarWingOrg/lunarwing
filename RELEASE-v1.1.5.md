@@ -12,7 +12,7 @@ The second focus is an **agent-loop reliability fix**: a hung LLM backend could 
 
 The third focus is a **large, `docs/`-only documentation reorganization** — a semi-total reorg that establishes a `history/` archive for superseded LunarWing docs and a `vendored/` archive for upstream third-party copies, rebuilds the `docs/README.md` index, and reconciles the documentation audit. Nothing outside `docs/` was touched.
 
-This release **does not** add database schema changes, and the crate version bump to **1.1.5 is still pending** (manifests currently report `1.1.4`); the migration/upgrade routes and the full release-test sweep have **not** yet been run. v1.1.5 is therefore mid-flight — the release date is **TBD**.
+This release **does not** add database schema changes, and the crate version bump to **1.1.5 is still pending** (manifests currently report `1.1.4`). The machine-migration and same-host (v1.0.9 → v1.1.2) upgrade routes have been live-validated on production tenants, but the rootless-adopt v1.1.0 → v1.1.4 flip and the full release-test sweep have **not** yet been run. v1.1.5 is therefore mid-flight — the release date is **TBD**.
 
 ---
 
