@@ -23,7 +23,7 @@ behaviors rather than a distinct unfixed bug:
   restart before decrypting reliably (see `CLAUDE.md` → "XMPP / OMEMO Known Behavior"). The
   early fallback messages are the warmup window, not a loop.
 - **Stuck `Processing` threads** were addressed by the `handle_message` timeout/recovery work
-  and stuck-run recovery (see `docs/architecture/HANDLE_MESSAGE_FIX.md` and the Routine System
+  and stuck-run recovery (see `docs/internal/history/architecture/HANDLE_MESSAGE_FIX.md` and the Routine System
   notes in `CLAUDE.md`).
 
 This note was previously a placeholder ("document the OMEMO MUC bug + stuck loop"); it is kept
