@@ -87,6 +87,10 @@ A hung LLM backend could let `RetryProvider` stack `max_retries + 1` attempts of
 
 - build_all() now reconciles that LLM budget against the agent's turn timeout via a pure, testable resolve_turn_budget() returning a TurnBudgetOutcome (Ok / Clamp(n) / TimeoutTooSmall). Rather than merely warning, it's self-correcting: if LLM_TURN_BUDGET_SECS sits too close to or over the timeout, it clamps the effective budget down to the safe ceiling (handle_message_timeout − HARD_KILL_GRACE_SECS) so the TimeoutProvider is guaranteed to fire before the hard-kill — warning on clamp, and on a timeout too small to position any budget. The default 270/300 now passes clean (the prior version warned on every boot), and the margin is sourced directly from agent_loop::HARD_KILL_GRACE_SECS (re-exported pub(crate)) so the grace period can't drift between the two files. Along the way it also fixed two non-compiling commits on the branch (a bare Self::-less call and a missing test-module import).
 
+### Lunartica polishing and testing
+
+- Lunartica is confirmed to work after some refinements and testing scripts have been created and used. A tenant is able to successfully complete a task after being assigned an issue. More polishing and development on Lunartica will continue and certain tool calls may be finnicky and not work correctly, but this is a Lunartica update. The bridge also works with standard Multica as well without any needed modification.
+
 ### Documentation & Housekeeping
 
 - **`docs/` tree reorganization.** A semi-total reorg and consolidation of the documentation tree, tracked end-to-end by a new living checklist **`docs/DOCS_REORG_CHECKLIST.md`** (all 10 declared areas complete, 2026-06-19). **Scope was deliberately limited to `docs/` only** — no `README.md` / `CLAUDE.md` / `AGENTS.md` outside `docs/` (repo root, `ic/`, `projects/`, worker dirs) was moved or edited.
@@ -183,7 +187,7 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 | Lunarvision K.E.R.S. system setup polishing *(was targeted v1.1.5 — slipped)* | v1.1.7 |
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.7 |
 | Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.7 |
-| External Worker planned enhancements; Multica bridge/channel refinements; Lunartica UI reskin | v1.1.7 |
+| External Worker planned enhancements; Multica bridge/channel refinements; Lunartica UI reskin continuation | v1.1.7 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; remaining `ironclaw` → `lunarwing` renames (WeeChat channel/adapter, Gotify tool) | v1.1.7 |
 | Re-add the custom Git WASM workspace tool; TensorZero upgrade + ClickHouse healthcheck test expansion | v1.1.8 |
 | v2 engine implementation + LunarWing UI performance overhaul; self-healing expansion | v1.2.0 |
