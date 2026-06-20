@@ -137,7 +137,7 @@ A hung LLM backend could let `RetryProvider` stack `max_retries + 1` attempts of
 - **Machine migration is a cutover with per-tenant downtime.** `export-tenant.sh` stops the tenant daemon + xmpp-bridge before dumping (PostgreSQL stays up only for `pg_dump`); the agent is down from export until it is started on the new host. Deliberate, to guarantee a consistent and final snapshot — plan a maintenance window per tenant.
 - **`mt-admin`'s `write_tenant_lunarwing_env` still hardcodes `GATEWAY_HOST` / `HTTP_HOST` on every write.** The migration carry-list fix preserves the bind across migration, but a plain `add-tenant` re-run on an existing tenant still resets a hand-edited bind back to `127.0.0.1`. A preserve-on-rewrite + override knob in the generator is the broader fix and is **not yet done** (PR-1 note).
 - **The data-orphan guard fires only when the rootless container is absent.** The "rootless container exists but is empty while a root orphan still holds the data" case cannot be distinguished at start time without breaking every legitimate restart, so it is intentionally not guarded there — it is instead covered by `upgrade-preflight.sh` (STOPs on a reachable-but-zero-rows orphan) and `upgrade-tenant.sh --prune-old-root` (refuses to delete the root copy while the rootless DB has zero conversation rows).
-- **Release-readiness: crate versions are not yet bumped to 1.1.5** (manifests still report `1.1.4`), and the full automated test sweep has not been run. The machine-migration and same-host (v1.0.9 → v1.1.2) upgrade routes are live-validated, but `docs/ops/GOALS_1.1.5.md` items for the version bump + `cargo test`, the rootless-adopt (v1.1.0 → v1.1.4) upgrade route, and the `ic/scripts/release-test.sh` / `docs/guides/TESTING_GUIDE.md` sweep remain unchecked at the time these notes were compiled. See *Testing*.
+- **Release-readiness: crate versions are not yet bumped to 1.1.5** (manifests still report `1.1.4`), and the full automated test sweep has not been run. The machine-migration and same-host (v1.0.9 → v1.1.2) upgrade routes are live-validated, but `docs/ops/GOALS_1.1.5.md` items for the version bump + `cargo test`, the rootless-adopt (v1.1.0 → v1.1.4) upgrade route, and the `ic/scripts/release-test.sh` / `docs/guides/TESTING_GUIDE.md` sweep remain unchecked at the time these notes were compiled. Also should add new app builder stuff to release notes and documentation. See *Testing*.
 - **Documentation reorg follow-ups.** `docs/proposals/DOCUMENTATION_UPDATING_STATUS.md` flags remaining work: `docs/guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md` is the one doc still under `docs/` carrying stale `ironclaw` paths, and a separate out-of-`docs/` IronClaw → LunarWing rename sweep (code/root files) is deliberately deferred. Stale in-repo links inside the immutable `releases/` notes (caused by the reorg moves) were intentionally left as-is and logged, not fixed.
 
 ### Carried forward (unchanged in v1.1.5)
@@ -173,13 +173,13 @@ The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`** and respects th
 
 | Feature | Target |
 |---------|--------|
-| Remaining migration/upgrade work (live-validate the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh`; extend `upgrade-tenant-version.sh` to source versions older than v1.0.9; spot-check OMEMO/secret continuity on a migration) | v1.1.6 |
-| XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| Lunarvision K.E.R.S. system setup polishing *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.6 |
-| Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.6 |
-| External Worker planned enhancements; Multica bridge/channel refinements; Lunartica UI reskin | v1.1.6 |
+| Remaining migration/upgrade work (live-validate the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh`; extend `upgrade-tenant-version.sh` to source versions older than v1.0.9; spot-check OMEMO/secret continuity on a migration) | v1.1.7 |
+| XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| Lunarvision K.E.R.S. system setup polishing *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.7 |
+| Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.7 |
+| External Worker planned enhancements; Multica bridge/channel refinements; Lunartica UI reskin | v1.1.7 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; remaining `ironclaw` → `lunarwing` renames (WeeChat channel/adapter, Gotify tool) | v1.1.7 |
 | Re-add the custom Git WASM workspace tool; TensorZero upgrade + ClickHouse healthcheck test expansion | v1.1.8 |
 | v2 engine implementation + LunarWing UI performance overhaul; self-healing expansion | v1.2.0 |

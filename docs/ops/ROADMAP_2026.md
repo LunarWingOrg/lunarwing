@@ -8,12 +8,12 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Remaining migration/upgrade work (live-validate the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh`; extend `upgrade-tenant-version.sh` to source versions older than v1.0.9; spot-check OMEMO/secret continuity on a migration) | v1.1.6 |
-| XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| Lunarvision K.E.R.S. system setup polishing *(was targeted v1.1.5 — slipped)* | v1.1.6 |
-| Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.6 |
-| Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.6 |
+| Remaining migration/upgrade work (live-validate the rootless-adopt v1.1.0 → v1.1.4 `upgrade-tenant.sh`; extend `upgrade-tenant-version.sh` to source versions older than v1.0.9; spot-check OMEMO/secret continuity on a migration) | v1.1.7 |
+| XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| Lunarvision K.E.R.S. system setup polishing *(was targeted v1.1.5 — slipped)* | v1.1.7 |
+| Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.7 |
+| Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.7 |
 | External Worker planned enhancements; Multica bridge/channel refinements and agent orchestration workflow improvements; Lunartica UI reskin | v1.1.6 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; remaining `ironclaw` → `lunarwing` renames (WeeChat channel/adapter, Gotify tool) | v1.1.7 |
 | Re-add the custom Git WASM workspace tool; TensorZero upgrade + optional tighter integration across deployments + ClickHouse healthcheck test expansion | v1.1.8 |
