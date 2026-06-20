@@ -38,7 +38,12 @@ use crate::workspace::Workspace;
 /// Grace period after soft timeout before the hard-kill timer aborts
 /// the orphaned task and force-resets thread state. Kept short to
 /// minimize the window where new messages queue indefinitely.
-const HARD_KILL_GRACE_SECS: u64 = 30;
+///
+/// Single source of truth for the hard-kill grace: `AppBuilder` reads this
+/// (via `crate::agent::HARD_KILL_GRACE_SECS`) to size the LLM turn-budget
+/// margin, so the `TimeoutProvider` is guaranteed to fire before this grace
+/// elapses. Keeping one constant prevents the two files from drifting.
+pub(crate) const HARD_KILL_GRACE_SECS: u64 = 30;
 
 /// Static greeting persisted to DB and broadcast on first launch.
 ///
