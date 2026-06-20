@@ -61,14 +61,20 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
       already exists for archiving. Consolidate stale ops scratchpads.
 - [ ] ⬜ **`proposals/`** — 61 files. Many superseded/implemented proposals and
       one-line stubs; archive shipped ones, drop dead stubs.
-- [ ] ⬜ **`releases/`** — 7 files. Release notes v1.0.7–v1.1.4 + changelog. Mostly
-      keep; verify completeness and index.
+- [x] ✅ **`releases/`** — all 7 kept (immutable historical records). Audited via a
+      7-agent workflow for broken in-repo links; no file changes. Catalog in work log.
 - [ ] ⬜ **`DOCS_AUDIT.md`** — reconcile against current reality (many M/L items are
       done or now out-of-scope since they touch files outside `docs/`).
 - [ ] ⬜ **`README.md`** — the `docs/` index. Currently self-declared "out of date."
       Rebuild as the accurate table of contents once the tree is reorganized. (Do last.)
 
 ---
+
+## Follow-ups / revisit
+
+- **`internal/` may have over-archived (2026-06-19):** the `internal/` pass moved 23 stub/notes
+  to `internal/history/internal/`. Nothing was deleted. Some may still be relevant — revisit and
+  un-move docs back into active `docs/internal/` as needed.
 
 ## Work log
 
@@ -180,3 +186,27 @@ the abandoned stub scaffold, keeping only the substantial working docs.
 Note: `docs/DOCS_AUDIT.md` references a couple of now-archived stubs (e.g. L12
 `REPLv2_Client_and_Server.md`) — reconcile in the `DOCS_AUDIT.md` pass (L12's "flesh out or delete"
 is effectively resolved by archiving).
+
+### `releases/` (done)
+
+Audited all 7 files via a 7-agent workflow (one verifier per note, each checking every in-repo
+link against the current tree). **Disposition: keep all 7** — release notes are immutable
+historical records, so no moves/deletes/edits. `docs/README.md`'s releases table already lists all
+7 correctly. `CHANGELOG-AGENTS.md` and `RELEASE-v1.0.7.md` have zero broken links.
+
+Broken in-repo links found (left as-is per the immutability rule):
+
+*Stale due to our reorg moves (already logged in earlier passes):*
+- `RELEASE-v1.1.0` → `architecture/MULTICA-SEC.md`
+- `RELEASE-v1.1.1` → `architecture/{FIXED_NON_UUID_SCOPE_LEAKAGE, SECURITY_ENHANCEMENTS, WEBSOCKET_KEEPALIVE_IMPLEMENTATION}.md`
+  (all now under `internal/history/architecture/`)
+- `RELEASE-v1.1.4` → `guides/QUICK_BUILD.md` (deleted stub)
+
+*Pre-existing broken/inaccurate links (NOT caused by this reorg):*
+- `RELEASE-v1.1.1/1.1.2/1.1.3` self-reference `docs/ops/RELEASE-v1.1.x.md` — release notes were
+  moved to `docs/releases/` back in v1.1.3, but the notes still cite the old `ops/` path.
+- `RELEASE-v1.1.0` → `GOALS_1.1.0.md` (in `ops/history/`), `ic/deploy/workspace-template/BOOTSTRAP.md`
+  (intentionally deleted — a removal record).
+- `RELEASE-v1.1.1` → `ops/STATUS_OF_REMOVAL_OF_PROPRIETARY_CHANNELS.md` (in `ops/history/`),
+  `proposals/SELF_HEALING_IMPROVEMENTS_1.md` (only `_2` exists).
+- `RELEASE-v1.1.4` → `reference/TENANT-CONFIGURATION.md` (always lived at `ops/TENANT-CONFIGURATION.md`).
