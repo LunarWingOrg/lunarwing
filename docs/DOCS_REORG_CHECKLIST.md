@@ -77,9 +77,10 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 
 ## Follow-ups / revisit
 
-- **`internal/` may have over-archived (2026-06-19):** the `internal/` pass moved 23 stub/notes
-  to `internal/history/internal/`. Nothing was deleted. Some may still be relevant — revisit and
-  un-move docs back into active `docs/internal/` as needed.
+- **`internal/` archive revisited (2026-06-19) — done.** Restored the 3 codex-worker design notes
+  to `docs/internal/codex4ironclaw/` and consolidated the 8 `custom_*` source-repo bookmarks into
+  `docs/internal/COMPONENT_SOURCES.md`. The remaining 12 archived items were confirmed thin
+  stubs / junk / deprecated and stay in `internal/history/internal/`.
 
 ## Work log
 
@@ -296,8 +297,9 @@ upstream) and `internal/history/` (superseded LunarWing docs, by source area). N
 every removed item from the conservative passes was *moved*, not deleted, and is recoverable.
 
 **Open follow-ups (out of scope for this reorg):**
-- Revisit `internal/history/internal/` and restore any still-relevant notes (the `internal/` pass
-  was intentionally aggressive; all recoverable).
+- ~~Revisit `internal/history/internal/` and restore any still-relevant notes.~~ **Done
+  2026-06-19** — restored 3 codex-worker notes + consolidated the component-source bookmarks into
+  `COMPONENT_SOURCES.md`; the remaining archived items were confirmed thin/deprecated.
 - `DOCS_AUDIT.md` still lists IronClaw→LunarWing rename fixes in files **outside `docs/`**
   (M2/M3/M10/M12/M22, L6/L9/L11/L13) plus **M13** (`darkirc/BUILD_INSTRUCTIONS.md`, the one stale
   doc still under `docs/`) — a separate rename sweep.

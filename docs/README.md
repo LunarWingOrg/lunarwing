@@ -177,6 +177,10 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 | [`ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md`](internal/ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md) | Health-check analysis draft |
 | [`nanocode-config/KAGEHO_QUESTIONS.md`](internal/nanocode-config/KAGEHO_QUESTIONS.md) | Agnostic coding-worker container design notes |
 | [`nanocode-config/NextSteps.md`](internal/nanocode-config/NextSteps.md) | Nanocode + TensorZero setup next steps |
+| [`COMPONENT_SOURCES.md`](internal/COMPONENT_SOURCES.md) | Where each custom component's upstream source repo lives |
+| [`codex4ironclaw/kageho_other_ideas/draft2.md`](internal/codex4ironclaw/kageho_other_ideas/draft2.md) | Codex-worker Dockerfile draft + security-hardening checklist |
+| [`codex4ironclaw/PASSING_SECRETS.md`](internal/codex4ironclaw/PASSING_SECRETS.md) | Options for passing secrets to the Codex worker |
+| [`codex4ironclaw/whatajsonshouldlookliken.md`](internal/codex4ironclaw/whatajsonshouldlookliken.md) | Codex-worker task-envelope JSON format |
 
 **Archives** (kept for provenance, not active docs):
 
