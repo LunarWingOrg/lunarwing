@@ -29,8 +29,8 @@ history via `git mv`. **Stale LunarWing-authored docs** (not vendored) go to
 |----------|------------------------:|--------|
 | `docs/reference/nanocode-config/` | 3 | ✅ moved to `internal/vendored/` |
 | `docs/guides/nanocode-config/` | 19 | ✅ moved to `internal/vendored/` (2 LW config docs kept) |
-| `docs/internal/nanocode-config/` | 46 | ⬜ pending (internal pass) |
-| **Total** | **68** | |
+| `docs/internal/nanocode-config/` | 48 | ✅ folded into `internal/vendored/` (2 LW notes kept) |
+| **Total** | **70** | ✅ all vendored consolidated under `internal/vendored/` |
 
 Includes a 384 KB `nanogpt.md`, 17-language UI glossaries, per-package READMEs, and
 test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
@@ -54,8 +54,9 @@ test fixtures. See [`internal/vendored/README.md`](internal/vendored/README.md).
 - [x] ✅ **`guides/`** — 56 → 23 files. Archived 19 vendored nanocode files; moved 6
       deprecated/divergent component docs to `internal/history/guides/`; deleted 8
       stubs/junk/duplicates; kept 23 real guides + canonical component docs.
-- [ ] ⬜ **`internal/`** — 76 files. Includes 46 vendored nanocode files. Drafts,
-      historical notes, vendored content. Largest cleanup target.
+- [x] ✅ **`internal/`** — folded 48 vendored nanocode files into `internal/vendored/`;
+      archived 23 stub/notes to `internal/history/internal/` (no hard deletes, per request);
+      kept 5 substantial docs. Active `internal/` is now 5 files + the two archives.
 - [ ] ⬜ **`ops/`** — 38 files. Many `GOALS_*` per-release checklists; `history/`
       already exists for archiving. Consolidate stale ops scratchpads.
 - [ ] ⬜ **`proposals/`** — 61 files. Many superseded/implemented proposals and
@@ -157,3 +158,25 @@ not relocation.
   `git-ironclaw-unix-socket-repl-server-repo`) + `nanocode-config/{README, SETUP…}`.
 - **Links:** removed 5 dead rows from `docs/README.md`'s guides table. Left stale (out of scope):
   `RELEASE-v1.1.4.md` → `QUICK_BUILD.md`.
+
+### `internal/` (done)
+
+`internal/` is the designated drafts/notes area; this pass folded its vendored bulk and archived
+the abandoned stub scaffold, keeping only the substantial working docs.
+
+- **Folded → `internal/vendored/nanocode-config/` (48)** — the `nanocode/` (46) + `nanocode.nvim/`
+  (2) upstream subtrees (incl. the 384 KB `nanogpt.md`), merged with the prior passes' copies (0
+  collisions). `internal/vendored/` is now the single consolidated upstream archive (71 files).
+- **Archived → `internal/history/internal/` (23)** — per request, the stub scaffold was *archived,
+  not deleted*: the 8 `custom_*` source-repo URL bookmarks, the deprecated-codex notes (5), and
+  assorted empty/placeholder stubs (`REMAKE`, `GRANT_PROPOSAL_FRAMEWORK`, `TEST`, `EXAMPLES`,
+  `APPROACH_TO_DOCS`, `BRANCHES`, `REPLv2_Client_and_Server`, `NOTES`, `KEEP`, `CONTRIBUTING`, …),
+  preserving their original subpaths.
+- **Kept in `internal/` (5)** — `FORK_CONTEXT.md` (CLAUDE.md-linked), `.github/pull_request_template.md`,
+  the ic-health-check analysis draft, and `nanocode-config/{KAGEHO_QUESTIONS, NextSteps}.md`.
+- **No hard deletes this pass** — everything is preserved under `vendored/` or `history/`.
+- Rewrote `docs/README.md`'s `internal/` index to the 5 kept docs + pointers to the archives.
+
+Note: `docs/DOCS_AUDIT.md` references a couple of now-archived stubs (e.g. L12
+`REPLv2_Client_and_Server.md`) — reconcile in the `DOCS_AUDIT.md` pass (L12's "flesh out or delete"
+is effectively resolved by archiving).

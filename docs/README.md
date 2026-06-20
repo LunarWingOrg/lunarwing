@@ -148,27 +148,16 @@ Internal notes, drafts, historical context, and vendored documentation. These ar
 
 | File | Description |
 |------|-------------|
-| [`BRANCHES.md`](internal/BRANCHES.md) | Branch tracking notes |
-| [`FORK_CONTEXT.md`](internal/FORK_CONTEXT.md) | Fork history and context |
-| [`GRANT_PROPOSAL_FRAMEWORK.md`](internal/GRANT_PROPOSAL_FRAMEWORK.md) | Grant proposal template |
-| [`REPLv2_Client_and_Server.md`](internal/REPLv2_Client_and_Server.md) | REPL v2 design notes |
-| [`codex4ironclaw/DEPRECATED.md`](internal/codex4ironclaw/DEPRECATED.md) | Deprecated Codex features |
-| [`codex4ironclaw/PASSING_SECRETS.md`](internal/codex4ironclaw/PASSING_SECRETS.md) | Secrets passing reference |
-| [`codex4ironclaw/kageho_other_ideas/draft2.md`](internal/codex4ironclaw/kageho_other_ideas/draft2.md) | Kageho ideas draft |
-| [`custom_channels/DarkIRC.md`](internal/custom_channels/DarkIRC.md) | DarkIRC channel notes |
-| [`custom_channels/Weechat.md`](internal/custom_channels/Weechat.md) | WeeChat channel notes |
-| [`custom_external_scripts/Secret_Manager.md`](internal/custom_external_scripts/Secret_Manager.md) | Secret manager scripts |
-| [`custom_external_scripts/enjin.md`](internal/custom_external_scripts/enjin.md) | Enjin integration notes |
-| [`custom_healthcheck_and_timers/healthcheck.md`](internal/custom_healthcheck_and_timers/healthcheck.md) | Health check scripts |
-| [`custom_tools/Gotify.md`](internal/custom_tools/Gotify.md) | Gotify tool reference |
-| [`custom_tools/codex4ironclaw.md`](internal/custom_tools/codex4ironclaw.md) | Codex tool reference |
-| [`custom_tools/git-md.md`](internal/custom_tools/git-md.md) | Git-md tool reference |
-| [`darkirc_channel_for_ironclaw/CONTRIBUTING.md`](internal/darkirc_channel_for_ironclaw/CONTRIBUTING.md) | DarkIRC contributing guide |
-| [`docs/APPROACH_TO_DOCS.md`](internal/docs/APPROACH_TO_DOCS.md) | Documentation strategy |
-| [`docs/EXAMPLES.md`](internal/docs/EXAMPLES.md) | Usage examples |
-| [`ic-infrastructure-health-check/...`](internal/ic-infrastructure-health-check/) | Health check analysis draft |
-| [`nanocode-config/`](internal/nanocode-config/) | Nanocode/nanocode.nvim vendored docs |
-| [`tensorzero-proxy-configurations/TEST.md`](internal/tensorzero-proxy-configurations/TEST.md) | TensorZero proxy test notes |
+| [`FORK_CONTEXT.md`](internal/FORK_CONTEXT.md) | Fork history and context (authoritative; linked from `CLAUDE.md`) |
+| [`.github/pull_request_template.md`](internal/.github/pull_request_template.md) | LunarWing PR template (review tracks, validation checklist) |
+| [`ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md`](internal/ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md) | Health-check analysis draft |
+| [`nanocode-config/KAGEHO_QUESTIONS.md`](internal/nanocode-config/KAGEHO_QUESTIONS.md) | Agnostic coding-worker container design notes |
+| [`nanocode-config/NextSteps.md`](internal/nanocode-config/NextSteps.md) | Nanocode + TensorZero setup next steps |
+
+**Archives** (kept for provenance, not active docs):
+
+- [`vendored/`](internal/vendored/) — third-party upstream copies (nanocode/opencode) swept into `docs/` by an earlier bulk commit. See [`vendored/README.md`](internal/vendored/README.md).
+- [`history/`](internal/history/) — superseded LunarWing docs relocated here during the docs reorg (by source area: `architecture/`, `guides/`, `internal/`). See [`history/README.md`](internal/history/README.md).
 
 </details>
 
