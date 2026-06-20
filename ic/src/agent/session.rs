@@ -365,15 +365,6 @@ impl Thread {
         self.updated_at = Utc::now();
     }
 
-    /// Fail the current turn AND clear the pending message queue.
-    ///
-    /// Used by hard-timeout and abort paths where the in-flight task has
-    /// been abandoned and no drain loop will ever process queued messages.
-    pub fn fail_turn_hard(&mut self, error: impl Into<String>) {
-        self.fail_turn(error);
-        self.pending_messages.clear();
-    }
-
     /// Mark the thread as awaiting approval with pending request details.
     pub fn await_approval(&mut self, pending: PendingApproval) {
         self.state = ThreadState::AwaitingApproval;
@@ -1678,10 +1669,14 @@ mod tests {
         assert_eq!(thread.state, ThreadState::Idle);
     }
 
-    /// Regression: hard timeout must clear pending_messages to prevent
-    /// orphaned queued messages from leaking into future turns.
+    /// Regression (B-preserve): a hard-timeout reset must PRESERVE the pending
+    /// queue, not clear it. The hard-kill `abort()`s the in-flight task (so no
+    /// concurrent response can arrive), and the user's queued follow-up must
+    /// survive to be drained by their next turn rather than be silently dropped.
+    /// Mirrors the hard-kill path in `agent_loop.rs`, which now resets via
+    /// `fail_turn` (the old `fail_turn_hard` that cleared the queue was removed).
     #[test]
-    fn test_fail_turn_hard_clears_pending_messages() {
+    fn test_hard_timeout_reset_preserves_pending_messages() {
         let mut thread = Thread::new(Uuid::new_v4());
 
         thread.start_turn("slow request");
@@ -1691,17 +1686,22 @@ mod tests {
         thread.queue_message("followup 2".into());
         assert_eq!(thread.pending_messages.len(), 2);
 
-        thread.fail_turn_hard("handle_message hard timeout");
+        // The hard-kill path resets via fail_turn, which preserves pending.
+        thread.fail_turn("handle_message hard timeout");
         assert_eq!(thread.state, ThreadState::Idle);
-        assert!(thread.pending_messages.is_empty());
+        assert_eq!(
+            thread.pending_messages.len(),
+            2,
+            "queued follow-ups must survive the hard-timeout reset"
+        );
 
         let turn = thread.turns.last().unwrap();
         assert_eq!(turn.state, TurnState::Failed);
 
-        thread.start_turn("retry");
-        assert_eq!(thread.state, ThreadState::Processing);
-        thread.complete_turn("success");
-        assert_eq!(thread.state, ThreadState::Idle);
+        // The preserved messages drain (merged) on the next turn.
+        let merged = thread.drain_pending_messages().unwrap();
+        assert!(merged.contains("followup 1") && merged.contains("followup 2"));
+        assert!(thread.pending_messages.is_empty());
     }
 
     /// Normal fail_turn preserves pending_messages for the requeue_drained
@@ -1720,16 +1720,5 @@ mod tests {
 
         let merged = thread.drain_pending_messages().unwrap();
         assert_eq!(merged, "queued msg");
-    }
-
-    /// fail_turn_hard on an empty thread is a safe no-op.
-    #[test]
-    fn test_fail_turn_hard_on_empty_thread() {
-        let mut thread = Thread::new(Uuid::new_v4());
-
-        thread.fail_turn_hard("phantom error");
-        assert_eq!(thread.state, ThreadState::Idle);
-        assert!(thread.turns.is_empty());
-        assert!(thread.pending_messages.is_empty());
     }
 }
