@@ -172,8 +172,9 @@ should survive plain `add-tenant` re-runs; not yet done.)*
 
 - **PostgreSQL only.** libSQL machine-migration is refused by design (see HIGH-5);
   migrate a libSQL DB file by hand if ever needed.
-- **`ic/scripts/rehearse-testbot.sh` is UNTESTED** (syntax/shellcheck-validated, not
-  executed). Its seeded DB marker proves DB round-trip only — it does **not** exercise
+- **`ic/scripts/rehearse-testbot.sh` is UNTESTED** (syntax/shellcheck-validated; run
+  source-side only on 2026-06-18 — the full export → import → verify round-trip was
+  never completed). Its seeded DB marker proves DB round-trip only — it does **not** exercise
   OMEMO or encrypted-secret continuity. For a full rehearsal, send a real message + an
   OMEMO chat through the testbot and confirm both survive on the new host.
 - The migration is a **cutover with downtime** per tenant (export stops the agent until

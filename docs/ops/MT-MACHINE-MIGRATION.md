@@ -154,8 +154,9 @@ chat decrypts (may take a few messages after first start).
 
 > ⚠️ **`ic/scripts/rehearse-testbot.sh` is generated but NOT yet tested.** It is a
 > convenience helper to create + seed a throwaway tenant for the rehearsal above. Review
-> it before running, and treat its first run as part of the rehearsal (it has only been
-> syntax/shellcheck-validated, not executed). It seeds a DB marker that proves DB
+> it before running, and treat the import side as still unproven (it has only been
+> syntax/shellcheck-validated plus a single source-side run on 2026-06-18; the full
+> export → import → verify round-trip was never completed). It seeds a DB marker that proves DB
 > round-trip only — it does not exercise OMEMO or encrypted-secret continuity, so still
 > send a real message + OMEMO chat through the testbot for a full test.
 
