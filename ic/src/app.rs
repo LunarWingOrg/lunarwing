@@ -1191,7 +1191,7 @@ async fn cleanup_ghost_seeded_tool_permissions(
 mod tests {
     use std::sync::Arc;
 
-    use super::TurnBudgetOutcome;
+    use super::{AppBuilder, TurnBudgetOutcome};
 
     use async_trait::async_trait;
     use tokio::sync::mpsc;
