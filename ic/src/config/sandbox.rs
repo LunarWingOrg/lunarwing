@@ -607,4 +607,54 @@ timeout_ms = 300000
         assert!(names.contains(&"nanocode"));
         assert!(names.contains(&"pebble"));
     }
+
+    #[test]
+    fn external_worker_config_multi_endpoint() {
+        let toml_str = r#"
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://127.0.0.1:10007/ws/agent"
+auth_token = "tok-legacy"
+timeout_ms = 300000
+
+[[sandbox.external_workers.endpoints]]
+url = "ws://10.0.0.1:9090/ws/agent"
+auth_token = "tok-1"
+
+[[sandbox.external_workers.endpoints]]
+url = "ws://10.0.0.2:9090/ws/agent"
+auth_token = "tok-2"
+"#;
+
+        let settings: crate::settings::Settings =
+            toml::from_str(toml_str).expect("multi-endpoint config must parse");
+        let workers = ExternalWorkerConfig::resolve_from_settings(&settings);
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].endpoints.len(), 2);
+        assert_eq!(workers[0].endpoints[0].url, "ws://10.0.0.1:9090/ws/agent");
+        assert_eq!(workers[0].endpoints[1].url, "ws://10.0.0.2:9090/ws/agent");
+        assert!(matches!(workers[0].load_balance, LoadBalanceStrategy::RoundRobin));
+    }
+
+    #[test]
+    fn external_worker_config_legacy_fallback() {
+        let toml_str = r#"
+[[sandbox.external_workers]]
+name = "codex"
+url = "ws://127.0.0.1:8443/ws/agent"
+auth_token = "tok-legacy"
+timeout_ms = 300000
+"#;
+
+        let settings: crate::settings::Settings =
+            toml::from_str(toml_str).expect("legacy config must parse");
+        let workers = ExternalWorkerConfig::resolve_from_settings(&settings);
+        assert_eq!(workers.len(), 1);
+        assert!(workers[0].endpoints.is_empty());
+
+        let endpoints = workers[0].endpoints();
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].url, "ws://127.0.0.1:8443/ws/agent");
+        assert_eq!(endpoints[0].auth_token.as_deref(), Some("tok-legacy"));
+    }
 }

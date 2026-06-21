@@ -8,5 +8,15 @@
     "ses_11677d1d1ffeaSgqPjcYlzOIFp": "direct"
   },
   "plan_name": "external-worker-upgrades",
-  "agent": "atlas"
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "Multi-instance `ExternalWorkerConfig` schema",
+      "session_id": "ses_11464b59fffewHbqDzcF0EUFbA",
+      "agent": "Sisyphus-Junior",
+      "updated_at": "2026-06-21T19:28:15.761Z"
+    }
+  }
 }
