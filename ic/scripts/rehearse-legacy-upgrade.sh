@@ -32,6 +32,13 @@ TARGET="v1.1.2"
 DUP_USER="rehearsal-dup-user"
 DUP_PATH="rehearsal/dup.md"
 
+# Pin the fixture to the SAME runtime model the upgrade tool + a rootful-Docker host use.
+# mt-admin already defaults to rootful when the runtime is Docker, but pin it explicitly so the
+# rehearsal can NEVER create a rootless/podman tenant (the upgrade tool pins the same and talks to
+# the PG container via `docker exec`). Keeps the host strictly rootful-Docker — no rootless flip.
+export LUNARWING_MT_ROOTLESS="${LUNARWING_MT_ROOTLESS:-false}"
+export LUNARWING_CONTAINER_RUNTIME="${LUNARWING_CONTAINER_RUNTIME:-docker}"
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     up)            ACTION="up"; shift ;;
