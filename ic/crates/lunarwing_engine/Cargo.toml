@@ -1,6 +1,6 @@
 [package]
 name = "lunarwing_engine"
-version = "1.1.4"
+version = "1.1.5"
 edition = "2024"
 rust-version = "1.92"
 description = "Unified thread-capability-CodeAct execution engine for LunarWing"
@@ -15,7 +15,7 @@ dist = false
 
 [dependencies]
 async-trait = "0.1"
-lunarwing_skills = { path = "../lunarwing_skills", version = "1.1.4", default-features = false }
+lunarwing_skills = { path = "../lunarwing_skills", version = "1.1.5", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 monty = { git = "https://github.com/pydantic/monty.git", rev = "7a0d4b75b72e6ddacafaf36e26486186cdb6eb68" }
 serde = { version = "1", features = ["derive"] }
