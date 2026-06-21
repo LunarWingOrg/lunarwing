@@ -2,6 +2,8 @@
 
 > Work paused on 2026-06-21. This checklist tracks completed and remaining tasks for the `external-worker-upgrades` plan.
 
+> Waiting
+
 ## Plan
 
 - Full plan: `.sisyphus/plans/external-worker-upgrades.md`
