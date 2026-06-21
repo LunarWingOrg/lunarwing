@@ -8,6 +8,44 @@
 
 ---
 
+## UPDATE — commit `d16be2e1` (2026-06-21 ~16:01) + MED-1 verified
+
+The branch author read this review and pushed `d16be2e1` ("reviewed and worked on podman babysitter implementation. tried to address issues from doc as best as could"); the fixes map precisely to the findings below. **Revised maturity: early-incomplete → promising-needs-fixes, and effectively solid-pending-on-host-fault-injection** now that the make-or-break MED-1 resolves favorably (below).
+
+**Fixed in `d16be2e1`:**
+
+| Finding (original review, below) | Status |
+|---|---|
+| **MED-2** install coupling (helper only installed by watchdog → silent absence) | ✅ Fixed — new `ensure_babysitter_helper()` in mt-admin installs the helper idempotently (`cmp -s` skip), called from `_register_babysitter`; removed from the watchdog installer; added `required_files="${command}"` so OpenRC won't start a `-sup` unit when the helper is absent (no ENOENT crash-loop). |
+| **MED-3** watchdog uninstall nukes the shared helper | ✅ Fixed — removal guarded by `if ! ls /etc/init.d/*-sup` (only when no `-sup` units remain). |
+| **MED-4** `_deregister_worker_unit` stop-order race | ✅ Fixed — `_deregister_babysitter` now runs **before** the container stop, and is wired into the live `stop_tenant_nanocode`/`stop_tenant_pebble` paths. |
+| **LOW-4** `podman wait` exit-code comment wrong | ✅ Fixed — comment corrected. |
+| Stale docs (`/bin` vs `/sbin`, install mechanism) | ✅ Fixed — spec reconciled to `/usr/local/sbin` + `ensure_babysitter_helper`; `GOALS_1.1.6` now lists the babysitter feature (incl. fault-injection as TODO items 6–7). |
+
+**MED-1 (env-threading) — VERIFIED, resolves FAVORABLY.** The make-or-break question was whether `supervise-daemon` preserves the `start_pre`-exported `HOME`/`XDG_RUNTIME_DIR` across its setuid to `command_user`. Authoritative answer from OpenRC source (`src/supervise-daemon/supervise-daemon.c`, `--user` handling in `main()`):
+
+```c
+home = pw->pw_dir;
+unsetenv("HOME");
+if (pw->pw_dir) setenv("HOME", pw->pw_dir, 1);
+unsetenv("USER");
+if (pw->pw_name) setenv("USER", pw->pw_name, 1);
+```
+
+- **`HOME` IS overridden** — but re-set to the target user's **passwd home** (`pw_dir`), which for an mt-admin tenant is `/home/<tenant>` — the same dir the `start_pre` export intended and where the rootless container store lives → **net `HOME` is correct** (the `start_pre` `HOME` export is redundant-but-harmless).
+- **`XDG_RUNTIME_DIR` is NOT touched** by supervise-daemon (it only manages `HOME` + `USER`) → the `start_pre` export **survives**. This is the load-bearing var for rootless podman.
+- **Net at exec:** `HOME=/home/<tenant>` + `XDG_RUNTIME_DIR=/run/user/<uid>`, running as the tenant uid → rootless `podman start`/`wait` resolves the tenant store. **The direct `command_user` approach works; the commented `sudo -u` fallback is NOT needed.**
+
+**Still open after `d16be2e1`:**
+- **On-host confirmation (final word):** the source above is OpenRC *master* — confirm the Gentoo VM's OpenRC version matches and that the tenant's passwd home == the container-store home. One-shot test: with a `-sup` unit active, `podman kill lunarwing-pg-<t>`, confirm ~2s recovery, and `cat /proc/<podman-pid>/environ | tr '\0' '\n' | grep -E 'HOME|XDG_RUNTIME_DIR'`.
+- **Fault-injection still undone** — now honestly tracked as `GOALS_1.1.6` items 6–7 (`[ ]`), but not run.
+- **Stray `RELEASE-v1.1.5` relocation still bundled** on the branch (the 201-line note + deleted stub) — not split out.
+- Minor: `GOALS` item 5 still lists the `pg_isready` status() fix as a babysitter task, though it already shipped on `staging`.
+
+*Everything below is the original (pre-`d16be2e1`) inspection, kept as the snapshot it was taken against — refer to it for the full findings the update above resolves.*
+
+---
+
 ## Verdict
 
 **Maturity: early-incomplete — a clever, sound-core "first attempt," not yet validated.** The mechanism is genuinely good and not a rewrite candidate; the gaps are integration/packaging footguns plus one make-or-break unverified correctness question. **Do not cherry-pick as-is.**
