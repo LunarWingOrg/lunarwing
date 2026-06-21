@@ -3735,9 +3735,10 @@ status_tenant() {
     done
   else
     local svc state
-    for svc in "lunarwing-pg-${name}" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
+    for svc in "lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
-               "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
+               "lunarwing-nanocode-${name}" "lunarwing-nanocode-${name}-sup" \
+               "lunarwing-pebble-${name}" "lunarwing-pebble-${name}-sup"; do
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
       say "  $svc: $state"
     done

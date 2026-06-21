@@ -360,6 +360,13 @@ install_openrc_watchdog() {
 
   install_openrc_confd
 
+  if [[ -f "${IC_DIR}/scripts/lunarwing-ctr-babysit.sh" ]]; then
+    install -o root -g root -m 0755 \
+      "${IC_DIR}/scripts/lunarwing-ctr-babysit.sh" \
+      /usr/local/sbin/lunarwing-ctr-babysit
+    say "Installed container babysitter helper: /usr/local/sbin/lunarwing-ctr-babysit"
+  fi
+
   # Self-healing infrastructure watchdog (D-1)
   if [[ -f "${REPO_ROOT}/ic-infrastructure-health-check/lunarwing-self-heal.sh" ]]; then
     install -o root -g root -m 0755 \
