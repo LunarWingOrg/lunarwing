@@ -131,7 +131,7 @@ cleanup_openrc_hourly_watchdog() {
 
 cleanup_openrc_watchdog() {
   cleanup_openrc_hourly_watchdog
-  rm -f "${OPENRC_WRAPPER}"
+  rm -f "${OPENRC_WRAPPER}" /usr/local/sbin/lunarwing-ctr-babysit
 }
 
 cleanup_launchd_watchdog() {
