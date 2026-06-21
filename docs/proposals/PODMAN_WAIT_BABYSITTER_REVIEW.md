@@ -8,6 +8,34 @@
 
 ---
 
+## UPDATE — on-host gate test (eris, live `aries` tenant, 2026-06-21 ~21:40)
+
+**The gate test this review kept deferring was finally run on real hardware** — a fresh live tenant (`aries`) on the eris Gentoo VM (OpenRC **0.63.1**, podman **5.8.2**, rootless). Result: **the mechanism works, but `d16be2e1` ships it broken-on-arrival.** The make-or-break MED-1 env-threading everyone fixated on was never the real risk; a mundane log-dir bug was.
+
+### Runtime results
+
+| Question | Verdict (live on `aries`) |
+|---|---|
+| **MED-1** env-threading (the "make-or-break") | ✅ **Confirmed at runtime.** The supervised `podman wait` (uid aries) carries `HOME=/home/aries`, `USER=aries`, `XDG_RUNTIME_DIR=/run/user/1001` — exactly as the OpenRC 0.63.1 source predicts (`/proc/<pid>/environ`). The `sudo -u` fallback is genuinely unnecessary. |
+| Fault-injection / ~5s recovery (review: untested) | ✅ **Passed.** `podman kill` → respawn: **pg 2314 ms, pebble 2326 ms**. Proven by advanced `State.StartedAt` + a fresh supervise-daemon child PID each time; the gateway stayed HTTP 200 through pg's brief outage. |
+| **SHOWSTOPPER the review missed (log-dir)** | ❌ **Babysitter DOA on a fresh host.** `start_pre()` runs `checkpath -d /var/log/lunarwing/<t>`, but `checkpath` is non-recursive and `/var/log/lunarwing` is never created → `supervise-daemon` can't open `output_log`/`error_log` → both `-sup` units land in `/run/openrc/failed/`. **OpenRC-only** (the feature is gated `openrc && rootless`; systemd/Docker never run this code). Introduced by **`d16be2e1`** — the same commit this review credited with "adding `output_log`/`error_log` (LOW-4 fixed)." |
+| **MED-2** "helper silently absent" (review: ✅ fixed) | ⚠️ **Only half-fixed.** `ensure_babysitter_helper` is wired to the *worker* path only; the **pg** render path bypasses it. A **worker-less (pg-only) tenant** renders `pg-sup` with `required_files=<helper>` but never installs the helper → pg babysitter silently dead. On `aries` it was masked because pebble's worker registration installed the helper *before* pg-sup started. |
+
+So the prior assessment ("promising… effectively solid pending on-host fault-injection") was **over-optimistic**: as shipped on `d16be2e1`, the babysitter never starts on a clean OpenRC+rootless deployment.
+
+### Fixes applied (`1.1.6-babysitter-gentoo` working tree — verified live, not yet committed)
+
+1. **Log dir → the tenant's own logs dir** (`render_container_babysitter_unit`): `/var/log/lunarwing/<t>` → `$(tenant_lw_root)/logs` = `/home/<t>/lunarwing/logs`, matching every other unit (lunarwing/proxy/xmpp-bridge) whose parent already exists. Kills the showstopper.
+2. **`ensure_babysitter_helper` moved into `render_container_babysitter_unit`** (and removed as redundant from `_register_babysitter`), so the **pg path installs the helper too** — closes the MED-2 worker-less gap.
+3. **Corrected the misleading `start_pre` comment** (it promised a `sudo -u` fallback that doesn't exist; replaced with the now-verified runtime behavior). Footgun caught while doing so: the unit heredoc is **unquoted**, so a backtick pair in a *comment* (`` `podman wait` ``) was being *executed* at render time — harmless empty substitution, but it emitted a stray `Error: "podman wait" requires a name` on every render. De-fanged.
+
+### Re-verification (simulated fresh host)
+Removed **both** `/var/log/lunarwing` **and** the helper binary, then re-rendered through the fixed generator (`render-units`) and restarted: both `-sup` units come up clean, `podman wait` children supervising as aries, babysitter logs land in `/home/aries/lunarwing/logs/`, **no `/var/log/lunarwing` required**, zero failed markers, and `render` no longer emits the spurious `podman wait` error.
+
+**Revised bottom line:** the core design is sound and now *runtime-verified* on OpenRC 0.63.1 / podman 5.8.2 — but only after the log-dir + pg-helper fixes. `d16be2e1` alone is **not** deployable on a fresh OpenRC+rootless host. Note the fix to `pg-sup` requires a `render-units` (re-render) on already-provisioned tenants — `start-tenant` does not re-render the pg unit.
+
+---
+
 ## UPDATE — commit `d16be2e1` (2026-06-21 ~16:01) + MED-1 verified
 
 The branch author read this review and pushed `d16be2e1` ("reviewed and worked on podman babysitter implementation. tried to address issues from doc as best as could"); the fixes map precisely to the findings below. **Revised maturity: early-incomplete → promising-needs-fixes, and effectively solid-pending-on-host-fault-injection** now that the make-or-break MED-1 resolves favorably (below).
