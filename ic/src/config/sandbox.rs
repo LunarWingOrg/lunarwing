@@ -1,5 +1,6 @@
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env, parse_string_env};
 use crate::error::ConfigError;
+use serde::{Deserialize, Serialize};
 use tracing;
 
 /// Docker sandbox configuration.
@@ -184,7 +185,7 @@ fn parse_oauth_access_token(json: &str) -> Option<String> {
 }
 
 /// A single endpoint for a named external worker (URL + optional auth).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerEndpoint {
     pub url: String,
     pub auth_token: Option<String>,
@@ -192,7 +193,8 @@ pub struct WorkerEndpoint {
 }
 
 /// Load balancing strategy for multi-instance workers.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum LoadBalanceStrategy {
     #[default]
     RoundRobin,
@@ -208,10 +210,8 @@ pub struct ExternalWorkerConfig {
     pub timeout_ms: u64,
     /// Multiple endpoints for load-balanced workers.
     /// When non-empty, `url`/`auth_token` are treated as fallback only.
-    #[serde(default)]
     pub endpoints: Vec<WorkerEndpoint>,
     /// Load balancing strategy (defaults to RoundRobin).
-    #[serde(default)]
     pub load_balance: LoadBalanceStrategy,
 }
 
@@ -226,8 +226,27 @@ impl ExternalWorkerConfig {
                 url: ew.url.clone(),
                 auth_token: ew.auth_token.clone(),
                 timeout_ms: ew.timeout_ms,
+                endpoints: ew.endpoints.clone(),
+                load_balance: ew.load_balance.clone(),
             })
             .collect()
+    }
+
+    /// Returns the canonical endpoint list for this worker.
+    ///
+    /// When `endpoints` is non-empty those are used directly; otherwise a
+    /// single `WorkerEndpoint` is synthesized from the legacy `url` and
+    /// `auth_token` fields.
+    pub fn endpoints(&self) -> Vec<WorkerEndpoint> {
+        if !self.endpoints.is_empty() {
+            self.endpoints.clone()
+        } else {
+            vec![WorkerEndpoint {
+                url: self.url.clone(),
+                auth_token: self.auth_token.clone(),
+                weight: None,
+            }]
+        }
     }
 }
 

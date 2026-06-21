@@ -168,7 +168,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
 
 ## TODOs
 
-- [ ] 1. Extend `TaskRequest` payload with context struct
+- [x] 1. Extend `TaskRequest` payload with context struct
 
   **What to do**:
   - Add `TaskContext` struct to `external_worker.rs` containing:
@@ -246,7 +246,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Files: `src/orchestrator/external_worker.rs`
   - Pre-commit: `cargo test -- external_worker`
 
-- [ ] 2. Add `ExternalTaskStatus` enum
+- [x] 2. Add `ExternalTaskStatus` enum
 
   **What to do**:
   - Add `ExternalTaskStatus` enum in `external_worker.rs`:

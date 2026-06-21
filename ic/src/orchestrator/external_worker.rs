@@ -694,6 +694,7 @@ async fn persist_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::LoadBalanceStrategy;
 
     #[test]
     fn envelope_serialization() {
@@ -737,12 +738,16 @@ mod tests {
                 url: "ws://localhost:9090/ws/agent".to_string(),
                 auth_token: Some("tok".to_string()),
                 timeout_ms: 300_000,
+                endpoints: vec![],
+                load_balance: LoadBalanceStrategy::default(),
             },
             ExternalWorkerConfig {
                 name: "codex".to_string(),
                 url: "ws://localhost:8443".to_string(),
                 auth_token: None,
                 timeout_ms: 600_000,
+                endpoints: vec![],
+                load_balance: LoadBalanceStrategy::default(),
             },
         ]);
         assert!(!mgr.is_empty());

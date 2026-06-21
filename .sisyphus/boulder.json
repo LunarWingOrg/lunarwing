@@ -1,7 +1,12 @@
 {
   "active_plan": "/home/sun/lw_new_workspace_wt/lunarwing/.sisyphus/plans/external-worker-upgrades.md",
-  "started_at": "2026-06-21T11:00:00Z",
-  "session_ids": ["ses_current"],
+  "started_at": "2026-06-21T12:01:37.252Z",
+  "session_ids": [
+    "ses_11677d1d1ffeaSgqPjcYlzOIFp"
+  ],
+  "session_origins": {
+    "ses_11677d1d1ffeaSgqPjcYlzOIFp": "direct"
+  },
   "plan_name": "external-worker-upgrades",
-  "worktree_path": null
+  "agent": "atlas"
 }
