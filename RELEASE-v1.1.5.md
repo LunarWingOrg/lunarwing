@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.5 — Codename `Kawarimi`
 
-**Release Date:** 2026-06-22
+**Release Date:** 2026-06-21
 
 > Codename *Kawarimi* — the ninja substitution art (替わり身): swap yourself out and leave a stand-in behind. Fitting for a release whose centerpiece is moving a tenant to a fresh host while the old one stays as the rollback.
 
