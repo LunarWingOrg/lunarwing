@@ -38,7 +38,7 @@ The podman wait babysitter provides docker-parity crash recovery for rootless Po
 
 ### Helper Script Installation
 
-Installed by `install-lunarwing-watchdog.sh` to `/usr/local/sbin/lunarwing-ctr-babysit` during OpenRC watchdog setup.
+Installed idempotently by `lunarwing-mt-admin.sh` via `ensure_babysitter_helper()` during tenant lifecycle operations. The watchdog installer historically copied this helper too, but helper provisioning is now owned by mt-admin so tenants work even if the watchdog is not installed yet.
 
 ### Tenant Lifecycle
 

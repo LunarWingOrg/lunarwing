@@ -22,5 +22,7 @@ fi
 # Ensure container is started (idempotent; no-op if already running)
 podman start "${ctr}" >/dev/null 2>&1 || true
 
-# Block until container exits, then exit with container's exit code
+# Block until container exits. `podman wait` exits 0 when the container stops
+# (regardless of the container's own exit code), which supervise-daemon treats
+# as the command exiting, so it respawns the babysitter and restarts the container.
 exec podman wait "${ctr}"

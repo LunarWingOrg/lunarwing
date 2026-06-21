@@ -9,12 +9,12 @@ Implement the "podman wait" babysitter pattern (Option 1 from ROOTLESS_PODMAN_CO
 
 ## Implementation
 - Create helper script ic/scripts/lunarwing-ctr-babysit.sh with podman start + podman wait logic
-- Install helper to /usr/local/bin/ via render-systemd/render-launchd and package build
+- Install helper to /usr/local/sbin/ via ensure_babysitter_helper() in lunarwing-mt-admin.sh (decoupled from watchdog installer)
 - Add render_container_babysitter_unit() function to lunarwing-mt-admin.sh for generating -sup OpenRC units
 - Wire babysitter units into tenant lifecycle (start_tenant_openrc, stop_tenant_openrc, uninstall_tenant_openrc)
 - Update PG container unit status() to use pg_isready health check instead of State.Running only
 - Add babysitter unit registration to _register_worker_unit for nanocode/pebble workers
-- Test with fault injection: kill container, verify sub-second recovery via supervise-daemon
+- Test with fault injection: kill container, verify sub-2-second recovery via supervise-daemon
 - Update ROADMAP_2026.md to mark feature as implemented in v1.1.7
 
 ## Required Specs

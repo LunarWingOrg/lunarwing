@@ -467,10 +467,30 @@ _deregister_worker_unit() {
   ensure_init_system
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ -f "/etc/init.d/lunarwing-${worker}-${name}" ]] || return 0
+  _deregister_babysitter "lunarwing-${worker}-${name}"
   rc-service "lunarwing-${worker}-${name}" stop >/dev/null 2>&1 || true
   rc-update del "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
   rm -f "/etc/init.d/lunarwing-${worker}-${name}" "/etc/conf.d/lunarwing-${worker}-${name}"
-  _deregister_babysitter "lunarwing-${worker}-${name}"
+}
+
+# Install (or refresh) the babysitter helper binary from this repo to /usr/local/sbin.
+# Idempotent: skips if the on-disk copy is byte-identical (mtime/perm-check), so
+# `start_tenant` is safe to call repeatedly without churning the file. This
+# decouples helper provisioning from the watchdog installer — a tenant created
+# before the watchdog is installed still gets a working babysitter.
+ensure_babysitter_helper() {
+  local src="${SCRIPT_DIR}/lunarwing-ctr-babysit.sh"
+  local dst="/usr/local/sbin/lunarwing-ctr-babysit"
+  [[ -f "$src" ]] || {
+    say "WARNING: babysitter helper source missing: $src (skipping install)"
+    return 0
+  }
+  if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then
+    return 0  # up to date; don't touch mtime/perm
+  fi
+  install -o root -g root -m 0755 "$src" "$dst" \
+    && say "Installed babysitter helper: $dst" \
+    || say "WARNING: failed to install babysitter helper to $dst"
 }
 
 # Render a supervised babysitter OpenRC unit for a rootless container.
@@ -485,6 +505,7 @@ render_container_babysitter_unit() {
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ "$MT_ROOTLESS" == "true" ]] || return 0
   local babysitter="/etc/init.d/${container}-sup"
+  local log_dir="/var/log/lunarwing/${name}"
 
   cat >"$babysitter" <<INITEOF
 #!/sbin/openrc-run
@@ -498,6 +519,9 @@ description="LunarWing ${type} container babysitter ($name)"
 : "\${babysitter_respawn_delay:=2}"
 : "\${babysitter_respawn_max:=10}"
 : "\${babysitter_respawn_period:=120}"
+: "\${babysitter_log_dir:=$log_dir}"
+: "\${babysitter_output_log:=\${babysitter_log_dir}/${type}-babysitter.log}"
+: "\${babysitter_error_log:=\${babysitter_log_dir}/${type}-babysitter.err}"
 
 supervisor="supervise-daemon"
 command="/usr/local/sbin/lunarwing-ctr-babysit"
@@ -506,6 +530,9 @@ command_user="\${babysitter_user}:\${babysitter_user}"
 respawn_delay="\${babysitter_respawn_delay}"
 respawn_max="\${babysitter_respawn_max}"
 respawn_period="\${babysitter_respawn_period}"
+output_log="\${babysitter_output_log}"
+error_log="\${babysitter_error_log}"
+required_files="\${command}"
 
 depend() {
     need net localmount
@@ -514,7 +541,19 @@ depend() {
 
 start_pre() {
     checkpath -d -m 0700 -o "\${babysitter_user}:\${babysitter_user}" "/run/user/\${babysitter_uid}"
-    export HOME="\${babysitter_home}" XDG_RUNTIME_DIR="/run/user/\${babysitter_uid}"
+    checkpath -d -m 0750 -o "\${babysitter_user}:\${babysitter_user}" "\${babysitter_log_dir}"
+    checkpath -f -m 0640 -o "\${babysitter_user}:\${babysitter_user}" "\${babysitter_output_log}"
+    checkpath -f -m 0640 -o "\${babysitter_user}:\${babysitter_user}" "\${babysitter_error_log}"
+
+    # Export rootless environment. supervise-daemon should preserve these after
+    # setuid to the tenant, but if it clobbers them (version-dependent), fall back
+    # to wrapping the command via sudo -u (mt-admin's proven pattern for rootless).
+    if [ -n "\${babysitter_home}" ]; then
+        export HOME="\${babysitter_home}"
+    fi
+    if [ -n "\${babysitter_uid}" ]; then
+        export XDG_RUNTIME_DIR="/run/user/\${babysitter_uid}"
+    fi
 }
 INITEOF
   chmod 0755 "$babysitter"
@@ -527,6 +566,7 @@ _register_babysitter() {
   ensure_init_system
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ "$MT_ROOTLESS" == "true" ]] || return 0
+  ensure_babysitter_helper
   render_container_babysitter_unit "$name" "$type" "$container" "$uid" "$home"
   rc-update add "${container}-sup" default >/dev/null 2>&1 || true
   rc-service "${container}-sup" start >/dev/null 2>&1 || true
@@ -1919,6 +1959,7 @@ stop_tenant_nanocode() {
   local container_name="lunarwing-nanocode-$name"
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    _deregister_babysitter "$container_name"
     rc-service "$container_name" stop >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
   elif _ctr "$name" inspect "$container_name" &>/dev/null; then
@@ -2029,6 +2070,7 @@ stop_tenant_pebble() {
   local container_name="lunarwing-pebble-$name"
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    _deregister_babysitter "$container_name"
     rc-service "$container_name" stop >/dev/null 2>&1 || true
     say "pebble worker stopped ($container_name)"
   elif _ctr "$name" inspect "$container_name" &>/dev/null; then

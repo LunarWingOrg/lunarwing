@@ -12,7 +12,7 @@ The podman wait babysitter provides docker-parity crash recovery for rootless Po
 
 ### Components
 
-1. **Helper Script** (`/usr/local/bin/lunarwing-ctr-babysit`)
+1. **Helper Script** (`/usr/local/sbin/lunarwing-ctr-babysit`)
    - Takes container name as argument
    - Ensures container is started: `podman start <ctr> || true`
    - Blocks on container exit: `exec podman wait <ctr>`
@@ -42,10 +42,7 @@ The podman wait babysitter provides docker-parity crash recovery for rootless Po
 
 ### Helper Script Installation
 
-Installed by:
-- `render-systemd` → systemd package
-- `render-launchd` → macOS package  
-- Package build (rpm/deb/apkb) → `/usr/local/bin/lunarwing-ctr-babysit`
+Installed idempotently by `lunarwing-mt-admin.sh`'s `ensure_babysitter_helper()` to `/usr/local/sbin/lunarwing-ctr-babysit` during tenant lifecycle operations.
 
 ### Tenant Lifecycle
 
@@ -118,7 +115,5 @@ podman kill lunarwing-pg-<tenant>
 ## Files Modified
 
 - `ic/scripts/lunarwing-ctr-babysit.sh` (new)
-- `ic/scripts/lunarwing-mt-admin.sh` (render_container_babysitter_unit, wiring)
-- `ic/scripts/render-systemd.sh` (install helper)
-- `ic/scripts/render-launchd.sh` (install helper)
-- Packaging specs (rpm/deb/apkb) for helper install
+- `ic/scripts/lunarwing-mt-admin.sh` (render_container_babysitter_unit, ensure_babysitter_helper, wiring)
+- `ic/scripts/install-lunarwing-watchdog.sh` (removed helper installation — now owned by mt-admin)
