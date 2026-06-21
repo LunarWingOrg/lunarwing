@@ -258,15 +258,20 @@ gate_docker_and_pg() {
 gate_clean_tree() {
   banner "GATE 5  tenant working tree is clean  (git checkout $TARGET must not clobber hand-edits)"
   # MF-7: build-tenant regenerates Cargo.lock files; those are build artifacts (the checkout
-  # would replace them anyway), NOT hand-edits. Report + restore any modified *Cargo.lock so
-  # they don't trip the hand-edit guard, but STILL hard-fail on any OTHER dirty tracked file.
+  # would replace them anyway), NOT hand-edits. On --apply, restore them so they don't block
+  # `git checkout $TARGET` (which refuses over a dirty tracked file); on a dry-run, only report
+  # (a dry-run must change nothing). Either way the clean-tree decision ignores *Cargo.lock and
+  # still hard-fails on any OTHER dirty tracked file.
   local dirty_locks; dirty_locks="$(sudo -u "$TENANT" git -c safe.directory="$HOME_DIR" -C "$HOME_DIR" status --short --untracked-files=no -- '*Cargo.lock' 2>/dev/null || true)"
   if [[ -n "$dirty_locks" ]]; then
-    say "  restoring build-regenerated Cargo.lock (build artifact; the checkout replaces it):"
+    if $APPLY; then say "  restoring build-regenerated Cargo.lock (build artifact; the checkout replaces it):"
+    else            say "  [dry-run] would restore build-regenerated Cargo.lock (build artifact):"; fi
     printf '%s\n' "$dirty_locks" | sed 's/^/    /'
-    sudo -u "$TENANT" git -c safe.directory="$HOME_DIR" -C "$HOME_DIR" checkout -- '*Cargo.lock' 2>/dev/null || true
+    if $APPLY; then
+      sudo -u "$TENANT" git -c safe.directory="$HOME_DIR" -C "$HOME_DIR" checkout -- '*Cargo.lock' 2>/dev/null || true
+    fi
   fi
-  local dirty; dirty="$(sudo -u "$TENANT" git -c safe.directory="$HOME_DIR" -C "$HOME_DIR" status --short --untracked-files=no 2>/dev/null || true)"
+  local dirty; dirty="$(sudo -u "$TENANT" git -c safe.directory="$HOME_DIR" -C "$HOME_DIR" status --short --untracked-files=no 2>/dev/null | grep -v 'Cargo\.lock$' || true)"
   if [[ -n "$dirty" ]]; then
     printf '%s\n' "$dirty" | sed 's/^/    /'
     die "checkout $TARGET would conflict with hand-edited tracked files (non-Cargo.lock). Reconcile/stash, then re-run."
