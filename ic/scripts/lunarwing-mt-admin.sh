@@ -454,6 +454,11 @@ _register_worker_unit() {
   rc-update add "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
   rc-service "lunarwing-${worker}-${name}" start >/dev/null 2>&1 || true
   say "registered OpenRC unit lunarwing-${worker}-${name} (health-monitored, boot-persistent)"
+  local container="lunarwing-${worker}-${name}"
+  local uid home
+  uid="$(id -u "$name" 2>/dev/null || echo "")"
+  home="$(tenant_home "$name")"
+  _register_babysitter "$name" "$worker" "$container" "$uid" "$home"
 }
 
 # Tear down a worker's OpenRC unit (boot-disable + remove the init script).
@@ -465,6 +470,77 @@ _deregister_worker_unit() {
   rc-service "lunarwing-${worker}-${name}" stop >/dev/null 2>&1 || true
   rc-update del "lunarwing-${worker}-${name}" default >/dev/null 2>&1 || true
   rm -f "/etc/init.d/lunarwing-${worker}-${name}" "/etc/conf.d/lunarwing-${worker}-${name}"
+  _deregister_babysitter "lunarwing-${worker}-${name}"
+}
+
+# Render a supervised babysitter OpenRC unit for a rootless container.
+# The babysitter blocks on `podman wait <container>` and respawns via supervise-daemon
+# when the container exits, providing docker-parity crash recovery (~seconds, not minutes).
+# Only applicable to rootless podman on OpenRC (systemd uses Quadlet).
+# Usage: render_container_babysitter_unit <tenant> <container-type> <container-name> <uid> <home>
+# Example: render_container_babysitter_unit acme pg lunarwing-pg-acme 1001 /home/acme
+render_container_babysitter_unit() {
+  local name="$1" type="$2" container="$3" uid="$4" home="$5"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  [[ "$MT_ROOTLESS" == "true" ]] || return 0
+  local babysitter="/etc/init.d/${container}-sup"
+
+  cat >"$babysitter" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing ${type} container babysitter ($name)"
+
+: "\${babysitter_container:=$container}"
+: "\${babysitter_user:=$name}"
+: "\${babysitter_home:=$home}"
+: "\${babysitter_uid:=$uid}"
+: "\${babysitter_respawn_delay:=2}"
+: "\${babysitter_respawn_max:=10}"
+: "\${babysitter_respawn_period:=120}"
+
+supervisor="supervise-daemon"
+command="/usr/local/sbin/lunarwing-ctr-babysit"
+command_args="\${babysitter_container}"
+command_user="\${babysitter_user}:\${babysitter_user}"
+respawn_delay="\${babysitter_respawn_delay}"
+respawn_max="\${babysitter_respawn_max}"
+respawn_period="\${babysitter_respawn_period}"
+
+depend() {
+    need net localmount
+    after firewall
+}
+
+start_pre() {
+    checkpath -d -m 0700 -o "\${babysitter_user}:\${babysitter_user}" "/run/user/\${babysitter_uid}"
+    export HOME="\${babysitter_home}" XDG_RUNTIME_DIR="/run/user/\${babysitter_uid}"
+}
+INITEOF
+  chmod 0755 "$babysitter"
+}
+
+# Register a babysitter unit for a container (render + boot-enable + start).
+# Idempotent: safe to call multiple times.
+_register_babysitter() {
+  local name="$1" type="$2" container="$3" uid="$4" home="$5"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  [[ "$MT_ROOTLESS" == "true" ]] || return 0
+  render_container_babysitter_unit "$name" "$type" "$container" "$uid" "$home"
+  rc-update add "${container}-sup" default >/dev/null 2>&1 || true
+  rc-service "${container}-sup" start >/dev/null 2>&1 || true
+}
+
+# Deregister a babysitter unit (stop + boot-disable + remove).
+_deregister_babysitter() {
+  local container="$1"
+  ensure_init_system
+  [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
+  [[ -f "/etc/init.d/${container}-sup" ]] || return 0
+  rc-service "${container}-sup" stop >/dev/null 2>&1 || true
+  rc-update del "${container}-sup" default >/dev/null 2>&1 || true
+  rm -f "/etc/init.d/${container}-sup"
 }
 
 # ── Port registry ────────────────────────────────────────────────────────────
@@ -2770,6 +2846,7 @@ status() {
 }
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-pg-${name}"
+  render_container_babysitter_unit "$name" pg "$pg_container" "$pg_uid" "$pg_home"
 
   # ── Main daemon init script ──
   cat >"/etc/init.d/lunarwing-${name}" <<INITEOF
@@ -3104,6 +3181,8 @@ start_tenant_openrc() {
 
   # Postgres first: the daemon `need`s it (and it's idempotent if already up).
   rc-service "lunarwing-pg-${name}" start
+  # Start PG babysitter (supervises the container via podman wait)
+  rc-service "lunarwing-pg-${name}-sup" start 2>/dev/null || true
   # Optional channels next, non-fatal: a missing weechat/aiohttp must not abort
   # the core stack (the main daemon does not depend on them).
   rc-service "lunarwing-weechat-${name}" start 2>/dev/null || say "  (lunarwing-weechat-${name} skipped — optional)"
@@ -3111,14 +3190,24 @@ start_tenant_openrc() {
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
+  # Start worker babysitters (if workers are configured)
+  for worker in nanocode pebble; do
+    rc-service "lunarwing-${worker}-${name}-sup" start 2>/dev/null || true
+  done
   say "OpenRC services started for $name"
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  for svc in "lunarwing-pg-${name}" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
+  for svc in "lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
              "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
     if rc-service "$svc" status >/dev/null 2>&1; then
       rc-update add "$svc" default >/dev/null 2>&1 || true
+    fi
+  done
+  # Auto-enable worker babysitters
+  for worker in nanocode pebble; do
+    if rc-service "lunarwing-${worker}-${name}-sup" status >/dev/null 2>&1; then
+      rc-update add "lunarwing-${worker}-${name}-sup" default >/dev/null 2>&1 || true
     fi
   done
   say "enabled boot persistence (default runlevel) for $name's running services"
@@ -3131,14 +3220,19 @@ stop_tenant_openrc() {
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-${name}" stop 2>/dev/null || true
+  # Worker babysitters: stop the supervisors so they don't respawn the stopped containers.
+  for worker in nanocode pebble; do
+    rc-service "lunarwing-${worker}-${name}-sup" stop 2>/dev/null || true
+  done
   # Postgres last: the daemon depends on it, so it stops after its consumers.
+  rc-service "lunarwing-pg-${name}-sup" stop 2>/dev/null || true
   rc-service "lunarwing-pg-${name}" stop 2>/dev/null || true
   say "OpenRC services stopped for $name"
 }
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
