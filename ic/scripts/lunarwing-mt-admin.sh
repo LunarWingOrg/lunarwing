@@ -504,8 +504,18 @@ render_container_babysitter_unit() {
   ensure_init_system
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ "$MT_ROOTLESS" == "true" ]] || return 0
+  # The pg path renders directly (bypassing _register_babysitter), so install the
+  # helper here too — otherwise a worker-less tenant renders a -sup unit whose
+  # required_files=<helper> never exists and supervise-daemon silently never starts it.
+  ensure_babysitter_helper
   local babysitter="/etc/init.d/${container}-sup"
-  local log_dir="/var/log/lunarwing/${name}"
+  # Log into the tenant's existing logs dir (created at add-tenant, tenant-owned),
+  # exactly like every other unit (lunarwing/proxy/xmpp-bridge). The old
+  # /var/log/lunarwing/<t> path had no parent on a fresh host, so the non-recursive
+  # `checkpath -d` failed, supervise-daemon could not open output_log/error_log, and
+  # the babysitter never stayed up (landed in /run/openrc/failed/).
+  local log_dir
+  log_dir="$(tenant_lw_root "$name")/logs"
 
   cat >"$babysitter" <<INITEOF
 #!/sbin/openrc-run
@@ -545,9 +555,12 @@ start_pre() {
     checkpath -f -m 0640 -o "\${babysitter_user}:\${babysitter_user}" "\${babysitter_output_log}"
     checkpath -f -m 0640 -o "\${babysitter_user}:\${babysitter_user}" "\${babysitter_error_log}"
 
-    # Export rootless environment. supervise-daemon should preserve these after
-    # setuid to the tenant, but if it clobbers them (version-dependent), fall back
-    # to wrapping the command via sudo -u (mt-admin's proven pattern for rootless).
+    # Export rootless environment. Verified at runtime on OpenRC 0.63.1: across its
+    # setuid, supervise-daemon re-sets HOME to the tenant's passwd home and leaves
+    # XDG_RUNTIME_DIR untouched, so the supervised podman-wait process already runs
+    # with HOME=/home/<t> + XDG_RUNTIME_DIR=/run/user/<uid>. These exports are belt-
+    # and-suspenders; no sudo -u wrapper is needed. (No backticks in this heredoc:
+    # it is unquoted, so backticks would be executed at render time.)
     if [ -n "\${babysitter_home}" ]; then
         export HOME="\${babysitter_home}"
     fi
@@ -566,7 +579,7 @@ _register_babysitter() {
   ensure_init_system
   [[ "$INIT_SYSTEM" == "openrc" ]] || return 0
   [[ "$MT_ROOTLESS" == "true" ]] || return 0
-  ensure_babysitter_helper
+  # render_container_babysitter_unit installs the helper itself (covers pg + workers).
   render_container_babysitter_unit "$name" "$type" "$container" "$uid" "$home"
   rc-update add "${container}-sup" default >/dev/null 2>&1 || true
   rc-service "${container}-sup" start >/dev/null 2>&1 || true
