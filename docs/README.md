@@ -81,6 +81,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`MT-MACHINE-MIGRATION-REVIEW-NOTES.md`](ops/MT-MACHINE-MIGRATION-REVIEW-NOTES.md) | Review notes for the machine-migration tooling |
 | [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](ops/MT-GENTOO-SETUP-AND-CHANGES-MADE.md) | Gentoo/OpenRC multi-tenant setup notes |
 | [`MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md`](ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md) | Review notes for the 1.1.4 MT upgrade tooling |
+| [`MT-LEGACY-UPGRADE-NOTES.md`](ops/MT-LEGACY-UPGRADE-NOTES.md) | Legacy same-host version upgrade runbook (v1.0.3–v1.0.8 → v1.1.x) |
 | [`SELF_REPAIR_IMPROVEMENTS_GENTOO.md`](ops/SELF_REPAIR_IMPROVEMENTS_GENTOO.md) | Self-heal fd-leak fix found on a live OpenRC MT host |
 | [`GOALS_1.1.5.md`](ops/GOALS_1.1.5.md) | v1.1.5 release checklist (current) |
 | [`GOALS_1.1.4.md`](ops/GOALS_1.1.4.md) | v1.1.4 release checklist (shipped; kept — still referenced by MT work) |
@@ -119,6 +120,8 @@ the reorg.
 | [`GITWASM/README.md`](proposals/GITWASM/README.md) | Git WASM tool proposal |
 | [`IC_REPAIR_FOLLOWUPS.md`](proposals/IC_REPAIR_FOLLOWUPS.md) | Self-repair / infra-repair follow-up items |
 | [`MT-1.1.0-TO-1.1.4-UPGRADE.md`](proposals/MT-1.1.0-TO-1.1.4-UPGRADE.md) | Multi-tenant v1.1.0 → v1.1.4 upgrade plan + tooling |
+| [`MT-LEGACY-UPGRADE-VERIFICATION.md`](proposals/MT-LEGACY-UPGRADE-VERIFICATION.md) | Live validation plan for the v1.0.3-era same-host upgrade harness |
+| [`MT-LEGACY-UPGRADE-QA-PLAN.md`](proposals/MT-LEGACY-UPGRADE-QA-PLAN.md) | Operator one-page live-validation checklist for legacy upgrades (v1.0.3-era → v1.1.2/3) |
 | [`MT-WEECHAT-CONSISTENCY-AND-CHANNEL-PRUNING.md`](proposals/MT-WEECHAT-CONSISTENCY-AND-CHANNEL-PRUNING.md) | WeeChat multi-tenant consistency + channel pruning |
 | [`OPENRC_ACCURATE_REPORT_16_JUNE_2026.md`](proposals/OPENRC_ACCURATE_REPORT_16_JUNE_2026.md) | OpenRC multi-tenant accurate report (2026-06-16) |
 | [`ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md`](proposals/ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md) | Rootless-podman container supervision gap analysis |

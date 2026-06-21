@@ -85,9 +85,15 @@ These gate the day-of runbook; answer before scheduling the real upgrade.
 
 1. **PostgreSQL major version — RESOLVED.** Tenant `ruffles` runs **PostgreSQL 16.13** (`docker exec lunarwing-pg-ruffles postgres --version`), well above the GATE 1 floor of 15 (V21 uses `UNIQUE NULLS NOT DISTINCT`). **No PG-major upgrade is required.** (This was the biggest risk; it's gone. Re-verify just before the run with `docker exec lunarwing-pg-ruffles cat /var/lib/postgresql/data/PG_VERSION`.)
 2. **Tenant layout.** The tool assumes the mt-admin layout: `/home/<t>/lunarwing` git checkout, `lunarwing-pg-<t>` container, `/etc/lunarwing/ports.json`, `lunarwing-mt-admin.sh` present. A v1.0.3 tenant predates much of this — confirm the on-disk reality matches, or adapt.
-3. **Container runtime.** GATE 0 requires **Docker rootful** (fails on podman; the tool pins `LUNARWING_MT_ROOTLESS=false`). Confirm runtime + rootful/rootless on the target.
+3. **Container runtime — CONFIRMED rootful Docker.** The host (`cmc-onexplayerx1pro-tab`) runs **rootful Docker, not rootless Podman**. GATE 0 passes; the tool pins `LUNARWING_MT_ROOTLESS=false` to keep it that way. **This is exactly the environment `upgrade-tenant-version.sh` targets** — and it means the v1.1.4 rootful→rootless flip, the data-orphan guard, and `LUNARWING_MT_ACK_ROOTLESS_FLIP` (all `upgrade-tenant.sh` concerns) **do NOT apply here.**
 4. **Init system.** The adapter steps use `systemctl --user` (systemd). Confirm the target's init system matches.
 5. **Target finality.** Is **v1.1.2** the end state, or a stepping stone? The legacy cap is v1.1.3; the rootful→rootless flip to v1.1.4 is a *different* tool (`upgrade-tenant.sh`).
+6. **Shared multitenant host — cross-tenant safety.** ruffles lives on a **multitenant rootful-Docker host alongside other tenants on lower versions (≤ v1.1.2)**, and we run the **1.1.6-branch-bundled `mt-admin`** (`$MT`) against it. Cautions:
+   - **Health pipeline:** the rehearsal's `add-tenant` MUST use `--no-health` (it does) so it doesn't arm the host-global ~15-min self-heal remediation timer and start acting on the OTHER tenants. The ruffles upgrade itself does not call `add-tenant`, so it won't arm it either.
+   - **ports.json schema skew:** the host's existing tenants were provisioned by an older mt-admin. **Back up `/etc/lunarwing/ports.json` before the rehearsal** and confirm the 1.1.6 mt-admin reads/writes it compatibly (the rehearsal's `add-tenant`/`remove-tenant --purge` round-trip must leave the registry consistent for the other tenants).
+   - **Resource contention:** cargo builds compete with the live tenants for CPU/RAM — cap `-j` and pick a quiet window.
+   - **Scope:** ruffles' `stop/build/render/start` is per-tenant; double-check the rehearsal's `--cleanup --purge` only removes the throwaway rehearsal tenant (its name guard + ports.json refuse-if-exists protect this).
+   - **WHERE to rehearse (decision needed):** the separate Arch/systemd test-VM (safest — but it must also be **rootful Docker** to be faithful) vs this production host (most faithful, but risks the other live tenants). Recommend the test-VM if its runtime matches.
 
 ---
 
