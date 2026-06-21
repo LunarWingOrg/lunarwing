@@ -59,6 +59,32 @@ struct TaskProgressPayload {
     done: bool,
 }
 
+/// A single message in conversation history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationMessage {
+    pub role: String,
+    pub content: String,
+}
+
+/// Context passed to external workers with task requests.
+///
+/// All fields are optional with serde defaults for backward compatibility —
+/// older workers that don't understand these fields will still work.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TaskContext {
+    /// Workspace/project directory path.
+    pub project_dir: Option<String>,
+    /// Recent conversation messages for context.
+    pub conversation_history: Vec<ConversationMessage>,
+    /// Environment variables to inject into the worker process.
+    pub environment: HashMap<String, String>,
+    /// User ID who initiated the task.
+    pub user_id: String,
+    /// Arbitrary metadata key-value pairs.
+    pub metadata: HashMap<String, String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct TaskResultPayload {
     #[allow(dead_code)]
@@ -257,10 +283,34 @@ impl ExternalWorkerManager {
     }
 }
 
+/// Status of an external worker task.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExternalTaskStatus {
+    Success,
+    Failed,
+    Cancelled,
+    #[serde(rename = "timed_out")]
+    TimedOut,
+    Partial(String),
+}
+
+impl std::fmt::Display for ExternalTaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::Failed => write!(f, "failed"),
+            Self::Cancelled => write!(f, "cancelled"),
+            Self::TimedOut => write!(f, "timed_out"),
+            Self::Partial(msg) => write!(f, "partial: {}", msg),
+        }
+    }
+}
+
 /// Result of an external worker task.
 #[derive(Debug, Clone)]
 pub struct ExternalTaskResult {
-    pub status: String,
+    pub status: ExternalTaskStatus,
     pub output: String,
     pub error: Option<String>,
     pub duration_ms: u64,
@@ -406,7 +456,7 @@ async fn run_external_task(
         serde_json::json!({
             "task_id": job_id.to_string(),
             "prompt": task,
-            "context": {},
+            "context": TaskContext::default(),
             "timeout_ms": timeout_ms,
         }),
     );
@@ -509,8 +559,14 @@ async fn run_external_task(
                                 result.output.clone()
                             };
 
+                            let status = match result.status.as_str() {
+                                "success" => ExternalTaskStatus::Success,
+                                "cancelled" => ExternalTaskStatus::Cancelled,
+                                _ => ExternalTaskStatus::Failed,
+                            };
+
                             return Ok(ExternalTaskResult {
-                                status: result.status,
+                                status,
                                 output: final_output,
                                 error: result.error,
                                 duration_ms: result.duration_ms,
@@ -532,7 +588,7 @@ async fn run_external_task(
                         let _ = write.send(tungstenite::Message::Text(json.into())).await;
                     }
                     return Ok(ExternalTaskResult {
-                        status: "cancelled".to_string(),
+                        status: ExternalTaskStatus::Cancelled,
                         output: accumulated_output.clone(),
                         error: None,
                         duration_ms: 0,
@@ -554,7 +610,7 @@ async fn run_external_task(
     };
 
     // Update context manager state
-    let success = task_result.status == "success";
+    let success = matches!(task_result.status, ExternalTaskStatus::Success);
     let final_state = if success {
         JobState::Completed
     } else {
@@ -706,5 +762,99 @@ mod tests {
         let worker = JobMode::Worker;
         assert_eq!(worker.db_value(), "worker");
         assert_eq!(JobMode::from_db_value("worker"), worker);
+    }
+
+    #[test]
+    fn task_context_full_roundtrip() {
+        let ctx = TaskContext {
+            project_dir: Some("/workspace/myproject".to_string()),
+            conversation_history: vec![
+                ConversationMessage {
+                    role: "user".to_string(),
+                    content: "fix the bug".to_string(),
+                },
+                ConversationMessage {
+                    role: "assistant".to_string(),
+                    content: "working on it".to_string(),
+                },
+            ],
+            environment: [("API_KEY".to_string(), "secret123".to_string())]
+                .into_iter()
+                .collect(),
+            user_id: "user-42".to_string(),
+            metadata: [("priority".to_string(), "high".to_string())]
+                .into_iter()
+                .collect(),
+        };
+
+        let json = serde_json::to_string(&ctx).unwrap();
+        let deserialized: TaskContext = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.project_dir, Some("/workspace/myproject".to_string()));
+        assert_eq!(deserialized.conversation_history.len(), 2);
+        assert_eq!(deserialized.conversation_history[0].role, "user");
+        assert_eq!(deserialized.conversation_history[0].content, "fix the bug");
+        assert_eq!(
+            deserialized.environment.get("API_KEY"),
+            Some(&"secret123".to_string())
+        );
+        assert_eq!(deserialized.user_id, "user-42");
+        assert_eq!(deserialized.metadata.get("priority"), Some(&"high".to_string()));
+    }
+
+    #[test]
+    fn task_context_backward_compat() {
+        let json = r#"{}"#;
+        let ctx: TaskContext = serde_json::from_str(json).unwrap();
+
+        assert_eq!(ctx.project_dir, None);
+        assert!(ctx.conversation_history.is_empty());
+        assert!(ctx.environment.is_empty());
+        assert_eq!(ctx.user_id, "");
+        assert!(ctx.metadata.is_empty());
+    }
+
+    #[test]
+    fn task_status_enum_serde() {
+        assert_eq!(
+            serde_json::to_string(&ExternalTaskStatus::Success).unwrap(),
+            "\"success\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExternalTaskStatus::Failed).unwrap(),
+            "\"failed\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExternalTaskStatus::Cancelled).unwrap(),
+            "\"cancelled\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExternalTaskStatus::TimedOut).unwrap(),
+            "\"timed_out\""
+        );
+        let partial_json = serde_json::to_string(&ExternalTaskStatus::Partial("wip".to_string())).unwrap();
+        assert!(partial_json.contains("partial"));
+        assert!(partial_json.contains("wip"));
+
+        let success: ExternalTaskStatus = serde_json::from_str("\"success\"").unwrap();
+        assert_eq!(success, ExternalTaskStatus::Success);
+
+        let failed: ExternalTaskStatus = serde_json::from_str("\"failed\"").unwrap();
+        assert_eq!(failed, ExternalTaskStatus::Failed);
+        let cancelled: ExternalTaskStatus = serde_json::from_str("\"cancelled\"").unwrap();
+        assert_eq!(cancelled, ExternalTaskStatus::Cancelled);
+        let timed_out: ExternalTaskStatus = serde_json::from_str("\"timed_out\"").unwrap();
+        assert_eq!(timed_out, ExternalTaskStatus::TimedOut);
+    }
+
+    #[test]
+    fn task_status_enum_matching() {
+        let success = ExternalTaskStatus::Success;
+        let failed = ExternalTaskStatus::Failed;
+        let cancelled = ExternalTaskStatus::Cancelled;
+
+        assert!(matches!(success, ExternalTaskStatus::Success));
+        assert!(!matches!(failed, ExternalTaskStatus::Success));
+        assert!(!matches!(cancelled, ExternalTaskStatus::Success));
     }
 }

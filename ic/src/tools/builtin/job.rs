@@ -23,6 +23,7 @@ use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::auth::CredentialGrant;
+use crate::orchestrator::external_worker::ExternalTaskStatus;
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -753,7 +754,7 @@ impl CreateJobTool {
                 .await
             {
                 Ok(Some(result)) => {
-                    let success = result.status == "success";
+                    let success = matches!(result.status, ExternalTaskStatus::Success);
                     if success {
                         let output = serde_json::json!({
                             "job_id": job_id.to_string(),

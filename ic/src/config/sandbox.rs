@@ -183,6 +183,22 @@ fn parse_oauth_access_token(json: &str) -> Option<String> {
     Some(token.to_string())
 }
 
+/// A single endpoint for a named external worker (URL + optional auth).
+#[derive(Debug, Clone)]
+pub struct WorkerEndpoint {
+    pub url: String,
+    pub auth_token: Option<String>,
+    pub weight: Option<u32>,
+}
+
+/// Load balancing strategy for multi-instance workers.
+#[derive(Debug, Clone, Default)]
+pub enum LoadBalanceStrategy {
+    #[default]
+    RoundRobin,
+    LeastConnections,
+}
+
 /// Configuration for a named external worker endpoint.
 #[derive(Debug, Clone)]
 pub struct ExternalWorkerConfig {
@@ -190,6 +206,13 @@ pub struct ExternalWorkerConfig {
     pub url: String,
     pub auth_token: Option<String>,
     pub timeout_ms: u64,
+    /// Multiple endpoints for load-balanced workers.
+    /// When non-empty, `url`/`auth_token` are treated as fallback only.
+    #[serde(default)]
+    pub endpoints: Vec<WorkerEndpoint>,
+    /// Load balancing strategy (defaults to RoundRobin).
+    #[serde(default)]
+    pub load_balance: LoadBalanceStrategy,
 }
 
 impl ExternalWorkerConfig {
