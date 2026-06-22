@@ -53,13 +53,28 @@
   - Job record persists `project_dir` and `credential_grants_json`
   - Backward compatible: empty credentials/project_dir produce same behavior as before
 
-## Pending — Wave 4 (worker containers)
+## Wave 4 — COMPLETE
 
-- [ ] **Task 9**: Update codex worker for extended context
-- [ ] **Task 10**: Update nanocode worker for extended context
-- [ ] **Task 11**: Update pebble worker for extended context
+- [x] **Task 9**: Update codex worker for extended context
+  - `TaskContext` interface added to `scripts/lunarwing_runtime.ts`
+  - `codex_task_executor.ts` uses `context.project_dir` for working dir, injects `context.environment` into subprocess env
+  - `agent_comm_protocol.json` updated with extended context fields
+  - Backward compatible: empty/missing context fields default gracefully
 
-## Pending — Final review
+- [x] **Task 10**: Update nanocode worker for extended context
+  - `TaskContext` interface added to `scripts/lunarwing_runtime.ts`
+  - `nanocode_task_executor.ts` uses `context.project_dir` for working dir, injects `context.environment` into `process.env`
+  - `agent_comm_protocol.json` updated with extended context fields
+  - Backward compatible: empty/missing context fields default gracefully
+
+- [x] **Task 11**: Update pebble worker for extended context
+  - `TaskContext` + `ConversationMessage` structs added to `src/protocol.rs` with `#[serde(default)]`
+  - `TaskRequest.context` changed from `serde_json::Value` to typed `TaskContext`
+  - `executor.rs` uses `context.project_dir` for working dir, injects `context.environment` into subprocess env
+  - Tests passing: `task_request_extended_context`, `task_request_empty_context_backward_compat` (+ 6 existing)
+  - Backward compatible: empty `{}` context deserializes to defaults
+
+## Still Peending — Final review
 
 - [ ] **F1**: Plan compliance audit
 - [ ] **F2**: Code quality review
@@ -72,6 +87,8 @@
 |------|-------|
 | 1 | `ic/src/orchestrator/external_worker.rs`, `ic/src/tools/builtin/job.rs`, `ic/src/config/sandbox.rs`, `ic/src/config/mod.rs`, `ic/src/settings.rs` |
 | 2+7 | `ic/src/orchestrator/external_worker.rs`, `ic/src/tools/builtin/job.rs` |
+| 3 | `ic/src/tools/builtin/job.rs` |
+| 4 | `codex4lunarwing/scripts/lunarwing_runtime.ts`, `codex4lunarwing/scripts/codex_task_executor.ts`, `codex4lunarwing/agent_comm_protocol.json`, `lunarcode4lunarwing/scripts/lunarwing_runtime.ts`, `lunarcode4lunarwing/scripts/nanocode_task_executor.ts`, `lunarcode4lunarwing/agent_comm_protocol.json`, `pebble4lunarwing/src/protocol.rs`, `pebble4lunarwing/src/executor.rs` |
 
 ## Verification
 
@@ -81,4 +98,7 @@ cargo fmt -- --check                                    # clean
 cargo clippy --all --benches --tests --examples         # zero warnings
 cargo test external_worker -- --nocapture                # 23 tests pass
 cargo test create_job -- --nocapture                     # 6 tests pass
+
+cd pebble4lunarwing
+cargo test -- --nocapture                                # 8 tests pass
 ```

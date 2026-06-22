@@ -237,7 +237,10 @@ mod tests {
         }"#;
         let req: TaskRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.task_id, "ext-1");
-        assert_eq!(req.context.project_dir.as_deref(), Some("/workspace/myproject"));
+        assert_eq!(
+            req.context.project_dir.as_deref(),
+            Some("/workspace/myproject")
+        );
         assert_eq!(req.context.environment.get("API_KEY").unwrap(), "secret123");
         assert_eq!(req.context.environment.get("DEBUG").unwrap(), "1");
         assert_eq!(req.context.user_id, "user-42");

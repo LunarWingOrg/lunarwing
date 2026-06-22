@@ -840,7 +840,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): wire pool + context into worker manager`
   - Files: `src/tools/builtin/job.rs`, `src/orchestrator/external_worker.rs`
 
-- [ ] 9. Update codex worker for extended context
+- [x] 9. Update codex worker for extended context
 
   **What to do**:
   - Update `codex4lunarwing/agent_comm_protocol.json` to document extended `context` fields:
@@ -923,7 +923,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(workers): accept extended context in codex worker`
   - Files: `codex4lunarwing/agent_comm_protocol.json`, `codex4lunarwing/entrypoint.sh`
 
-- [ ] 10. Update nanocode worker for extended context
+- [x] 10. Update nanocode worker for extended context
 
   **What to do**:
   - Update `lunarcode4lunarwing/agent_comm_protocol.json` to document extended `context` fields
@@ -1005,7 +1005,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(workers): accept extended context in nanocode worker`
   - Files: `lunarcode4lunarwing/agent_comm_protocol.json`, `lunarcode4lunarwing/entrypoint.sh`
 
-- [ ] 11. Update pebble worker for extended context
+- [x] 11. Update pebble worker for extended context
 
   **What to do**:
   - Update `pebble4lunarwing/src/protocol.rs` to parse extended `context` fields from `TaskRequest`
@@ -1142,3 +1142,4 @@ cd ic && cargo test test_envelope -- --nocapture             # Protocol serializ
 - [ ] All tests pass
 - [ ] Backward compatibility verified (old config format still works)
 - [ ] All three worker containers updated
+- [ ] final verification needed
