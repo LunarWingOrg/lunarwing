@@ -841,10 +841,32 @@ async fn run_external_task(
             .await;
     }
 
-    // NOTE: Pool release of the connection back happens here once stream
-    // reunification after the message loop is implemented. For now, each
-    // task opens a fresh connection (or reuses a pooled one) but does not
-    // return it. The pool infrastructure is in place for future wiring.
+    // Return the connection to the pool for reuse on successful tasks.
+    // On failure/cancel/timeout paths the connection may be in an
+    // indeterminate state, so we drop it instead of risking corruption.
+    if success {
+        match write.reunite(read) {
+            Ok(stream) => {
+                tracing::debug!(
+                    "Returning connection to pool for '{worker_name}' (key={pool_key})"
+                );
+                pool.release(
+                    pool_key.to_string(),
+                    PooledConnection {
+                        stream,
+                        worker_id,
+                        last_used: std::time::Instant::now(),
+                    },
+                )
+                .await;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to reunite WebSocket halves for '{worker_name}': {e}"
+                );
+            }
+        }
+    }
 
     Ok(task_result)
 }
