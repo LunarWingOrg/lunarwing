@@ -4,6 +4,9 @@
 
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
+
+### TODO: ADD PAST+SS to ROADMAP
+
 ### Near-term
 
 | Feature | Target |
