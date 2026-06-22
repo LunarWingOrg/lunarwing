@@ -134,6 +134,8 @@ impl ExternalJobHandle {
 /// Manages connections to external worker endpoints.
 pub struct ExternalWorkerManager {
     workers: HashMap<String, ExternalWorkerConfig>,
+    load_balancers: HashMap<String, LoadBalancer>,
+    pool: Arc<WorkerConnectionPool>,
     job_event_tx: Option<broadcast::Sender<(Uuid, String, SseEvent)>>,
     context_manager: Option<Arc<ContextManager>>,
     store: Option<Arc<dyn Database>>,
@@ -142,6 +144,12 @@ pub struct ExternalWorkerManager {
 
 impl ExternalWorkerManager {
     pub fn new(configs: Vec<ExternalWorkerConfig>) -> Self {
+        let mut load_balancers = HashMap::new();
+        for config in &configs {
+            let endpoints = config.endpoints();
+            load_balancers.insert(config.name.clone(), LoadBalancer::new(endpoints));
+        }
+
         let workers: HashMap<String, ExternalWorkerConfig> =
             configs.into_iter().map(|c| (c.name.clone(), c)).collect();
 
@@ -154,6 +162,8 @@ impl ExternalWorkerManager {
 
         Self {
             workers,
+            load_balancers,
+            pool: Arc::new(WorkerConnectionPool::new(2, Duration::from_secs(300))),
             job_event_tx: None,
             context_manager: None,
             store: None,
@@ -202,6 +212,8 @@ impl ExternalWorkerManager {
         wait: bool,
         context: TaskContext,
     ) -> Result<Option<ExternalTaskResult>, OrchestratorError> {
+        self.pool.evict_stale().await;
+
         let config = self.workers.get(worker_name).ok_or_else(|| {
             OrchestratorError::ExternalWorkerNotFound {
                 worker_name: worker_name.to_string(),
@@ -209,14 +221,28 @@ impl ExternalWorkerManager {
         })?;
 
         let timeout = timeout_ms.unwrap_or(config.timeout_ms);
-        let url = config.url.clone();
-        let auth_token = config.auth_token.clone();
+
+        // Use load balancer to select endpoint
+        let endpoint = self
+            .load_balancers
+            .get(worker_name)
+            .map(|lb| lb.next_endpoint().clone())
+            .unwrap_or_else(|| WorkerEndpoint {
+                url: config.url.clone(),
+                auth_token: config.auth_token.clone(),
+                weight: None,
+            });
+
+        let url = endpoint.url.clone();
+        let auth_token = endpoint.auth_token.clone();
+        let pool_key = format!("{worker_name}:{url}");
         let worker_name_owned = worker_name.to_string();
         let task_owned = task.to_string();
         let event_tx = self.job_event_tx.clone();
         let context_manager = self.context_manager.clone();
         let store = self.store.clone();
         let active_handles = Arc::clone(&self.active_handles);
+        let pool = Arc::clone(&self.pool);
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let handle = Arc::new(Mutex::new(ExternalJobHandle {
@@ -242,6 +268,8 @@ impl ExternalWorkerManager {
                 store.as_ref(),
                 cancel_rx,
                 context,
+                &pool,
+                &pool_key,
             )
             .await;
 
@@ -261,6 +289,8 @@ impl ExternalWorkerManager {
                     store.as_ref(),
                     cancel_rx,
                     context,
+                    &pool,
+                    &pool_key,
                 )
                 .await;
 
@@ -364,25 +394,79 @@ impl LoadBalancer {
     }
 }
 
+// ── Connection pool ────────────────────────────────────────────────
+
+use std::time::Instant;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+
+type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+pub struct PooledConnection {
+    pub stream: WsStream,
+    pub worker_id: String,
+    last_used: Instant,
+}
+
+pub struct WorkerConnectionPool {
+    connections: Mutex<HashMap<String, Vec<PooledConnection>>>,
+    max_idle_per_endpoint: usize,
+    idle_timeout: Duration,
+}
+
+impl WorkerConnectionPool {
+    pub fn new(max_idle_per_endpoint: usize, idle_timeout: Duration) -> Self {
+        Self {
+            connections: Mutex::new(HashMap::new()),
+            max_idle_per_endpoint,
+            idle_timeout,
+        }
+    }
+
+    pub async fn try_acquire(&self, key: &str) -> Option<PooledConnection> {
+        let mut conns = self.connections.lock().await;
+        let pool = conns.get_mut(key)?;
+        pool.pop()
+    }
+
+    pub async fn release(&self, key: String, mut conn: PooledConnection) {
+        conn.last_used = Instant::now();
+        let mut conns = self.connections.lock().await;
+        let pool = conns.entry(key).or_default();
+        if pool.len() < self.max_idle_per_endpoint {
+            pool.push(conn);
+        }
+    }
+
+    pub async fn evict_stale(&self) {
+        let mut conns = self.connections.lock().await;
+        let cutoff = self.idle_timeout;
+        conns.retain(|_, pool| {
+            pool.retain(|c| c.last_used.elapsed() < cutoff);
+            !pool.is_empty()
+        });
+    }
+
+    pub async fn drain(&self) {
+        let mut conns = self.connections.lock().await;
+        conns.clear();
+    }
+
+    pub async fn pool_size(&self) -> usize {
+        let conns = self.connections.lock().await;
+        conns.values().map(|v| v.len()).sum()
+    }
+}
+
 // ── WebSocket task runner ───────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
-async fn run_external_task(
-    job_id: Uuid,
+async fn connect_and_handshake(
     url: &str,
     auth_token: Option<&str>,
-    task: &str,
-    timeout_ms: u64,
     worker_name: &str,
-    event_tx: Option<&broadcast::Sender<(Uuid, String, SseEvent)>>,
-    context_manager: Option<&Arc<ContextManager>>,
-    store: Option<&Arc<dyn Database>>,
-    cancel_rx: oneshot::Receiver<()>,
-    context: TaskContext,
-) -> Result<ExternalTaskResult, OrchestratorError> {
+) -> Result<(WsStream, String), OrchestratorError> {
     use tokio_tungstenite::tungstenite;
 
-    // Build WS request with auth header
     let uri = url.parse::<http::Uri>().map_err(|e| {
         OrchestratorError::ExternalWorkerConnectionFailed {
             worker_name: worker_name.to_string(),
@@ -398,7 +482,6 @@ async fn run_external_task(
         req_builder = req_builder.header("Authorization", format!("Bearer {token}"));
     }
 
-    // tungstenite needs specific headers for the handshake
     let host = uri.host().unwrap_or("localhost");
     let port_suffix = uri.port_u16().map(|p| format!(":{p}")).unwrap_or_default();
     req_builder = req_builder
@@ -419,7 +502,6 @@ async fn run_external_task(
                 reason: format!("failed to build request: {e}"),
             })?;
 
-    // Connect with timeout
     let connect_timeout = Duration::from_secs(15);
     let (ws_stream, _response) = tokio::time::timeout(
         connect_timeout,
@@ -435,9 +517,8 @@ async fn run_external_task(
         reason: e.to_string(),
     })?;
 
-    let (mut write, mut read) = ws_stream.split();
+    let (mut _write, mut read) = ws_stream.split();
 
-    // Wait for `ready` message
     let ready_timeout = Duration::from_secs(10);
     let ready_msg = tokio::time::timeout(ready_timeout, read.next())
         .await
@@ -483,10 +564,52 @@ async fn run_external_task(
         }
     })?;
 
+    let stream = _write.reunite(read).map_err(|_| {
+        OrchestratorError::ExternalWorkerProtocolError {
+            worker_name: worker_name.to_string(),
+            reason: "failed to reunite WebSocket stream halves".to_string(),
+        }
+    })?;
+
+    Ok((stream, ready.worker_id))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_external_task(
+    job_id: Uuid,
+    url: &str,
+    auth_token: Option<&str>,
+    task: &str,
+    timeout_ms: u64,
+    worker_name: &str,
+    event_tx: Option<&broadcast::Sender<(Uuid, String, SseEvent)>>,
+    context_manager: Option<&Arc<ContextManager>>,
+    store: Option<&Arc<dyn Database>>,
+    cancel_rx: oneshot::Receiver<()>,
+    context: TaskContext,
+    pool: &WorkerConnectionPool,
+    pool_key: &str,
+) -> Result<ExternalTaskResult, OrchestratorError> {
+    use tokio_tungstenite::tungstenite;
+
+    // Try pooled connection first, fall back to fresh
+    let (mut write, mut read, worker_id, from_pool) =
+        if let Some(pooled) = pool.try_acquire(pool_key).await {
+            tracing::debug!("Reusing pooled connection for '{worker_name}'");
+            let wid = pooled.worker_id.clone();
+            let (w, r) = pooled.stream.split();
+            (w, r, wid, true)
+        } else {
+            let (stream, wid) =
+                connect_and_handshake(url, auth_token, worker_name).await?;
+            let (w, r) = stream.split();
+            (w, r, wid, false)
+        };
+
+    let source = if from_pool { "pooled" } else { "new" };
     tracing::info!(
-        "External worker '{}' ready (worker_id={})",
-        worker_name,
-        ready.worker_id
+        "External worker '{}' ready (worker_id={}, connection={})",
+        worker_name, worker_id, source
     );
 
     // Emit job_started event
@@ -712,6 +835,11 @@ async fn run_external_task(
             )
             .await;
     }
+
+    // NOTE: Pool release of the connection back happens here once stream
+    // reunification after the message loop is implemented. For now, each
+    // task opens a fresh connection (or reuses a pooled one) but does not
+    // return it. The pool infrastructure is in place for future wiring.
 
     Ok(task_result)
 }
