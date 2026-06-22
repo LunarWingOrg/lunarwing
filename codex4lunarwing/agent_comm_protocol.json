@@ -31,7 +31,7 @@
         "payload": {
           "task_id":     "string — unique task identifier",
           "prompt":      "string — natural-language task description",
-          "context":     "object — optional file / repo context (path, model, agent)",
+          "context":     "object — optional TaskContext (project_dir, environment, conversation_history, user_id, metadata)",
           "timeout_ms":  "integer — hard deadline for the task (default 300000)"
         }
       },

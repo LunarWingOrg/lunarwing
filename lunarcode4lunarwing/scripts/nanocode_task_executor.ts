@@ -48,9 +48,16 @@ export async function executeTask(
 ): Promise<void> {
   const startTime = Date.now()
   const timeoutMs = request.timeout_ms ?? DEFAULT_TIMEOUT_MS
-  const workDir = request.context?.path
-    ? resolveWorkDir(request.context.path as string)
+  const workDir = request.context?.project_dir
+    ? resolveWorkDir(request.context.project_dir)
     : WORKSPACE_ROOT
+
+  // Inject context environment variables into the process
+  if (request.context?.environment) {
+    for (const [key, value] of Object.entries(request.context.environment)) {
+      process.env[key] = value
+    }
+  }
 
   const sdk = createSdk(workDir)
   let sessionID: string | undefined

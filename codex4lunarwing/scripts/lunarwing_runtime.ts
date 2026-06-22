@@ -38,10 +38,18 @@ export function parseEnvelope(data: string): Envelope | null {
 
 // ── Message Types ─────────────────────────────────────────────────────────────
 
+export interface TaskContext {
+  project_dir?: string
+  conversation_history?: Array<{ role: string; content: string }>
+  environment?: Record<string, string>
+  user_id?: string
+  metadata?: Record<string, string>
+}
+
 export interface TaskRequest {
   task_id: string
   prompt: string
-  context?: { path?: string; [key: string]: unknown }
+  context?: TaskContext
   timeout_ms?: number
 }
 
