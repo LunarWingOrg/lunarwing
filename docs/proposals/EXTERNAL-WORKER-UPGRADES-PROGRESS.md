@@ -44,9 +44,14 @@
   - Pool release after task completion noted as follow-up (stream reunification)
   - Tests passing: `pool_try_acquire_empty_returns_none`, `pool_evict_stale_removes_old`, `pool_drain_empties_all`, `manager_initializes_load_balancers`
 
-## Pending — Wave 3 (tool integration)
+## Wave 3 — COMPLETE
 
-- [ ] **Task 8**: Update `CreateJobTool` to pass `project_dir` + credentials via `TaskContext`
+- [x] **Task 8**: Update `CreateJobTool` to pass `project_dir` + credentials via `TaskContext`
+  - `parameters_schema()` exposes `project_dir` and `credentials` for external workers (not just sandbox)
+  - `execute()` parses both params when routing to external workers
+  - `execute_external()` accepts `project_dir` and `credential_grants`, resolves secrets to env vars via `SecretsStore::get_decrypted()`, populates `TaskContext.environment` and `TaskContext.project_dir`
+  - Job record persists `project_dir` and `credential_grants_json`
+  - Backward compatible: empty credentials/project_dir produce same behavior as before
 
 ## Pending — Wave 4 (worker containers)
 

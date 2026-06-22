@@ -753,7 +753,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): wire pool + context into worker manager`
   - Files: `src/orchestrator/external_worker.rs`, `src/orchestrator/mod.rs`
 
-- [ ] 8. Update `CreateJobTool` to pass project_dir + context
+- [x] 8. Update `CreateJobTool` to pass project_dir + context
 
   **What to do**:
   - Update `execute_external()` in `src/tools/builtin/job.rs` to:
