@@ -1070,11 +1070,12 @@ impl Tool for CreateJobTool {
                 }
             });
 
-            if self.sandbox_enabled() {
+            if self.sandbox_enabled() || self.has_external_workers() {
                 props["project_dir"] = serde_json::json!({
                     "type": "string",
-                    "description": "Path to an existing project directory to mount into the container. \
-                                    Must be under ~/.lunarwing/projects/. If omitted, a fresh directory is created."
+                    "description": "Path to a project directory. For sandbox: mounted into the container \
+                                    (must be under ~/.lunarwing/projects/). For external workers: passed \
+                                    as context for the worker to use as working directory."
                 });
                 props["credentials"] = serde_json::json!({
                     "type": "object",
@@ -1158,8 +1159,22 @@ impl Tool for CreateJobTool {
                 && ewm.get_worker(mode_str).is_some()
             {
                 let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
+                let project_dir = params
+                    .get("project_dir")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let credential_grants = self.parse_credentials(&params, &ctx.user_id).await?;
                 let task = format!("{}\n\n{}", title, description);
-                return self.execute_external(&task, mode_str, wait, ctx).await;
+                return self
+                    .execute_external(
+                        &task,
+                        mode_str,
+                        wait,
+                        ctx,
+                        project_dir,
+                        credential_grants,
+                    )
+                    .await;
             }
             return Err(ToolError::InvalidParameters(format!(
                 "Unknown job mode '{}'. Available: worker{}",
