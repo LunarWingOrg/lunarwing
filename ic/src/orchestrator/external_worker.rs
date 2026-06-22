@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use chrono::Utc;
@@ -314,6 +315,34 @@ pub struct ExternalTaskResult {
     pub output: String,
     pub error: Option<String>,
     pub duration_ms: u64,
+}
+
+// ── Load balancer ──────────────────────────────────────────────────
+
+use crate::config::WorkerEndpoint;
+
+pub struct LoadBalancer {
+    endpoints: Vec<WorkerEndpoint>,
+    current_index: AtomicUsize,
+}
+
+impl LoadBalancer {
+    pub fn new(endpoints: Vec<WorkerEndpoint>) -> Self {
+        assert!(!endpoints.is_empty(), "LoadBalancer requires at least one endpoint");
+        Self {
+            endpoints,
+            current_index: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn next_endpoint(&self) -> &WorkerEndpoint {
+        let idx = self.current_index.fetch_add(1, Ordering::Relaxed) % self.endpoints.len();
+        &self.endpoints[idx]
+    }
+
+    pub fn endpoint_count(&self) -> usize {
+        self.endpoints.len()
+    }
 }
 
 // ── WebSocket task runner ───────────────────────────────────────────
@@ -861,5 +890,38 @@ mod tests {
         assert!(matches!(success, ExternalTaskStatus::Success));
         assert!(!matches!(failed, ExternalTaskStatus::Success));
         assert!(!matches!(cancelled, ExternalTaskStatus::Success));
+    }
+
+    #[test]
+    fn load_balancer_round_robin() {
+        use crate::config::WorkerEndpoint;
+
+        let endpoints = vec![
+            WorkerEndpoint { url: "ws://a:9090".to_string(), auth_token: None, weight: None },
+            WorkerEndpoint { url: "ws://b:9090".to_string(), auth_token: None, weight: None },
+            WorkerEndpoint { url: "ws://c:9090".to_string(), auth_token: None, weight: None },
+        ];
+        let lb = LoadBalancer::new(endpoints);
+
+        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://c:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://c:9090");
+    }
+
+    #[test]
+    fn load_balancer_single_endpoint() {
+        use crate::config::WorkerEndpoint;
+
+        let endpoints = vec![
+            WorkerEndpoint { url: "ws://only:9090".to_string(), auth_token: None, weight: None },
+        ];
+        let lb = LoadBalancer::new(endpoints);
+
+        for _ in 0..10 {
+            assert_eq!(lb.next_endpoint().url, "ws://only:9090");
+        }
     }
 }
