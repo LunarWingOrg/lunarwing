@@ -15,7 +15,7 @@
 11. [ ] Bump crate versions to 1.1.6 and subsequently run all cargo tests
 12. [ ] Fix broken cargo tests
 13. [ ] Test migration route updates since 1.1.5
-14. [ ] Test upgrade in place route
+14. [ ] Perform successful upgrade in place route with legacy upgrade harness
 15. [ ] Run automated testing scripts
 16. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 17. [ ] Write up release notes (at root of repo) for v1.1.6 explaining all changes since v1.1.5 as well as accurate known issues list
