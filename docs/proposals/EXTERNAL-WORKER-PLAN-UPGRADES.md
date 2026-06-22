@@ -323,7 +323,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): extend external worker protocol types`
   - Files: `src/orchestrator/external_worker.rs`, `src/tools/builtin/job.rs`
 
-- [ ] 3. Multi-instance `ExternalWorkerConfig` schema
+- [x] 3. Multi-instance `ExternalWorkerConfig` schema
 
   **What to do**:
   - Add `endpoints: Vec<WorkerEndpoint>` field to `ExternalWorkerConfig` with `#[serde(default)]`
