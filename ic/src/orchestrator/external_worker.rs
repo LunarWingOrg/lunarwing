@@ -377,7 +377,10 @@ pub struct LoadBalancer {
 
 impl LoadBalancer {
     pub fn new(endpoints: Vec<WorkerEndpoint>) -> Self {
-        assert!(!endpoints.is_empty(), "LoadBalancer requires at least one endpoint");
+        assert!(
+            !endpoints.is_empty(),
+            "LoadBalancer requires at least one endpoint"
+        );
         Self {
             endpoints,
             current_index: AtomicUsize::new(0),
@@ -564,12 +567,13 @@ async fn connect_and_handshake(
         }
     })?;
 
-    let stream = _write.reunite(read).map_err(|_| {
-        OrchestratorError::ExternalWorkerProtocolError {
-            worker_name: worker_name.to_string(),
-            reason: "failed to reunite WebSocket stream halves".to_string(),
-        }
-    })?;
+    let stream =
+        _write
+            .reunite(read)
+            .map_err(|_| OrchestratorError::ExternalWorkerProtocolError {
+                worker_name: worker_name.to_string(),
+                reason: "failed to reunite WebSocket stream halves".to_string(),
+            })?;
 
     Ok((stream, ready.worker_id))
 }
@@ -600,8 +604,7 @@ async fn run_external_task(
             let (w, r) = pooled.stream.split();
             (w, r, wid, true)
         } else {
-            let (stream, wid) =
-                connect_and_handshake(url, auth_token, worker_name).await?;
+            let (stream, wid) = connect_and_handshake(url, auth_token, worker_name).await?;
             let (w, r) = stream.split();
             (w, r, wid, false)
         };
@@ -609,7 +612,9 @@ async fn run_external_task(
     let source = if from_pool { "pooled" } else { "new" };
     tracing::info!(
         "External worker '{}' ready (worker_id={}, connection={})",
-        worker_name, worker_id, source
+        worker_name,
+        worker_id,
+        source
     );
 
     // Emit job_started event
@@ -972,7 +977,10 @@ mod tests {
         let json = serde_json::to_string(&ctx).unwrap();
         let deserialized: TaskContext = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(deserialized.project_dir, Some("/workspace/myproject".to_string()));
+        assert_eq!(
+            deserialized.project_dir,
+            Some("/workspace/myproject".to_string())
+        );
         assert_eq!(deserialized.conversation_history.len(), 2);
         assert_eq!(deserialized.conversation_history[0].role, "user");
         assert_eq!(deserialized.conversation_history[0].content, "fix the bug");
@@ -981,7 +989,10 @@ mod tests {
             Some(&"secret123".to_string())
         );
         assert_eq!(deserialized.user_id, "user-42");
-        assert_eq!(deserialized.metadata.get("priority"), Some(&"high".to_string()));
+        assert_eq!(
+            deserialized.metadata.get("priority"),
+            Some(&"high".to_string())
+        );
     }
 
     #[test]
@@ -1014,7 +1025,8 @@ mod tests {
             serde_json::to_string(&ExternalTaskStatus::TimedOut).unwrap(),
             "\"timed_out\""
         );
-        let partial_json = serde_json::to_string(&ExternalTaskStatus::Partial("wip".to_string())).unwrap();
+        let partial_json =
+            serde_json::to_string(&ExternalTaskStatus::Partial("wip".to_string())).unwrap();
         assert!(partial_json.contains("partial"));
         assert!(partial_json.contains("wip"));
 
@@ -1045,9 +1057,21 @@ mod tests {
         use crate::config::WorkerEndpoint;
 
         let endpoints = vec![
-            WorkerEndpoint { url: "ws://a:9090".to_string(), auth_token: None, weight: None },
-            WorkerEndpoint { url: "ws://b:9090".to_string(), auth_token: None, weight: None },
-            WorkerEndpoint { url: "ws://c:9090".to_string(), auth_token: None, weight: None },
+            WorkerEndpoint {
+                url: "ws://a:9090".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+            WorkerEndpoint {
+                url: "ws://b:9090".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+            WorkerEndpoint {
+                url: "ws://c:9090".to_string(),
+                auth_token: None,
+                weight: None,
+            },
         ];
         let lb = LoadBalancer::new(endpoints);
 
@@ -1063,9 +1087,11 @@ mod tests {
     fn load_balancer_single_endpoint() {
         use crate::config::WorkerEndpoint;
 
-        let endpoints = vec![
-            WorkerEndpoint { url: "ws://only:9090".to_string(), auth_token: None, weight: None },
-        ];
+        let endpoints = vec![WorkerEndpoint {
+            url: "ws://only:9090".to_string(),
+            auth_token: None,
+            weight: None,
+        }];
         let lb = LoadBalancer::new(endpoints);
 
         for _ in 0..10 {
@@ -1075,14 +1101,16 @@ mod tests {
 
     #[test]
     fn build_task_context_populates_fields() {
-        let env: HashMap<String, String> =
-            [("API_KEY".to_string(), "secret".to_string())].into_iter().collect();
+        let env: HashMap<String, String> = [("API_KEY".to_string(), "secret".to_string())]
+            .into_iter()
+            .collect();
         let history = vec![ConversationMessage {
             role: "user".to_string(),
             content: "do the thing".to_string(),
         }];
-        let meta: HashMap<String, String> =
-            [("priority".to_string(), "high".to_string())].into_iter().collect();
+        let meta: HashMap<String, String> = [("priority".to_string(), "high".to_string())]
+            .into_iter()
+            .collect();
 
         let ctx = build_task_context("user-1", Some("/workspace"), env, history, meta);
 
@@ -1108,7 +1136,11 @@ mod tests {
     #[tokio::test]
     async fn pool_try_acquire_empty_returns_none() {
         let pool = WorkerConnectionPool::new(2, Duration::from_secs(60));
-        assert!(pool.try_acquire("nanocode:ws://localhost:9090").await.is_none());
+        assert!(
+            pool.try_acquire("nanocode:ws://localhost:9090")
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -1130,19 +1162,25 @@ mod tests {
     fn manager_initializes_load_balancers() {
         use crate::config::WorkerEndpoint;
 
-        let mgr = ExternalWorkerManager::new(vec![
-            ExternalWorkerConfig {
-                name: "multi".to_string(),
-                url: "ws://fallback:9090".to_string(),
-                auth_token: None,
-                timeout_ms: 300_000,
-                endpoints: vec![
-                    WorkerEndpoint { url: "ws://a:9090".to_string(), auth_token: None, weight: None },
-                    WorkerEndpoint { url: "ws://b:9090".to_string(), auth_token: None, weight: None },
-                ],
-                load_balance: LoadBalanceStrategy::default(),
-            },
-        ]);
+        let mgr = ExternalWorkerManager::new(vec![ExternalWorkerConfig {
+            name: "multi".to_string(),
+            url: "ws://fallback:9090".to_string(),
+            auth_token: None,
+            timeout_ms: 300_000,
+            endpoints: vec![
+                WorkerEndpoint {
+                    url: "ws://a:9090".to_string(),
+                    auth_token: None,
+                    weight: None,
+                },
+                WorkerEndpoint {
+                    url: "ws://b:9090".to_string(),
+                    auth_token: None,
+                    weight: None,
+                },
+            ],
+            load_balance: LoadBalanceStrategy::default(),
+        }]);
 
         assert!(mgr.load_balancers.get("multi").is_some());
         let lb = mgr.load_balancers.get("multi").unwrap();

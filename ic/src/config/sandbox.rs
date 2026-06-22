@@ -633,7 +633,10 @@ auth_token = "tok-2"
         assert_eq!(workers[0].endpoints.len(), 2);
         assert_eq!(workers[0].endpoints[0].url, "ws://10.0.0.1:9090/ws/agent");
         assert_eq!(workers[0].endpoints[1].url, "ws://10.0.0.2:9090/ws/agent");
-        assert!(matches!(workers[0].load_balance, LoadBalanceStrategy::RoundRobin));
+        assert!(matches!(
+            workers[0].load_balance,
+            LoadBalanceStrategy::RoundRobin
+        ));
     }
 
     #[test]
