@@ -1104,4 +1104,51 @@ mod tests {
         assert!(ctx.conversation_history.is_empty());
         assert!(ctx.metadata.is_empty());
     }
+
+    #[tokio::test]
+    async fn pool_try_acquire_empty_returns_none() {
+        let pool = WorkerConnectionPool::new(2, Duration::from_secs(60));
+        assert!(pool.try_acquire("nanocode:ws://localhost:9090").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pool_evict_stale_removes_old() {
+        let pool = WorkerConnectionPool::new(2, Duration::from_millis(1));
+        // Pool is empty, evict should be a no-op
+        pool.evict_stale().await;
+        assert_eq!(pool.pool_size().await, 0);
+    }
+
+    #[tokio::test]
+    async fn pool_drain_empties_all() {
+        let pool = WorkerConnectionPool::new(2, Duration::from_secs(300));
+        pool.drain().await;
+        assert_eq!(pool.pool_size().await, 0);
+    }
+
+    #[test]
+    fn manager_initializes_load_balancers() {
+        use crate::config::WorkerEndpoint;
+
+        let mgr = ExternalWorkerManager::new(vec![
+            ExternalWorkerConfig {
+                name: "multi".to_string(),
+                url: "ws://fallback:9090".to_string(),
+                auth_token: None,
+                timeout_ms: 300_000,
+                endpoints: vec![
+                    WorkerEndpoint { url: "ws://a:9090".to_string(), auth_token: None, weight: None },
+                    WorkerEndpoint { url: "ws://b:9090".to_string(), auth_token: None, weight: None },
+                ],
+                load_balance: LoadBalanceStrategy::default(),
+            },
+        ]);
+
+        assert!(mgr.load_balancers.get("multi").is_some());
+        let lb = mgr.load_balancers.get("multi").unwrap();
+        assert_eq!(lb.endpoint_count(), 2);
+        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
+        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
+    }
 }
