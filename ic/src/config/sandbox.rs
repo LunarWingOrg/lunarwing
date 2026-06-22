@@ -1,5 +1,6 @@
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env, parse_string_env};
 use crate::error::ConfigError;
+use serde::{Deserialize, Serialize};
 use tracing;
 
 /// Docker sandbox configuration.
@@ -183,6 +184,23 @@ fn parse_oauth_access_token(json: &str) -> Option<String> {
     Some(token.to_string())
 }
 
+/// A single endpoint for a named external worker (URL + optional auth).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerEndpoint {
+    pub url: String,
+    pub auth_token: Option<String>,
+    pub weight: Option<u32>,
+}
+
+/// Load balancing strategy for multi-instance workers.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadBalanceStrategy {
+    #[default]
+    RoundRobin,
+    LeastConnections,
+}
+
 /// Configuration for a named external worker endpoint.
 #[derive(Debug, Clone)]
 pub struct ExternalWorkerConfig {
@@ -190,6 +208,11 @@ pub struct ExternalWorkerConfig {
     pub url: String,
     pub auth_token: Option<String>,
     pub timeout_ms: u64,
+    /// Multiple endpoints for load-balanced workers.
+    /// When non-empty, `url`/`auth_token` are treated as fallback only.
+    pub endpoints: Vec<WorkerEndpoint>,
+    /// Load balancing strategy (defaults to RoundRobin).
+    pub load_balance: LoadBalanceStrategy,
 }
 
 impl ExternalWorkerConfig {
@@ -203,8 +226,27 @@ impl ExternalWorkerConfig {
                 url: ew.url.clone(),
                 auth_token: ew.auth_token.clone(),
                 timeout_ms: ew.timeout_ms,
+                endpoints: ew.endpoints.clone(),
+                load_balance: ew.load_balance.clone(),
             })
             .collect()
+    }
+
+    /// Returns the canonical endpoint list for this worker.
+    ///
+    /// When `endpoints` is non-empty those are used directly; otherwise a
+    /// single `WorkerEndpoint` is synthesized from the legacy `url` and
+    /// `auth_token` fields.
+    pub fn endpoints(&self) -> Vec<WorkerEndpoint> {
+        if !self.endpoints.is_empty() {
+            self.endpoints.clone()
+        } else {
+            vec![WorkerEndpoint {
+                url: self.url.clone(),
+                auth_token: self.auth_token.clone(),
+                weight: None,
+            }]
+        }
     }
 }
 
@@ -564,5 +606,58 @@ timeout_ms = 300000
         assert_eq!(workers.len(), 2);
         assert!(names.contains(&"nanocode"));
         assert!(names.contains(&"pebble"));
+    }
+
+    #[test]
+    fn external_worker_config_multi_endpoint() {
+        let toml_str = r#"
+[[sandbox.external_workers]]
+name = "nanocode"
+url = "ws://127.0.0.1:10007/ws/agent"
+auth_token = "tok-legacy"
+timeout_ms = 300000
+
+[[sandbox.external_workers.endpoints]]
+url = "ws://10.0.0.1:9090/ws/agent"
+auth_token = "tok-1"
+
+[[sandbox.external_workers.endpoints]]
+url = "ws://10.0.0.2:9090/ws/agent"
+auth_token = "tok-2"
+"#;
+
+        let settings: crate::settings::Settings =
+            toml::from_str(toml_str).expect("multi-endpoint config must parse");
+        let workers = ExternalWorkerConfig::resolve_from_settings(&settings);
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].endpoints.len(), 2);
+        assert_eq!(workers[0].endpoints[0].url, "ws://10.0.0.1:9090/ws/agent");
+        assert_eq!(workers[0].endpoints[1].url, "ws://10.0.0.2:9090/ws/agent");
+        assert!(matches!(
+            workers[0].load_balance,
+            LoadBalanceStrategy::RoundRobin
+        ));
+    }
+
+    #[test]
+    fn external_worker_config_legacy_fallback() {
+        let toml_str = r#"
+[[sandbox.external_workers]]
+name = "codex"
+url = "ws://127.0.0.1:8443/ws/agent"
+auth_token = "tok-legacy"
+timeout_ms = 300000
+"#;
+
+        let settings: crate::settings::Settings =
+            toml::from_str(toml_str).expect("legacy config must parse");
+        let workers = ExternalWorkerConfig::resolve_from_settings(&settings);
+        assert_eq!(workers.len(), 1);
+        assert!(workers[0].endpoints.is_empty());
+
+        let endpoints = workers[0].endpoints();
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].url, "ws://127.0.0.1:8443/ws/agent");
+        assert_eq!(endpoints[0].auth_token.as_deref(), Some("tok-legacy"));
     }
 }

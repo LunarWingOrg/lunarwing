@@ -132,6 +132,11 @@ cleanup_openrc_hourly_watchdog() {
 cleanup_openrc_watchdog() {
   cleanup_openrc_hourly_watchdog
   rm -f "${OPENRC_WRAPPER}"
+  # Only remove the shared babysitter helper if no OpenRC -sup units remain.
+  # mt-admin.sh owns container supervision; the watchdog must not break it.
+  if ! ls /etc/init.d/*-sup >/dev/null 2>&1; then
+    rm -f /usr/local/sbin/lunarwing-ctr-babysit
+  fi
 }
 
 cleanup_launchd_watchdog() {

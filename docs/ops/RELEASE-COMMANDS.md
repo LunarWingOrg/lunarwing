@@ -36,3 +36,34 @@ gh release view v<version> --web
 
 > Release notes are drafted at the repo root as `RELEASE-v<version>.md` (so the tag captures
 > them) and archived to `docs/ops/RELEASE-v<version>.md` after the release.
+
+tl;dr
+# Create the release branch
+
+  cd /home/sun/lw_new_workspace/lunarwing
+  git checkout staging
+  git pull --ff-only origin staging      # ensure local staging == remote (no-op if already current)
+  git checkout -b release/v1.1.5         # convention: release/v<version>
+  git push -u origin release/v1.1.5
+
+# Create the GitHub release (tag + notes)
+
+  cd /home/sun/lw_new_workspace/lunarwing
+  gh release create v1.1.5 \
+    --target release/v1.1.5 \
+    --title "v1.1.5 - Codename Kawarimi" \
+    --notes-file RELEASE-v1.1.5.md \
+    --latest
+  This creates the v1.1.5 tag at the tip of release/v1.1.5 (pushed in step 10), attaches RELEASE-v1.1.5.md as the body, titles it like the others, and marks it
+  Latest. Matches v1.1.4 (not a prerelease, so no --prerelease).
+
+  Verify (optional)
+
+  git fetch --tags origin
+  gh release view v1.1.5            # confirm tag, title, notes, target
+
+
+also:
+gh repo set-default LunarWingOrg/lunarwing
+
+

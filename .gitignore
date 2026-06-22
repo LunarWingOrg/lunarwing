@@ -14,6 +14,9 @@
 .sidecar/
 .todos/
 
+# Sisyphus agent working files (plans, evidence, scratch)
+.sisyphus/
+
 target/
 .logs/
 # Python

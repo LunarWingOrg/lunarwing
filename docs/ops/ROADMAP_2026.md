@@ -4,12 +4,15 @@
 
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
+
+### TODO: ADD PAST+SS to ROADMAP
+
 ### Near-term
 
 | Feature | Target |
 |---------|--------|
-| External Worker planned enhancements | v1.1.6 |
-| Remaining migration/upgrade work (extend `upgrade-tenant-version.sh` to source versions older than v1.0.9) | v1.1.6 |
+| External Worker planned enhancements (still being tested) | v1.1.6 |
+| Remaining migration/upgrade work. Extend `upgrade-tenant-version.sh` to source versions older than v1.0.9 after actual legacy upgrader is confirmed to be working on PROD instances | v1.1.6 |
 | Multica bridge/channel refinements and agent orchestration workflow improvements; Lunartica UI reskin continuation | v1.1.7 |
 | XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.7 |
 | XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.7 |
@@ -23,7 +26,8 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Decision to remove GitHub extension from the official project repo | v1.1.9 |
+| Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |
+| Further re-organization of repository documentation as follow up to work done in 1.1.5 | v1.1.9 |
 | v2 engine implementation + LunarWing UI performance overhaul; self-healing expansion | v1.2.0 |
 | Better githooks for repo | v1.2.1 |
 | LunarWing developer CI/CD pipeline, including x86-64 and AARCH64 builds | v1.2.1 |

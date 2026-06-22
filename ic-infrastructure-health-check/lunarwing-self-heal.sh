@@ -188,6 +188,8 @@ unit_tenant() {
         lunarwing-weechat-*)         printf '%s' "${u#lunarwing-weechat-}" ;;
         xmpp-bridge-*)               printf '%s' "${u#xmpp-bridge-}" ;;
         weechat-*)                   printf '%s' "${u#weechat-}" ;;
+        lunarwing-darkirc-adapter-*) printf '%s' "${u#lunarwing-darkirc-adapter-}" ;;
+        lunarwing-darkirc-*)         printf '%s' "${u#lunarwing-darkirc-}" ;;
         lunarwing-*)                 printf '%s' "${u#lunarwing-}" ;;
         *)                           printf '' ;;
     esac

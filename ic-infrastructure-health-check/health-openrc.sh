@@ -91,7 +91,9 @@ RUNLEVELS_DIR="${RUNLEVELS_DIR:-/etc/runlevels}"
 # units. Known per-service roles are stripped so every unit maps to its tenant:
 #   lunarwing-acme -> acme   lunarwing-proxy-acme -> acme
 #   lunarwing-weechat-adapter-acme -> acme   xmpp-bridge-acme -> acme
-# (weechat-adapter MUST precede weechat in the case so the longer role wins.)
+#   lunarwing-darkirc-adapter-acme -> acme   lunarwing-darkirc-acme -> acme
+# (weechat-adapter MUST precede weechat in the case so the longer role wins.
+# Same for darkirc-adapter vs darkirc.)
 unit_tenant() {
   local svc="$1" rest
   case "$svc" in
@@ -100,12 +102,14 @@ unit_tenant() {
     lunarwing-*)
       rest="${svc#lunarwing-}"
       case "$rest" in
-        proxy-*)           rest="${rest#proxy-}" ;;
-        pg-*)              rest="${rest#pg-}" ;;
-        nanocode-*)        rest="${rest#nanocode-}" ;;
-        pebble-*)          rest="${rest#pebble-}" ;;
-        weechat-adapter-*) rest="${rest#weechat-adapter-}" ;;
-        weechat-*)         rest="${rest#weechat-}" ;;
+        proxy-*)             rest="${rest#proxy-}" ;;
+        pg-*)                rest="${rest#pg-}" ;;
+        nanocode-*)          rest="${rest#nanocode-}" ;;
+        pebble-*)            rest="${rest#pebble-}" ;;
+        weechat-adapter-*)   rest="${rest#weechat-adapter-}" ;;
+        weechat-*)           rest="${rest#weechat-}" ;;
+        darkirc-adapter-*)   rest="${rest#darkirc-adapter-}" ;;
+        darkirc-*)           rest="${rest#darkirc-}" ;;
       esac
       printf '%s' "$rest" ;;
     *)                      printf '' ;;

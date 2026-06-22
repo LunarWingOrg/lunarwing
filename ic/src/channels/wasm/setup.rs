@@ -642,6 +642,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn darkirc_adapter_url_injected_from_env() {
+        // Regression: DarkIRC's WASM channel defaulted to the shared adapter
+        // port because per-tenant adapter URLs were never injected. With
+        // `env` declared on `adapter_url`, mt-admin's per-tenant
+        // DARKIRC_ADAPTER_URL must flow into the channel config.
+        unsafe {
+            std::env::set_var("DARKIRC_ADAPTER_URL", "http://127.0.0.1:16080");
+        }
+
+        let caps = ChannelCapabilitiesFile::from_json(
+            r#"{
+                "name": "darkirc",
+                "setup": {
+                    "required_fields": [
+                        { "name": "adapter_url", "prompt": "DarkIRC adapter URL", "optional": true, "env": "DARKIRC_ADAPTER_URL" }
+                    ]
+                }
+            }"#,
+        )
+        .expect("valid capabilities JSON");
+
+        let overrides =
+            load_channel_setup_field_overrides(None, "test-owner", "darkirc", Some(&caps)).await;
+
+        unsafe {
+            std::env::remove_var("DARKIRC_ADAPTER_URL");
+        }
+
+        assert_eq!(
+            overrides.get("adapter_url"),
+            Some(&serde_json::Value::String(
+                "http://127.0.0.1:16080".to_string()
+            ))
+        );
+    }
+
+    #[tokio::test]
     async fn weechat_relay_password_injected_from_env() {
         // Regression: once the port is correct, the adapter's auth becomes the
         // next blocker. mt-admin sets a per-tenant RELAY_PASSWORD that must be

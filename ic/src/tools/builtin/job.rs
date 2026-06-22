@@ -23,6 +23,7 @@ use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::auth::CredentialGrant;
+use crate::orchestrator::external_worker::{ExternalTaskStatus, build_task_context};
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -700,6 +701,8 @@ impl CreateJobTool {
         worker_name: &str,
         wait: bool,
         ctx: &JobContext,
+        project_dir: Option<String>,
+        credential_grants: Vec<CredentialGrant>,
     ) -> Result<ToolOutput, ToolError> {
         let start = std::time::Instant::now();
         let ewm = self.external_worker_manager.as_ref().ok_or_else(|| {
@@ -709,6 +712,30 @@ impl CreateJobTool {
         })?;
 
         let job_id = Uuid::new_v4();
+
+        // Resolve credential grants to actual env var values
+        let mut environment = std::collections::HashMap::new();
+        if !credential_grants.is_empty() {
+            let secrets = self.secrets_store.as_ref().ok_or_else(|| {
+                ToolError::ExecutionFailed(
+                    "credentials requested but no secrets store is configured".to_string(),
+                )
+            })?;
+            for grant in &credential_grants {
+                let decrypted = secrets
+                    .get_decrypted(&ctx.user_id, &grant.secret_name)
+                    .await
+                    .map_err(|e| {
+                        ToolError::ExecutionFailed(format!(
+                            "failed to decrypt secret '{}': {}",
+                            grant.secret_name, e
+                        ))
+                    })?;
+                environment.insert(grant.env_var.clone(), decrypted.expose().to_string());
+            }
+        }
+
+        let grants_json = serde_json::to_string(&credential_grants).unwrap_or_default();
 
         self.context_manager
             .register_sandbox_job(job_id, &ctx.user_id, task, task)
@@ -722,13 +749,13 @@ impl CreateJobTool {
             task: task.to_string(),
             status: "creating".to_string(),
             user_id: ctx.user_id.clone(),
-            project_dir: String::new(),
+            project_dir: project_dir.clone().unwrap_or_default(),
             success: None,
             failure_reason: None,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
-            credential_grants_json: "[]".to_string(),
+            credential_grants_json: grants_json,
         });
 
         if let Some(store) = &self.store {
@@ -747,13 +774,21 @@ impl CreateJobTool {
             None
         };
 
+        let task_context = build_task_context(
+            &ctx.user_id,
+            project_dir.as_deref(),
+            environment,
+            vec![],
+            std::collections::HashMap::new(),
+        );
+
         if wait {
             match ewm
-                .execute_task(job_id, worker_name, task, None, true)
+                .execute_task(job_id, worker_name, task, None, true, task_context)
                 .await
             {
                 Ok(Some(result)) => {
-                    let success = result.status == "success";
+                    let success = matches!(result.status, ExternalTaskStatus::Success);
                     if success {
                         let output = serde_json::json!({
                             "job_id": job_id.to_string(),
@@ -798,7 +833,7 @@ impl CreateJobTool {
             }
         } else {
             if let Err(e) = ewm
-                .execute_task(job_id, worker_name, task, None, false)
+                .execute_task(job_id, worker_name, task, None, false, task_context)
                 .await
             {
                 self.update_status(
@@ -1054,11 +1089,12 @@ impl Tool for CreateJobTool {
                 }
             });
 
-            if self.sandbox_enabled() {
+            if self.sandbox_enabled() || self.has_external_workers() {
                 props["project_dir"] = serde_json::json!({
                     "type": "string",
-                    "description": "Path to an existing project directory to mount into the container. \
-                                    Must be under ~/.lunarwing/projects/. If omitted, a fresh directory is created."
+                    "description": "Path to a project directory. For sandbox: mounted into the container \
+                                    (must be under ~/.lunarwing/projects/). For external workers: passed \
+                                    as context for the worker to use as working directory."
                 });
                 props["credentials"] = serde_json::json!({
                     "type": "object",
@@ -1142,8 +1178,15 @@ impl Tool for CreateJobTool {
                 && ewm.get_worker(mode_str).is_some()
             {
                 let wait = params.get("wait").and_then(|v| v.as_bool()).unwrap_or(true);
+                let project_dir = params
+                    .get("project_dir")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let credential_grants = self.parse_credentials(&params, &ctx.user_id).await?;
                 let task = format!("{}\n\n{}", title, description);
-                return self.execute_external(&task, mode_str, wait, ctx).await;
+                return self
+                    .execute_external(&task, mode_str, wait, ctx, project_dir, credential_grants)
+                    .await;
             }
             return Err(ToolError::InvalidParameters(format!(
                 "Unknown job mode '{}'. Available: worker{}",

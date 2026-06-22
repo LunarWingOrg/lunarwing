@@ -48,9 +48,20 @@ export async function executeTask(
 ): Promise<void> {
   const startTime = Date.now()
   const timeoutMs = request.timeout_ms ?? DEFAULT_TIMEOUT_MS
-  const workDir = request.context?.path
-    ? resolveWorkDir(request.context.path as string)
+  const workDir = request.context?.project_dir
+    ? resolveWorkDir(request.context.project_dir)
     : WORKSPACE_ROOT
+
+  // Inject context environment variables, tracking originals for cleanup
+  const injectedKeys: string[] = []
+  const savedValues: Record<string, string | undefined> = {}
+  if (request.context?.environment) {
+    for (const [key, value] of Object.entries(request.context.environment)) {
+      injectedKeys.push(key)
+      savedValues[key] = process.env[key]
+      process.env[key] = value
+    }
+  }
 
   const sdk = createSdk(workDir)
   let sessionID: string | undefined
@@ -193,6 +204,14 @@ export async function executeTask(
     })
   } finally {
     clearTimeout(timeout)
+    // Restore original environment to prevent credential leakage between tasks
+    for (const key of injectedKeys) {
+      if (savedValues[key] === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = savedValues[key]
+      }
+    }
   }
 }
 

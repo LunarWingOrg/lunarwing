@@ -9,14 +9,16 @@
             {
                 "name": "darkirc_adapter_secret",
                 "prompt": "Optional shared secret (Bearer token) for DarkIRC adapter authentication. Leave empty to skip.",
-                "optional": true
+                "optional": true,
+                "env": "DARKIRC_ADAPTER_SECRET"
             }
         ],
         "required_fields": [
             {
                 "name": "adapter_url",
                 "prompt": "DarkIRC adapter URL where darkirc_adapter.py is listening (default: http://127.0.0.1:6680)",
-                "optional": true
+                "optional": true,
+                "env": "DARKIRC_ADAPTER_URL"
             },
             {
                 "name": "dm_policy",

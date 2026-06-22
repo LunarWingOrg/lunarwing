@@ -87,22 +87,33 @@ fn spawn_pebble(
     config: &ExecutorConfig,
     request: &protocol::TaskRequest,
 ) -> Result<tokio::process::Child, std::io::Error> {
-    Command::new(&config.pebble_bin)
-        .args([
-            "--output-format",
-            "ndjson",
-            "--permission-mode",
-            &config.permission_mode,
-            "--model",
-            &config.model,
-            "prompt",
-        ])
-        .arg(&request.prompt)
-        .current_dir(&config.workspace_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
+    let work_dir = request
+        .context
+        .project_dir
+        .as_deref()
+        .unwrap_or(&config.workspace_root);
+
+    let mut cmd = Command::new(&config.pebble_bin);
+    cmd.args([
+        "--output-format",
+        "ndjson",
+        "--permission-mode",
+        &config.permission_mode,
+        "--model",
+        &config.model,
+        "prompt",
+    ])
+    .arg(&request.prompt)
+    .current_dir(work_dir)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .kill_on_drop(true);
+
+    for (key, value) in &request.context.environment {
+        cmd.env(key, value);
+    }
+
+    cmd.spawn()
 }
 
 async fn stream_stdout(

@@ -27,9 +27,10 @@ export async function executeTask(
 ): Promise<void> {
   const startTime = Date.now()
   const timeoutMs = request.timeout_ms ?? DEFAULT_TIMEOUT_MS
-  const workDir = request.context?.path
-    ? resolveWorkDir(request.context.path as string)
+  const workDir = request.context?.project_dir
+    ? resolveWorkDir(request.context.project_dir)
     : WORKSPACE_ROOT
+  const extraEnv = request.context?.environment ?? {}
 
   let output = ""
   let proc: Subprocess | null = null
@@ -69,6 +70,7 @@ export async function executeTask(
       stderr: "pipe",
       env: {
         ...process.env,
+        ...extraEnv,
         CODEX_QUIET_MODE: "1",
       },
     })

@@ -124,8 +124,9 @@ host_checks() {
 
   if [[ -f "$PORTS_REGISTRY" ]]; then
     local pv; pv="$(jq -r '.version // 0' "$PORTS_REGISTRY" 2>/dev/null || echo 0)"
-    if [[ "$pv" -ge 6 ]]; then ok "ports.json present (schema v$pv)"
-    else warn "ports.json at schema v$pv (< 6) — additive, non-breaking; run migrate-ports-v6.sh (backs up + validates) at your convenience"; fi
+    if [[ "$pv" -ge 7 ]]; then ok "ports.json present (schema v$pv, darkirc ports ready)"
+    elif [[ "$pv" -ge 6 ]]; then warn "ports.json at schema v$pv (< 7) — darkirc_irc/darkirc_rpc may be missing; run migrate-ports-v7.sh (backs up + validates) at your convenience"
+    else warn "ports.json at schema v$pv (< 6) — additive, non-breaking; run migrate-ports-v6.sh (backs up + validates), then migrate-ports-v6.1.sh and migrate-ports-v7.sh, at your convenience"; fi
   else
     stop "ports registry not found: $PORTS_REGISTRY"; HOST_STOP=1
   fi

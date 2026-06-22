@@ -21,12 +21,28 @@ pub struct ReadyPayload {
     pub mode: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TaskContext {
+    pub project_dir: Option<String>,
+    pub conversation_history: Vec<ConversationMessage>,
+    pub environment: std::collections::HashMap<String, String>,
+    pub user_id: String,
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationMessage {
+    pub role: String,
+    pub content: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskRequest {
     pub task_id: String,
     pub prompt: String,
     #[serde(default)]
-    pub context: serde_json::Value,
+    pub context: TaskContext,
     pub timeout_ms: Option<u64>,
 }
 
@@ -200,5 +216,50 @@ mod tests {
         let req: TaskRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.task_id, "x");
         assert!(req.timeout_ms.is_none());
+    }
+
+    #[test]
+    fn task_request_extended_context() {
+        let json = r#"{
+            "task_id": "ext-1",
+            "prompt": "deploy it",
+            "context": {
+                "project_dir": "/workspace/myproject",
+                "environment": {"API_KEY": "secret123", "DEBUG": "1"},
+                "user_id": "user-42",
+                "conversation_history": [
+                    {"role": "user", "content": "please deploy"},
+                    {"role": "assistant", "content": "on it"}
+                ],
+                "metadata": {"priority": "high"}
+            },
+            "timeout_ms": 120000
+        }"#;
+        let req: TaskRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.task_id, "ext-1");
+        assert_eq!(
+            req.context.project_dir.as_deref(),
+            Some("/workspace/myproject")
+        );
+        assert_eq!(req.context.environment.get("API_KEY").unwrap(), "secret123");
+        assert_eq!(req.context.environment.get("DEBUG").unwrap(), "1");
+        assert_eq!(req.context.user_id, "user-42");
+        assert_eq!(req.context.conversation_history.len(), 2);
+        assert_eq!(req.context.metadata.get("priority").unwrap(), "high");
+    }
+
+    #[test]
+    fn task_request_empty_context_backward_compat() {
+        let json = r#"{
+            "task_id": "old-1",
+            "prompt": "do stuff",
+            "context": {}
+        }"#;
+        let req: TaskRequest = serde_json::from_str(json).unwrap();
+        assert!(req.context.project_dir.is_none());
+        assert!(req.context.environment.is_empty());
+        assert!(req.context.conversation_history.is_empty());
+        assert_eq!(req.context.user_id, "");
+        assert!(req.context.metadata.is_empty());
     }
 }

@@ -818,6 +818,13 @@ pub struct ExternalWorkerSettings {
     /// Default task timeout in milliseconds.
     #[serde(default = "default_external_worker_timeout")]
     pub timeout_ms: u64,
+    /// Multiple endpoints for load-balanced workers.
+    /// When non-empty, `url`/`auth_token` are treated as fallback only.
+    #[serde(default)]
+    pub endpoints: Vec<crate::config::WorkerEndpoint>,
+    /// Load balancing strategy (defaults to RoundRobin).
+    #[serde(default)]
+    pub load_balance: crate::config::LoadBalanceStrategy,
 }
 
 fn default_external_worker_timeout() -> u64 {
