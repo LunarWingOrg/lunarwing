@@ -397,7 +397,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): extend external worker protocol types`
   - Files: `src/config/sandbox.rs`
 
-- [ ] 4. `WorkerConnectionPool` implementation
+- [x] 4. `WorkerConnectionPool` implementation
 
   **What to do**:
   - Add `WorkerConnection` struct wrapping `(WriteHalf, ReadHalf)` from `tokio_tungstenite`
@@ -486,7 +486,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): add connection pool and load balancer`
   - Files: `src/orchestrator/external_worker.rs` (new pool module or inline)
 
-- [ ] 5. Context serialization + credential injection
+- [x] 5. Context serialization + credential injection
 
   **What to do**:
   - Add `build_task_context()` function in `external_worker.rs` that constructs `TaskContext` from:
@@ -574,7 +574,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): add connection pool and load balancer`
   - Files: `src/orchestrator/external_worker.rs`
 
-- [ ] 6. Round-robin load balancer
+- [x] 6. Round-robin load balancer
 
   **What to do**:
   - Add `LoadBalancer` struct with:
@@ -658,7 +658,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): add connection pool and load balancer`
   - Files: `src/orchestrator/external_worker.rs`
 
-- [ ] 7. Wire pool + LB into `ExternalWorkerManager`
+- [x] 7. Wire pool + LB into `ExternalWorkerManager`
 
   **What to do**:
   - Add `connection_pool: Option<WorkerConnectionPool>` field to `ExternalWorkerManager`
