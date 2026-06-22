@@ -1258,7 +1258,7 @@ build_darkirc() {
     build_user="$tenant_name"
     local envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
     if [[ -f "$envf" ]]; then
-      darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)"
+      darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)" || true
     fi
     [[ -n "$darkirc_src" ]] || darkirc_src="$DARKIRC_SOURCE"
     [[ -n "$darkirc_src" ]] || darkirc_src="$(tenant_home "$tenant_name")/darkfi"
