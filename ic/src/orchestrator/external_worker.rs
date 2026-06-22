@@ -86,6 +86,22 @@ pub struct TaskContext {
     pub metadata: HashMap<String, String>,
 }
 
+pub fn build_task_context(
+    user_id: &str,
+    project_dir: Option<&str>,
+    environment: HashMap<String, String>,
+    conversation_history: Vec<ConversationMessage>,
+    metadata: HashMap<String, String>,
+) -> TaskContext {
+    TaskContext {
+        user_id: user_id.to_string(),
+        project_dir: project_dir.map(String::from),
+        environment,
+        conversation_history,
+        metadata,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct TaskResultPayload {
     #[allow(dead_code)]
@@ -184,6 +200,7 @@ impl ExternalWorkerManager {
         task: &str,
         timeout_ms: Option<u64>,
         wait: bool,
+        context: TaskContext,
     ) -> Result<Option<ExternalTaskResult>, OrchestratorError> {
         let config = self.workers.get(worker_name).ok_or_else(|| {
             OrchestratorError::ExternalWorkerNotFound {
@@ -224,6 +241,7 @@ impl ExternalWorkerManager {
                 context_manager.as_ref(),
                 store.as_ref(),
                 cancel_rx,
+                context,
             )
             .await;
 
@@ -242,6 +260,7 @@ impl ExternalWorkerManager {
                     context_manager.as_ref(),
                     store.as_ref(),
                     cancel_rx,
+                    context,
                 )
                 .await;
 
@@ -359,6 +378,7 @@ async fn run_external_task(
     context_manager: Option<&Arc<ContextManager>>,
     store: Option<&Arc<dyn Database>>,
     cancel_rx: oneshot::Receiver<()>,
+    context: TaskContext,
 ) -> Result<ExternalTaskResult, OrchestratorError> {
     use tokio_tungstenite::tungstenite;
 
@@ -485,7 +505,7 @@ async fn run_external_task(
         serde_json::json!({
             "task_id": job_id.to_string(),
             "prompt": task,
-            "context": TaskContext::default(),
+            "context": context,
             "timeout_ms": timeout_ms,
         }),
     );
@@ -923,5 +943,37 @@ mod tests {
         for _ in 0..10 {
             assert_eq!(lb.next_endpoint().url, "ws://only:9090");
         }
+    }
+
+    #[test]
+    fn build_task_context_populates_fields() {
+        let env: HashMap<String, String> =
+            [("API_KEY".to_string(), "secret".to_string())].into_iter().collect();
+        let history = vec![ConversationMessage {
+            role: "user".to_string(),
+            content: "do the thing".to_string(),
+        }];
+        let meta: HashMap<String, String> =
+            [("priority".to_string(), "high".to_string())].into_iter().collect();
+
+        let ctx = build_task_context("user-1", Some("/workspace"), env, history, meta);
+
+        assert_eq!(ctx.user_id, "user-1");
+        assert_eq!(ctx.project_dir.as_deref(), Some("/workspace"));
+        assert_eq!(ctx.environment.get("API_KEY").unwrap(), "secret");
+        assert_eq!(ctx.conversation_history.len(), 1);
+        assert_eq!(ctx.conversation_history[0].content, "do the thing");
+        assert_eq!(ctx.metadata.get("priority").unwrap(), "high");
+    }
+
+    #[test]
+    fn build_task_context_defaults() {
+        let ctx = build_task_context("u", None, HashMap::new(), vec![], HashMap::new());
+
+        assert_eq!(ctx.user_id, "u");
+        assert!(ctx.project_dir.is_none());
+        assert!(ctx.environment.is_empty());
+        assert!(ctx.conversation_history.is_empty());
+        assert!(ctx.metadata.is_empty());
     }
 }

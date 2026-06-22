@@ -23,7 +23,7 @@ use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::auth::CredentialGrant;
-use crate::orchestrator::external_worker::ExternalTaskStatus;
+use crate::orchestrator::external_worker::{ExternalTaskStatus, build_task_context};
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -748,9 +748,17 @@ impl CreateJobTool {
             None
         };
 
+        let task_context = build_task_context(
+            &ctx.user_id,
+            None,
+            std::collections::HashMap::new(),
+            vec![],
+            std::collections::HashMap::new(),
+        );
+
         if wait {
             match ewm
-                .execute_task(job_id, worker_name, task, None, true)
+                .execute_task(job_id, worker_name, task, None, true, task_context)
                 .await
             {
                 Ok(Some(result)) => {
@@ -798,8 +806,15 @@ impl CreateJobTool {
                 }
             }
         } else {
+            let task_context = build_task_context(
+                &ctx.user_id,
+                None,
+                std::collections::HashMap::new(),
+                vec![],
+                std::collections::HashMap::new(),
+            );
             if let Err(e) = ewm
-                .execute_task(job_id, worker_name, task, None, false)
+                .execute_task(job_id, worker_name, task, None, false, task_context)
                 .await
             {
                 self.update_status(
