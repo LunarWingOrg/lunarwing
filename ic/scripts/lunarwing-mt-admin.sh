@@ -20,6 +20,9 @@ PORT_BLOCK_SIZE=10
 BUILD_LOCK="/var/lock/lunarwing-build.lock"
 PROFILE="${LUNARWING_MT_PROFILE:-release}"
 SOURCE_REPO="${LUNARWING_MT_SOURCE_REPO:-$LUNARWING_ROOT}"
+DARKIRC_SOURCE="${LUNARWING_MT_DARKIRC_SOURCE:-}"
+DARKIRC_BIN="${LUNARWING_MT_DARKIRC_BIN:-/usr/local/bin/darkirc}"
+TEMPLATES_DIR="${SCRIPT_DIR}/templates"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000/openai/v1}"
 # Fleet-wide default for the daemon's LLM endpoint (LLM_BASE_URL). Empty = fall
 # back to each tenant's local TensorZero proxy. Set this (or --llm-base-url per
@@ -166,6 +169,9 @@ Commands:
   build-pebble-worker             Build the pebble worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
+  build-darkirc                   Build darkirc daemon from external source
+                                   (shared binary, not per-tenant)
+
   install-wasm <name>             Install built WASM tools/channels into tenant state dir
   install-wasm-all                Install WASM for all tenants
 
@@ -214,6 +220,33 @@ Environment:
 EOF
 }
 
+# ── Template rendering ────────────────────────
+#
+# render_template <template-file> <output-file> [var=value ...]
+#
+# Reads a template file, replaces __VARNAME__ placeholders with their values
+# (supplied as var=value pairs on the command line), and writes the result.
+# Template files live under $TEMPLATES_DIR. If the template path is relative
+# (no leading /), it is resolved against $TEMPLATES_DIR.
+render_template() {
+  local template="$1" out="$2"
+  shift 2
+
+  [[ "$template" = /* ]] || template="$TEMPLATES_DIR/$template"
+  [[ -f "$template" ]] || die "template not found: $template"
+
+  local content
+  content="$(<"$template")"
+
+  local pair var val
+  for pair; do
+    var="${pair%%=*}"
+    val="${pair#*=}"
+    content="${content//__${var}__/${val}}"
+  done
+
+  printf '%s\n' "$content" > "$out"
+}
 # ── Root check ────────────────────────────────────────────────────────────────
 
 require_root() {
@@ -623,6 +656,165 @@ ENDJSON
   ports_migrate
 }
 
+ports_migrate_v2() {
+  say "migrating port registry v1 -> v2 (reserved_0 -> orchestrator) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 2 |
+    .tenants |= with_entries(
+      .value.ports |= (
+        if .reserved_0 then
+          .orchestrator = .reserved_0 | del(.reserved_0)
+        else
+          .
+        end
+      )
+    )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v2"
+}
+
+ports_migrate_v3() {
+  say "migrating port registry v2 -> v3 (reserved_1 -> nanocode_wss) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 3 |
+    .tenants |= with_entries(
+      .value.ports |= (
+        if .reserved_1 then
+          .nanocode_wss = .reserved_1 | del(.reserved_1)
+        else
+          . + { nanocode_wss: (.orchestrator + 1) }
+        end
+      )
+    )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v3"
+}
+
+ports_migrate_v4() {
+  say "migrating port registry v3 -> v4 (reserved_2 -> pebble_wss) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 4 |
+    .tenants |= with_entries(
+      .value.ports |= (
+        if .reserved_2 then
+          .pebble_wss = .reserved_2 | del(.reserved_2)
+        else
+          . + { pebble_wss: (.orchestrator + 2) }
+        end
+      )
+    )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v4"
+}
+
+ports_migrate_v5() {
+  say "migrating port registry v4 -> v5 (reserved_3 -> weechat_adapter) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 5 |
+    .tenants |= with_entries(
+      .value.ports |= (
+        if .reserved_3 then
+          .weechat_adapter = .reserved_3 | del(.reserved_3)
+        else
+          . + { weechat_adapter: (.orchestrator + 3) }
+        end
+      )
+    )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v5"
+}
+
+ports_migrate_v6() {
+  say "migrating port registry v${current_version} -> v6 (add extended port range for overflow services) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 6
+    | .extended_range = { "start": 20000, "end": 29999 }
+    | .extended_block_size = (.block_size // 10)
+    | ( .range.start // 10000 ) as $rstart
+    | ( .extended_range.start ) as $estart
+    | ( .extended_block_size ) as $bs
+    | .tenants |= with_entries(
+        .value |= (
+          if .base_port then
+            ( .base_port - $rstart + $estart ) as $eb
+            | .extended_base = $eb
+            | .extended_ports = (
+                reduce range(0; $bs) as $i ({}; . + { ("reserved_\($i)"): ($eb + $i) })
+              )
+          else . end
+        )
+      )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v6"
+}
+
+ports_migrate_v6_1() {
+  # v6.1: assign darkirc_adapter to existing tenants from extended_ports[0].
+  # Idempotent: detected by the absence of darkirc_adapter in extended_ports.
+  if ! jq -e '.tenants | to_entries[] | select(.value.extended_ports | has("darkirc_adapter") | not)' "$PORTS_REGISTRY" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  say "migrating port registry -> v6.1 (assign darkirc_adapter from extended slot 0) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .tenants |= with_entries(
+      .value |= (
+        if (.extended_ports | has("darkirc_adapter") | not) and (.extended_ports | type == "object") then
+          .extended_ports.darkirc_adapter = .extended_ports.reserved_0
+          | if (.extended_ports.reserved_0) then .extended_ports |= del(.reserved_0) else . end
+        else . end
+      )
+    )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "port registry migrated to v6.1 (darkirc_adapter added)"
+}
+
+ports_migrate_v7() {
+  say "migrating port registry v${current_version} -> v7 (assign darkirc_irc + darkirc_rpc from extended slots) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 7
+    | .tenants |= with_entries(
+        .value.extended_ports |= (
+          if type == "object" then
+            .darkirc_irc = ((.darkirc_irc) // (.reserved_1) // (.darkirc_adapter + 1))
+            | .darkirc_rpc = ((.darkirc_rpc) // (.reserved_2) // (.darkirc_adapter + 2))
+            | del(.reserved_1, .reserved_2)
+          else . end
+        )
+      )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  current_version=7
+  say "port registry migrated to v7 (darkirc_irc + darkirc_rpc added)"
+}
+
 ports_migrate() {
   [[ -f "$PORTS_REGISTRY" ]] || return 0
   require_cmd jq
@@ -630,126 +822,13 @@ ports_migrate() {
   local current_version
   current_version="$(jq -r '.version // 0' "$PORTS_REGISTRY")"
 
-  if [[ "$current_version" -lt 2 ]]; then
-    say "migrating port registry v${current_version} -> v2 (reserved_0 -> orchestrator) ..."
-    local tmp
-    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
-    jq '
-      .version = 2 |
-      .tenants |= with_entries(
-        .value.ports |= (
-          if .reserved_0 then
-            .orchestrator = .reserved_0 | del(.reserved_0)
-          else
-            .
-          end
-        )
-      )
-    ' "$PORTS_REGISTRY" >"$tmp"
-    chmod 0644 "$tmp"
-    mv "$tmp" "$PORTS_REGISTRY"
-    say "port registry migrated to v2"
-    current_version=2
-  fi
-
-  if [[ "$current_version" -lt 3 ]]; then
-    say "migrating port registry v2 -> v3 (reserved_1 -> nanocode_wss) ..."
-    local tmp
-    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
-    jq '
-      .version = 3 |
-      .tenants |= with_entries(
-        .value.ports |= (
-          if .reserved_1 then
-            .nanocode_wss = .reserved_1 | del(.reserved_1)
-          else
-            . + { nanocode_wss: (.orchestrator + 1) }
-          end
-        )
-      )
-    ' "$PORTS_REGISTRY" >"$tmp"
-    chmod 0644 "$tmp"
-    mv "$tmp" "$PORTS_REGISTRY"
-    say "port registry migrated to v3"
-    current_version=3
-  fi
-
-  if [[ "$current_version" -lt 4 ]]; then
-    say "migrating port registry v3 -> v4 (reserved_2 -> pebble_wss) ..."
-    local tmp
-    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
-    jq '
-      .version = 4 |
-      .tenants |= with_entries(
-        .value.ports |= (
-          if .reserved_2 then
-            .pebble_wss = .reserved_2 | del(.reserved_2)
-          else
-            . + { pebble_wss: (.orchestrator + 2) }
-          end
-        )
-      )
-    ' "$PORTS_REGISTRY" >"$tmp"
-    chmod 0644 "$tmp"
-    mv "$tmp" "$PORTS_REGISTRY"
-    say "port registry migrated to v4"
-  fi
-
-  if [[ "$current_version" -lt 5 ]]; then
-    say "migrating port registry v4 -> v5 (reserved_3 -> weechat_adapter) ..."
-    local tmp
-    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
-    jq '
-      .version = 5 |
-      .tenants |= with_entries(
-        .value.ports |= (
-          if .reserved_3 then
-            .weechat_adapter = .reserved_3 | del(.reserved_3)
-          else
-            . + { weechat_adapter: (.orchestrator + 3) }
-          end
-        )
-      )
-    ' "$PORTS_REGISTRY" >"$tmp"
-    chmod 0644 "$tmp"
-    mv "$tmp" "$PORTS_REGISTRY"
-    say "port registry migrated to v5"
-  fi
-
-  if [[ "$current_version" -lt 6 ]]; then
-    say "migrating port registry v${current_version} -> v6 (add extended port range for overflow services) ..."
-    local tmp
-    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
-    # v6 expands per-tenant capacity *without moving any existing port*. Each
-    # tenant's existing block (base_port + .ports) is left untouched; a parallel
-    # block is mirrored into a second range (extended_base = base_port - range
-    # start + extended_range start) holding fresh reserved_N slots for future
-    # services. Mirroring preserves the >= block_size spacing, so extended blocks
-    # never overlap each other or the original range.
-    jq '
-      .version = 6
-      | .extended_range = { "start": 20000, "end": 29999 }
-      | .extended_block_size = (.block_size // 10)
-      | ( .range.start // 10000 ) as $rstart
-      | ( .extended_range.start ) as $estart
-      | ( .extended_block_size ) as $bs
-      | .tenants |= with_entries(
-          .value |= (
-            if .base_port then
-              ( .base_port - $rstart + $estart ) as $eb
-              | .extended_base = $eb
-              | .extended_ports = (
-                  reduce range(0; $bs) as $i ({}; . + { ("reserved_\($i)"): ($eb + $i) })
-                )
-            else . end
-          )
-        )
-    ' "$PORTS_REGISTRY" >"$tmp"
-    chmod 0644 "$tmp"
-    mv "$tmp" "$PORTS_REGISTRY"
-    say "port registry migrated to v6"
-    current_version=6
-  fi
+  if [[ "$current_version" -lt 2 ]]; then ports_migrate_v2; current_version=2; fi
+  if [[ "$current_version" -lt 3 ]]; then ports_migrate_v3; current_version=3; fi
+  if [[ "$current_version" -lt 4 ]]; then ports_migrate_v4; current_version=4; fi
+  if [[ "$current_version" -lt 5 ]]; then ports_migrate_v5; current_version=5; fi
+  if [[ "$current_version" -lt 6 ]]; then ports_migrate_v6; current_version=6; fi
+  ports_migrate_v6_1
+  if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
 }
 
 ports_allocate() {
@@ -804,7 +883,12 @@ ports_allocate() {
         },
         extended_base: $ebase,
         extended_ports: (
-          reduce range(0; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) })
+          {
+            darkirc_adapter: $ebase,
+            darkirc_irc: ($ebase + 1),
+            darkirc_rpc: ($ebase + 2)
+          }
+          + (reduce range(3; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -836,7 +920,18 @@ ports_deallocate() {
 ports_get() {
   local name="$1" port_name="$2"
   require_cmd jq
-  jq -r ".tenants[\"$name\"].ports.$port_name // empty" "$PORTS_REGISTRY"
+  local port
+  port="$(jq -r ".tenants[\"$name\"].ports.$port_name // empty" "$PORTS_REGISTRY")"
+  if [[ -n "$port" ]]; then
+    printf '%s' "$port"
+    return 0
+  fi
+  port="$(jq -r ".tenants[\"$name\"].extended_ports.$port_name // empty" "$PORTS_REGISTRY")"
+  if [[ -n "$port" ]]; then
+    printf '%s' "$port"
+    return 0
+  fi
+  return 1
 }
 
 ports_list() {
@@ -845,8 +940,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,ORCH,NANOCODE,PEBBLE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.extended_ports.darkirc_adapter // "-")\t\(.value.extended_ports.darkirc_irc // "-")\t\(.value.extended_ports.darkirc_rpc // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,DARKIRC_ADPT,DARKIRC_IRC,DARKIRC_RPC,ORCH,NANOCODE,PEBBLE"
 }
 
 tenant_exists_in_registry() {
@@ -1149,6 +1244,50 @@ build_tenant() {
   fi
 }
 
+# ── Darkirc daemon build (shared, not per-tenant) ────────────────────────────
+
+build_darkirc() {
+  local tenant_name="${1:-}" darkirc_src=""
+
+  if [[ -n "$tenant_name" ]]; then
+    local envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
+    if [[ -f "$envf" ]]; then
+      darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)"
+    fi
+  fi
+
+  [[ -n "$darkirc_src" ]] || darkirc_src="$DARKIRC_SOURCE"
+
+  if [[ -z "$darkirc_src" ]]; then
+    die "darkirc source path not configured — set DARKIRC_SOURCE in tenant lunarwing.env or LUNARWING_MT_DARKIRC_SOURCE"
+  fi
+
+  say "acquiring build lock for darkirc ..."
+  (
+    flock -x 200
+
+    [[ -d "$darkirc_src" ]] || die "darkirc source not found at $darkirc_src"
+    [[ -f "$darkirc_src/Makefile" ]] || die "darkirc Makefile not found (expected darkfi repo root)"
+    [[ -f "$darkirc_src/bin/darkirc/Cargo.toml" ]] || die "darkirc Cargo.toml not found"
+
+    local cargo_env="if [ -f \"\$HOME/.cargo/env\" ]; then . \"\$HOME/.cargo/env\"; else export PATH=\"\$HOME/.cargo/bin:\$PATH\"; fi;"
+
+    # Use darkfi's official make build system (handles zkas circuit compilation + release build)
+    say "building darkirc from $darkirc_src via make ..."
+    bash -c "$cargo_env cd '$darkirc_src' && make darkirc" \
+      || die "darkirc build failed"
+
+    local built_bin="$darkirc_src/darkirc"
+    [[ -x "$built_bin" ]] || die "darkirc binary not found at $built_bin"
+
+    say "installing darkirc to $DARKIRC_BIN ..."
+    install -m 0755 "$built_bin" "$DARKIRC_BIN"
+
+    say "darkirc build complete: $DARKIRC_BIN"
+    "$DARKIRC_BIN" --version || say "(darkirc --version not supported, skipping)"
+  ) 200>"$BUILD_LOCK"
+}
+
 build_all() {
   local with_wasm="${1:-false}"
   local with_nanocode="${2:-false}"
@@ -1414,7 +1553,7 @@ write_tenant_lunarwing_env() {
   local llm_api_key="${5:-}"
   local llm_base_url="${6:-}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port darkirc_adapter_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
@@ -1426,6 +1565,7 @@ write_tenant_lunarwing_env() {
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
+  darkirc_adapter_port="$(ports_get "$name" darkirc_adapter)" || true
 
   local state_dir run_dir repo_dir
   state_dir="$(tenant_state_dir "$name")"
@@ -1437,12 +1577,13 @@ write_tenant_lunarwing_env() {
   # tenant's encrypted DB secrets (it is the AES-256-GCM vault key); rotating the
   # tokens would break live clients/workers; minting a fresh XMPP_PASSWORD would
   # break the already-registered XMPP account. Generate fresh ONLY on first write.
-  local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password
+  local gateway_token bridge_token relay_password secrets_key webhook_secret pg_password darkirc_adapter_secret
   gateway_token="$(_env_existing "$path" GATEWAY_AUTH_TOKEN)";   gateway_token="${gateway_token:-$(generate_token)}"
   bridge_token="$(_env_existing "$path" XMPP_BRIDGE_TOKEN)";     bridge_token="${bridge_token:-$(generate_token | cut -c1-32)}"
   relay_password="$(_env_existing "$path" RELAY_PASSWORD)";      relay_password="${relay_password:-$(generate_token | cut -c1-32)}"
   secrets_key="$(_env_existing "$path" SECRETS_MASTER_KEY)";     secrets_key="${secrets_key:-$(generate_token)}"
   webhook_secret="$(_env_existing "$path" HTTP_WEBHOOK_SECRET)"; webhook_secret="${webhook_secret:-$(generate_token)}"
+  darkirc_adapter_secret="$(_env_existing "$path" DARKIRC_ADAPTER_SECRET)"; darkirc_adapter_secret="${darkirc_adapter_secret:-$(generate_token | cut -c1-32)}"
   # XMPP password: an explicit --xmpp-password wins; else preserve an existing one;
   # else mint a fresh one (first-time provision).
   [[ -n "$xmpp_password" ]] || { xmpp_password="$(_env_existing "$path" XMPP_PASSWORD)"; xmpp_password="${xmpp_password:-$(generate_token | cut -c1-32)}"; }
@@ -1531,6 +1672,9 @@ ADAPTER_PORT=$weechat_adapter_port
 WEECHAT_ADAPTER_PORT=$weechat_adapter_port
 WS_ADAPTER_URL=http://127.0.0.1:${weechat_adapter_port}
 
+DARKIRC_ADAPTER_URL=http://127.0.0.1:${darkirc_adapter_port}
+DARKIRC_ADAPTER_SECRET=$darkirc_adapter_secret
+
 # Daemon mode
 CLI_ENABLED=false
 ONBOARD_COMPLETED=true
@@ -1604,6 +1748,83 @@ ENVEOF
   )
   chown "$name:$name" "$path"
   say "wrote: $path"
+}
+
+write_tenant_darkirc_adapter_env() {
+  local name="$1"
+
+  local path adapter_port darkirc_irc_port lunarwing_env
+  path="$(tenant_env_dir "$name")/darkirc-adapter.env"
+  lunarwing_env="$(tenant_env_dir "$name")/lunarwing.env"
+  adapter_port="$(ports_get "$name" darkirc_adapter)" || true
+  darkirc_irc_port="$(ports_get "$name" darkirc_irc)" || true
+
+  local adapter_secret
+  adapter_secret="$(grep -s '^DARKIRC_ADAPTER_SECRET=' "$lunarwing_env" | cut -d= -f2-)"
+  [[ -n "$adapter_secret" ]] || adapter_secret="$(generate_token | cut -c1-32)"
+
+  if [[ -f "$TEMPLATES_DIR/darkirc-adapter.env.template" ]]; then
+    render_template \
+      "darkirc-adapter.env.template" "$path" \
+      "TENANT_NAME=$name" \
+      "DARKIRC_IRC_PORT=$darkirc_irc_port" \
+      "DARKIRC_ADAPTER_PORT=$adapter_port" \
+      "ADAPTER_SECRET=$adapter_secret"
+  else
+    (
+      umask 077
+      cat >"$path" <<ENVEOF
+DARKIRC_HOST=127.0.0.1
+DARKIRC_PORT=$darkirc_irc_port
+DARKIRC_NICK=${name}-bridge
+DARKIRC_USER=$name
+DARKIRC_REALNAME="LunarWing DarkIRC Bridge ($name)"
+ADAPTER_HOST=127.0.0.1
+ADAPTER_PORT=$adapter_port
+ADAPTER_SECRET=$adapter_secret
+ADAPTER_LOG_LEVEL=INFO
+ENVEOF
+    )
+  fi
+  chown "$name:$name" "$path"
+  say "wrote: $path"
+}
+
+generate_darkirc_config() {
+  local name="$1"
+  local state_dir
+  state_dir="$(tenant_state_dir "$name")"
+
+  local config_dir="$state_dir/darkirc"
+  mkdir -p "$config_dir" "$config_dir/datastore" 2>/dev/null || true
+  chmod 0700 "$config_dir"
+
+  mkdir -p "$state_dir/logs" 2>/dev/null || true
+
+  local irc_port rpc_port
+  irc_port="$(ports_get "$name" darkirc_irc)" || die "no darkirc_irc port for tenant '$name'"
+  rpc_port="$(ports_get "$name" darkirc_rpc)" || die "no darkirc_rpc port for tenant '$name'"
+
+  local log_dir
+  log_dir="$(tenant_log_dir "$name")"
+
+  local toml_out="$config_dir/darkirc_config.toml"
+  if [[ -f "$TEMPLATES_DIR/darkirc_config.toml.template" ]]; then
+    render_template \
+      "darkirc_config.toml.template" "$toml_out" \
+      "TENANT_NAME=$name" \
+      "IRC_PORT=$irc_port" \
+      "RPC_PORT=$rpc_port" \
+      "CONFIG_DIR=$config_dir" \
+      "LOG_DIR=$log_dir"
+  else
+    die "darkirc config template not found at $TEMPLATES_DIR/darkirc_config.toml.template"
+  fi
+
+  chmod 0700 "$config_dir"
+  chmod 0600 "$toml_out"
+
+  say "darkirc config generated for $name (irc=$irc_port rpc=$rpc_port)"
 }
 
 # ── External-worker config.toml generation ────────────────────────────────────
@@ -1757,6 +1978,29 @@ patch_tenant_env() {
     else
       printf '\n# WeeChat relay URL consumed by the in-process WASM channel\nRELAY_URL=http://127.0.0.1:%s\n' "$weechat_port" >>"$env_path"
       say "added RELAY_URL=http://127.0.0.1:$weechat_port to $env_path"
+    fi
+  fi
+
+  local darkirc_adapter_port
+  darkirc_adapter_port="$(ports_get "$name" darkirc_adapter)" || true
+  if [[ -n "$darkirc_adapter_port" ]]; then
+    if grep -q '^DARKIRC_ADAPTER_URL=' "$env_path"; then
+      say "DARKIRC_ADAPTER_URL already set in $env_path (skipping)"
+    else
+      printf '\nDARKIRC_ADAPTER_URL=http://127.0.0.1:%s\n' "$darkirc_adapter_port" >>"$env_path"
+      say "added DARKIRC_ADAPTER_URL=http://127.0.0.1:$darkirc_adapter_port to $env_path"
+    fi
+    if grep -q '^DARKIRC_ADAPTER_SECRET=' "$env_path"; then
+      say "DARKIRC_ADAPTER_SECRET already set in $env_path (skipping)"
+    else
+      local darkirc_adapter_secret
+      darkirc_adapter_secret="$(generate_token | cut -c1-32)"
+      printf 'DARKIRC_ADAPTER_SECRET=%s\n' "$darkirc_adapter_secret" >>"$env_path"
+      say "added DARKIRC_ADAPTER_SECRET to $env_path"
+    fi
+    write_tenant_darkirc_adapter_env "$name"
+    if ports_get "$name" darkirc_irc >/dev/null 2>&1; then
+      generate_darkirc_config "$name"
     fi
   fi
 
@@ -2642,6 +2886,45 @@ NoNewPrivileges=true
 WantedBy=default.target
 EOF
 
+  local darkirc_adapter_path
+  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+
+  cat >"$user_unit_dir/lunarwing-darkirc-adapter-${name}.service" <<EOF
+[Unit]
+Description=LunarWing DarkIRC adapter ($name)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$(dirname "$darkirc_adapter_path")
+EnvironmentFile=$env_dir/darkirc-adapter.env
+ExecStart=$(command -v python3) $darkirc_adapter_path
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
+EOF
+
+  # DarkIRC daemon unit
+  cat >"$user_unit_dir/lunarwing-darkirc-${name}.service" <<EOF
+[Unit]
+Description=DarkIRC daemon ($name)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$DARKIRC_BIN --config $(tenant_state_dir "$name")/darkirc/darkirc_config.toml
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
+EOF
+
   # Bridge unit
   cat >"$user_unit_dir/xmpp-bridge-${name}.service" <<EOF
 [Unit]
@@ -2676,8 +2959,8 @@ EOF
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target ${pg_dep_after}xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service
+After=network.target ${pg_dep_after}xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service lunarwing-darkirc-adapter-${name}.service
+Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service lunarwing-darkirc-adapter-${name}.service
 ${pg_dep_requires}
 
 [Service]
@@ -2738,7 +3021,12 @@ start_tenant_systemd() {
     "xmpp-bridge-${name}.service" \
     "lunarwing-proxy-${name}.service" \
     "lunarwing-weechat-${name}.service" \
-    "lunarwing-weechat-adapter-${name}.service"
+    "lunarwing-weechat-adapter-${name}.service" \
+    "lunarwing-darkirc-${name}.service" \
+    "lunarwing-darkirc-adapter-${name}.service"
+  # Start the darkirc daemon BEFORE the adapter (adapter connects to daemon's IRC port).
+  _systemctl_user "$name" start "lunarwing-darkirc-${name}.service"
+  sleep 2
   _systemctl_user "$name" start "lunarwing-${name}.service"
   sleep 2
   if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service"; then
@@ -2755,7 +3043,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-pg-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-pg-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -2768,7 +3056,7 @@ uninstall_tenant_systemd() {
   local user_unit_dir
   user_unit_dir="$(tenant_home "$name")/.config/systemd/user"
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service"; do
     rm -f "$user_unit_dir/$svc"
   done
 
@@ -2944,7 +3232,7 @@ required_files="\${command}"
 depend() {
     need net localmount lunarwing-pg-${name}
     use dns logger
-    after firewall lunarwing-pg-${name} xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}
+    after firewall lunarwing-pg-${name} xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name} lunarwing-darkirc-adapter-${name}
 }
 
 load_env() {
@@ -3031,6 +3319,61 @@ start_pre() {
 }
 INITEOF
   chmod 0755 "/etc/init.d/xmpp-bridge-${name}"
+
+  # ── DarkIRC daemon init script ──
+  cat >"/etc/init.d/lunarwing-darkirc-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing DarkIRC daemon ($name)"
+
+: "\${darkirc_command:=$DARKIRC_BIN}"
+: "\${darkirc_args:=--config $state_dir/darkirc/darkirc_config.toml}"
+: "\${darkirc_user:=$name}"
+: "\${darkirc_group:=$name}"
+: "\${darkirc_workdir:=$state_dir/darkirc}"
+: "\${darkirc_pidfile:=$run_dir/darkirc.pid}"
+: "\${darkirc_state_dir:=$state_dir}"
+: "\${darkirc_runtime_dir:=$run_dir}"
+: "\${darkirc_log_dir:=$log_dir}"
+: "\${darkirc_output_log:=\${darkirc_log_dir}/darkirc.log}"
+: "\${darkirc_error_log:=\${darkirc_log_dir}/darkirc.err}"
+: "\${darkirc_umask:=0077}"
+: "\${darkirc_respawn_delay:=5}"
+: "\${darkirc_respawn_max:=5}"
+: "\${darkirc_respawn_period:=60}"
+: "\${darkirc_retry:=SIGTERM/30/KILL/5}"
+
+command="\${darkirc_command}"
+command_args="\${darkirc_args}"
+command_user="\${darkirc_user}:\${darkirc_group}"
+directory="\${darkirc_workdir}"
+pidfile="\${darkirc_pidfile}"
+supervisor="supervise-daemon"
+retry="\${darkirc_retry}"
+respawn_delay="\${darkirc_respawn_delay}"
+respawn_max="\${darkirc_respawn_max}"
+respawn_period="\${darkirc_respawn_period}"
+output_log="\${darkirc_output_log}"
+error_log="\${darkirc_error_log}"
+required_files="\${command}"
+
+depend() {
+    need net localmount
+    use dns logger
+    after firewall
+    before lunarwing-darkirc-adapter-${name}
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o "\${darkirc_user}:\${darkirc_group}" "\${darkirc_state_dir}/darkirc"
+    checkpath -d -m 0750 -o "\${darkirc_user}:\${darkirc_group}" "\${darkirc_log_dir}"
+    checkpath -d -m 0750 -o "\${darkirc_user}:\${darkirc_group}" "\${darkirc_runtime_dir}"
+    checkpath -f -m 0640 -o "\${darkirc_user}:\${darkirc_group}" "\${output_log}"
+    checkpath -f -m 0640 -o "\${darkirc_user}:\${darkirc_group}" "\${error_log}"
+    umask "\${darkirc_umask}"
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-darkirc-${name}"
 
   # ── TensorZero proxy init script ──
   cat >"/etc/init.d/lunarwing-proxy-${name}" <<INITEOF
@@ -3197,10 +3540,75 @@ start_pre() {
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-weechat-adapter-${name}"
 
+  # DarkIRC adapter init script
+  local darkirc_adapter_path darkirc_adapter_dir
+  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+  darkirc_adapter_dir="$(dirname "$darkirc_adapter_path")"
+
+  cat >"/etc/init.d/lunarwing-darkirc-adapter-${name}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing DarkIRC adapter ($name)"
+
+: "\${darkirc_adapter_command:=$(command -v python3)}"
+: "\${darkirc_adapter_args:=$darkirc_adapter_path}"
+: "\${darkirc_adapter_user:=$name}"
+: "\${darkirc_adapter_group:=$name}"
+: "\${darkirc_adapter_pidfile:=$run_dir/darkirc-adapter.pid}"
+: "\${darkirc_adapter_runtime_dir:=$run_dir}"
+: "\${darkirc_adapter_log_dir:=$log_dir}"
+: "\${darkirc_adapter_output_log:=\${darkirc_adapter_log_dir}/darkirc-adapter.log}"
+: "\${darkirc_adapter_error_log:=\${darkirc_adapter_log_dir}/darkirc-adapter.err}"
+: "\${darkirc_adapter_env_file:=$env_dir/darkirc-adapter.env}"
+: "\${darkirc_adapter_umask:=0077}"
+: "\${darkirc_adapter_respawn_delay:=5}"
+: "\${darkirc_adapter_respawn_max:=5}"
+: "\${darkirc_adapter_respawn_period:=60}"
+: "\${darkirc_adapter_retry:=SIGTERM/30/KILL/5}"
+
+command="\${darkirc_adapter_command}"
+command_args="\${darkirc_adapter_args}"
+command_user="\${darkirc_adapter_user}:\${darkirc_adapter_group}"
+directory="$darkirc_adapter_dir"
+pidfile="\${darkirc_adapter_pidfile}"
+supervisor="supervise-daemon"
+retry="\${darkirc_adapter_retry}"
+respawn_delay="\${darkirc_adapter_respawn_delay}"
+respawn_max="\${darkirc_adapter_respawn_max}"
+respawn_period="\${darkirc_adapter_respawn_period}"
+output_log="\${darkirc_adapter_output_log}"
+error_log="\${darkirc_adapter_error_log}"
+
+depend() {
+    need net
+    use dns
+    after firewall
+    before lunarwing-${name}
+}
+
+load_env() {
+    if [ -n "\${darkirc_adapter_env_file}" ] && [ -r "\${darkirc_adapter_env_file}" ]; then
+        set -a
+        . "\${darkirc_adapter_env_file}"
+        set +a
+    fi
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o "\${darkirc_adapter_user}:\${darkirc_adapter_group}" "\${darkirc_adapter_runtime_dir}"
+    checkpath -d -m 0750 -o "\${darkirc_adapter_user}:\${darkirc_adapter_group}" "\${darkirc_adapter_log_dir}"
+    checkpath -f -m 0640 -o "\${darkirc_adapter_user}:\${darkirc_adapter_group}" "\${output_log}"
+    checkpath -f -m 0640 -o "\${darkirc_adapter_user}:\${darkirc_adapter_group}" "\${error_log}"
+    load_env || return 1
+    umask "\${darkirc_adapter_umask}"
+}
+INITEOF
+  chmod 0755 "/etc/init.d/lunarwing-darkirc-adapter-${name}"
+
   # ── Conf.d files ──
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-${name} lunarwing-weechat-adapter-${name}"
+lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-${name} lunarwing-weechat-adapter-${name} lunarwing-darkirc-adapter-${name}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -3217,6 +3625,10 @@ CONFD
 CONFD
 
   cat >"/etc/conf.d/lunarwing-weechat-adapter-${name}" <<CONFD
+# Auto-generated by lunarwing-mt-admin.sh for tenant: $name
+CONFD
+
+  cat >"/etc/conf.d/lunarwing-darkirc-adapter-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
 
@@ -3242,6 +3654,8 @@ start_tenant_openrc() {
   # the core stack (the main daemon does not depend on them).
   rc-service "lunarwing-weechat-${name}" start 2>/dev/null || say "  (lunarwing-weechat-${name} skipped — optional)"
   rc-service "lunarwing-weechat-adapter-${name}" start 2>/dev/null || say "  (lunarwing-weechat-adapter-${name} skipped — optional)"
+  rc-service "lunarwing-darkirc-${name}" start 2>/dev/null || say "  (lunarwing-darkirc-${name} skipped — optional)"
+  rc-service "lunarwing-darkirc-adapter-${name}" start 2>/dev/null || say "  (lunarwing-darkirc-adapter-${name} skipped — optional)"
   rc-service "lunarwing-proxy-${name}" start
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
@@ -3254,7 +3668,8 @@ start_tenant_openrc() {
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
   for svc in "lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" \
-             "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}"; do
+             "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
+             "lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}"; do
     if rc-service "$svc" status >/dev/null 2>&1; then
       rc-update add "$svc" default >/dev/null 2>&1 || true
     fi
@@ -3275,6 +3690,8 @@ stop_tenant_openrc() {
   rc-service "lunarwing-proxy-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-adapter-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-weechat-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-darkirc-adapter-${name}" stop 2>/dev/null || true
+  rc-service "lunarwing-darkirc-${name}" stop 2>/dev/null || true
   # Worker babysitters: stop the supervisors so they don't respawn the stopped containers.
   for worker in nanocode pebble; do
     rc-service "lunarwing-${worker}-${name}-sup" stop 2>/dev/null || true
@@ -3287,7 +3704,7 @@ stop_tenant_openrc() {
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-darkirc-adapter-${name}" "lunarwing-darkirc-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -3557,6 +3974,8 @@ add_tenant() {
   write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
+  write_tenant_darkirc_adapter_env "$name"
+  generate_darkirc_config "$name"
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
@@ -3777,7 +4196,8 @@ status_tenant() {
   say "Services ($INIT_SYSTEM):"
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
     local svcs=("lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
-                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}")
+                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
+                "lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}")
     # pg + workers are Quadlet units only on rootless podman; on rootful docker
     # they run as plain containers (shown above), not systemd units.
     if [[ "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
@@ -3792,6 +4212,7 @@ status_tenant() {
     local svc state
     for svc in "lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" \
                "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" \
+               "lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}" \
                "lunarwing-nanocode-${name}" "lunarwing-nanocode-${name}-sup" \
                "lunarwing-pebble-${name}" "lunarwing-pebble-${name}-sup"; do
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
@@ -4080,6 +4501,19 @@ main() {
         esac
       done
       build_all "$with_wasm" "$with_nanocode" "$with_pebble"
+      ;;
+
+    build-darkirc)
+      require_root
+      local darkirc_tenant=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --tenant) darkirc_tenant="$2"; shift 2 ;;
+          -*)       die "unknown flag: $1" ;;
+          *)        die "unexpected argument: $1" ;;
+        esac
+      done
+      build_darkirc "$darkirc_tenant"
       ;;
 
     build-nanocode-worker)
