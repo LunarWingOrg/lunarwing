@@ -2,6 +2,8 @@
 
 ## TL;DR
 
+### really rough
+
 > **Quick Summary**: Extend the external worker protocol to pass real context/credentials, add WebSocket connection pooling for persistent workers, and support multi-instance load balancing.
 >
 > **Deliverables**:
