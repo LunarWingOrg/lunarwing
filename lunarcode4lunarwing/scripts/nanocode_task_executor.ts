@@ -52,9 +52,13 @@ export async function executeTask(
     ? resolveWorkDir(request.context.project_dir)
     : WORKSPACE_ROOT
 
-  // Inject context environment variables into the process
+  // Inject context environment variables, tracking originals for cleanup
+  const injectedKeys: string[] = []
+  const savedValues: Record<string, string | undefined> = {}
   if (request.context?.environment) {
     for (const [key, value] of Object.entries(request.context.environment)) {
+      injectedKeys.push(key)
+      savedValues[key] = process.env[key]
       process.env[key] = value
     }
   }
@@ -200,6 +204,14 @@ export async function executeTask(
     })
   } finally {
     clearTimeout(timeout)
+    // Restore original environment to prevent credential leakage between tasks
+    for (const key of injectedKeys) {
+      if (savedValues[key] === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = savedValues[key]
+      }
+    }
   }
 }
 

@@ -520,7 +520,7 @@ async fn connect_and_handshake(
         reason: e.to_string(),
     })?;
 
-    let (mut _write, mut read) = ws_stream.split();
+    let (write_half, mut read) = ws_stream.split();
 
     let ready_timeout = Duration::from_secs(10);
     let ready_msg = tokio::time::timeout(ready_timeout, read.next())
@@ -568,7 +568,7 @@ async fn connect_and_handshake(
     })?;
 
     let stream =
-        _write
+        write_half
             .reunite(read)
             .map_err(|_| OrchestratorError::ExternalWorkerProtocolError {
                 worker_name: worker_name.to_string(),
