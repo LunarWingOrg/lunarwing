@@ -19,11 +19,10 @@ For adapter architecture and QA scenarios, see [DarkIRC Multitenant Adapter](../
 
 - Production multi-tenancy is already managed with `ic/scripts/lunarwing-mt-admin.sh`.
 - `jq` is installed for `/etc/lunarwing/ports.json` migrations and inspection.
-- Python 3 is available for `darkirc_adapter.py`.
-- The DarkFi/DarkIRC source tree exists outside the LunarWing repo.
-- The operator knows where that external source tree lives.
+- Python 3 with `aiohttp` is available for `darkirc_adapter.py`.
+- `git` and a working Rust toolchain (`cargo` + `make`) are available **to the tenant / build user** — `build-darkirc` clones and compiles DarkFi as that user, never as root. (Root does not need a Rust toolchain.)
 
-Do not vendor DarkFi/DarkIRC source into the LunarWing repository. The admin script builds from an external source path.
+You do **not** need to clone DarkFi by hand: `build-darkirc` auto-clones it if the source is absent (see [Build DarkIRC](#build-darkirc)). The source is cloned and built outside the LunarWing repo (under the tenant's home by default) and is never vendored into the repository.
 
 ## Port Registry Requirements
 
@@ -99,9 +98,9 @@ jq '.tenants | to_entries[] | {tenant: .key, extended_ports: .value.extended_por
 
 The top-level `ports_migrate()` dispatcher runs them in order. This means normal admin-script flows can bring stale registries forward, while the standalone scripts remain available for explicit operator-controlled upgrades.
 
-## Configure the DarkIRC Source Path
+## Configure the DarkIRC Source Path (optional)
 
-`build-darkirc` does not hardcode a DarkFi source path. It resolves the source in this order:
+`build-darkirc` resolves the DarkFi source path in this order:
 
 1. per-tenant `/home/<TENANT>/lunarwing/env/lunarwing.env` value:
    ```bash
@@ -111,23 +110,24 @@ The top-level `ports_migrate()` dispatcher runs them in order. This means normal
    ```bash
    export LUNARWING_MT_DARKIRC_SOURCE=/path/to/darkfi
    ```
+3. default: `/home/<TENANT>/darkfi` (tenant-owned).
 
-Prefer the per-tenant env file when tenants may use different DarkFi checkouts or revisions.
+If the resolved path does not exist yet, `build-darkirc` **clones DarkFi into it automatically** (as the tenant / build user). Setting a path explicitly is only needed for a shared or non-default checkout, or to pin different tenants to different revisions.
 
-Set it for one tenant:
+The clone source and revision are configurable (defaults shown):
+
+```bash
+export LUNARWING_MT_DARKIRC_REPO=https://github.com/darkrenaissance/darkfi
+export LUNARWING_MT_DARKIRC_REV=master
+```
+
+To point one tenant at an existing checkout instead of auto-cloning:
 
 ```bash
 sudo install -d -m 700 -o <TENANT> -g <TENANT> /home/<TENANT>/lunarwing/env
 sudo sh -c 'grep -q "^DARKIRC_SOURCE=" /home/<TENANT>/lunarwing/env/lunarwing.env || printf "\nDARKIRC_SOURCE=/path/to/darkfi\n" >> /home/<TENANT>/lunarwing/env/lunarwing.env'
 sudo chown <TENANT>:<TENANT> /home/<TENANT>/lunarwing/env/lunarwing.env
 sudo chmod 600 /home/<TENANT>/lunarwing/env/lunarwing.env
-```
-
-For a fleet-wide source path during a build session:
-
-```bash
-sudo LUNARWING_MT_DARKIRC_SOURCE=/path/to/darkfi \
-  ic/scripts/lunarwing-mt-admin.sh build-darkirc --tenant <TENANT>
 ```
 
 ## Provision or Backfill a Tenant
@@ -148,20 +148,26 @@ This backfills DarkIRC-related values in `lunarwing.env`, writes `darkirc-adapte
 
 ## Build DarkIRC
 
-Build and install the external DarkIRC daemon for one tenant:
+Build and install the DarkIRC daemon for one tenant:
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh build-darkirc --tenant <TENANT>
 ```
 
-If using a fleet-wide source override:
+`build-darkirc`:
+
+- resolves the DarkFi source path (see above) and **clones it as the tenant user** if absent;
+- runs DarkFi's `make darkirc` **as the tenant user**, using that user's Rust toolchain — it never builds as root, so there are no root-owned source or build artifacts;
+- installs the resulting binary to the shared `DARKIRC_BIN` (default `/usr/local/bin/darkirc`) — the only step that uses root.
+
+Without `--tenant`, the build runs as the invoking (`sudo`) user instead, into `DARKIRC_SOURCE` / `LUNARWING_MT_DARKIRC_SOURCE`:
 
 ```bash
 sudo LUNARWING_MT_DARKIRC_SOURCE=/path/to/darkfi \
-  ic/scripts/lunarwing-mt-admin.sh build-darkirc --tenant <TENANT>
+  ic/scripts/lunarwing-mt-admin.sh build-darkirc
 ```
 
-The build uses the external DarkFi checkout and installs the daemon into the tenant's LunarWing layout. It does not copy DarkFi source into the LunarWing repo.
+The build runs from an external DarkFi checkout and does not copy DarkFi source into the LunarWing repo. (Note: DarkFi's `make darkirc` also compiles `zkas` + proof circuits, so the first build can take a while.)
 
 ## Install WASM Channel Artifacts
 
@@ -277,12 +283,15 @@ Do not print `ADAPTER_SECRET`.
 
 ### 3. Check Adapter Health
 
+`/health` requires the adapter's bearer secret (it returns `{"error": "unauthorized"}` without it):
+
 ```bash
 adapter_port=$(jq -r '.tenants["<TENANT>"].extended_ports.darkirc_adapter' /etc/lunarwing/ports.json)
-curl -sf "http://127.0.0.1:${adapter_port}/health" | jq .
+secret=$(sudo grep -s '^ADAPTER_SECRET=' /home/<TENANT>/lunarwing/env/darkirc-adapter.env | cut -d= -f2-)
+curl -sf -H "Authorization: Bearer ${secret}" "http://127.0.0.1:${adapter_port}/health" | jq .
 ```
 
-Expected shape:
+Do not print the secret in shared logs. Expected shape:
 
 ```json
 {
@@ -314,7 +323,11 @@ Do not print the token in shared logs.
 
 ## DarkIRC Channels, Seeds, and Contacts
 
-The generated `darkirc_config.toml` includes baseline channel and seed configuration. Edit it as the tenant when needed:
+The generated `darkirc_config.toml` ships baseline channels and seeds. The clearnet seeds use port **9600** (`tcp+tls://lilith0.dark.fi:9600`, `lilith1.dark.fi:9600`); the Tor seeds are onion addresses on port 25552.
+
+Reachability note: a clearnet seed only bootstraps peer discovery — the seed hands out peer addresses and then closes the channel ("Channel stopped" in the daemon log is normal seed behaviour). Most public DarkIRC nodes are **Tor-only**, so a tenant with no Tor daemon can connect to a clearnet seed but may stay at "Waiting for some P2P connections…". For real peering, run Tor on the host (the config's `tor_socks5_proxy` already points at `127.0.0.1:9050`). See [Tor / Hidden Service Options](#tor--hidden-service-options).
+
+Edit the config as the tenant when needed:
 
 ```bash
 sudo -u <TENANT> editor /home/<TENANT>/lunarwing/state/darkirc/darkirc_config.toml
@@ -351,15 +364,29 @@ Operational rules:
 
 ## Troubleshooting
 
-### `build-darkirc` fails with missing source path
+### `build-darkirc` fails
 
-Set `DARKIRC_SOURCE` in the tenant env or pass `LUNARWING_MT_DARKIRC_SOURCE` for the build command.
+With `--tenant`, the source is auto-cloned to `/home/<TENANT>/darkfi` and built as the tenant — no manual source path is required. Common causes if it still fails:
+
+- **No Rust toolchain for the build user.** `build-darkirc` builds as the tenant (or, without `--tenant`, the invoking `sudo` user), never as root. That user needs working `cargo` + `make`:
+  ```bash
+  sudo -u <TENANT> bash -lc 'cargo --version && make --version'
+  ```
+- **Refuses to build as root.** Run with `--tenant <TENANT>`, or invoke via `sudo` from a normal user that has a toolchain.
+- **Custom source path invalid / clone failed.** If `DARKIRC_SOURCE` / `LUNARWING_MT_DARKIRC_SOURCE` points at a non-DarkFi tree (no `Makefile`), fix or unset it to fall back to auto-clone. Override the clone target with `LUNARWING_MT_DARKIRC_REPO` / `LUNARWING_MT_DARKIRC_REV`.
+
+### DarkIRC daemon fails to start with `permission denied` on its config
+
+The daemon runs as the tenant and must own its state directory. `add-tenant` / `patch-env` chown it automatically; if it was created or edited as root, re-render and fix ownership:
 
 ```bash
-grep -s '^DARKIRC_SOURCE=' /home/<TENANT>/lunarwing/env/lunarwing.env
+sudo ic/scripts/lunarwing-mt-admin.sh patch-env <TENANT>
+sudo chown -R <TENANT>:<TENANT> /home/<TENANT>/lunarwing/state/darkirc
 ```
 
-If empty, add the source path or export the fleet-wide override.
+### Adapter `/health` returns `{"error": "unauthorized"}`
+
+`/health` requires the adapter bearer secret — pass `Authorization: Bearer <ADAPTER_SECRET>` (see [Check Adapter Health](#3-check-adapter-health)).
 
 ### `darkirc_irc` or `darkirc_rpc` is missing
 
@@ -482,8 +509,8 @@ For each production tenant:
 
 - [ ] `/etc/lunarwing/ports.json` is schema v7.
 - [ ] `darkirc_adapter`, `darkirc_irc`, and `darkirc_rpc` exist under `.extended_ports`.
-- [ ] `DARKIRC_SOURCE` is set in tenant env or `LUNARWING_MT_DARKIRC_SOURCE` is supplied during builds.
-- [ ] `build-darkirc --tenant <TENANT>` completed.
+- [ ] The tenant (build) user has a working Rust toolchain (`cargo` + `make`). DarkFi source is auto-cloned; set `DARKIRC_SOURCE` only for a custom checkout.
+- [ ] `build-darkirc --tenant <TENANT>` completed (clones + builds as the tenant).
 - [ ] `build-tenant <TENANT> --with-wasm` completed.
 - [ ] `install-wasm <TENANT>` completed.
 - [ ] `darkirc_config.toml` and `darkirc-adapter.env` exist and use tenant ports.

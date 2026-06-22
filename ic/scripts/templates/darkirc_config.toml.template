@@ -47,14 +47,17 @@ outbound_connections = 7
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally — uncomment and set if you have
 ## a public address (Tor onion, public IP, etc.)
-#external_addrs = ["tor://<your-onion>:25551"]
+#external_addrs = ["tor://<your-onion>:25552"]
 
-## Seed nodes to connect to
+## Seed nodes to connect to.
+## Clearnet seeds use port 9600 (the darkfi network's current darkirc seed port).
+## Tor seeds require a running Tor daemon (see tor_socks5_proxy below); most public
+## darkirc nodes are Tor-only, so enabling Tor greatly improves peering.
 seeds = [
-    "tcp+tls://lilith0.dark.fi:25551",
-    "tcp+tls://lilith1.dark.fi:25551",
-    "tor://fewhndztlb3otot5j2znszfaae5afuzhgkr7lfygfdash2vyrtpxa3id.onion:25551",
-    "tor://darkficgji6ukoev46flygzjteoucz7a2mz6g3zvzeusym2ikomad3qd.onion:25551",
+    "tcp+tls://lilith0.dark.fi:9600",
+    "tcp+tls://lilith1.dark.fi:9600",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
 ]
 
 ## Manual peers to connect to

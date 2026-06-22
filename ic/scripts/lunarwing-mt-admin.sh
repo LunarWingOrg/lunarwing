@@ -22,6 +22,11 @@ PROFILE="${LUNARWING_MT_PROFILE:-release}"
 SOURCE_REPO="${LUNARWING_MT_SOURCE_REPO:-$LUNARWING_ROOT}"
 DARKIRC_SOURCE="${LUNARWING_MT_DARKIRC_SOURCE:-}"
 DARKIRC_BIN="${LUNARWING_MT_DARKIRC_BIN:-/usr/local/bin/darkirc}"
+# darkfi source for build-darkirc auto-clone. The source is cloned + built as the
+# tenant (or invoking) user, never root, so there are no root-owned artifacts and
+# the user's own rust toolchain is used. Override for a pinned rev or local mirror.
+DARKIRC_REPO="${LUNARWING_MT_DARKIRC_REPO:-https://github.com/darkrenaissance/darkfi}"
+DARKIRC_REV="${LUNARWING_MT_DARKIRC_REV:-master}"
 TEMPLATES_DIR="${SCRIPT_DIR}/templates"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000/openai/v1}"
 # Fleet-wide default for the daemon's LLM endpoint (LLM_BASE_URL). Empty = fall
@@ -1247,39 +1252,58 @@ build_tenant() {
 # ── Darkirc daemon build (shared, not per-tenant) ────────────────────────────
 
 build_darkirc() {
-  local tenant_name="${1:-}" darkirc_src=""
+  local tenant_name="${1:-}" darkirc_src="" build_user=""
 
   if [[ -n "$tenant_name" ]]; then
+    build_user="$tenant_name"
     local envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
     if [[ -f "$envf" ]]; then
       darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)"
     fi
+    [[ -n "$darkirc_src" ]] || darkirc_src="$DARKIRC_SOURCE"
+    [[ -n "$darkirc_src" ]] || darkirc_src="$(tenant_home "$tenant_name")/darkfi"
+  else
+    # Fleet-wide build: run as the invoking (sudo) user, never root. Root has no
+    # per-user rust toolchain under rustup, and root-owned source/artifacts break
+    # the tenant-run daemon.
+    build_user="${SUDO_USER:-$(id -un)}"
+    [[ -n "$darkirc_src" ]] || darkirc_src="$DARKIRC_SOURCE"
+    [[ -n "$darkirc_src" ]] || die "darkirc source path not configured — set DARKIRC_SOURCE/LUNARWING_MT_DARKIRC_SOURCE or pass --tenant <name>"
   fi
 
-  [[ -n "$darkirc_src" ]] || darkirc_src="$DARKIRC_SOURCE"
-
-  if [[ -z "$darkirc_src" ]]; then
-    die "darkirc source path not configured — set DARKIRC_SOURCE in tenant lunarwing.env or LUNARWING_MT_DARKIRC_SOURCE"
-  fi
+  [[ "$build_user" != "root" ]] || die "refusing to build darkirc as root — pass --tenant <name>, or invoke via sudo from a user that has a rust toolchain"
 
   say "acquiring build lock for darkirc ..."
   (
     flock -x 200
 
-    [[ -d "$darkirc_src" ]] || die "darkirc source not found at $darkirc_src"
+    # Clone darkfi as the build user if absent, so the source tree and build
+    # artifacts are owned by that user (no root-owned files) — "clone as the user".
+    if [[ ! -d "$darkirc_src/.git" ]]; then
+      say "darkirc source not present at $darkirc_src — cloning $DARKIRC_REPO ($DARKIRC_REV) as $build_user ..."
+      sudo -u "$build_user" git clone "$DARKIRC_REPO" "$darkirc_src" || die "darkirc clone failed"
+      if [[ -n "$DARKIRC_REV" && "$DARKIRC_REV" != "master" ]]; then
+        sudo -u "$build_user" git -C "$darkirc_src" checkout "$DARKIRC_REV" || die "darkirc checkout '$DARKIRC_REV' failed"
+      fi
+    else
+      say "darkirc source present at $darkirc_src ($(sudo -u "$build_user" git -C "$darkirc_src" rev-parse --short HEAD 2>/dev/null || echo unknown)) — using as-is"
+    fi
+
     [[ -f "$darkirc_src/Makefile" ]] || die "darkirc Makefile not found (expected darkfi repo root)"
     [[ -f "$darkirc_src/bin/darkirc/Cargo.toml" ]] || die "darkirc Cargo.toml not found"
 
     local cargo_env="if [ -f \"\$HOME/.cargo/env\" ]; then . \"\$HOME/.cargo/env\"; else export PATH=\"\$HOME/.cargo/bin:\$PATH\"; fi;"
 
-    # Use darkfi's official make build system (handles zkas circuit compilation + release build)
-    say "building darkirc from $darkirc_src via make ..."
-    bash -c "$cargo_env cd '$darkirc_src' && make darkirc" \
+    # Build with darkfi's make as the build user (mirrors build_tenant): uses that
+    # user's rust toolchain and leaves no root-owned artifacts.
+    say "building darkirc from $darkirc_src via make (as $build_user) ..."
+    sudo -u "$build_user" bash -c "$cargo_env cd '$darkirc_src' && make darkirc" \
       || die "darkirc build failed"
 
     local built_bin="$darkirc_src/darkirc"
     [[ -x "$built_bin" ]] || die "darkirc binary not found at $built_bin"
 
+    # Install the shared daemon binary — the only root-privileged step.
     say "installing darkirc to $DARKIRC_BIN ..."
     install -m 0755 "$built_bin" "$DARKIRC_BIN"
 
@@ -1823,6 +1847,12 @@ generate_darkirc_config() {
 
   chmod 0700 "$config_dir"
   chmod 0600 "$toml_out"
+
+  # The darkirc daemon runs as the tenant user, so it must own its config dir,
+  # rendered config, and datastore. This function runs as root during add-tenant,
+  # so chown the whole tree to the tenant — otherwise the daemon gets EACCES on
+  # its config and fails to start.
+  chown -R "$name:$name" "$config_dir"
 
   say "darkirc config generated for $name (irc=$irc_port rpc=$rpc_port)"
 }
