@@ -79,6 +79,8 @@ These `[FAIL]`s are benign and can be ignored:
 sudo ic/scripts/lunarwing-mt-admin.sh add-tenant ruffles --docker-group
 ```
 
+> **Tip:** To include DarkIRC daemon and adapter services for this tenant, add `--enable-darkirc` to the command above. DarkIRC is disabled by default.
+
 This single command does all of the following:
 
 1. Creates an OS user `ruffles` and adds it to the docker/podman group.

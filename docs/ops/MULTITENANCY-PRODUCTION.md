@@ -34,6 +34,8 @@ Add all tenants at once. Names are comma-separated and will be lowercased automa
 sudo ic/scripts/lunarwing-mt-admin.sh add-tenants "Ruffles,Miyuki,Sparkie,Starforce" --docker-group
 ```
 
+> **DarkIRC opt-in:** DarkIRC services are disabled by default. To provision DarkIRC daemon and adapter services for tenants, append `--enable-darkirc` to the command above. The flag state is persisted per-tenant in `/etc/lunarwing/ports.json`.
+
 This creates OS users, allocates port blocks, clones the repo, generates env files, starts PostgreSQL containers, and renders service units for each tenant.
 
 ### Step 3: Build binaries
@@ -411,6 +413,8 @@ sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
 add-tenant <name> [options]      Create user, allocate ports, clone repo,
                                  generate env, render and install services
   --docker-group                 Add user to docker/podman group
+  --enable-darkirc               Enable DarkIRC daemon and adapter services
+                                 (disabled by default; persisted in ports.json)
   --xmpp-jid <jid>              XMPP JID for this tenant
   --xmpp-password <pass>        XMPP password (generated if omitted)
   --tensorzero-url <url>         Upstream TensorZero URL
@@ -418,6 +422,8 @@ add-tenant <name> [options]      Create user, allocate ports, clone repo,
 
 add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
   --docker-group                 Add user to docker/podman group
+  --enable-darkirc               Enable DarkIRC daemon and adapter services
+                                 (disabled by default; persisted in ports.json)
   --xmpp-domain <domain>        XMPP domain for JIDs (default: xmpp.localhost)
   --tensorzero-url <url>         Upstream TensorZero URL
   --llm-base-url <url>           LLM endpoint (LLM_BASE_URL); default: local proxy

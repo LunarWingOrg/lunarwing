@@ -18,6 +18,7 @@ For adapter architecture and QA scenarios, see [DarkIRC Multitenant Adapter](../
 ## Prerequisites
 
 - Production multi-tenancy is already managed with `ic/scripts/lunarwing-mt-admin.sh`.
+- **DarkIRC must be explicitly enabled** when creating tenants by passing `--enable-darkirc` to `add-tenant` or `add-tenants`. Without this flag, no DarkIRC services, env files, or service units are created for the tenant. The flag state is persisted per-tenant in `/etc/lunarwing/ports.json` as `enable_darkirc: true/false`; existing tenants without the field default to disabled.
 - `jq` is installed for `/etc/lunarwing/ports.json` migrations and inspection.
 - Python 3 with `aiohttp` is available for `darkirc_adapter.py`.
 - `git` and a working Rust toolchain (`cargo` + `make`) are available **to the tenant / build user** — `build-darkirc` clones and compiles DarkFi as that user, never as root. (Root does not need a Rust toolchain.)
@@ -132,11 +133,13 @@ sudo chmod 600 /home/<TENANT>/lunarwing/env/lunarwing.env
 
 ## Provision or Backfill a Tenant
 
-For new tenants, `add-tenant` allocates DarkIRC ports and renders the DarkIRC env/config files as part of the tenant setup flow.
+For new tenants, `add-tenant` allocates DarkIRC ports and renders the DarkIRC env/config files as part of the tenant setup flow. DarkIRC services must be explicitly opted in with `--enable-darkirc`:
 
 ```bash
-sudo ic/scripts/lunarwing-mt-admin.sh add-tenant <TENANT> --docker-group
+sudo ic/scripts/lunarwing-mt-admin.sh add-tenant <TENANT> --docker-group --enable-darkirc
 ```
+
+Tenants created without `--enable-darkirc` will not have DarkIRC services, env files, or service units. The `start-tenant`, `status`, and `patch-env` commands automatically respect the persisted flag — they skip DarkIRC operations for tenants where it is disabled.
 
 For an existing tenant after migration, patch the env/config files:
 

@@ -36,7 +36,7 @@ sudo LUNARWING_SERVICE_MANAGER=openrc LUNARWING_CONTAINER_RUNTIME=podman \
   ic/scripts/lunarwing-mt-admin.sh add-tenant luna1 --docker-group
 ```
 
-Optional `add-tenant` flags (all take a value except booleans `--docker-group`/`--no-health`): `--xmpp-jid <jid>` (default `luna1@xmpp.localhost`), `--xmpp-password <pass>`, `--llm-api-key <key>`, `--llm-base-url <url>`, `--tensorzero-url <url>`, `--gotify-url <url>`, `--no-health`.
+Optional `add-tenant` flags (all take a value except booleans `--docker-group`/`--no-health`/`--enable-darkirc`): `--xmpp-jid <jid>` (default `luna1@xmpp.localhost`), `--xmpp-password <pass>`, `--llm-api-key <key>`, `--llm-base-url <url>`, `--tensorzero-url <url>`, `--gotify-url <url>`, `--no-health`, `--enable-darkirc` (enables DarkIRC daemon and adapter services; disabled by default).
 
 ## 2. Build everything (binary + WASM + workers)
 
