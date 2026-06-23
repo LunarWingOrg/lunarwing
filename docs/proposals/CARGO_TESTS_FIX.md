@@ -12,3 +12,5 @@ e2e_reflex_compiler::e2e_below_threshold_not_compiled, e2e_spot_checks::spot_tes
 multi_tenant_system_prompt::tests::alice_system_prompt_contains_alice_identity,
 multi_tenant_system_prompt::tests::bob_identity_does_not_leak_into_alice_prompt,
 multi_tenant_system_prompt::tests::alice_identity_does_not_leak_into_bob_prompt, multi_tenant_system_prompt::tests::bob_system_prompt_contains_bob_identity
+
+Failure mode confirmed for multi_tenant: agent uses generic default prompt, no user identity.
