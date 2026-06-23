@@ -22,6 +22,8 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; remaining `ironclaw` → `lunarwing` renames (WeeChat channel/adapter, Gotify tool) | v1.1.7 |
 | Agent SSH Harness | v1.1.8 |
 | Re-add the custom Git WASM workspace tool; Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup; TensorZero upgrade + optional tighter integration across deployments + Gateway/ClickHouse/UI healthcheck test expansion | v1.1.8 |
+| Add Opencode external worker | v1.1.8 |
+| Remove Codex external worker | v1.1.8 |
 
 ### Longer-term
 
