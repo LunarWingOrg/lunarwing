@@ -864,6 +864,30 @@ ports_migrate_v7() {
   say "port registry migrated to v7 (darkirc_irc + darkirc_rpc added)"
 }
 
+ports_migrate_v8() {
+  say "migrating port registry v${current_version} -> v8 (dedicate nanocode_health + pebble_health) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 8
+    | .tenants |= with_entries(
+        .value |= (
+          .extended_base as $eb
+          | .extended_ports |= (
+              if type == "object" then
+                .nanocode_health = ((.nanocode_health) // (.reserved_3) // ($eb + 3))
+                | .pebble_health = ((.pebble_health) // (.reserved_4) // ($eb + 4))
+                | del(.reserved_3, .reserved_4)
+              else . end
+            )
+        )
+      )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  current_version=8
+}
+
 ports_migrate() {
   [[ -f "$PORTS_REGISTRY" ]] || return 0
   require_cmd jq
@@ -878,6 +902,7 @@ ports_migrate() {
   if [[ "$current_version" -lt 6 ]]; then ports_migrate_v6; current_version=6; fi
   ports_migrate_v6_1
   if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
+  if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
 }
 
 ports_allocate() {
@@ -947,9 +972,11 @@ ports_allocate() {
           {
             darkirc_adapter: $ebase,
             darkirc_irc: ($ebase + 1),
-            darkirc_rpc: ($ebase + 2)
+            darkirc_rpc: ($ebase + 2),
+            nanocode_health: ($ebase + 3),
+            pebble_health: ($ebase + 4)
           }
-          + (reduce range(3; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(5; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -2353,13 +2380,15 @@ start_tenant_nanocode() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
-    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
-    # 127.0.0.1:8443/health, served by health_server.py). The probe runs inside
-    # the container's network namespace, so this needs no -p publish and never
-    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
-    # container stuck "unhealthy" even though the WS bridge was fine.
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (in-container).
+    # v8: also publish the tenant's dedicated nanocode_health port -> container
+    # 8443, so the host self-heal pipeline can probe /health directly.
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" nanocode_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -2371,6 +2400,7 @@ start_tenant_nanocode() {
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
+      "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
@@ -2902,9 +2932,10 @@ EOF
 # Returns early (no unit) when the worker has no allocated wss port.
 render_worker_quadlet() {
   local name="$1" worker="$2" health_port="${3:-8443}"
-  local qdir wss_port workspace_dir env_dir tenant_env_path worker_env_path
+  local qdir wss_port workspace_dir env_dir tenant_env_path worker_env_path host_health_port
   qdir="$(tenant_quadlet_dir "$name")"
   wss_port="$(ports_get "$name" "${worker}_wss")"
+  host_health_port="$(ports_get "$name" "${worker}_health")"
   [[ -n "$wss_port" ]] || return 0
   env_dir="$(tenant_env_dir "$name")"
   tenant_env_path="$env_dir/lunarwing.env"
@@ -2943,6 +2974,10 @@ Environment=HEALTH_PORT=${health_port}
 Environment=WS_BIND_HOST=0.0.0.0
 Environment=WS_PATH=/ws/agent
 EOF
+    # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
+    # the host self-heal pipeline can probe /health directly. The container still
+    # listens on HEALTH_PORT=8443 internally (matches the image's baked HEALTHCHECK).
+    [[ -n "$host_health_port" ]] && printf 'PublishPort=127.0.0.1:%s:8443\n' "$host_health_port"
     if [[ "$worker" == "nanocode" ]]; then
       printf 'Environment=NANOCODE_MODE=websocket\n'
       printf 'Environment=WS_ROLE=server\n'

@@ -11,8 +11,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Finish what was started in 1.1.6 with external worker improvements, will require new por migration | v.1.1.7 |
-| Further polish of some existing channels | v1.1.7 |
+| Finish what was started in 1.1.6 with external worker improvements | v.1.1.7 |
 | Multica bridge/channel refinements and agent orchestration workflow improvements; Lunartica UI reskin continuation | v1.1.7 |
 | XMPP OMEMO MUC fallback fix *(was targeted v1.1.5 — slipped)* | v1.1.7 |
 | XMPP file transfer — remaining polish (live e2e validation, optional SSRF guard, further hardening) *(was targeted v1.1.5 — slipped)* | v1.1.7 |
