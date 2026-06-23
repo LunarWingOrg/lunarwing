@@ -350,11 +350,7 @@ impl Guest for DarkircChannel {
                     .filter(|s| !s.is_empty())
                     .unwrap_or_else(|| default_adapter_url());
 
-                let truncated = if message.len() > MAX_IRC_MESSAGE_BYTES {
-                    format!("{}...", &message[..MAX_IRC_MESSAGE_BYTES - 3])
-                } else {
-                    message.to_string()
-                };
+                let truncated = truncate_for_status(message);
 
                 let status_text = format!("[status] {}", truncated);
 
@@ -653,6 +649,18 @@ fn split_message(text: &str, max_bytes: usize) -> Vec<String> {
     chunks
 }
 
+// Truncate a single-line status message to fit MAX_IRC_MESSAGE_BYTES, reserving
+// 3 bytes for a "..." ellipsis. Cuts at the nearest valid UTF-8 char boundary
+// at or below the target offset, so multibyte characters (emoji, CJK, accents)
+// never panic the slice.
+fn truncate_for_status(message: &str) -> String {
+    if message.len() <= MAX_IRC_MESSAGE_BYTES {
+        return message.to_string();
+    }
+    let cut = message.floor_char_boundary(MAX_IRC_MESSAGE_BYTES - 3);
+    format!("{}...", &message[..cut])
+}
+
 // Create a JSON HTTP response.
 fn json_response(status: u16, value: serde_json::Value) -> OutgoingHttpResponse {
     let body = serde_json::to_vec(&value).unwrap_or_default();
@@ -876,6 +884,84 @@ mod tests {
         let chunks = split_message(text, 1);
         assert!(!chunks.is_empty());
         assert_split_invariants(&chunks, text, 1);
+    }
+
+    // ── Status truncation tests (H1 regression: multibyte UTF-8) ──
+
+    #[test]
+    fn test_truncate_for_status_passthrough() {
+        // Short messages are returned unchanged.
+        assert_eq!(truncate_for_status("hello"), "hello");
+        // Empty is unchanged.
+        assert_eq!(truncate_for_status(""), "");
+        // Exactly at the byte limit is NOT truncated.
+        let exact = "a".repeat(MAX_IRC_MESSAGE_BYTES);
+        assert_eq!(truncate_for_status(&exact), exact);
+        assert!(!exact.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_for_status_ascii_truncates() {
+        let text = "a".repeat(MAX_IRC_MESSAGE_BYTES + 5);
+        let truncated = truncate_for_status(&text);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.len() <= MAX_IRC_MESSAGE_BYTES);
+        // 397 ASCII chars kept + "..." = 400 bytes.
+        assert_eq!(truncated.len(), MAX_IRC_MESSAGE_BYTES);
+    }
+
+    #[test]
+    fn test_truncate_for_status_multibyte_no_panic() {
+        // Regression for H1: the old code sliced &message[..397], which lands
+        // mid-codepoint here (201 × 'é' = 402 bytes; byte 397 is byte 1 of é #199)
+        // and panicked the WASM instance.
+        let text = "é".repeat(201);
+        let truncated = truncate_for_status(&text);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.len() <= MAX_IRC_MESSAGE_BYTES);
+
+        // The kept portion (minus "...") must be a char-boundary-aligned prefix
+        // of the original message — no split mid-codepoint, no data corruption.
+        let kept = &truncated[..truncated.len() - 3];
+        assert!(text.starts_with(kept));
+        assert!(text.is_char_boundary(kept.len()));
+    }
+
+    #[test]
+    fn test_truncate_for_status_emoji_no_panic() {
+        // 4-byte emoji: 101 × 🐴 = 404 bytes. floor_char_boundary(397) -> 396
+        // (start of emoji #100), so 99 emojis are kept.
+        let text = "🐴".repeat(101);
+        let truncated = truncate_for_status(&text);
+        assert!(truncated.ends_with("..."));
+        assert!(truncated.len() <= MAX_IRC_MESSAGE_BYTES);
+        let kept = &truncated[..truncated.len() - 3];
+        assert!(text.starts_with(kept));
+        assert!(text.is_char_boundary(kept.len()));
+    }
+
+    #[test]
+    fn test_truncate_for_status_byte_budget_invariants() {
+        // Across scripts of differing byte-widths, the output must always fit
+        // the byte budget and keep a char-boundary-aligned prefix.
+        let cases: Vec<String> = vec![
+            "café résumé naïve".repeat(50),
+            "日本語のステータス".repeat(60),
+            "🦄🌙🗡️⚔️🐴🏯🌸".repeat(60),
+            format!("{}{}", "x".repeat(396), "é赛道🐴"),
+        ];
+        for text in cases {
+            let truncated = truncate_for_status(&text);
+            assert!(
+                truncated.len() <= MAX_IRC_MESSAGE_BYTES,
+                "status over byte budget: {} bytes",
+                truncated.len()
+            );
+            assert!(truncated.ends_with("..."), "missing ellipsis");
+            let kept = &truncated[..truncated.len() - 3];
+            assert!(text.starts_with(kept), "prefix not preserved");
+            assert!(text.is_char_boundary(kept.len()), "split mid-codepoint");
+        }
     }
 
     // ── Config / serialization tests (unchanged) ──

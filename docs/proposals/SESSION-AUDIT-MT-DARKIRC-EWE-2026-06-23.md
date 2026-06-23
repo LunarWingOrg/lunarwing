@@ -22,7 +22,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 
 | # | Item | Area | Location | Status |
 |---|------|------|----------|--------|
-| H1 | `on_status` UTF-8 byte-slice panic on >400-byte multibyte status messages | DarkIRC | `ic/channels-src/darkirc/src/lib.rs:354` | TODO |
+| H1 | `on_status` UTF-8 byte-slice panic on >400-byte multibyte status messages | DarkIRC | `ic/channels-src/darkirc/src/lib.rs:354` | DONE |
 | H2 | `--enable-darkirc` cannot be flipped on an existing tenant (resume path drops flag) | MT admin | `ic/scripts/lunarwing-mt-admin.sh:857-863` | TODO |
 | H3 | `LeastConnections` strategy is dead code — silently behaves as RoundRobin | EWE | `ic/src/orchestrator/external_worker.rs:443-446` | TODO |
 
@@ -46,7 +46,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 |---|------|------|----------|--------|
 | L1 | Hardcoded health port `8443` (acknowledged unfinished in commit `175d2686`) | MT admin | `lunarwing-mt-admin.sh:2180,2243,2301,2356,2780` | TODO |
 | L2 | Hardcoded `DEFAULT_TENSORZERO_URL=http://192.168.1.157:3000/...` | MT admin | `lunarwing-mt-admin.sh:31` | TODO |
-| L3 | Duplicated byte-identical DarkIRC source trees | DarkIRC | `darkirc_channel_for_ironclaw/darkirc/` vs `ic/channels-src/darkirc/` | TODO |
+| L3 | ~~Duplicated byte-identical DarkIRC source trees~~ **Non-issue** — `ic/channels-src/darkirc` is a symlink to `darkirc_channel_for_ironclaw/darkirc` (same inode); single source of truth | DarkIRC | WONTFIX |
 | L4 | Stale DarkIRC docs (`aiohttp` claim, `darkirc_keypair.yaml`, Unix-socket line) | DarkIRC | `DARKIRC_MT_ADAPTER.md:95`, `darkirc.env:17-18` | TODO |
 | L5 | `LoadBalancer::new` `assert!` + `lb.unwrap()` are production panics | EWE | `external_worker.rs:433,265` | TODO |
 | L6 | No backpressure / concurrency cap on external worker tasks | EWE | `external_worker.rs` (max_idle_per_endpoint bounds only idle) | TODO |
@@ -58,7 +58,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 | # | Item | Area | Status |
 |---|------|------|--------|
 | T1 | Add mock-WS integration test for external worker lifecycle (success/timeout/cancel/failover/pool-reuse) | EWE | TODO |
-| T2 | Add regression test for H1 (DarkIRC `on_status` multibyte truncation) | DarkIRC | TODO |
+| T2 | Add regression test for H1 (DarkIRC `on_status` multibyte truncation) | DarkIRC | DONE |
 | T3 | Add real-pool eviction test (current tests only touch empty pool) | EWE | TODO |
 | T4 | Add DarkIRC adapter integration test (mock IRC server: registration/PING/queue/poll/send/503/auth/oversize) | DarkIRC | TODO |
 | T5 | Add regression test for H2 (enable-darkirc flag flip on existing tenant) | MT admin | TODO |
