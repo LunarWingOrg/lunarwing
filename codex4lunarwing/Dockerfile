@@ -22,7 +22,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 RUN npm install -g @openai/codex
 
 # ── Non-root user ─────────────────────────────────────────────────────────────
-RUN useradd -m -s /bin/bash -u 1000 codex \
+RUN useradd -m -s /bin/bash codex \
     && mkdir -p /workspace /app/scripts /app/config /home/codex/.codex \
     && chown -R codex:codex /workspace /app /home/codex
 

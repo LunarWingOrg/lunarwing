@@ -2,15 +2,15 @@
   "model_name": "spot-chain-write-read",
   "expects": {
     "tools_used": ["write_file", "read_file"],
-    "response_contains": ["ironclaw spot check"],
+    "response_contains": ["lunarwing spot check"],
     "all_tools_succeeded": true,
-    "tool_results_contain": { "read_file": "ironclaw spot check" },
+    "tool_results_contain": { "read_file": "lunarwing spot check" },
     "min_responses": 1
   },
   "steps": [
     {
       "request_hint": {
-        "last_user_message_contains": "ironclaw spot check"
+        "last_user_message_contains": "lunarwing spot check"
       },
       "response": {
         "type": "tool_calls",
@@ -19,8 +19,8 @@
             "id": "call_write_1",
             "name": "write_file",
             "arguments": {
-              "path": "/tmp/ironclaw_spot_test.txt",
-              "content": "ironclaw spot check"
+              "path": "/tmp/lunarwing_spot_test.txt",
+              "content": "lunarwing spot check"
             }
           }
         ],
@@ -36,7 +36,7 @@
             "id": "call_read_1",
             "name": "read_file",
             "arguments": {
-              "path": "/tmp/ironclaw_spot_test.txt"
+              "path": "/tmp/lunarwing_spot_test.txt"
             }
           }
         ],
@@ -47,7 +47,7 @@
     {
       "response": {
         "type": "text",
-        "content": "I wrote 'ironclaw spot check' to /tmp/ironclaw_spot_test.txt and read it back. The file contains: ironclaw spot check",
+        "content": "I wrote 'lunarwing spot check' to /tmp/lunarwing_spot_test.txt and read it back. The file contains: lunarwing spot check",
         "input_tokens": 160,
         "output_tokens": 30
       }

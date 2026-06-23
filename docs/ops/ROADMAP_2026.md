@@ -5,7 +5,7 @@
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
 
-### TODO: ADD PAST+SS to ROADMAP
+### TODO: ADD PASTA+SS to ROADMAP
 
 ### Near-term
 
@@ -20,7 +20,10 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.7 |
 | Rootless Podman per-tenant container parent-supervision babysitter (`podman wait`, crash-recovery latency) | v1.1.7 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; remaining `ironclaw` → `lunarwing` renames (WeeChat channel/adapter, Gotify tool) | v1.1.7 |
-| Re-add the custom Git WASM workspace tool; TensorZero upgrade + optional tighter integration across deployments + Gateway/ClickHouse/UI healthcheck test expansion | v1.1.8 |
+| Agent SSH Harness | v1.1.8 |
+| Re-add the custom Git WASM workspace tool; Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup; TensorZero upgrade + optional tighter integration across deployments + Gateway/ClickHouse/UI healthcheck test expansion | v1.1.8 |
+| Add Opencode external worker | v1.1.8 |
+| Remove Codex external worker | v1.1.8 |
 
 ### Longer-term
 

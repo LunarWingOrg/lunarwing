@@ -23,7 +23,7 @@ use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::auth::CredentialGrant;
-use crate::orchestrator::external_worker::{ExternalTaskStatus, build_task_context};
+use crate::orchestrator::external_worker::{ExternalTaskStatus, build_task_context, ConversationMessage};
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -774,12 +774,37 @@ impl CreateJobTool {
             None
         };
 
+        let metadata = if ctx.metadata.is_object() {
+            ctx.metadata
+                .as_object()
+                .map(|map| {
+                    map.iter()
+                        .filter_map(|(k, v)| {
+                            v.as_str().map(|s| (k.clone(), s.to_string()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            std::collections::HashMap::new()
+        };
+
+        let conversation_history: Vec<ConversationMessage> = metadata
+            .iter()
+            .filter_map(|(k, v)| {
+                k.strip_prefix("conv_").map(|_| ConversationMessage {
+                    role: "context".to_string(),
+                    content: v.clone(),
+                })
+            })
+            .collect();
+
         let task_context = build_task_context(
             &ctx.user_id,
             project_dir.as_deref(),
             environment,
-            vec![],
-            std::collections::HashMap::new(),
+            conversation_history,
+            metadata,
         );
 
         if wait {
