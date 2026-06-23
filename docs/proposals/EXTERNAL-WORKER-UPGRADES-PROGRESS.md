@@ -74,12 +74,14 @@
   - Tests passing: `task_request_extended_context`, `task_request_empty_context_backward_compat` (+ 6 existing)
   - Backward compatible: empty `{}` context deserializes to defaults
 
-## Still Peending — Final review
+## Final Review — COMPLETE
 
-- [ ] **F1**: Plan compliance audit
-- [ ] **F2**: Code quality review
-- [ ] **F3**: Real manual QA
-- [ ] **F4**: Scope fidelity check
+> Last updated: 2026-06-23. All waves complete, final review passed against live `mars` tenant.
+
+- [x] **F1**: Plan compliance audit — all 11 tasks verified complete, code matches plan deliverables
+- [x] **F2**: Code quality review — `cargo check` clean, 18/18 external_worker tests pass, 0 new clippy warnings on changed files
+- [x] **F3**: Real manual QA — live `mars` tenant on Gentoo/OpenRC with all 3 worker types (nanocode:10007, pebble:10008, codex:10010), gateway HTTP 200, daemon log confirms "External workers configured: codex, pebble, nanocode"
+- [x] **F4**: Scope fidelity check — changes scoped to `external_worker.rs`, `job.rs`, `catalog.rs` (clippy), test fixtures, codex Dockerfile; no Docker sandbox, ACP bridge, or other guardrailed paths touched
 
 ## Files Modified
 
