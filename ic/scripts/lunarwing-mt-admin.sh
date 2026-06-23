@@ -402,17 +402,42 @@ _ctr() {
 # Returns non-zero if the image can't be made available (caller should skip).
 _ensure_tenant_image() {
   local name="$1" image="$2"
-  if _ctr "$name" image inspect "$image" &>/dev/null; then
-    return 0
+
+  # The admin (root) store's image ID is the source of truth for "current".
+  local admin_id=""
+  if "$CONTAINER_RT" image inspect -f '{{.Id}}' "$image" &>/dev/null; then
+    admin_id="$("$CONTAINER_RT" image inspect -f '{{.Id}}' "$image")"
   fi
+
+  # rootful: the admin store IS the runtime store, so presence there suffices.
   if [[ "$MT_ROOTLESS" != "true" ]]; then
+    [[ -n "$admin_id" ]] && return 0
     return 1   # rootful + not built yet -> caller skips (build first)
   fi
-  if ! "$CONTAINER_RT" image inspect "$image" &>/dev/null; then
-    return 1   # rootless, but the admin store has no source image to copy
+
+  # rootless: each tenant has its own store. Skip only when the tenant already
+  # holds the CURRENT image (same ID as the admin store) — not merely when the
+  # name exists — so a rebuilt worker image actually reaches tenants instead of
+  # being silently held back by a stale same-named copy.
+  local tenant_id=""
+  if _ctr "$name" image inspect -f '{{.Id}}' "$image" &>/dev/null; then
+    tenant_id="$(_ctr "$name" image inspect -f '{{.Id}}' "$image")"
   fi
-  say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  if [[ -n "$tenant_id" && "$tenant_id" == "$admin_id" ]]; then
+    return 0   # tenant already has the current image
+  fi
+  [[ -n "$admin_id" ]] || return 1   # rootless, but the admin store has no source image to copy
+
+  if [[ -n "$tenant_id" ]]; then
+    say "refreshing stale image $image in ${name}'s rootless store (save|load — minutes for large images) ..."
+  else
+    say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  fi
   if "$CONTAINER_RT" save "$image" | _ctr "$name" load >/dev/null 2>&1; then
+    # Drop the previous (now-untagged) image if the load re-pointed the tag, so
+    # repeated worker-image updates don't accumulate GBs of stale layers in the
+    # tenant's rootless store.
+    _ctr "$name" image prune -f >/dev/null 2>&1 || true
     say "image $image available in ${name}'s store"
     return 0
   fi
