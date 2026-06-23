@@ -152,10 +152,13 @@ impl SoftwareBuilder for FailingSoftwareBuilder {
 /// Returns `(concrete_backend, dyn_store)` — hold both; the concrete one is
 /// for raw SQL ops, the trait-object one is for the compiler/router.
 async fn fresh_backend() -> (Arc<LibSqlBackend>, Arc<dyn Database>) {
+    let temp_dir = tempfile::tempdir().expect("create temp dir");
+    let db_path = temp_dir.path().join("reflex_test.db");
+    std::mem::forget(temp_dir);
     let backend = Arc::new(
-        LibSqlBackend::new_memory()
+        LibSqlBackend::new_local(&db_path)
             .await
-            .expect("LibSqlBackend::new_memory"),
+            .expect("LibSqlBackend::new_local"),
     );
     backend.run_migrations().await.expect("run_migrations");
     let store: Arc<dyn Database> = Arc::clone(&backend) as Arc<dyn Database>;
@@ -169,9 +172,8 @@ async fn seed_completed_jobs(backend: &LibSqlBackend, description: &str, count: 
         let id = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO agent_jobs \
-             (id, title, description, status, source, user_id, success, created_at, updated_at) \
+             (id, title, description, status, source, user_id, success, created_at) \
              VALUES (?1, ?2, ?3, 'completed', 'test', 'default', 1, \
-                     strftime('%Y-%m-%dT%H:%M:%fZ','now'), \
                      strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
             libsql::params![id.as_str(), description, description],
         )

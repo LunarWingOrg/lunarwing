@@ -837,7 +837,7 @@ mod advanced {
         );
         let greeting = &responses[0].content;
         assert!(
-            greeting.contains("chief of staff"),
+            greeting.contains("I'm LunarWing"),
             "bootstrap greeting should contain the static text, got: {greeting}"
         );
 
@@ -876,7 +876,7 @@ mod advanced {
             "bootstrap greeting should arrive"
         );
         assert!(
-            greeting_responses[0].content.contains("chief of staff"),
+            greeting_responses[0].content.contains("I'm LunarWing"),
             "expected bootstrap greeting, got: {}",
             greeting_responses[0].content
         );

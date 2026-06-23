@@ -27,7 +27,7 @@
           {
             "id": "call_good_write",
             "name": "write_file",
-            "arguments": { "path": "/tmp/ironclaw_error_feedback_test/recovered.txt", "content": "recovered content" }
+            "arguments": { "path": "/tmp/lunarwing_error_feedback_test/recovered.txt", "content": "recovered content" }
           }
         ],
         "input_tokens": 200,
