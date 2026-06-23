@@ -136,7 +136,7 @@ async fn upgrade_websocket(
     let token = auth_token.map(String::from);
 
     #[allow(clippy::result_large_err)]
-    tokio_tungstenite::accept_hdr_async(stream, move |req: &Request, response: Response| {
+    tokio_tungstenite::accept_hdr_async(stream, move |req: &Request, mut response: Response| {
         if req.uri().path() != path {
             return Err(reject(StatusCode::NOT_FOUND));
         }
@@ -163,6 +163,13 @@ async fn upgrade_websocket(
         {
             return Err(reject(StatusCode::BAD_REQUEST));
         }
+        // Echo the negotiated subprotocol back: the orchestrator's client
+        // rejects the handshake ("Server sent no subprotocol") unless the server
+        // sets Sec-WebSocket-Protocol in the upgrade response.
+        response.headers_mut().insert(
+            "sec-websocket-protocol",
+            tokio_tungstenite::tungstenite::http::HeaderValue::from_static(protocol::SUBPROTOCOL),
+        );
         Ok(response)
     })
     .await
