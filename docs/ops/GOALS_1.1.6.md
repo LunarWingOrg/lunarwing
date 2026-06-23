@@ -1,4 +1,4 @@
-# PRE-RELEASE CHECKLIST for 1.1.6 Codename `Reversable Extinction`
+# PRE-RELEASE CHECKLIST for 1.1.6 Codename `Reversible Extinction`
 **Open TODOs (1.1.6) — Multi-Feature Release**
 
 1. [x] Render + register babysitter -sup OpenRC units for PG, nanocode, pebble containers
@@ -19,7 +19,7 @@
 16. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v2
 17. [ ] Run automated testing scripts
 18. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-19. [ ] Finish testing external worker enhancements for systemd/openrc hosts
+19. [ ] Finish testing external worker enhancements for systemd/openrc hosts HEALTH CHECK ARE STILL BROKEN FOR MT PORTS NOT IN CONFIG ALWAYS SAME PORT FOR NANOCODE
 20. [ ] Finish testing darkirc enhancements for systemd/openrc hosts
 21. [ ] Write up release notes (at root of repo) for v1.1.6 explaining all changes since v1.1.5 as well as accurate known issues list
 22. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (only after #21)
