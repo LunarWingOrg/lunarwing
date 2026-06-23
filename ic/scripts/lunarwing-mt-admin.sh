@@ -858,6 +858,14 @@ ports_allocate() {
   existing="$(jq -r ".tenants[\"$name\"].base_port // empty" "$PORTS_REGISTRY" 2>/dev/null || true)"
   if [[ -n "$existing" ]]; then
     say "tenant '$name' already has ports allocated (base $existing); reusing for resume" >&2
+    # Reconcile the darkirc flag on resume (H2): add_tenant()'s env/unit writers
+    # (write_tenant_lunarwing_env, render_tenant_*_units, start_tenant_*) gate on
+    # tenant_darkirc_enabled (a registry read), but the adapter env/TOML writers
+    # at add_tenant() use the in-memory flag. Without this flip, re-running
+    # `add-tenant <existing> --enable-darkirc` leaves the tenant half-configured.
+    # One-directional (false -> true): disabling darkirc post-provision is a
+    # manual teardown (see docs/ops/DARKIRC-MULTITENANT.md).
+    [[ "$enable_darkirc" == "true" ]] && ports_enable_darkirc "$name"
     printf '%s' "$existing"
     return 0
   fi
@@ -915,6 +923,29 @@ ports_allocate() {
 
   say "allocated port block $base-$((base + PORT_BLOCK_SIZE - 1)) for tenant '$name'" >&2
   printf '%s' "$base"
+}
+
+# Mark darkirc enabled for a tenant in the registry (one-directional: false -> true).
+# Idempotent: no-op if already enabled. Used by ports_allocate()'s resume path so
+# `add-tenant <existing> --enable-darkirc` flips the registry (H2). Does NOT tear
+# down darkirc (disabling is a manual operation; see DARKIRC-MULTITENANT.md).
+ports_enable_darkirc() {
+  local name="$1"
+  require_cmd jq
+  local current
+  current="$(jq -r ".tenants[\"$name\"].enable_darkirc // false" "$PORTS_REGISTRY" 2>/dev/null || true)"
+  [[ "$current" == "true" ]] && return 0
+
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  if ! jq --arg name "$name" '.tenants[$name].enable_darkirc = true' \
+      "$PORTS_REGISTRY" >"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    die "failed to enable darkirc flag for tenant '$name'"
+  fi
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "darkirc for tenant '$name': disabled -> enabled" >&2
 }
 
 ports_deallocate() {
