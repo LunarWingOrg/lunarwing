@@ -44,7 +44,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 
 | # | Item | Area | Location | Status |
 |---|------|------|----------|--------|
-| L1 | Hardcoded health port `8443` (acknowledged unfinished in commit `175d2686`) | MT admin | `lunarwing-mt-admin.sh:2180,2243,2301,2356,2780` | TODO |
+| L1 | Hardcoded health port `8443` (acknowledged unfinished in commit `175d2686`) | MT admin | resolved by v8 ports schema (dedicated `nanocode_health`/`pebble_health`) | DONE |
 | L2 | Hardcoded `DEFAULT_TENSORZERO_URL=http://192.168.1.157:3000/...` | MT admin | `lunarwing-mt-admin.sh:31` | TODO |
 | L3 | ~~Duplicated byte-identical DarkIRC source trees~~ **Non-issue** — `ic/channels-src/darkirc` is a symlink to `darkirc_channel_for_ironclaw/darkirc` (same inode); single source of truth | DarkIRC | WONTFIX |
 | L4 | Stale DarkIRC docs (`aiohttp` claim, `darkirc_keypair.yaml`, Unix-socket line) | DarkIRC | `DARKIRC_MT_ADAPTER.md:95`, `darkirc.env:17-18` | TODO |
@@ -91,11 +91,30 @@ Makes DarkIRC opt-in per tenant (previously always provisioned). Default disable
 `ports_allocate()` at `lunarwing-mt-admin.sh:857-863`: the resume path returns early **without writing `enable_darkirc`** if the tenant already has a `base_port`. But `add_tenant()` at `:4051-4054` still writes adapter env/TOML from the in-memory flag. Result: a half-configured tenant — adapter env exists, but `lunarwing.env` lacks the URL/SECRET, no units render, no services start. No documented way to enable darkirc on an existing tenant except hand-editing `ports.json`.
 
 ### Other findings
-- **L1 / Hardcoded `8443` health port** — comment at `:2232-2236` argues it's safe (probe runs inside container netns, port not published). Commit `175d2686` flags it as unfinished. Breaks if netns is shared.
+- **L1 / Hardcoded `8443` health port** — ~~comment argued it's safe (probe runs inside container netns, port not published)~~ **RESOLVED by v8** (see below): each tenant now has dedicated `nanocode_health`/`pebble_health` ports, published host→container:8443, so the host self-heal can probe directly.
 - **M1 / `chmod 777` workspace dirs** — any local host user can read/tamper with any tenant's workspace (bind-mounted into containers). Should be `0750`/`0770`.
 - **M2 / `tokens` cleartext** — `show_tokens()` prints full gateway bearer tokens to stdout. Add `--reveal` gate or redacted-by-default.
 - **L2 / Hardcoded TensorZero IP** — `DEFAULT_TENSORZERO_URL` pins `192.168.1.157`; override via `LUNARWING_MT_TENSORZERO_URL`.
 - **Idempotency** is otherwise strong: secrets preserved on re-run, port blocks reused, `restore-tenant` requires `--yes`.
+
+### v8 ports schema — dedicated per-tenant worker health ports (DONE, 2026-06-23)
+The v7 base block was full (10/10) and the worker `HEALTH_PORT` was a hardcoded `8443` across ~10 sites — never registry-allocated, never published, so the host self-heal could only read container-runtime health state (no direct `curl`). **v8** names two existing extended slots as dedicated health ports (no renumber, no `block_size` change):
+- `extended_ports.reserved_3 → nanocode_health` (= `extended_base + 3`)
+- `extended_ports.reserved_4 → pebble_health` (= `extended_base + 4`)
+
+For tiggy (`extended_base=20010`): `nanocode_health=20013`, `pebble_health=20014`. **Publish-alias design**: the container still listens on `8443` internally (matches the image's baked HEALTHCHECK → **no image rebuild**); the per-tenant host port is published → container `8443` (`PublishPort=127.0.0.1:<health>:8443` / `-p`), giving the host a direct `/health` probe path.
+
+Delivered:
+- `ic/scripts/migrate-ports-v8.sh` — standalone, idempotent (version-gate, backup, collision check, rollback hint).
+- `ports_migrate_v8()` in mt-admin + wired into `ports_migrate()` (any mt-admin run auto-migrates v7→v8).
+- `ports_allocate` emits `nanocode_health`/`pebble_health` for new tenants (`reserved_*` reduce now starts at 5).
+- All three init paths publish the dedicated port → container 8443: systemd Quadlet (`render_worker_quadlet` → `PublishPort`), OpenRC/fallback (`start_tenant_nanocode`/`pebble` `_ctr run` → `-p`), OpenRC unit's in-container `podman exec` check stays on 8443.
+
+Verified on tiggy: registry→v8, quadlet gained `PublishPort=127.0.0.1:20013:8443`, and `curl http://127.0.0.1:20013/health` from the **host** returns `{"status":"ok",...}` (previously impossible). Pebble is symmetric (`pebble_health`, identical code).
+
+### Also done this session (MT-admin / worker ops, not in the original audit list)
+- **`_ensure_tenant_image` staleness + accumulation fix**: was skipping re-transfer whenever the image *name* existed (stale same-named copy held back updates) and never pruned the old image. Now compares admin-store vs tenant-store image **IDs** (re-loads only when stale) and runs `image prune -f` after load so updates don't accumulate GBs of layers. Root cause of the disk-thrash during tiggy's nanocode image refresh.
+- **Nanocode per-tenant model/baseURL overrides**: `configure-nanocode <name> --model/--base-url` (+ `add-tenant` flags) write `NANOCODE_MODEL`/`NANOCODE_BASE_URL` to `lunarwing.env`; both init paths inject them; the worker `entrypoint.sh` materializes an overridden `nanocode.json` (python JSON edit) when set. Verified live on tiggy.
 
 ---
 

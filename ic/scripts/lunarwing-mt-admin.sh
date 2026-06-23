@@ -2496,13 +2496,15 @@ start_tenant_pebble() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
-    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
-    # 127.0.0.1:8443/health, served by src/health.rs). The probe runs inside the
-    # container's network namespace, so this needs no -p publish and never
-    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
-    # container stuck "unhealthy" even though the WS bridge was fine.
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (in-container).
+    # v8: also publish the tenant's dedicated pebble_health port -> container
+    # 8443, so the host self-heal pipeline can probe /health directly.
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" pebble_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -2513,6 +2515,7 @@ start_tenant_pebble() {
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
+      "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
