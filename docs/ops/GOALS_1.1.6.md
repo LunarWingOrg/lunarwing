@@ -9,8 +9,8 @@
 6. [x] PG status() uses pg_isready health check (container running AND DB accepting connections)
 7. [ ] KagehoPASTA+KagehoSS+WriteDocs4EachInList
 8. [x] Update ROADMAP file to reflect accuracy
-9. [ ] Fault-injection test: podman kill → verify <2s respawn via supervise-daemon (no automated test exists for this currently)
-10. [ ] Fault-injection test: verify crash-loop exhaust → self-heal backstop after respawn_max (no automated test exists for this currently)
+9. [x] Fault-injection test: podman kill → verify <2s respawn via supervise-daemon
+10. [x] Fault-injection test: verify crash-loop exhaust → self-heal backstop after respawn_max
 11. [x] Finalize goals list
 12. [x] Bump crate versions to 1.1.6
 13. [ ] Run all cargo tests
