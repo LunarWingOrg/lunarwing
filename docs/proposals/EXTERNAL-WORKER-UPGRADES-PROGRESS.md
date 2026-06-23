@@ -26,6 +26,25 @@
 - [x] **Task 6**: `LoadBalancer` struct with `AtomicUsize` round-robin
   - `next_endpoint()` cycles through endpoints lock-free
   - Tests passing: `load_balancer_round_robin`, `load_balancer_single_endpoint`
+  - **Second pass (2026-06-23, H3)**: the first pass defined
+    `LoadBalanceStrategy::LeastConnections` but `next_endpoint()` always
+    round-robined regardless of strategy, so selecting `LeastConnections`
+    silently behaved as RoundRobin. Replaced the selection API with an
+    acquire/release model:
+    - `LoadBalancer::new(endpoints, strategy)` now takes the strategy.
+    - `acquire() -> EndpointLease` selects by strategy (RoundRobin cycles;
+      LeastConnections picks the endpoint with the fewest in-flight tasks,
+      ties to lowest index) and bumps a per-endpoint active counter.
+    - `EndpointLease` is `Send+Sync`, derefs to `WorkerEndpoint`, and
+      decrements the active count on drop — held for the task's lifetime on
+      both the `wait=true` (per-attempt) and `wait=false` (moved into the
+      spawned task) paths in `execute_task`.
+    - Removed the now-unused `next_endpoint()`; updated all call sites.
+    - Multi-endpoint connection-failure failover remains RoundRobin-gated;
+      LeastConnections failover/circuit-breaking deferred to M9.
+    - Tests added: `least_connections_picks_least_loaded`,
+      `lease_release_on_drop`, `strategies_diverge`, `endpoint_lease_is_send_sync`.
+    - See `docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md` (H3).
 
 - [x] **Task 5**: Context serialization — `build_task_context()` + signature changes
   - `execute_task()` and `run_external_task()` now accept `TaskContext` parameter

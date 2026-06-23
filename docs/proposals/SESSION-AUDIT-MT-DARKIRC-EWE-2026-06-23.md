@@ -24,7 +24,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 |---|------|------|----------|--------|
 | H1 | `on_status` UTF-8 byte-slice panic on >400-byte multibyte status messages | DarkIRC | `ic/channels-src/darkirc/src/lib.rs:354` | DONE |
 | H2 | `--enable-darkirc` cannot be flipped on an existing tenant (resume path drops flag) | MT admin | `ic/scripts/lunarwing-mt-admin.sh:857-863` | DONE |
-| H3 | `LeastConnections` strategy is dead code — silently behaves as RoundRobin | EWE | `ic/src/orchestrator/external_worker.rs:443-446` | TODO |
+| H3 | `LeastConnections` strategy is dead code — silently behaves as RoundRobin | EWE | `ic/src/orchestrator/external_worker.rs:443-446` | DONE |
 
 ### Medium priority (security / correctness)
 
