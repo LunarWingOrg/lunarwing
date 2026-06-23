@@ -1,5 +1,6 @@
 use crate::config::helpers::{optional_env, parse_bool_env, parse_optional_env, parse_string_env};
 use crate::error::ConfigError;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use tracing;
 
@@ -188,7 +189,10 @@ fn parse_oauth_access_token(json: &str) -> Option<String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerEndpoint {
     pub url: String,
-    pub auth_token: Option<String>,
+    // Secret-bearing: never serialized out (`SecretString` has no `Serialize`
+    // impl by design). `Debug` auto-redacts via secrecy's `[REDACTED]`.
+    #[serde(skip_serializing, default)]
+    pub auth_token: Option<SecretString>,
     pub weight: Option<u32>,
 }
 
@@ -206,7 +210,7 @@ pub enum LoadBalanceStrategy {
 pub struct ExternalWorkerConfig {
     pub name: String,
     pub url: String,
-    pub auth_token: Option<String>,
+    pub auth_token: Option<SecretString>,
     pub timeout_ms: u64,
     /// Multiple endpoints for load-balanced workers.
     /// When non-empty, `url`/`auth_token` are treated as fallback only.
@@ -302,6 +306,7 @@ impl AcpModeConfig {
 mod tests {
     use crate::config::sandbox::*;
     use crate::testing::credentials::*;
+    use secrecy::ExposeSecret;
 
     // ── SandboxModeConfig defaults ──────────────────────────────────
 
@@ -574,7 +579,10 @@ timeout_ms = 300000
         assert_eq!(workers.len(), 1, "exactly one external worker expected");
         assert_eq!(workers[0].name, "nanocode");
         assert_eq!(workers[0].url, "ws://127.0.0.1:10007/ws/agent");
-        assert_eq!(workers[0].auth_token.as_deref(), Some("deadbeefcafe1234"));
+        assert_eq!(
+            workers[0].auth_token.as_ref().map(|s| s.expose_secret()),
+            Some("deadbeefcafe1234")
+        );
         assert_eq!(workers[0].timeout_ms, 300_000);
     }
 
@@ -658,6 +666,9 @@ timeout_ms = 300000
         let endpoints = workers[0].endpoints();
         assert_eq!(endpoints.len(), 1);
         assert_eq!(endpoints[0].url, "ws://127.0.0.1:8443/ws/agent");
-        assert_eq!(endpoints[0].auth_token.as_deref(), Some("tok-legacy"));
+        assert_eq!(
+            endpoints[0].auth_token.as_ref().map(|s| s.expose_secret()),
+            Some("tok-legacy")
+        );
     }
 }

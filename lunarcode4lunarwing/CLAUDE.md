@@ -28,6 +28,8 @@ docker compose --profile smoke up agent-smoke
 |---|---|---|
 | `AGENT_AUTH_TOKEN` | — | WebSocket bearer auth (empty = no auth, dev mode) |
 | `TENSORZERO_API_KEY` | `dummy` | LLM gateway auth |
+| `NANOCODE_MODEL` | — | Override the LLM model in `nanocode.json` (any string). Set by `lunarwing-mt-admin.sh` from the tenant's `lunarwing.env` (`add-tenant --nanocode-model` / `configure-nanocode --model`). |
+| `NANOCODE_BASE_URL` | — | Override the TensorZero baseURL in `nanocode.json` (full URL, e.g. `http://host:3000/openai/v1/`). Set the same way as `NANOCODE_MODEL`. |
 | `NANOCODE_MODE` | `websocket` | `websocket`, `cli`, or `acp` |
 | `WS_ROLE` | `server` | `server` (inbound) or `client` (outbound to hub) |
 | `WS_PORT` | `9090` | WebSocket listen port |
@@ -74,6 +76,9 @@ model = "your_model"
 ```
 
 The model name in `config/nanocode.json` must use TensorZero's format: `tensorzero::function_name::lunarwing`.
+
+### Per-tenant model/baseURL overrides (no image rebuild)
+The model and baseURL baked into `config/nanocode.json` can be overridden per-tenant at runtime via the `NANOCODE_MODEL` (any string) and `NANOCODE_BASE_URL` (full URL) env vars. `lunarwing-mt-admin.sh` writes these to the tenant's `lunarwing.env` (`add-tenant --nanocode-model <m> --nanocode-base-url <u>`, or `configure-nanocode <name> --model <m> --base-url <u>` for an existing tenant) and injects them into the container on both systemd (Quadlet `Environment=`) and OpenRC (`podman run -e`) hosts. When either var is set, `entrypoint.sh` materializes an overridden `.nanocode/nanocode.json` copy (python JSON edit) instead of symlinking the baked default; when neither is set, behavior is unchanged. Restart the worker after changing them (`stop-tenant && start-tenant`).
 
 ### End-to-end flow
 

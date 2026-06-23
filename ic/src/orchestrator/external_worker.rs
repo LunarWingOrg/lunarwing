@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock, broadcast, oneshot};
 use uuid::Uuid;
@@ -295,7 +296,7 @@ impl ExternalWorkerManager {
                 let result = run_external_task(
                     job_id,
                     &attempt_url,
-                    attempt_auth_token.as_deref(),
+                    attempt_auth_token.as_ref().map(|s| s.expose_secret()),
                     &task_owned,
                     timeout,
                     &worker_name_owned,
@@ -346,7 +347,7 @@ impl ExternalWorkerManager {
                 let result = run_external_task(
                     job_id,
                     &url,
-                    auth_token.as_deref(),
+                    auth_token.as_ref().map(|s| s.expose_secret()),
                     &task_owned,
                     timeout,
                     &worker_name_owned,
@@ -1084,7 +1085,7 @@ mod tests {
             ExternalWorkerConfig {
                 name: "nanocode".to_string(),
                 url: "ws://localhost:9090/ws/agent".to_string(),
-                auth_token: Some("tok".to_string()),
+                auth_token: Some(secrecy::SecretString::from("tok")),
                 timeout_ms: 300_000,
                 endpoints: vec![],
                 load_balance: LoadBalanceStrategy::default(),

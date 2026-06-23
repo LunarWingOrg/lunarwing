@@ -36,7 +36,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 | M4 | `/poll` is destructive — message loss on crash (no ACK/redelivery) | DarkIRC | `darkirc_adapter.py:379-384` | TODO |
 | M5 | No body-size limit on hand-rolled adapter HTTP server (OOM DoS) | DarkIRC | `darkirc_adapter.py:364` | TODO |
 | M6 | Non-constant-time bearer comparison in adapter | DarkIRC | `darkirc_adapter.py:358` | TODO |
-| M7 | `auth_token` stored as plain `Option<String>`, not `SecretString` | EWE | `config/sandbox.rs:191,209` | TODO |
+| M7 | `auth_token` stored as plain `Option<String>`, not `SecretString` | EWE | `config/sandbox.rs:191,209` | DONE |
 | M8 | No graceful `pool.drain()` on shutdown; no background `evict_stale()` | EWE | `main.rs:1217`, `external_worker.rs:215` | TODO |
 | M9 | Failover is connection-only — no retry on `ProtocolError`/timeout | EWE | `external_worker.rs:260-323` | TODO |
 
@@ -168,6 +168,13 @@ Writing the mock surfaced a hard protocol requirement: `connect_and_handshake` a
 **Verification of the three worker containers (2026-06-23):**
 - ✅ **nanocode + codex** (`lunarwing_bridge.ts:167-168`) — validate *and* echo via `server.upgrade(req, { headers: { "sec-websocket-protocol": SUBPROTOCOL } })`. Correct.
 - ❌→✅ **pebble** (`pebble4lunarwing/src/bridge.rs:139-167`) — **was broken**: it validated the client's offered subprotocol (rejecting with `400` if absent) but returned `Ok(response)` **without echoing it**, so every pebble connection from the orchestrator would fail with "Server sent no subprotocol". **Fixed**: the `accept_hdr_async` callback now inserts `Sec-WebSocket-Protocol: ironclaw-agent-v1` into the upgrade response before returning `Ok`. Verified: pebble clippy (`-D warnings`) / fmt / 8 unit tests all green. (Confirmed production bug — the EWE live-QA "mars tenant" pass evidently did not exercise the pebble WS path.)
+
+### M7 — `auth_token` wrapped in `secrecy::SecretString` — DONE
+The external-worker bearer token is now `Option<SecretString>` at every layer (`WorkerEndpoint`, `ExternalWorkerConfig` in `config/sandbox.rs`; `ExternalWorkerSettings` in `settings.rs`), so it can no longer be accidentally logged or serialized. Key points:
+- **Deserialization preserved**: `SecretString` impls `Deserialize`, so TOML `auth_token = "..."` still loads unchanged.
+- **Serialization protected**: `WorkerEndpoint`/`ExternalWorkerSettings` keep their `Serialize` derives, but the field is `#[serde(skip_serializing)]` (and `Debug` auto-redacts to `[REDACTED]` via secrecy) — the token can never leak through a `Debug` print or a serialized dump.
+- **Boundary stays clean**: the secret is exposed to `&str` only at the single use site (`format!("Bearer {token}")` in `connect_and_handshake`); `run_external_task`/`connect_and_handshake` keep their `Option<&str>` signatures.
+- **Verification**: compile-clean; 22 external-worker + 23 config unit tests pass; the T1 integration suite gained two end-to-end auth tests (`auth_correct_token_succeeds`, `auth_wrong_token_rejected`) proving config → `SecretString` → `expose_secret()` → Bearer header → worker validates (accepts correct, rejects wrong) — 10/10 deterministic across repeated runs; clippy/fmt clean on all four changed files.
 
 ---
 

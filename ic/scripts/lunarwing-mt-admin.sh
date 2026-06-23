@@ -160,9 +160,14 @@ Commands:
     --no-health                    Don't enable the host-global health/self-heal pipeline
     --enable-darkirc               Provision DarkIRC daemon + adapter for this tenant
                                    (disabled by default; darkirc services are NOT created)
+    --nanocode-model <model>       Override the nanocode worker's LLM model
+                                   (written to lunarwing.env as NANOCODE_MODEL)
+    --nanocode-base-url <url>      Override the nanocode worker's TensorZero baseURL
+                                   (written to lunarwing.env as NANOCODE_BASE_URL)
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
-    (same options as add-tenant apply to all, including --enable-darkirc)
+    (same options as add-tenant apply to all, including --enable-darkirc and
+     --nanocode-model/--nanocode-base-url)
 
   remove-tenant <name>             Stop services, deallocate ports
     --purge                        Also delete OS user and home directory
@@ -202,6 +207,11 @@ Commands:
   configure-pebble <name>          Configure pebble worker for a tenant
     --nanogpt-api-key <key>        NanoGPT API key
     --model <model>                Pebble model (default: openai/gpt-5.2)
+
+  configure-nanocode <name>        Set nanocode worker LLM overrides for a tenant
+    --model <model>                TensorZero model (NANOCODE_MODEL; any string)
+    --base-url <url>               TensorZero baseURL (NANOCODE_BASE_URL; full URL)
+                                   (restart the worker after: stop-tenant && start-tenant)
 
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
@@ -1620,6 +1630,8 @@ write_tenant_lunarwing_env() {
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
   local llm_base_url="${6:-}"
+  local nanocode_model="${7:-}"
+  local nanocode_base_url="${8:-}"
 
   local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
@@ -1653,6 +1665,10 @@ write_tenant_lunarwing_env() {
   # XMPP password: an explicit --xmpp-password wins; else preserve an existing one;
   # else mint a fresh one (first-time provision).
   [[ -n "$xmpp_password" ]] || { xmpp_password="$(_env_existing "$path" XMPP_PASSWORD)"; xmpp_password="${xmpp_password:-$(generate_token | cut -c1-32)}"; }
+  # Nanocode model/base_url overrides: an explicit flag wins; else preserve an
+  # existing value so re-running add-tenant without the flags keeps prior settings.
+  [[ -n "$nanocode_model" ]]    || nanocode_model="$(_env_existing "$path" NANOCODE_MODEL)"
+  [[ -n "$nanocode_base_url" ]] || nanocode_base_url="$(_env_existing "$path" NANOCODE_BASE_URL)"
   # Stable + migration-safe; resolved before the heredoc so it can read an
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
@@ -1753,6 +1769,11 @@ ENVEOF
     printf '\nDARKIRC_ADAPTER_URL=http://127.0.0.1:%s\nDARKIRC_ADAPTER_SECRET=%s\n' \
       "$darkirc_adapter_port" "$darkirc_adapter_secret" >> "$path"
   fi
+  # Nanocode worker LLM overrides (consumed by the worker container via env;
+  # see start_tenant_nanocode / render_worker_quadlet). Written only when set so
+  # an unconfigured tenant gets the image's baked-in nanocode.json defaults.
+  [[ -n "$nanocode_model" ]]    && printf '\nNANOCODE_MODEL=%s\n'    "$nanocode_model"     >> "$path"
+  [[ -n "$nanocode_base_url" ]] && printf 'NANOCODE_BASE_URL=%s\n' "$nanocode_base_url" >> "$path"
   chown "$name:$name" "$path"
   say "wrote: $path"
 }
@@ -2180,6 +2201,46 @@ configure_pebble() {
   fi
 }
 
+# ── Nanocode worker LLM configuration ─────────────────────────────────────────
+#
+# Sets the nanocode worker's TensorZero model + baseURL overrides for a tenant by
+# upserting NANOCODE_MODEL / NANOCODE_BASE_URL into lunarwing.env (the same source
+# add-tenant writes, and that both init paths inject into the container). Mirrors
+# configure-pebble, but stored in lunarwing.env (not a separate nanocode.env).
+
+configure_nanocode() {
+  local name="$1"
+  local model="${2:-}"
+  local base_url="${3:-}"
+
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  [[ -n "$model" || -n "$base_url" ]] \
+    || die "configure-nanocode: pass --model <model> and/or --base-url <url>"
+
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$env_path" ]] || die "env file not found: $env_path (run add-tenant first)"
+
+  # Upsert: drop any existing override lines, then append the provided values.
+  local tmp
+  tmp="$(mktemp)"
+  grep -v -e '^NANOCODE_MODEL=' -e '^NANOCODE_BASE_URL=' "$env_path" >"$tmp" || true
+  [[ -n "$model" ]]    && printf 'NANOCODE_MODEL=%s\n'    "$model"    >>"$tmp"
+  [[ -n "$base_url" ]] && printf 'NANOCODE_BASE_URL=%s\n' "$base_url" >>"$tmp"
+  cat "$tmp" >"$env_path"
+  rm -f "$tmp"
+  chown "$name:$name" "$env_path"
+  chmod 600 "$env_path"
+  say "nanocode LLM overrides written to $env_path for tenant '$name'"
+
+  local container_name="lunarwing-nanocode-$name"
+  if _ctr "$name" inspect "$container_name" &>/dev/null 2>&1; then
+    say "note: restart the nanocode worker to pick up the new config:"
+    say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
+  fi
+}
+
 # ── Nanocode worker container ─────────────────────────────────────────────────
 
 start_tenant_nanocode() {
@@ -2247,6 +2308,13 @@ start_tenant_nanocode() {
       local llm_api_key
       llm_api_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" | cut -d= -f2- || true)"
       [[ -n "$llm_api_key" ]] && env_flags+=(-e "TENSORZERO_API_KEY=$llm_api_key")
+
+      # Nanocode LLM overrides (model / TensorZero baseURL), if set on the tenant.
+      local nanocode_model nanocode_base_url
+      nanocode_model="$(grep '^NANOCODE_MODEL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$nanocode_model" ]] && env_flags+=(-e "NANOCODE_MODEL=$nanocode_model")
+      nanocode_base_url="$(grep '^NANOCODE_BASE_URL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$nanocode_base_url" ]] && env_flags+=(-e "NANOCODE_BASE_URL=$nanocode_base_url")
     fi
 
     # Override with nanocode-specific env file if present
@@ -2823,6 +2891,9 @@ render_worker_quadlet() {
   local agent_token tz_key
   agent_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
   tz_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  local nanocode_model nanocode_base_url
+  nanocode_model="$(grep '^NANOCODE_MODEL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  nanocode_base_url="$(grep '^NANOCODE_BASE_URL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
   # systemd treats % as a unit specifier; escape so a token containing % survives.
   agent_token="${agent_token//%/%%}"
   tz_key="${tz_key//%/%%}"
@@ -2855,6 +2926,8 @@ EOF
     fi
     [[ -n "$agent_token" ]] && printf 'Environment=AGENT_AUTH_TOKEN=%s\n' "$agent_token"
     [[ "$worker" == "nanocode" && -n "$tz_key" ]] && printf 'Environment=TENSORZERO_API_KEY=%s\n' "$tz_key"
+    [[ "$worker" == "nanocode" && -n "$nanocode_model" ]] && printf 'Environment=NANOCODE_MODEL=%s\n' "$nanocode_model"
+    [[ "$worker" == "nanocode" && -n "$nanocode_base_url" ]] && printf 'Environment=NANOCODE_BASE_URL=%s\n' "$nanocode_base_url"
     # Operator override file (optional). EnvironmentFile= has existed since the
     # Quadlet 4.4 debut, so it is safe at our >= 4.6 floor.
     [[ -f "$worker_env_path" ]] && printf 'EnvironmentFile=%s\n' "$worker_env_path"
@@ -4044,6 +4117,8 @@ add_tenant() {
   local llm_api_key="${8:-}"
   local llm_base_url="${9:-$DEFAULT_LLM_BASE_URL}"
   local enable_darkirc="${10:-false}"
+  local nanocode_model="${11:-}"
+  local nanocode_base_url="${12:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -4076,7 +4151,7 @@ add_tenant() {
   say ""
 
   say "--- Generating environment files ---"
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   if [[ "$enable_darkirc" == "true" ]]; then
@@ -4503,7 +4578,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false"
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -4516,6 +4591,8 @@ main() {
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
+          --nanocode-model)    nanocode_model="$2"; shift 2 ;;
+          --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
@@ -4526,12 +4603,12 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false"
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -4543,6 +4620,8 @@ main() {
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
+          --nanocode-model)    nanocode_model="$2"; shift 2 ;;
+          --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$names_csv" ]]; then names_csv="$1"; shift
@@ -4561,7 +4640,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
       done
       ;;
 
@@ -4743,6 +4822,25 @@ main() {
       [[ -n "$nanogpt_key" ]] || die "configure-pebble requires --nanogpt-api-key"
       ports_registry_init
       configure_pebble "$(sanitize_name "$name")" "$nanogpt_key" "$pebble_model"
+      ;;
+
+    configure-nanocode)
+      require_root
+      local name="" nc_model="" nc_base_url=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --model)    nc_model="$2"; shift 2 ;;
+          --base-url) nc_base_url="$2"; shift 2 ;;
+          -*)         die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-nanocode <name> [--model <model>] [--base-url <url>]"
+      configure_nanocode "$name" "$nc_model" "$nc_base_url"
       ;;
 
     patch-env)
