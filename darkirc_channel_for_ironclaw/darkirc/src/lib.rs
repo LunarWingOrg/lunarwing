@@ -90,7 +90,7 @@ struct DarkircConfig {
 }
 
 fn default_adapter_url() -> String {
-    "http://127.0.0.1:6680".to_string()
+    String::new()
 }
 
 fn default_dm_policy() -> String {
@@ -200,8 +200,13 @@ impl Guest for DarkircChannel {
         let dm_policy_path = dm_policy_path(&config.tenant_id);
         let allow_from_path = allow_from_path(&config.tenant_id);
 
-        // Persist config for subsequent callbacks
-        let _ = channel_host::workspace_write(&adapter_url_path, &config.adapter_url);
+        // Persist config for subsequent callbacks. adapter_url is only written
+        // when actually configured (M3: an empty/default value must NOT be
+        // persisted, otherwise runtime reads silently fall back and could route
+        // a tenant to the wrong adapter).
+        if !config.adapter_url.is_empty() {
+            let _ = channel_host::workspace_write(&adapter_url_path, &config.adapter_url);
+        }
         let _ = channel_host::workspace_write(&dm_policy_path, &config.dm_policy);
 
         let allow_from_json = serde_json::to_string(&config.allow_from).unwrap_or_else(|_| "[]".to_string());
@@ -260,7 +265,7 @@ impl Guest for DarkircChannel {
         // Read tenant-aware paths
         let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| default_adapter_url());
+            .unwrap_or_default();
 
         let poll_url = format!("{}/poll", adapter_url);
         let headers_json = serde_json::json!({}).to_string();
@@ -311,6 +316,16 @@ impl Guest for DarkircChannel {
         for msg in &poll_response.messages {
             handle_inbound_dm(msg);
         }
+
+        // Ack the batch so the adapter can drop it (M4: at-least-once delivery —
+        // if we crash before this ack, the next /poll re-serves the same batch).
+        let ack_url = format!("{}/ack", adapter_url);
+        if let Err(e) = channel_host::http_request("POST", &ack_url, &headers_json, None, Some(5_000)) {
+            channel_host::log(
+                channel_host::LogLevel::Warn,
+                &format!("Adapter /ack failed (batch will be re-delivered next poll): {}", e),
+            );
+        }
     }
 
     // Deliver the agent's response back to the DarkIRC user via the adapter.
@@ -348,7 +363,7 @@ impl Guest for DarkircChannel {
                     .unwrap_or_else(|| "default".to_string());
                 let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
                     .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| default_adapter_url());
+                    .unwrap_or_default();
 
                 let truncated = truncate_for_status(message);
 
@@ -421,7 +436,7 @@ fn handle_inbound_dm(msg: &AdapterMessage) {
                         if result.created {
                             let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
                                 .filter(|s| !s.is_empty())
-                                .unwrap_or_else(|| default_adapter_url());
+                                .unwrap_or_default();
 
                             let reply = format!(
                                 "To pair with this agent, run: lunarwing pairing approve darkirc {}",
@@ -502,7 +517,7 @@ fn send_response_to_nick(nick: &str, content: &str) -> Result<(), String> {
         .unwrap_or_else(|| "default".to_string());
     let adapter_url = channel_host::workspace_read(&adapter_url_path(&tenant_id))
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| default_adapter_url());
+        .unwrap_or_default();
 
     let chunks = split_message(content, MAX_IRC_MESSAGE_BYTES);
     let mut successful_chunks = 0;
@@ -992,7 +1007,7 @@ mod tests {
     #[test]
     fn test_config_defaults() {
         let config: DarkircConfig = serde_json::from_str("{}").unwrap();
-        assert_eq!(config.adapter_url, "http://127.0.0.1:6680");
+        assert_eq!(config.adapter_url, "");
         assert_eq!(config.dm_policy, "pairing");
         assert!(config.allow_from.is_empty());
         assert_eq!(config.poll_interval_seconds, 3);

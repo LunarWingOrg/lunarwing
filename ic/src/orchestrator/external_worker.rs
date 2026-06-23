@@ -398,6 +398,32 @@ impl ExternalWorkerManager {
         }
         false
     }
+
+    /// Spawn a background task that periodically evicts stale idle connections.
+    /// Cancelled when the shutdown receiver fires.
+    pub fn spawn_eviction_task(&self, mut shutdown_rx: broadcast::Receiver<()>) {
+        let pool = Arc::clone(&self.pool);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            interval.tick().await; // skip immediate first tick
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        pool.evict_stale().await;
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::debug!("pool eviction task shutting down");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    /// Gracefully drain the pool (send WS Close frames, bounded per-connection).
+    pub async fn drain_pool(&self) {
+        self.pool.drain().await;
+    }
 }
 
 /// Status of an external worker task.
@@ -599,6 +625,20 @@ impl WorkerConnectionPool {
 
     pub async fn drain(&self) {
         let mut conns = self.connections.lock().await;
+        for pool in conns.values_mut() {
+            for conn in pool.drain(..) {
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    async {
+                        let (mut sink, _read) = conn.stream.split();
+                        let _ = sink
+                            .send(tokio_tungstenite::tungstenite::Message::Close(None))
+                            .await;
+                    },
+                )
+                .await;
+            }
+        }
         conns.clear();
     }
 

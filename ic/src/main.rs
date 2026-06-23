@@ -1020,6 +1020,10 @@ async fn async_main() -> anyhow::Result<()> {
     // Broadcast channel for clean shutdown of background tasks
     let (shutdown_tx, _) = tokio::sync::broadcast::channel::<()>(1);
 
+    if let Some(ref mgr) = external_worker_manager {
+        mgr.spawn_eviction_task(shutdown_tx.subscribe());
+    }
+
     #[cfg(unix)]
     {
         // Collect all channels that support secret updates
@@ -1215,6 +1219,10 @@ async fn async_main() -> anyhow::Result<()> {
 
     // Signal background tasks (SIGHUP handler, etc.) to gracefully shut down
     let _ = shutdown_tx.send(());
+
+    if let Some(ref mgr) = external_worker_manager {
+        mgr.drain_pool().await;
+    }
 
     // Shut down all stdio MCP server child processes.
     components.mcp_process_manager.shutdown_all().await;
