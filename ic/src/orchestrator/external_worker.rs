@@ -147,7 +147,10 @@ impl ExternalWorkerManager {
         let mut load_balancers = HashMap::new();
         for config in &configs {
             let endpoints = config.endpoints();
-            load_balancers.insert(config.name.clone(), LoadBalancer::new(endpoints));
+            load_balancers.insert(
+                config.name.clone(),
+                LoadBalancer::new(endpoints, config.load_balance.clone()),
+            );
         }
 
         let workers: HashMap<String, ExternalWorkerConfig> =
@@ -222,19 +225,20 @@ impl ExternalWorkerManager {
 
         let timeout = timeout_ms.unwrap_or(config.timeout_ms);
 
-        // Use load balancer to select endpoint
-        let endpoint = self
-            .load_balancers
-            .get(worker_name)
-            .map(|lb| lb.next_endpoint().clone())
-            .unwrap_or_else(|| WorkerEndpoint {
-                url: config.url.clone(),
-                auth_token: config.auth_token.clone(),
-                weight: None,
-            });
-
-        let url = endpoint.url.clone();
-        let auth_token = endpoint.auth_token.clone();
+        // Use load balancer to select an endpoint and acquire an active-connection
+        // lease. The lease is held for the task's lifetime (moved into the spawned
+        // task on the fire-and-forget path) so LeastConnections reflects real load.
+        // With no LB configured (single legacy endpoint) there is nothing to
+        // balance and no active count to track.
+        let lease = self.load_balancers.get(worker_name).map(|lb| lb.acquire());
+        let url = lease
+            .as_ref()
+            .map(|l| l.url.clone())
+            .unwrap_or_else(|| config.url.clone());
+        let auth_token = lease
+            .as_ref()
+            .map(|l| l.auth_token.clone())
+            .unwrap_or_else(|| config.auth_token.clone());
         let pool_key = format!("{worker_name}:{url}");
         let worker_name_owned = worker_name.to_string();
         let task_owned = task.to_string();
@@ -268,14 +272,19 @@ impl ExternalWorkerManager {
             };
 
             for attempt in 0..max_attempts {
-                let endpoint = lb
-                    .map(|lb| lb.next_endpoint().clone())
-                    .unwrap_or_else(|| WorkerEndpoint {
-                        url: config.url.clone(),
-                        auth_token: config.auth_token.clone(),
-                        weight: None,
-                    });
-                let attempt_url = endpoint.url.clone();
+                // Acquire a fresh endpoint lease for this attempt; it
+                // decrements the active count when dropped (at `continue`/return
+                // or end of iteration), so in-flight load stays accurate across
+                // retries.
+                let attempt_lease = lb.map(|lb| lb.acquire());
+                let attempt_url = attempt_lease
+                    .as_ref()
+                    .map(|l| l.url.clone())
+                    .unwrap_or_else(|| config.url.clone());
+                let attempt_auth_token = attempt_lease
+                    .as_ref()
+                    .map(|l| l.auth_token.clone())
+                    .unwrap_or_else(|| config.auth_token.clone());
                 let attempt_pool_key = format!("{worker_name_owned}:{attempt_url}");
 
                 let attempt_cancel_rx = maybe_cancel_rx.take().unwrap_or_else(|| {
@@ -286,7 +295,7 @@ impl ExternalWorkerManager {
                 let result = run_external_task(
                     job_id,
                     &attempt_url,
-                    endpoint.auth_token.as_deref(),
+                    attempt_auth_token.as_deref(),
                     &task_owned,
                     timeout,
                     &worker_name_owned,
@@ -330,6 +339,10 @@ impl ExternalWorkerManager {
                 rx
             });
             tokio::spawn(async move {
+                // Hold the endpoint lease for the task's lifetime so the active
+                // count (LeastConnections accounting) stays accurate until the
+                // task finishes; it decrements when _lease drops at block end.
+                let _lease = lease;
                 let result = run_external_task(
                     job_id,
                     &url,
@@ -424,29 +437,109 @@ pub struct ExternalTaskResult {
 use crate::config::WorkerEndpoint;
 
 pub struct LoadBalancer {
-    endpoints: Vec<WorkerEndpoint>,
+    inner: Arc<LbInner>,
+    strategy: LoadBalanceStrategy,
     current_index: AtomicUsize,
 }
 
+struct LbInner {
+    endpoints: Vec<WorkerEndpoint>,
+    // In-flight task count per endpoint, parallel to `endpoints`. Bumped by
+    // `acquire()` and decremented when the returned `EndpointLease` drops, so
+    // LeastConnections can prefer the least-loaded endpoint.
+    active: Vec<AtomicUsize>,
+}
+
+/// A selected endpoint plus its active-connection accounting. Derefs to the
+/// chosen [`WorkerEndpoint`]; dropping the lease decrements that endpoint's
+/// in-flight count, so callers must hold it for the task's lifetime.
+pub struct EndpointLease {
+    index: usize,
+    inner: Arc<LbInner>,
+}
+
+impl std::ops::Deref for EndpointLease {
+    type Target = WorkerEndpoint;
+    fn deref(&self) -> &WorkerEndpoint {
+        &self.inner.endpoints[self.index]
+    }
+}
+
+impl Drop for EndpointLease {
+    fn drop(&mut self) {
+        self.inner.active[self.index].fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 impl LoadBalancer {
-    pub fn new(endpoints: Vec<WorkerEndpoint>) -> Self {
+    pub fn new(endpoints: Vec<WorkerEndpoint>, strategy: LoadBalanceStrategy) -> Self {
         assert!(
             !endpoints.is_empty(),
             "LoadBalancer requires at least one endpoint"
         );
+        let active = (0..endpoints.len())
+            .map(|_| AtomicUsize::new(0))
+            .collect::<Vec<_>>();
         Self {
-            endpoints,
+            inner: Arc::new(LbInner { endpoints, active }),
+            strategy,
             current_index: AtomicUsize::new(0),
         }
     }
 
-    pub fn next_endpoint(&self) -> &WorkerEndpoint {
-        let idx = self.current_index.fetch_add(1, Ordering::Relaxed) % self.endpoints.len();
-        &self.endpoints[idx]
+    /// Select the next endpoint and acquire an active-connection lease.
+    ///
+    /// - `RoundRobin`: cycles endpoints lock-free.
+    /// - `LeastConnections`: picks the endpoint with the fewest in-flight tasks
+    ///   (ties resolve to the lowest index).
+    ///
+    /// The returned lease must be held for the task's lifetime so the count
+    /// reflects actual load; it decrements on drop.
+    ///
+    /// Note: multi-endpoint connection-failure failover is currently wired only
+    /// for RoundRobin; LeastConnections failover/circuit-breaking is tracked
+    /// separately (see M9 in SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md).
+    pub fn acquire(&self) -> EndpointLease {
+        let len = self.inner.endpoints.len();
+        let idx = match self.strategy {
+            LoadBalanceStrategy::RoundRobin => {
+                self.current_index.fetch_add(1, Ordering::Relaxed) % len
+            }
+            LoadBalanceStrategy::LeastConnections => {
+                let mut best = 0usize;
+                let mut best_count = usize::MAX;
+                for (i, a) in self.inner.active.iter().enumerate() {
+                    let c = a.load(Ordering::Relaxed);
+                    if c < best_count {
+                        best_count = c;
+                        best = i;
+                    }
+                }
+                best
+            }
+        };
+        self.inner.active[idx].fetch_add(1, Ordering::Relaxed);
+        EndpointLease {
+            index: idx,
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    /// In-flight task count for the endpoint currently at `index` (debug/observe).
+    pub fn active_for(&self, index: usize) -> usize {
+        self.inner
+            .active
+            .get(index)
+            .map(|a| a.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     pub fn endpoint_count(&self) -> usize {
-        self.endpoints.len()
+        self.inner.endpoints.len()
+    }
+
+    pub fn strategy(&self) -> LoadBalanceStrategy {
+        self.strategy.clone()
     }
 }
 
@@ -914,9 +1007,7 @@ async fn run_external_task(
                 .await;
             }
             Err(e) => {
-                tracing::warn!(
-                    "Failed to reunite WebSocket halves for '{worker_name}': {e}"
-                );
+                tracing::warn!("Failed to reunite WebSocket halves for '{worker_name}': {e}");
             }
         }
     }
@@ -1148,14 +1239,14 @@ mod tests {
                 weight: None,
             },
         ];
-        let lb = LoadBalancer::new(endpoints);
+        let lb = LoadBalancer::new(endpoints, LoadBalanceStrategy::RoundRobin);
 
-        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://c:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://c:9090");
+        assert_eq!(lb.acquire().url, "ws://a:9090");
+        assert_eq!(lb.acquire().url, "ws://b:9090");
+        assert_eq!(lb.acquire().url, "ws://c:9090");
+        assert_eq!(lb.acquire().url, "ws://a:9090");
+        assert_eq!(lb.acquire().url, "ws://b:9090");
+        assert_eq!(lb.acquire().url, "ws://c:9090");
     }
 
     #[test]
@@ -1167,11 +1258,142 @@ mod tests {
             auth_token: None,
             weight: None,
         }];
-        let lb = LoadBalancer::new(endpoints);
+        let lb = LoadBalancer::new(endpoints, LoadBalanceStrategy::RoundRobin);
 
         for _ in 0..10 {
-            assert_eq!(lb.next_endpoint().url, "ws://only:9090");
+            assert_eq!(lb.acquire().url, "ws://only:9090");
         }
+    }
+
+    #[test]
+    fn load_balancer_least_connections_picks_least_loaded() {
+        // Regression for H3: LeastConnections must select by in-flight count,
+        // not silently round-robin.
+        use crate::config::WorkerEndpoint;
+
+        let endpoints = vec![
+            WorkerEndpoint {
+                url: "ws://a".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+            WorkerEndpoint {
+                url: "ws://b".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+            WorkerEndpoint {
+                url: "ws://c".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+        ];
+        let lb = LoadBalancer::new(endpoints, LoadBalanceStrategy::LeastConnections);
+
+        // All zero: tie resolves to lowest index (a).
+        let l0 = lb.acquire();
+        assert_eq!(l0.url, "ws://a");
+        assert_eq!(lb.active_for(0), 1);
+
+        // a=1, b=0, c=0 -> pick b (lowest of the zeros).
+        let l1 = lb.acquire();
+        assert_eq!(l1.url, "ws://b");
+        assert_eq!(lb.active_for(1), 1);
+
+        // a=1, b=1, c=0 -> pick c.
+        let l2 = lb.acquire();
+        assert_eq!(l2.url, "ws://c");
+        assert_eq!(lb.active_for(2), 1);
+
+        // a=1, b=1, c=1 -> tie, lowest index a.
+        let l3 = lb.acquire();
+        assert_eq!(l3.url, "ws://a");
+        assert_eq!(lb.active_for(0), 2);
+        assert_eq!(lb.active_for(1), 1);
+        assert_eq!(lb.active_for(2), 1);
+    }
+
+    #[test]
+    fn load_balancer_lease_release_on_drop() {
+        // Holding a lease bumps the count; dropping it restores the count so the
+        // next LeastConnections pick returns to the released endpoint.
+        use crate::config::WorkerEndpoint;
+
+        let endpoints = vec![
+            WorkerEndpoint {
+                url: "ws://a".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+            WorkerEndpoint {
+                url: "ws://b".to_string(),
+                auth_token: None,
+                weight: None,
+            },
+        ];
+        let lb = LoadBalancer::new(endpoints, LoadBalanceStrategy::LeastConnections);
+
+        // Pin a load on endpoint a.
+        let held = lb.acquire();
+        assert_eq!(held.url, "ws://a");
+        assert_eq!(lb.active_for(0), 1);
+
+        // While a is loaded, b is preferred.
+        let _b = lb.acquire();
+        assert_eq!(_b.url, "ws://b");
+        assert_eq!(lb.active_for(1), 1);
+
+        // Dropping the a-lease makes a least-loaded again.
+        drop(held);
+        assert_eq!(lb.active_for(0), 0);
+
+        let next = lb.acquire();
+        assert_eq!(next.url, "ws://a");
+        assert_eq!(lb.active_for(0), 1);
+    }
+
+    #[test]
+    fn load_balancer_strategies_diverge() {
+        // Concrete demonstration that H3 is fixed: the same acquire sequence
+        // yields different endpoints under the two strategies.
+        use crate::config::WorkerEndpoint;
+
+        let mk = || {
+            vec![
+                WorkerEndpoint {
+                    url: "ws://a".to_string(),
+                    auth_token: None,
+                    weight: None,
+                },
+                WorkerEndpoint {
+                    url: "ws://b".to_string(),
+                    auth_token: None,
+                    weight: None,
+                },
+            ]
+        };
+
+        // RoundRobin: a, b, a, b ...
+        let rr = LoadBalancer::new(mk(), LoadBalanceStrategy::RoundRobin);
+        assert_eq!(rr.acquire().url, "ws://a");
+        assert_eq!(rr.acquire().url, "ws://b");
+        assert_eq!(rr.acquire().url, "ws://a");
+
+        // LeastConnections with leases held: a, b, b, b ... (a stays loaded, so
+        // every subsequent pick prefers the least-loaded b).
+        let lc = LoadBalancer::new(mk(), LoadBalanceStrategy::LeastConnections);
+        let _hold_a = lc.acquire();
+        assert_eq!(_hold_a.url, "ws://a");
+        assert_eq!(lc.acquire().url, "ws://b");
+        assert_eq!(lc.acquire().url, "ws://b");
+    }
+
+    #[test]
+    fn endpoint_lease_is_send_sync() {
+        // EndpointLease must be Send+Sync so it can move into tokio::spawn on
+        // the fire-and-forget path and decrement across threads on drop.
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<EndpointLease>();
     }
 
     #[test]
@@ -1260,8 +1482,8 @@ mod tests {
         assert!(mgr.load_balancers.get("multi").is_some());
         let lb = mgr.load_balancers.get("multi").unwrap();
         assert_eq!(lb.endpoint_count(), 2);
-        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://b:9090");
-        assert_eq!(lb.next_endpoint().url, "ws://a:9090");
+        assert_eq!(lb.acquire().url, "ws://a:9090");
+        assert_eq!(lb.acquire().url, "ws://b:9090");
+        assert_eq!(lb.acquire().url, "ws://a:9090");
     }
 }
