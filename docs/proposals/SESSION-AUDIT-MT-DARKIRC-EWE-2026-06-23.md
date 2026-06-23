@@ -57,7 +57,7 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 
 | # | Item | Area | Status |
 |---|------|------|--------|
-| T1 | Add mock-WS integration test for external worker lifecycle (success/timeout/cancel/failover/pool-reuse) | EWE | TODO |
+| T1 | Add mock-WS integration test for external worker lifecycle (success/timeout/cancel/failover/pool-reuse) | EWE | DONE |
 | T2 | Add regression test for H1 (DarkIRC `on_status` multibyte truncation) | DarkIRC | DONE |
 | T3 | Add real-pool eviction test (current tests only touch empty pool) | EWE | TODO |
 | T4 | Add DarkIRC adapter integration test (mock IRC server: registration/PING/queue/poll/send/503/auth/oversize) | DarkIRC | TODO |
@@ -160,7 +160,10 @@ EWE is an 11-task plan (see `EXTERNAL-WORKER-PLAN-UPGRADES.md` + `EXTERNAL-WORKE
 
 ### Test coverage
 - ~18 unit tests on data structures, config TOML contracts, empty-pool behavior, auth, and the Docker API.
-- **Critical gap (T1):** no integration/e2e test exercises the live WebSocket path — `connect_and_handshake`, `run_external_task`, and `execute_task` against a real/mock WS server are never tested. `ic/tests/e2e_worker_coverage.rs` is misnamed (tests the agent tool-loop, not external workers).
+- **T1 — DONE (2026-06-23):** added `ic/tests/external_worker_integration.rs` — a mock worker speaking `ironclaw-agent-v1` on an ephemeral loopback port, exercising the real `ExternalWorkerManager::execute_task` end-to-end. Covers: happy path (progress + result, incl. empty-output fallback), failed result, task timeout → `ExternalWorkerTimeout`, cancel in-flight → `Cancelled`, connection failure → `ExternalWorkerConnectionFailed`, closed-before-ready → `ExternalWorkerProtocolError`, and **connection-pool reuse** (asserts a single TCP accept across two sequential successful tasks). Deterministic across repeated runs; clippy/fmt-clean. No PostgreSQL/Docker required.
+
+### Finding from T1: WebSocket subprotocol echo is mandatory
+Writing the mock surfaced a hard protocol requirement: `connect_and_handshake` always sends `Sec-WebSocket-Protocol: ironclaw-agent-v1`, and the client's tungstenite **rejects** the handshake if the server sends no subprotocol back (`WebSocket protocol error: SubProtocol error: Server sent no subprotocol`). The mock had to use `accept_hdr_async` with a callback echoing the subprotocol. **Implication:** the real worker containers (nanocode/codex/pebble) MUST echo `ironclaw-agent-v1` in their WS upgrade response, or every EWE connection fails. Worth verifying in the worker repos (`lunarcode4lunarwing/`, `codex4lunarwing/`, `pebble4lunarwing/`) — if any doesn't echo it, that worker is silently broken against the current orchestrator.
 
 ---
 
