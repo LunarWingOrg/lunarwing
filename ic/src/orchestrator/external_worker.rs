@@ -15,7 +15,7 @@ use tokio::sync::{Mutex, RwLock, broadcast, oneshot};
 use uuid::Uuid;
 
 use crate::channels::web::types::SseEvent;
-use crate::config::ExternalWorkerConfig;
+use crate::config::{ExternalWorkerConfig, LoadBalanceStrategy};
 use crate::context::{ContextManager, JobState};
 use crate::db::Database;
 use crate::error::OrchestratorError;
@@ -255,27 +255,80 @@ impl ExternalWorkerManager {
             .await
             .insert(job_id, Arc::clone(&handle));
 
+        let mut maybe_cancel_rx = Some(cancel_rx);
+
         if wait {
-            let result = run_external_task(
-                job_id,
-                &url,
-                auth_token.as_deref(),
-                &task_owned,
-                timeout,
-                &worker_name_owned,
-                event_tx.as_ref(),
-                context_manager.as_ref(),
-                store.as_ref(),
-                cancel_rx,
-                context,
-                &pool,
-                &pool_key,
-            )
-            .await;
+            let lb = self.load_balancers.get(worker_name);
+            let max_attempts = if lb.is_some_and(|l| l.endpoint_count() > 1)
+                && matches!(config.load_balance, LoadBalanceStrategy::RoundRobin)
+            {
+                lb.unwrap().endpoint_count()
+            } else {
+                1
+            };
+
+            for attempt in 0..max_attempts {
+                let endpoint = lb
+                    .map(|lb| lb.next_endpoint().clone())
+                    .unwrap_or_else(|| WorkerEndpoint {
+                        url: config.url.clone(),
+                        auth_token: config.auth_token.clone(),
+                        weight: None,
+                    });
+                let attempt_url = endpoint.url.clone();
+                let attempt_pool_key = format!("{worker_name_owned}:{attempt_url}");
+
+                let attempt_cancel_rx = maybe_cancel_rx.take().unwrap_or_else(|| {
+                    let (_, rx) = oneshot::channel();
+                    rx
+                });
+
+                let result = run_external_task(
+                    job_id,
+                    &attempt_url,
+                    endpoint.auth_token.as_deref(),
+                    &task_owned,
+                    timeout,
+                    &worker_name_owned,
+                    event_tx.as_ref(),
+                    context_manager.as_ref(),
+                    store.as_ref(),
+                    attempt_cancel_rx,
+                    context.clone(),
+                    &pool,
+                    &attempt_pool_key,
+                )
+                .await;
+
+                let is_connection_failure = matches!(
+                    &result,
+                    Err(OrchestratorError::ExternalWorkerConnectionFailed { .. })
+                );
+
+                if is_connection_failure && attempt + 1 < max_attempts {
+                    if let Err(ref e) = result {
+                        tracing::warn!(
+                            "External worker '{}' endpoint {} unreachable ({e}), retrying {}/{}",
+                            worker_name_owned,
+                            attempt_url,
+                            attempt + 2,
+                            max_attempts
+                        );
+                    }
+                    continue;
+                }
+
+                active_handles.write().await.remove(&job_id);
+                return result.map(Some);
+            }
 
             active_handles.write().await.remove(&job_id);
-            result.map(Some)
+            unreachable!("loop always returns when max_attempts > 0");
         } else {
+            let spawn_cancel_rx = maybe_cancel_rx.take().unwrap_or_else(|| {
+                let (_, rx) = oneshot::channel();
+                rx
+            });
             tokio::spawn(async move {
                 let result = run_external_task(
                     job_id,
@@ -287,7 +340,7 @@ impl ExternalWorkerManager {
                     event_tx.as_ref(),
                     context_manager.as_ref(),
                     store.as_ref(),
-                    cancel_rx,
+                    spawn_cancel_rx,
                     context,
                     &pool,
                     &pool_key,
