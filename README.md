@@ -67,7 +67,6 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (seperate repo)
 
 ### Worker Containers
-* **Codex Worker** -- Persistent OpenAI Codex worker container with optional ACP bridge support and persistent mounted storage (`codex4lunarwing/`)
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
 * **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
@@ -209,7 +208,7 @@ pytest scenarios/
 
 ### Worker Test Harness
 
-Matrix test suite for all 4 worker types (Codex, Nanocode, Built-in, Sandbox) running in Docker Compose isolation. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
+Matrix test suite for all 4 worker types, including external workers. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
 
 ```bash
 cd tests
