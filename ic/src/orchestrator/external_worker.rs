@@ -264,20 +264,22 @@ impl ExternalWorkerManager {
 
         if wait {
             let lb = self.load_balancers.get(worker_name);
-            let max_attempts = if lb.is_some_and(|l| l.endpoint_count() > 1)
-                && matches!(config.load_balance, LoadBalanceStrategy::RoundRobin)
-            {
+            let max_attempts = if lb.is_some_and(|l| l.endpoint_count() > 1) {
                 lb.unwrap().endpoint_count()
             } else {
                 1
             };
 
+            let mut failed_urls: Vec<String> = Vec::new();
+
             for attempt in 0..max_attempts {
-                // Acquire a fresh endpoint lease for this attempt; it
-                // decrements the active count when dropped (at `continue`/return
-                // or end of iteration), so in-flight load stays accurate across
-                // retries.
-                let attempt_lease = lb.map(|lb| lb.acquire());
+                let attempt_lease = lb.map(|lb| {
+                    if failed_urls.is_empty() {
+                        lb.acquire()
+                    } else {
+                        lb.acquire_excluding(&failed_urls)
+                    }
+                });
                 let attempt_url = attempt_lease
                     .as_ref()
                     .map(|l| l.url.clone())
@@ -316,6 +318,7 @@ impl ExternalWorkerManager {
                 );
 
                 if is_connection_failure && attempt + 1 < max_attempts {
+                    failed_urls.push(attempt_url.clone());
                     if let Err(ref e) = result {
                         tracing::warn!(
                             "External worker '{}' endpoint {} unreachable ({e}), retrying {}/{}",
@@ -543,6 +546,48 @@ impl LoadBalancer {
                     }
                 }
                 best
+            }
+        };
+        self.inner.active[idx].fetch_add(1, Ordering::Relaxed);
+        EndpointLease {
+            index: idx,
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    /// Select an endpoint, skipping any whose URL is in `excluded_urls`. Used by
+    /// the failover retry loop to avoid re-trying an endpoint that just failed
+    /// (M9 circuit-breaker). If all endpoints are excluded, falls back to the
+    /// normal selection so we never deadlock.
+    pub fn acquire_excluding(&self, excluded_urls: &[String]) -> EndpointLease {
+        let len = self.inner.endpoints.len();
+        let idx = match self.strategy {
+            LoadBalanceStrategy::RoundRobin => {
+                self.current_index.fetch_add(1, Ordering::Relaxed) % len
+            }
+            LoadBalanceStrategy::LeastConnections => {
+                let mut best = 0usize;
+                let mut best_count = usize::MAX;
+                let mut found = false;
+                for (i, a) in self.inner.active.iter().enumerate() {
+                    if excluded_urls
+                        .iter()
+                        .any(|u| u == &self.inner.endpoints[i].url)
+                    {
+                        continue;
+                    }
+                    let c = a.load(Ordering::Relaxed);
+                    if c < best_count {
+                        best_count = c;
+                        best = i;
+                        found = true;
+                    }
+                }
+                if found {
+                    best
+                } else {
+                    self.current_index.fetch_add(1, Ordering::Relaxed) % len
+                }
             }
         };
         self.inner.active[idx].fetch_add(1, Ordering::Relaxed);

@@ -274,7 +274,7 @@ render_template() {
 # ── Root check ────────────────────────────────────────────────────────────────
 
 require_root() {
-  [[ "${EUID}" -eq 0 ]] || die "run with sudo: sudo $0 $*"
+  [[ "${EUID}" -eq 0 ]] || die "must run as root (use sudo)"
 }
 
 # ── Init system detection ────────────────────────────────────────────────────
@@ -1362,7 +1362,8 @@ build_darkirc() {
 
   if [[ -n "$tenant_name" ]]; then
     build_user="$tenant_name"
-    local envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
+    local envf
+    envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
     if [[ -f "$envf" ]]; then
       darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)" || true
     fi
@@ -1698,10 +1699,9 @@ write_tenant_lunarwing_env() {
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
 
-  local state_dir run_dir repo_dir
+  local state_dir run_dir
   state_dir="$(tenant_state_dir "$name")"
   run_dir="$(tenant_run_dir "$name")"
-  repo_dir="$(tenant_repo "$name")"
 
   # Idempotent on re-run (F4-A/F4-B): PRESERVE existing secrets when lunarwing.env
   # already exists. Regenerating SECRETS_MASTER_KEY would permanently orphan the

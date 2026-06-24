@@ -1,0 +1,3 @@
+# Shellcheck configuration for LunarWing scripts.
+# The mt-admin gate is: ic/scripts/check-mt-admin.sh (must pass with 0 issues).
+external-sources=true
