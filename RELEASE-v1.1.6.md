@@ -181,6 +181,7 @@ Following OpenAI's removal of the chat completions API (which the codex worker d
 - **`podman save | load` image distribution is slow.** The `_ensure_tenant_image` prune fix addresses accumulation but not transfer speed. A shared read-only image store remains a future optimization
 - **`/api/logs/download` has no UI button.** The endpoint exists but the gateway UI button has not been added
 - **Multica bridge remains pre-release/experimental.**
+- **DarkIRC PM length limitation.** DarkIRC PMs are capped by DarkFi's P2P event graph metering. Agent responses exceeding ~400 bytes are chunked into separate PRIVMSG events, but DarkFi's metering system silently drops events when multiple are sent in succession, resulting in partial message delivery. A global rate limiter was added to the DarkIRC adapter (`DARKIRC_PRIVMSG_INTERVAL`, default 7s) but does not fully resolve the issue. Long agent responses over DarkIRC may be truncated or incomplete. Workaround: ask the agent for short/concise responses, or use a different channel (web UI, XMPP, Weechat, Gotify) for detailed output.
 
 ---
 

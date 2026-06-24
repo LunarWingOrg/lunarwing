@@ -1352,6 +1352,7 @@ mod tests {
     fn load_balancer_least_connections_picks_least_loaded() {
         // Regression for H3: LeastConnections must select by in-flight count,
         // not silently round-robin.
+        // Noted in audit document for Jun 23 2026
         use crate::config::WorkerEndpoint;
 
         let endpoints = vec![
