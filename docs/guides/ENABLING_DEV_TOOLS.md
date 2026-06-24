@@ -215,6 +215,10 @@ ALLOW_LOCAL_TOOLS=true
 SANDBOX_POLICY=full_access
 SANDBOX_ALLOW_FULL_ACCESS=true
 ```
+```bash
+SANDBOX_ALLOW_FULL_ACCESS=true
+```
+is particularly important
 
 ### Step 3: Set tool permissions (pick one)
 
