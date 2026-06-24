@@ -16,10 +16,12 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Agent SSH/Mosh Harness | v1.1.8 |
 | Re-add the custom Git WASM workspace tool; Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup; TensorZero upgrade + optional tighter integration across deployments + Gateway/ClickHouse/UI healthcheck test expansion | v1.1.8 |
 | Add Opencode external worker similar to nanocode worker | v1.1.8 |
+| In-place Upgrade Harness v2 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.1.8
 | Multica bridge/channel refinements and agent orchestration workflow improvements; Lunar
 tica UI reskin continuation | v1.1.9 |
 | Remove half-baked Codex external worker | v1.1.9 |
-| Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |                                                                                      | Further re-organization of repository documentation as follow up to work done in 1.1.5 | v1.1.9 | 
+| Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |
+| Further re-organization of repository documentation as follow up to work done in 1.1.5 | v1.1.9 |
 | Upgrade old test harness | v.1.1.9 |
 | Remove support for all the other random unsupported LLM providers | v.1.1.9 |
 

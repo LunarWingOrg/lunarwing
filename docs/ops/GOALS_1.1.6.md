@@ -18,7 +18,7 @@
 13. [x] Run all cargo tests
 14. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
 15. [x] Test migration route updates since 1.1.5
-16. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v2
+16. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v2
 17. [x] Run automated testing scripts
 18. [x] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 19. [ ] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
