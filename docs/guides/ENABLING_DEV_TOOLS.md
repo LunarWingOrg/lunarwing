@@ -5,13 +5,38 @@ and other "developer tools" for a LunarWing agent in a multi-tenant deployment.
 
 ## Overview
 
-LunarWing gates agent tool access through **two independent layers**:
+LunarWing gates agent tool access through **three independent layers**:
 
-1. **Sandbox policy** — controls *what the tools can do* (filesystem scope, shell access).
-2. **Tool permissions** — controls *whether the agent asks before using a tool* (per-tool, stored in the database).
+1. **Tool registration** — controls *whether the tools exist at all* (the agent must know about `read_file`, `write_file`, `shell`, etc. before it can use them).
+2. **Sandbox policy** — controls *what the tools can do* (filesystem scope, shell access).
+3. **Tool permissions** — controls *whether the agent asks before using a tool* (per-tool, stored in the database).
 
-Both must be configured for the agent to have unrestricted filesystem and shell
+All three must be configured for the agent to have unrestricted filesystem and shell
 access without approval prompts.
+
+---
+
+## Layer 0: Tool Registration (REQUIRED — without this, the tools don't exist)
+
+The filesystem and shell tools (`read_file`, `write_file`, `list_dir`, `apply_patch`,
+`shell`) are **not registered by default**. They are only loaded when
+`ALLOW_LOCAL_TOOLS=true` is set in the tenant's environment.
+
+Without this env var, the agent literally does not know these tools exist — it will
+report that it has no filesystem access, regardless of sandbox policy or database
+permissions.
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `ALLOW_LOCAL_TOOLS` | `false` | When `true`, registers `ShellTool`, `ReadFileTool`, `WriteFileTool`, `ListDirTool`, `ApplyPatchTool` into the agent's tool set. |
+
+Set in the tenant's `lunarwing.env`:
+
+```bash
+ALLOW_LOCAL_TOOLS=true
+```
+
+Restart the daemon after setting this — the tool registration happens at startup.
 
 ---
 
@@ -103,6 +128,12 @@ ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = no
 "
 ```
 
+also try
+
+```bash
+sudo -u name XDG_RUNTIME_DIR=/run/user/uidno podman exec lunarwing-pg-name psql -U lunarwing -d lunarwing -c "INSERT INTO settings (user_id, key, value) VALUES ('default', 'sandbox.enabled', 'true'), ('default', 'sandbox.policy', '\"workspace_write\"'), ('default', 'sandbox.timeout_secs', '300'), ('default', 'sandbox.image', '\"lunarwing-worker:latest\"') ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value;"
+```
+
 Replace `<tenant>` with the tenant name (e.g., `tiggy`).
 
 #### Verifying the settings
@@ -167,18 +198,25 @@ Tools not listed here fall back to `AskEachTime` if unknown.
 
 To give a tenant full filesystem + shell access with zero approval prompts:
 
-### Step 1: Set sandbox policy
+### Step 1: Register the dev tools (REQUIRED)
 
 ```bash
 # Edit the tenant's lunarwing.env
 sudo nano /home/<tenant>/lunarwing/env/lunarwing.env
 
+# Add this line (without it, the tools don't exist at all):
+ALLOW_LOCAL_TOOLS=true
+```
+
+### Step 2: Set sandbox policy
+
+```bash
 # Add or modify these lines:
 SANDBOX_POLICY=full_access
 SANDBOX_ALLOW_FULL_ACCESS=true
 ```
 
-### Step 2: Set tool permissions (pick one)
+### Step 3: Set tool permissions (pick one)
 
 **Option A (all tools, no prompts):**
 ```bash
@@ -201,7 +239,7 @@ ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = no
 "
 ```
 
-### Step 3: Restart the daemon
+### Step 4: Restart the daemon
 
 ```bash
 sudo bash ic/scripts/lunarwing-mt-admin.sh restart-tenant <tenant>
