@@ -26,7 +26,7 @@ DARKIRC_BIN="${LUNARWING_MT_DARKIRC_BIN:-/usr/local/bin/darkirc}"
 # tenant (or invoking) user, never root, so there are no root-owned artifacts and
 # the user's own rust toolchain is used. Override for a pinned rev or local mirror.
 DARKIRC_REPO="${LUNARWING_MT_DARKIRC_REPO:-https://github.com/darkrenaissance/darkfi}"
-DARKIRC_REV="${LUNARWING_MT_DARKIRC_REV:-master}"
+DARKIRC_REV="${LUNARWING_MT_DARKIRC_REV:-a05956d412a091e8b54c1cd4f4264c33b941203d}"
 TEMPLATES_DIR="${SCRIPT_DIR}/templates"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000/openai/v1}"
 # Fleet-wide default for the daemon's LLM endpoint (LLM_BASE_URL). Empty = fall

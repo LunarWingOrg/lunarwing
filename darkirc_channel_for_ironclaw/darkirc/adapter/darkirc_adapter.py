@@ -45,6 +45,11 @@ MAX_QUEUE = int(os.getenv("ADAPTER_MAX_QUEUE", "500"))
 # Max UTF-8 bytes per IRC message chunk (conservative under 512-byte IRC limit)
 MAX_IRC_MESSAGE_BYTES = int(os.getenv("DARKIRC_MAX_MESSAGE_BYTES", "400"))
 
+# Minimum seconds between PRIVMSG sends (DarkFi metering requires spacing)
+PRIVMSG_MIN_INTERVAL = float(os.getenv("DARKIRC_PRIVMSG_INTERVAL", "7.0"))
+_last_privmsg_time: float = 0.0
+_privmsg_lock = asyncio.Lock()
+
 # Cap on inbound HTTP request bodies (M5: the hand-rolled reader trusts
 # Content-Length via readexactly — without a cap a caller can force unbounded
 # allocation → OOM). 64 KiB is far above any legitimate /send payload.
@@ -131,17 +136,22 @@ class IRCClient:
         await self._send(f"PONG :{token}")
 
     async def privmsg(self, target: str, text: str):
-        # Normalization (CRLF → LF, lone \r → \n) and chunking happen inside _split_message_bytes
+        global _last_privmsg_time
         chunks = _split_message_bytes(text, MAX_IRC_MESSAGE_BYTES)
         successful_chunks = 0
 
         for chunk in chunks:
-            try:
-                await self._send(f"PRIVMSG {target} :{chunk}")
-                successful_chunks += 1
-            except Exception as e:
-                log.error("Failed to send chunk %d to %s: %s", successful_chunks + 1, target, e)
-                # Continue trying to send remaining chunks
+            async with _privmsg_lock:
+                now = asyncio.get_event_loop().time()
+                elapsed = now - _last_privmsg_time
+                if elapsed < PRIVMSG_MIN_INTERVAL:
+                    await asyncio.sleep(PRIVMSG_MIN_INTERVAL - elapsed)
+                try:
+                    await self._send(f"PRIVMSG {target} :{chunk}")
+                    _last_privmsg_time = asyncio.get_event_loop().time()
+                    successful_chunks += 1
+                except Exception as e:
+                    log.error("Failed to send chunk %d to %s: %s", successful_chunks + 1, target, e)
 
         log.info("Sent %d of %d chunk(s) to %s", successful_chunks, len(chunks), target)
 
