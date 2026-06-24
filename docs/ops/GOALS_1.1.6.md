@@ -24,10 +24,11 @@
 19. [x] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
 20. [x] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
 21. [x] full integrated test using new plan
-22. [x] Write up release notes (at root of repo) for v1.1.6 explaining all changes since v1.1.5 as well as accurate known issues list
-23. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (only after #22)
-24. [ ] Create new branch to correspond with release
-25. [ ] Create GH release tag and add release notes to it like other releases already have
+22. [ ] fix problems. more testing
+23. [x] Write up release notes (at root of repo) for v1.1.6 explaining all changes since v1.1.5 as well as accurate known issues list
+24. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (only after #23)
+25. [ ] Create new branch to correspond with release
+26. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
 
