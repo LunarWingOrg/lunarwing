@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock, broadcast, oneshot};
 use uuid::Uuid;
@@ -263,20 +264,22 @@ impl ExternalWorkerManager {
 
         if wait {
             let lb = self.load_balancers.get(worker_name);
-            let max_attempts = if lb.is_some_and(|l| l.endpoint_count() > 1)
-                && matches!(config.load_balance, LoadBalanceStrategy::RoundRobin)
-            {
+            let max_attempts = if lb.is_some_and(|l| l.endpoint_count() > 1) {
                 lb.unwrap().endpoint_count()
             } else {
                 1
             };
 
+            let mut failed_urls: Vec<String> = Vec::new();
+
             for attempt in 0..max_attempts {
-                // Acquire a fresh endpoint lease for this attempt; it
-                // decrements the active count when dropped (at `continue`/return
-                // or end of iteration), so in-flight load stays accurate across
-                // retries.
-                let attempt_lease = lb.map(|lb| lb.acquire());
+                let attempt_lease = lb.map(|lb| {
+                    if failed_urls.is_empty() {
+                        lb.acquire()
+                    } else {
+                        lb.acquire_excluding(&failed_urls)
+                    }
+                });
                 let attempt_url = attempt_lease
                     .as_ref()
                     .map(|l| l.url.clone())
@@ -295,7 +298,7 @@ impl ExternalWorkerManager {
                 let result = run_external_task(
                     job_id,
                     &attempt_url,
-                    attempt_auth_token.as_deref(),
+                    attempt_auth_token.as_ref().map(|s| s.expose_secret()),
                     &task_owned,
                     timeout,
                     &worker_name_owned,
@@ -315,6 +318,7 @@ impl ExternalWorkerManager {
                 );
 
                 if is_connection_failure && attempt + 1 < max_attempts {
+                    failed_urls.push(attempt_url.clone());
                     if let Err(ref e) = result {
                         tracing::warn!(
                             "External worker '{}' endpoint {} unreachable ({e}), retrying {}/{}",
@@ -346,7 +350,7 @@ impl ExternalWorkerManager {
                 let result = run_external_task(
                     job_id,
                     &url,
-                    auth_token.as_deref(),
+                    auth_token.as_ref().map(|s| s.expose_secret()),
                     &task_owned,
                     timeout,
                     &worker_name_owned,
@@ -396,6 +400,32 @@ impl ExternalWorkerManager {
             }
         }
         false
+    }
+
+    /// Spawn a background task that periodically evicts stale idle connections.
+    /// Cancelled when the shutdown receiver fires.
+    pub fn spawn_eviction_task(&self, mut shutdown_rx: broadcast::Receiver<()>) {
+        let pool = Arc::clone(&self.pool);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            interval.tick().await; // skip immediate first tick
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        pool.evict_stale().await;
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::debug!("pool eviction task shutting down");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    /// Gracefully drain the pool (send WS Close frames, bounded per-connection).
+    pub async fn drain_pool(&self) {
+        self.pool.drain().await;
     }
 }
 
@@ -525,6 +555,48 @@ impl LoadBalancer {
         }
     }
 
+    /// Select an endpoint, skipping any whose URL is in `excluded_urls`. Used by
+    /// the failover retry loop to avoid re-trying an endpoint that just failed
+    /// (M9 circuit-breaker). If all endpoints are excluded, falls back to the
+    /// normal selection so we never deadlock.
+    pub fn acquire_excluding(&self, excluded_urls: &[String]) -> EndpointLease {
+        let len = self.inner.endpoints.len();
+        let idx = match self.strategy {
+            LoadBalanceStrategy::RoundRobin => {
+                self.current_index.fetch_add(1, Ordering::Relaxed) % len
+            }
+            LoadBalanceStrategy::LeastConnections => {
+                let mut best = 0usize;
+                let mut best_count = usize::MAX;
+                let mut found = false;
+                for (i, a) in self.inner.active.iter().enumerate() {
+                    if excluded_urls
+                        .iter()
+                        .any(|u| u == &self.inner.endpoints[i].url)
+                    {
+                        continue;
+                    }
+                    let c = a.load(Ordering::Relaxed);
+                    if c < best_count {
+                        best_count = c;
+                        best = i;
+                        found = true;
+                    }
+                }
+                if found {
+                    best
+                } else {
+                    self.current_index.fetch_add(1, Ordering::Relaxed) % len
+                }
+            }
+        };
+        self.inner.active[idx].fetch_add(1, Ordering::Relaxed);
+        EndpointLease {
+            index: idx,
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     /// In-flight task count for the endpoint currently at `index` (debug/observe).
     pub fn active_for(&self, index: usize) -> usize {
         self.inner
@@ -598,6 +670,20 @@ impl WorkerConnectionPool {
 
     pub async fn drain(&self) {
         let mut conns = self.connections.lock().await;
+        for pool in conns.values_mut() {
+            for conn in pool.drain(..) {
+                let _ = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    async {
+                        let (mut sink, _read) = conn.stream.split();
+                        let _ = sink
+                            .send(tokio_tungstenite::tungstenite::Message::Close(None))
+                            .await;
+                    },
+                )
+                .await;
+            }
+        }
         conns.clear();
     }
 
@@ -1084,7 +1170,7 @@ mod tests {
             ExternalWorkerConfig {
                 name: "nanocode".to_string(),
                 url: "ws://localhost:9090/ws/agent".to_string(),
-                auth_token: Some("tok".to_string()),
+                auth_token: Some(secrecy::SecretString::from("tok")),
                 timeout_ms: 300_000,
                 endpoints: vec![],
                 load_balance: LoadBalanceStrategy::default(),

@@ -82,11 +82,32 @@ while [ $# -gt 0 ]; do
 done
 
 # ── config setup ──────────────────────────────────────────────────────────────
-# Symlink project-level nanocode.json into the workspace if a config is mounted
+# Link the baked nanocode.json into the workspace, OR — when NANOCODE_MODEL or
+# NANOCODE_BASE_URL is set (injected by lunarwing-mt-admin.sh from lunarwing.env)
+# — materialize an overridden copy so the worker uses the tenant-configured LLM
+# model / TensorZero baseURL instead of the image default.
 if [ -f /app/config/nanocode.json ]; then
   mkdir -p "$WORKSPACE_ROOT/.nanocode"
-  ln -sfn /app/config/nanocode.json "$WORKSPACE_ROOT/.nanocode/nanocode.json"
-  log "Config linked: /app/config/nanocode.json → $WORKSPACE_ROOT/.nanocode/nanocode.json"
+  if [ -n "${NANOCODE_MODEL:-}" ] || [ -n "${NANOCODE_BASE_URL:-}" ]; then
+    python3 - "$WORKSPACE_ROOT/.nanocode/nanocode.json" <<'PY'
+import json, os, sys
+with open("/app/config/nanocode.json") as f:
+    cfg = json.load(f)
+model = os.environ.get("NANOCODE_MODEL", "").strip()
+base = os.environ.get("NANOCODE_BASE_URL", "").strip()
+if model:
+    cfg["model"] = model
+if base:
+    # baseURL lives under the hardcoded "nanogpt" provider id (see CLAUDE.md).
+    cfg.setdefault("provider", {}).setdefault("nanogpt", {}).setdefault("options", {})["baseURL"] = base
+with open(sys.argv[1], "w") as f:
+    json.dump(cfg, f, indent=2)
+PY
+    log "Config generated with overrides (model=${NANOCODE_MODEL:-<default>}, baseURL=${NANOCODE_BASE_URL:-<default>})"
+  else
+    ln -sfn /app/config/nanocode.json "$WORKSPACE_ROOT/.nanocode/nanocode.json"
+    log "Config linked: /app/config/nanocode.json → $WORKSPACE_ROOT/.nanocode/nanocode.json"
+  fi
 fi
 
 # ── always start the health server in the background ──────────────────────────

@@ -15,6 +15,7 @@ session management happens in the WASM channel / IronClaw host.
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -43,6 +44,11 @@ MAX_QUEUE = int(os.getenv("ADAPTER_MAX_QUEUE", "500"))
 
 # Max UTF-8 bytes per IRC message chunk (conservative under 512-byte IRC limit)
 MAX_IRC_MESSAGE_BYTES = int(os.getenv("DARKIRC_MAX_MESSAGE_BYTES", "400"))
+
+# Cap on inbound HTTP request bodies (M5: the hand-rolled reader trusts
+# Content-Length via readexactly — without a cap a caller can force unbounded
+# allocation → OOM). 64 KiB is far above any legitimate /send payload.
+MAX_BODY_BYTES = int(os.getenv("ADAPTER_MAX_BODY_BYTES", str(64 * 1024)))
 
 # Shared secret for basic auth between WASM channel and adapter
 # The WASM channel sends this as Bearer token
@@ -243,6 +249,11 @@ def _split_message_bytes(text: str, max_bytes: int) -> list:
 
 message_queue: deque = deque(maxlen=MAX_QUEUE)
 
+# Messages delivered via /poll but not yet acked (M4: at-least-once delivery).
+# Re-served on the next /poll until /ack clears them, so a host crash between
+# poll and processing doesn't lose DMs.
+pending_ack: deque = deque(maxlen=MAX_QUEUE)
+
 
 # ---------------------------------------------------------------------------
 # IRC loop
@@ -352,16 +363,26 @@ async def handle_http(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
                 key, val = decoded.split(":", 1)
                 headers[key.strip().lower()] = val.strip()
 
-        # Auth check
+        # Auth check (M6: constant-time comparison to avoid a timing oracle on
+        # the bearer secret). Empty ADAPTER_SECRET => no auth (dev); mt-admin
+        # always sets a secret, so multi-tenant deployments are always authed.
         if ADAPTER_SECRET:
             auth = headers.get("authorization", "")
-            if auth != f"Bearer {ADAPTER_SECRET}":
+            if not hmac.compare_digest(auth, f"Bearer {ADAPTER_SECRET}"):
                 await send_response(writer, 401, {"error": "unauthorized"})
                 return
 
-        # Read body if present
+        # Read body if present (M5: cap Content-Length and tolerate a malformed
+        # value instead of trusting it blindly into readexactly → OOM).
         body = b""
-        content_length = int(headers.get("content-length", "0"))
+        try:
+            content_length = int(headers.get("content-length", "0"))
+        except ValueError:
+            await send_response(writer, 400, {"error": "invalid content-length"})
+            return
+        if content_length < 0 or content_length > MAX_BODY_BYTES:
+            await send_response(writer, 413, {"error": "payload too large"})
+            return
         if content_length > 0:
             body = await asyncio.wait_for(
                 reader.readexactly(content_length), timeout=10
@@ -377,11 +398,18 @@ async def handle_http(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             })
 
         elif method == "GET" and path == "/poll":
-            # Drain all queued messages
-            messages = []
-            while message_queue:
-                messages.append(message_queue.popleft())
+            # Serve unacked (pending) + fresh; hold the batch until /ack so a
+            # host crash between poll and processing re-delivers rather than
+            # loses (at-least-once).
+            messages = list(pending_ack) + list(message_queue)
+            pending_ack.clear()
+            message_queue.clear()
+            pending_ack.extend(messages)
             await send_response(writer, 200, {"messages": messages})
+
+        elif method == "POST" and path == "/ack":
+            pending_ack.clear()
+            await send_response(writer, 200, {"status": "acked"})
 
         elif method == "POST" and path == "/send":
             if not body:
@@ -446,6 +474,12 @@ async def main():
     log.info("darkirc-http-adapter starting")
     log.info("  IRC: %s:%d nick=%s", IRC_HOST, IRC_PORT, IRC_NICK)
     log.info("  HTTP: %s:%d", HTTP_HOST, HTTP_PORT)
+    if not ADAPTER_SECRET:
+        log.warning(
+            "ADAPTER_SECRET not set — running WITHOUT auth. This is dev-only; "
+            "multi-tenant deployments must set it (lunarwing-mt-admin.sh does so "
+            "automatically). Without it any local process can read/send DMs."
+        )
 
     # Start HTTP server
     server = await asyncio.start_server(

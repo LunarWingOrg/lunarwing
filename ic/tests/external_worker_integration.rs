@@ -23,6 +23,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
+use secrecy::SecretString;
 use tokio::net::TcpListener;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
@@ -71,11 +72,17 @@ fn envelope(msg_type: &str, payload: serde_json::Value) -> String {
     .to_string()
 }
 
-/// Spawn a mock worker bound to an ephemeral loopback port, running on the
-/// current tokio runtime. Returns its `ws://` URL and a shared counter of
-/// accepted TCP connections (used to assert pool reuse: a reused connection
-/// does not trigger a new accept).
+/// Spawn a mock worker with no auth check. See [`spawn_mock_worker_with_auth`].
 async fn spawn_mock_worker_async(behavior: MockBehavior) -> (String, Arc<AtomicUsize>) {
+    spawn_mock_worker_with_auth(behavior, None).await
+}
+
+/// Spawn a mock worker bound to an ephemeral loopback port that optionally
+/// requires a Bearer token matching `expected_token` on the WS upgrade.
+async fn spawn_mock_worker_with_auth(
+    behavior: MockBehavior,
+    expected_token: Option<String>,
+) -> (String, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind mock listener");
@@ -83,7 +90,12 @@ async fn spawn_mock_worker_async(behavior: MockBehavior) -> (String, Arc<AtomicU
     let url = format!("ws://{addr}");
     let conn_count = Arc::new(AtomicUsize::new(0));
 
-    tokio::spawn(run_accept_loop(listener, behavior, conn_count.clone()));
+    tokio::spawn(run_accept_loop(
+        listener,
+        behavior,
+        conn_count.clone(),
+        expected_token,
+    ));
 
     (url, conn_count)
 }
@@ -93,6 +105,7 @@ async fn run_accept_loop(
     listener: TcpListener,
     behavior: MockBehavior,
     conn_count: Arc<AtomicUsize>,
+    expected_token: Option<String>,
 ) {
     loop {
         let (stream, _peer) = match listener.accept().await {
@@ -101,33 +114,58 @@ async fn run_accept_loop(
         };
         conn_count.fetch_add(1, Ordering::SeqCst);
         let b = behavior.clone();
+        let tok = expected_token.clone();
         tokio::spawn(async move {
-            let _ = handle_connection(stream, b).await;
+            let _ = handle_connection(stream, b, tok).await;
         });
     }
 }
 
-/// Server-handshake callback that echoes the `ironclaw-agent-v1` subprotocol the
-/// orchestrator requests (`connect_and_handshake` always sends it). The client's
-/// tungstenite rejects the handshake if the server sends no subprotocol, so this
-/// mirrors what real worker containers must do.
-#[allow(clippy::result_large_err)] // Err type is fixed by tungstenite's Callback trait
-fn echo_subprotocol(req: &Request, mut resp: Response) -> Result<Response, ErrorResponse> {
-    if req.headers().contains_key("sec-websocket-protocol") {
-        resp.headers_mut().insert(
-            "sec-websocket-protocol",
-            "ironclaw-agent-v1".parse().expect("valid header value"),
-        );
-    }
-    Ok(resp)
+/// 401 response used to reject an unauthenticated WS upgrade.
+fn unauthorized_response() -> ErrorResponse {
+    tokio_tungstenite::tungstenite::http::Response::builder()
+        .status(tokio_tungstenite::tungstenite::http::StatusCode::UNAUTHORIZED)
+        .body(Some("unauthorized".to_string()))
+        .expect("valid error response")
 }
 
 /// Per-connection protocol handler. Implements the server side of
-/// `ironclaw-agent-v1` for the scripted behavior.
-async fn handle_connection(stream: tokio::net::TcpStream, behavior: MockBehavior) {
+/// `ironclaw-agent-v1` for the scripted behavior. When `expected_token` is set,
+/// the WS upgrade is rejected unless the client sends a matching
+/// `Authorization: Bearer <token>` header.
+#[allow(clippy::result_large_err)] // Err type is fixed by tungstenite's Callback trait
+async fn handle_connection(
+    stream: tokio::net::TcpStream,
+    behavior: MockBehavior,
+    expected_token: Option<String>,
+) {
+    let handshake = move |req: &Request, mut resp: Response| -> Result<Response, ErrorResponse> {
+        // Validate Bearer auth when a token is configured.
+        if let Some(expected) = expected_token.as_deref() {
+            let bearer = req
+                .headers()
+                .get("authorization")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.strip_prefix("Bearer "))
+                .unwrap_or("");
+            if bearer != expected {
+                return Err(unauthorized_response());
+            }
+        }
+        // Echo the negotiated subprotocol (the orchestrator rejects "no
+        // subprotocol"); mirrors what real worker containers must do.
+        if req.headers().contains_key("sec-websocket-protocol") {
+            resp.headers_mut().insert(
+                "sec-websocket-protocol",
+                "ironclaw-agent-v1".parse().expect("valid header value"),
+            );
+        }
+        Ok(resp)
+    };
+
     // For CloseBeforeReady we want the upgrade to complete (so the client treats
     // it as a protocol problem, not a connection problem) then close.
-    let mut ws = match tokio_tungstenite::accept_hdr_async(stream, echo_subprotocol).await {
+    let mut ws = match tokio_tungstenite::accept_hdr_async(stream, handshake).await {
         Ok(ws) => ws,
         Err(_) => return,
     };
@@ -220,6 +258,23 @@ fn config_for(url: &str) -> ExternalWorkerConfig {
         endpoints: vec![WorkerEndpoint {
             url: url.to_string(),
             auth_token: None,
+            weight: None,
+        }],
+        load_balance: LoadBalanceStrategy::RoundRobin,
+    }
+}
+
+/// Like [`config_for`] but sets a Bearer auth token on both the worker config
+/// and its endpoint, exercising the `SecretString` -> `expose_secret()` path.
+fn config_for_with_auth(url: &str, token: &str) -> ExternalWorkerConfig {
+    ExternalWorkerConfig {
+        name: "mock".to_string(),
+        url: url.to_string(),
+        auth_token: Some(SecretString::from(token)),
+        timeout_ms: 30_000,
+        endpoints: vec![WorkerEndpoint {
+            url: url.to_string(),
+            auth_token: Some(SecretString::from(token)),
             weight: None,
         }],
         load_balance: LoadBalanceStrategy::RoundRobin,
@@ -493,5 +548,79 @@ async fn connection_pool_reuse_across_sequential_tasks() {
         1,
         "expected pool reuse (1 connection), got {}",
         conn_count.load(Ordering::SeqCst)
+    );
+}
+
+#[tokio::test]
+async fn auth_correct_token_succeeds() {
+    // End-to-end proof that the SecretString auth_token flows correctly:
+    // config -> SecretString -> expose_secret() -> Bearer header -> worker
+    // validates and accepts the upgrade -> task completes.
+    let (url, _count) = spawn_mock_worker_with_auth(
+        MockBehavior::Success {
+            progress: vec![],
+            output: "ok".to_string(),
+        },
+        Some("good-token".to_string()),
+    )
+    .await;
+    let mgr = ExternalWorkerManager::new(vec![config_for_with_auth(&url, "good-token")]);
+
+    let res = timeout(
+        TEST_BOUND,
+        mgr.execute_task(
+            Uuid::new_v4(),
+            "mock",
+            "task",
+            Some(5_000),
+            true,
+            TaskContext::default(),
+        ),
+    )
+    .await
+    .expect("test timed out")
+    .expect("execute_task errored")
+    .expect("expected result");
+
+    assert_eq!(res.status, ExternalTaskStatus::Success);
+}
+
+#[tokio::test]
+async fn auth_wrong_token_rejected() {
+    // A wrong token must be rejected at the WS upgrade: the worker demands
+    // "good-token" but the config carries "bad-token" -> handshake rejected ->
+    // ExternalWorkerConnectionFailed. This also rules out the mock accepting
+    // any token (i.e. it really validates the secret).
+    let (url, _count) = spawn_mock_worker_with_auth(
+        MockBehavior::Success {
+            progress: vec![],
+            output: "ok".to_string(),
+        },
+        Some("good-token".to_string()),
+    )
+    .await;
+    let mgr = ExternalWorkerManager::new(vec![config_for_with_auth(&url, "bad-token")]);
+
+    let err = timeout(
+        TEST_BOUND,
+        mgr.execute_task(
+            Uuid::new_v4(),
+            "mock",
+            "task",
+            Some(5_000),
+            true,
+            TaskContext::default(),
+        ),
+    )
+    .await
+    .expect("test timed out")
+    .expect_err("expected connection failure (rejected auth)");
+
+    assert!(
+        matches!(
+            err,
+            OrchestratorError::ExternalWorkerConnectionFailed { .. }
+        ),
+        "got {err:?}"
     );
 }

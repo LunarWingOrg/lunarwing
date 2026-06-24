@@ -32,19 +32,19 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 |---|------|------|----------|--------|
 | M1 | `chmod 777` on worker workspace dirs breaks tenant isolation | MT admin | `lunarwing-mt-admin.sh:2230,2343,2789` | TODO |
 | M2 | `tokens` command prints bearer tokens in cleartext (no `--reveal` gate) | MT admin | `lunarwing-mt-admin.sh:4362` (`show_tokens`) | TODO |
-| M3 | DarkIRC adapter auth disabled by default; silent cross-tenant fallback to `:6680` | DarkIRC | `darkirc_adapter.py:356-360`, `lib.rs:92,263,351,428,509` | TODO |
-| M4 | `/poll` is destructive — message loss on crash (no ACK/redelivery) | DarkIRC | `darkirc_adapter.py:379-384` | TODO |
-| M5 | No body-size limit on hand-rolled adapter HTTP server (OOM DoS) | DarkIRC | `darkirc_adapter.py:364` | TODO |
-| M6 | Non-constant-time bearer comparison in adapter | DarkIRC | `darkirc_adapter.py:358` | TODO |
-| M7 | `auth_token` stored as plain `Option<String>`, not `SecretString` | EWE | `config/sandbox.rs:191,209` | TODO |
-| M8 | No graceful `pool.drain()` on shutdown; no background `evict_stale()` | EWE | `main.rs:1217`, `external_worker.rs:215` | TODO |
-| M9 | Failover is connection-only — no retry on `ProtocolError`/timeout | EWE | `external_worker.rs:260-323` | TODO |
+| M3 | DarkIRC adapter auth disabled by default; silent cross-tenant fallback to `:6680` | DarkIRC | `darkirc_adapter.py`, `lib.rs` | DONE |
+| M4 | `/poll` is destructive — message loss on crash (no ACK/redelivery) | DarkIRC | `darkirc_adapter.py` | DONE |
+| M5 | No body-size limit on hand-rolled adapter HTTP server (OOM DoS) | DarkIRC | `darkirc_adapter.py` | DONE |
+| M6 | Non-constant-time bearer comparison in adapter | DarkIRC | `darkirc_adapter.py` | DONE |
+| M7 | `auth_token` stored as plain `Option<String>`, not `SecretString` | EWE | `config/sandbox.rs:191,209` | DONE |
+| M8 | No graceful `pool.drain()` on shutdown; no background `evict_stale()` | EWE | `main.rs`, `external_worker.rs` | DONE |
+| M9 | Failover is connection-only — no retry on `ProtocolError`/timeout | EWE | `external_worker.rs` | DONE |
 
 ### Low priority / quality
 
 | # | Item | Area | Location | Status |
 |---|------|------|----------|--------|
-| L1 | Hardcoded health port `8443` (acknowledged unfinished in commit `175d2686`) | MT admin | `lunarwing-mt-admin.sh:2180,2243,2301,2356,2780` | TODO |
+| L1 | Hardcoded health port `8443` (acknowledged unfinished in commit `175d2686`) | MT admin | resolved by v8 ports schema (dedicated `nanocode_health`/`pebble_health`) | DONE |
 | L2 | Hardcoded `DEFAULT_TENSORZERO_URL=http://192.168.1.157:3000/...` | MT admin | `lunarwing-mt-admin.sh:31` | TODO |
 | L3 | ~~Duplicated byte-identical DarkIRC source trees~~ **Non-issue** — `ic/channels-src/darkirc` is a symlink to `darkirc_channel_for_ironclaw/darkirc` (same inode); single source of truth | DarkIRC | WONTFIX |
 | L4 | Stale DarkIRC docs (`aiohttp` claim, `darkirc_keypair.yaml`, Unix-socket line) | DarkIRC | `DARKIRC_MT_ADAPTER.md:95`, `darkirc.env:17-18` | TODO |
@@ -60,10 +60,10 @@ Status legend: `TODO` · `IN PROGRESS` · `DONE` · `WONTFIX` · `DEFERRED`
 | T1 | Add mock-WS integration test for external worker lifecycle (success/timeout/cancel/failover/pool-reuse) | EWE | DONE |
 | T2 | Add regression test for H1 (DarkIRC `on_status` multibyte truncation) | DarkIRC | DONE |
 | T3 | Add real-pool eviction test (current tests only touch empty pool) | EWE | TODO |
-| T4 | Add DarkIRC adapter integration test (mock IRC server: registration/PING/queue/poll/send/503/auth/oversize) | DarkIRC | TODO |
+| T4 | Add DarkIRC adapter integration test (mock IRC server: registration/PING/queue/poll/send/503/auth/oversize) | DarkIRC | DONE |
 | T5 | Add regression test for H2 (enable-darkirc flag flip on existing tenant) | MT admin | DONE |
 | T6 | Fill/remove empty bug stubs (`BUG-external-worker-loadbalancer-failover-problem.md`, `BUG-external-worker-test.md`) | EWE | TODO |
-| T7 | Add `shellcheck` gate for `lunarwing-mt-admin.sh` | MT admin | TODO |
+| T7 | Add `shellcheck` gate for `lunarwing-mt-admin.sh` | MT admin | DONE |
 
 ---
 
@@ -91,11 +91,30 @@ Makes DarkIRC opt-in per tenant (previously always provisioned). Default disable
 `ports_allocate()` at `lunarwing-mt-admin.sh:857-863`: the resume path returns early **without writing `enable_darkirc`** if the tenant already has a `base_port`. But `add_tenant()` at `:4051-4054` still writes adapter env/TOML from the in-memory flag. Result: a half-configured tenant — adapter env exists, but `lunarwing.env` lacks the URL/SECRET, no units render, no services start. No documented way to enable darkirc on an existing tenant except hand-editing `ports.json`.
 
 ### Other findings
-- **L1 / Hardcoded `8443` health port** — comment at `:2232-2236` argues it's safe (probe runs inside container netns, port not published). Commit `175d2686` flags it as unfinished. Breaks if netns is shared.
+- **L1 / Hardcoded `8443` health port** — ~~comment argued it's safe (probe runs inside container netns, port not published)~~ **RESOLVED by v8** (see below): each tenant now has dedicated `nanocode_health`/`pebble_health` ports, published host→container:8443, so the host self-heal can probe directly.
 - **M1 / `chmod 777` workspace dirs** — any local host user can read/tamper with any tenant's workspace (bind-mounted into containers). Should be `0750`/`0770`.
 - **M2 / `tokens` cleartext** — `show_tokens()` prints full gateway bearer tokens to stdout. Add `--reveal` gate or redacted-by-default.
 - **L2 / Hardcoded TensorZero IP** — `DEFAULT_TENSORZERO_URL` pins `192.168.1.157`; override via `LUNARWING_MT_TENSORZERO_URL`.
 - **Idempotency** is otherwise strong: secrets preserved on re-run, port blocks reused, `restore-tenant` requires `--yes`.
+
+### v8 ports schema — dedicated per-tenant worker health ports (DONE, 2026-06-23)
+The v7 base block was full (10/10) and the worker `HEALTH_PORT` was a hardcoded `8443` across ~10 sites — never registry-allocated, never published, so the host self-heal could only read container-runtime health state (no direct `curl`). **v8** names two existing extended slots as dedicated health ports (no renumber, no `block_size` change):
+- `extended_ports.reserved_3 → nanocode_health` (= `extended_base + 3`)
+- `extended_ports.reserved_4 → pebble_health` (= `extended_base + 4`)
+
+For tiggy (`extended_base=20010`): `nanocode_health=20013`, `pebble_health=20014`. **Publish-alias design**: the container still listens on `8443` internally (matches the image's baked HEALTHCHECK → **no image rebuild**); the per-tenant host port is published → container `8443` (`PublishPort=127.0.0.1:<health>:8443` / `-p`), giving the host a direct `/health` probe path.
+
+Delivered:
+- `ic/scripts/migrate-ports-v8.sh` — standalone, idempotent (version-gate, backup, collision check, rollback hint).
+- `ports_migrate_v8()` in mt-admin + wired into `ports_migrate()` (any mt-admin run auto-migrates v7→v8).
+- `ports_allocate` emits `nanocode_health`/`pebble_health` for new tenants (`reserved_*` reduce now starts at 5).
+- All three init paths publish the dedicated port → container 8443: systemd Quadlet (`render_worker_quadlet` → `PublishPort`), OpenRC/fallback (`start_tenant_nanocode`/`pebble` `_ctr run` → `-p`), OpenRC unit's in-container `podman exec` check stays on 8443.
+
+Verified on tiggy: registry→v8, quadlet gained `PublishPort=127.0.0.1:20013:8443`, and `curl http://127.0.0.1:20013/health` from the **host** returns `{"status":"ok",...}` (previously impossible). Pebble is symmetric (`pebble_health`, identical code).
+
+### Also done this session (MT-admin / worker ops, not in the original audit list)
+- **`_ensure_tenant_image` staleness + accumulation fix**: was skipping re-transfer whenever the image *name* existed (stale same-named copy held back updates) and never pruned the old image. Now compares admin-store vs tenant-store image **IDs** (re-loads only when stale) and runs `image prune -f` after load so updates don't accumulate GBs of layers. Root cause of the disk-thrash during tiggy's nanocode image refresh.
+- **Nanocode per-tenant model/baseURL overrides**: `configure-nanocode <name> --model/--base-url` (+ `add-tenant` flags) write `NANOCODE_MODEL`/`NANOCODE_BASE_URL` to `lunarwing.env`; both init paths inject them; the worker `entrypoint.sh` materializes an overridden `nanocode.json` (python JSON edit) when set. Verified live on tiggy.
 
 ---
 
@@ -120,10 +139,10 @@ format!("{}...", &message[..MAX_IRC_MESSAGE_BYTES - 3])
 Byte-index slice at 397 panics if that byte isn't a char boundary — any emoji/CJK/accented status >400 bytes traps the WASM instance. The send path uses safe `split_message`; this one path diverges. **Fix:** use `split_message(...).next()` or `floor_char_boundary`.
 
 ### Other findings
-- **M3 / Auth off by default** — `ADAPTER_SECRET=""` skips the bearer check; shipped `.service` has the line commented out. Five fallbacks to `http://127.0.0.1:6680` in `lib.rs` mean a failed env injection could route a tenant to another tenant's adapter.
-- **M4 / Destructive `/poll`** — `popleft` before HTTP response delivered → message loss on crash. No ACK, no persistence.
-- **M5 / No body-size limit** — `reader.readexactly(content_length)` trusts the header → OOM DoS.
-- **M6 / Non-constant-time comparison** — use `hmac.compare_digest`.
+- **M3 / Auth off by default** — ~~`ADAPTER_SECRET=""` skips the bearer check~~ **RESOLVED**: `default_adapter_url()` → empty (no `:6680` fallback); `on_start` skips empty; adapter warns on missing secret. See Group A below.
+- **M4 / Destructive `/poll`** — ~~`popleft` before HTTP response delivered~~ **RESOLVED**: `/poll` holds batch in `pending_ack`; new `/ack` endpoint clears it; WASM acks after emit → at-least-once delivery. See Group A below.
+- **M5 / No body-size limit** — ~~`reader.readexactly(content_length)` trusts the header~~ **RESOLVED**: `MAX_BODY_BYTES=64KiB` cap; oversize → 413, malformed CL → 400. See Group A below.
+- **M6 / Non-constant-time comparison** — ~~use `hmac.compare_digest`~~ **RESOLVED**: replaced `!=` with `hmac.compare_digest`. See Group A below.
 - **L3 / Duplicated source trees** — `darkirc_channel_for_ironclaw/darkirc/` and `ic/channels-src/darkirc/` are byte-identical. Host builds from `ic/channels-src/`; the root copy risks staleness.
 - **L4 / Stale docs** — `aiohttp` dependency claim (adapter is stdlib-only); `darkirc_keypair.yaml` claim (no such file is generated); Unix-socket line in `darkirc.env`.
 - **Minor** — pairing codes logged at Info (`lib.rs:422`); nick-collision loop unbounded (`darkirc_adapter.py:282`); partial-success treated as full success (`lib.rs:546`).
@@ -132,7 +151,14 @@ Byte-index slice at 397 panics if that byte isn't a char boundary — any emoji/
 - Strong Rust unit tests on `split_message` (byte safety, CRLF normalization, unicode scripts).
 - Python tests on `_split_message_bytes` (`test_split.py`).
 - Host regression test `darkirc_adapter_url_injected_from_env` in `setup.rs:644-679`.
-- **Gaps:** no E2E test loads the real WASM; no adapter integration test with a mock IRC server; the QA scenarios in `DARKIRC_MT_ADAPTER.md` are explicitly marked "not yet executed"; H1 (`on_status`) has zero coverage.
+- **T4 — DONE (2026-06-23):** added `adapter/test_adapter_integration.py` — mock IRC server + real adapter subprocess, 8 tests: health, auth (wrong/no token → 401), oversize → 413, malformed CL → 400, poll+ack no-duplicate, poll-without-ack redelivers (at-least-once), /send forwards PRIVMSG. All pass.
+
+### Group A — DarkIRC security cluster (DONE, 2026-06-23)
+All four DarkIRC security/robustness items + the integration test (T4) are resolved:
+- **M3** (`darkirc_adapter.py` + `lib.rs`): `default_adapter_url()` → empty (no `:6680` cross-tenant fallback); `on_start` skips writing an empty URL; 4 runtime `.unwrap_or_else` → `.unwrap_or_default()`; adapter logs a WARNING on missing `ADAPTER_SECRET`. The `:6680` path is eliminated — a misconfigured tenant fail-closes (graceful error) instead of silently routing to the wrong adapter. Verified: 25 Rust tests pass (incl. updated `test_config_defaults` expecting empty default).
+- **M4** (`darkirc_adapter.py` + `lib.rs`): `/poll` now serves `pending_ack` + fresh messages, holds the batch until `/ack` clears it. The WASM `on_poll` POSTs `/ack` after emitting the batch. If the host crashes before acking, the next `/poll` re-serves the same batch (at-least-once). Verified: T4 `test_poll_ack_no_duplicate` + `test_poll_without_ack_redelivers`.
+- **M5** (`darkirc_adapter.py`): `Content-Length` capped at `MAX_BODY_BYTES=64KiB`; oversize → 413, malformed/non-numeric → 400 (previously `int()` would throw uncaught → connection drop). Verified: T4 `test_oversize_body_rejected` + `test_malformed_content_length`.
+- **M6** (`darkirc_adapter.py`): `!=` replaced with `hmac.compare_digest` for the bearer comparison. Verified: T4 `test_auth_rejected_wrong_token`.
 
 ---
 
@@ -148,9 +174,9 @@ EWE is an 11-task plan (see `EXTERNAL-WORKER-PLAN-UPGRADES.md` + `EXTERNAL-WORKE
 `ic/src/orchestrator/external_worker.rs:443-446`: `next_endpoint()` always round-robins (`fetch_add % len`) regardless of strategy. There is no strategy check and no `active_connections` tracking. Selecting `LeastConnections` silently behaves as RoundRobin. The plan's Task 6 acceptance ("picks minimum") was never satisfied. **Fix:** either implement `active_connections` counting, or remove `LeastConnections` from the enum to stop misleading operators.
 
 ### Other findings
-- **M8 / No shutdown drain** — `main.rs:1217` sends a shutdown broadcast but never wires it to `pool.drain()`; WS connections die without a close frame. No background `evict_stale()` task (only opportunistic at `execute_task` start).
-- **M9 / Failover is connection-only** — retries to the next endpoint only on `ExternalWorkerConnectionFailed`, not on `ProtocolError`/timeout. A worker that dies mid-task after handshake isn't retried. (`BUG-external-worker-loadbalancer-failover-problem.md` is an empty stub.)
-- **M7 / `auth_token` plain `Option<String>`** — violates the secrecy rule; no compile-time protection against future leakage.
+- **M8 / No shutdown drain** — ~~`main.rs` sends a shutdown broadcast but never wires it to `pool.drain()`~~ **RESOLVED (M8)**: `drain()` now sends WS Close frames (bounded 2s/conn); `spawn_eviction_task` runs `evict_stale` every 60s (shutdown-cancelled); both wired into `main.rs` shutdown. See Group B below.
+- **M9 / Failover is connection-only** — ~~retries only on `ExternalWorkerConnectionFailed`, RoundRobin-only~~ **RESOLVED (M9)**: RoundRobin-only gate removed (both strategies now failover); `acquire_excluding` circuit-breaker tracks `failed_urls` and skips them on retry. See Group B below.
+- **M7 / `auth_token` plain `Option<String>`** — ~~violates the secrecy rule~~ **RESOLVED (M7)**: wrapped in `secrecy::SecretString` at every layer. See M7 note below.
 - **L5 / Production panics** — `LoadBalancer::new` `assert!` (`:433`) and `lb.unwrap()` (`:265`); currently guarded but brittle.
 - **L6 / No backpressure** — `max_idle_per_endpoint` bounds only idle conns; a burst of `create_job` calls opens unbounded WS connections. No semaphore.
 - **L7 / `ws://` cleartext default** — credentials/prompts traverse in cleartext; no enforcement/warning for remote workers.
@@ -169,6 +195,20 @@ Writing the mock surfaced a hard protocol requirement: `connect_and_handshake` a
 - ✅ **nanocode + codex** (`lunarwing_bridge.ts:167-168`) — validate *and* echo via `server.upgrade(req, { headers: { "sec-websocket-protocol": SUBPROTOCOL } })`. Correct.
 - ❌→✅ **pebble** (`pebble4lunarwing/src/bridge.rs:139-167`) — **was broken**: it validated the client's offered subprotocol (rejecting with `400` if absent) but returned `Ok(response)` **without echoing it**, so every pebble connection from the orchestrator would fail with "Server sent no subprotocol". **Fixed**: the `accept_hdr_async` callback now inserts `Sec-WebSocket-Protocol: ironclaw-agent-v1` into the upgrade response before returning `Ok`. Verified: pebble clippy (`-D warnings`) / fmt / 8 unit tests all green. (Confirmed production bug — the EWE live-QA "mars tenant" pass evidently did not exercise the pebble WS path.)
 
+### M7 — `auth_token` wrapped in `secrecy::SecretString` — DONE
+The external-worker bearer token is now `Option<SecretString>` at every layer (`WorkerEndpoint`, `ExternalWorkerConfig` in `config/sandbox.rs`; `ExternalWorkerSettings` in `settings.rs`), so it can no longer be accidentally logged or serialized. Key points:
+- **Deserialization preserved**: `SecretString` impls `Deserialize`, so TOML `auth_token = "..."` still loads unchanged.
+- **Serialization protected**: `WorkerEndpoint`/`ExternalWorkerSettings` keep their `Serialize` derives, but the field is `#[serde(skip_serializing)]` (and `Debug` auto-redacts to `[REDACTED]` via secrecy) — the token can never leak through a `Debug` print or a serialized dump.
+- **Boundary stays clean**: the secret is exposed to `&str` only at the single use site (`format!("Bearer {token}")` in `connect_and_handshake`); `run_external_task`/`connect_and_handshake` keep their `Option<&str>` signatures.
+- **Verification**: compile-clean; 22 external-worker + 23 config unit tests pass; the T1 integration suite gained two end-to-end auth tests (`auth_correct_token_succeeds`, `auth_wrong_token_rejected`) proving config → `SecretString` → `expose_secret()` → Bearer header → worker validates (accepts correct, rejects wrong) — 10/10 deterministic across repeated runs; clippy/fmt clean on all four changed files.
+
+### Group B — EWE pool + failover (DONE, 2026-06-23)
+- **M8** (`external_worker.rs` + `main.rs`): `drain()` now sends WS Close frames to each pooled connection (bounded 2s per conn) before clearing — a graceful shutdown handshake instead of an abrupt TCP drop. `spawn_eviction_task()` runs `evict_stale()` every 60s as a background task, cancelled by the shutdown broadcast — so idle tenants free stale connections promptly instead of waiting for the next `execute_task`. Both wired into `main.rs`: the eviction task is spawned after `shutdown_tx` is created, and `drain_pool()` is called in the shutdown block (after the broadcast, alongside MCP/webhook shutdown). Verified: 22 tests pass (incl. `pool_drain_empties_all`).
+- **M9** (`external_worker.rs`): the failover retry loop no longer gates on `RoundRobin` only — both `RoundRobin` and `LeastConnections` now get `max_attempts = endpoint_count` when >1 endpoint. Added `acquire_excluding(excluded_urls)` to `LoadBalancer` — on retry, the loop tracks `failed_urls` and calls `acquire_excluding` to skip endpoints that just failed (circuit-breaker). For `LeastConnections`, this picks the least-loaded non-excluded endpoint; for `RoundRobin`, the natural rotation handles it. Falls back to round-robin if all are excluded (no deadlock). Verified: 22 tests pass (incl. `load_balancer_strategies_diverge`, `load_balancer_least_connections_picks_least_loaded`).
+
+### Group C — shellcheck gate (DONE, 2026-06-23)
+- **T7**: fixed 3 existing shellcheck warnings on `lunarwing-mt-admin.sh` (SC2120 `require_root` references `$*` with no args; SC2155 `local x=$(...)` masking return; SC2034 unused `repo_dir`). Added `ic/scripts/.shellcheckrc` (configures shellcheck for the scripts dir) + `ic/scripts/check-mt-admin.sh` (gate script: `shellcheck -S warning`, exits 0/1/2). Gate passes clean (0 warnings).
+
 ---
 
 ## Recommended Starting Points
@@ -185,7 +225,6 @@ Writing the mock surfaced a hard protocol requirement: `connect_and_handshake` a
 - `SandboxReaper` (`reaper.rs`) doesn't cover external-worker WS connections — orphaned/hung WS have no reaper.
 - Credential cleanup consistency across the three worker containers (nanocode/codex/pebble); the audit (`EXTERNAL-WORKER-AUDIT-2026-06-23.md`) recommends a chaos test.
 - Whether `pebble4lunarwing/` and the worker containers consume `TaskContext.environment` correctly end-to-end.
-- T7: a `shellcheck` gate for `lunarwing-mt-admin.sh` (4,799 lines, no static analysis; SC2086 quoting issues likely).
 
 ---
 

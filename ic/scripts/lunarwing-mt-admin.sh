@@ -160,9 +160,14 @@ Commands:
     --no-health                    Don't enable the host-global health/self-heal pipeline
     --enable-darkirc               Provision DarkIRC daemon + adapter for this tenant
                                    (disabled by default; darkirc services are NOT created)
+    --nanocode-model <model>       Override the nanocode worker's LLM model
+                                   (written to lunarwing.env as NANOCODE_MODEL)
+    --nanocode-base-url <url>      Override the nanocode worker's TensorZero baseURL
+                                   (written to lunarwing.env as NANOCODE_BASE_URL)
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
-    (same options as add-tenant apply to all, including --enable-darkirc)
+    (same options as add-tenant apply to all, including --enable-darkirc and
+     --nanocode-model/--nanocode-base-url)
 
   remove-tenant <name>             Stop services, deallocate ports
     --purge                        Also delete OS user and home directory
@@ -202,6 +207,11 @@ Commands:
   configure-pebble <name>          Configure pebble worker for a tenant
     --nanogpt-api-key <key>        NanoGPT API key
     --model <model>                Pebble model (default: openai/gpt-5.2)
+
+  configure-nanocode <name>        Set nanocode worker LLM overrides for a tenant
+    --model <model>                TensorZero model (NANOCODE_MODEL; any string)
+    --base-url <url>               TensorZero baseURL (NANOCODE_BASE_URL; full URL)
+                                   (restart the worker after: stop-tenant && start-tenant)
 
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
@@ -264,7 +274,7 @@ render_template() {
 # ── Root check ────────────────────────────────────────────────────────────────
 
 require_root() {
-  [[ "${EUID}" -eq 0 ]] || die "run with sudo: sudo $0 $*"
+  [[ "${EUID}" -eq 0 ]] || die "must run as root (use sudo)"
 }
 
 # ── Init system detection ────────────────────────────────────────────────────
@@ -392,17 +402,42 @@ _ctr() {
 # Returns non-zero if the image can't be made available (caller should skip).
 _ensure_tenant_image() {
   local name="$1" image="$2"
-  if _ctr "$name" image inspect "$image" &>/dev/null; then
-    return 0
+
+  # The admin (root) store's image ID is the source of truth for "current".
+  local admin_id=""
+  if "$CONTAINER_RT" image inspect -f '{{.Id}}' "$image" &>/dev/null; then
+    admin_id="$("$CONTAINER_RT" image inspect -f '{{.Id}}' "$image")"
   fi
+
+  # rootful: the admin store IS the runtime store, so presence there suffices.
   if [[ "$MT_ROOTLESS" != "true" ]]; then
+    [[ -n "$admin_id" ]] && return 0
     return 1   # rootful + not built yet -> caller skips (build first)
   fi
-  if ! "$CONTAINER_RT" image inspect "$image" &>/dev/null; then
-    return 1   # rootless, but the admin store has no source image to copy
+
+  # rootless: each tenant has its own store. Skip only when the tenant already
+  # holds the CURRENT image (same ID as the admin store) — not merely when the
+  # name exists — so a rebuilt worker image actually reaches tenants instead of
+  # being silently held back by a stale same-named copy.
+  local tenant_id=""
+  if _ctr "$name" image inspect -f '{{.Id}}' "$image" &>/dev/null; then
+    tenant_id="$(_ctr "$name" image inspect -f '{{.Id}}' "$image")"
   fi
-  say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  if [[ -n "$tenant_id" && "$tenant_id" == "$admin_id" ]]; then
+    return 0   # tenant already has the current image
+  fi
+  [[ -n "$admin_id" ]] || return 1   # rootless, but the admin store has no source image to copy
+
+  if [[ -n "$tenant_id" ]]; then
+    say "refreshing stale image $image in ${name}'s rootless store (save|load — minutes for large images) ..."
+  else
+    say "distributing image $image into ${name}'s rootless store (save|load — minutes for large images) ..."
+  fi
   if "$CONTAINER_RT" save "$image" | _ctr "$name" load >/dev/null 2>&1; then
+    # Drop the previous (now-untagged) image if the load re-pointed the tag, so
+    # repeated worker-image updates don't accumulate GBs of stale layers in the
+    # tenant's rootless store.
+    _ctr "$name" image prune -f >/dev/null 2>&1 || true
     say "image $image available in ${name}'s store"
     return 0
   fi
@@ -829,6 +864,30 @@ ports_migrate_v7() {
   say "port registry migrated to v7 (darkirc_irc + darkirc_rpc added)"
 }
 
+ports_migrate_v8() {
+  say "migrating port registry v${current_version} -> v8 (dedicate nanocode_health + pebble_health) ..."
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '
+    .version = 8
+    | .tenants |= with_entries(
+        .value |= (
+          .extended_base as $eb
+          | .extended_ports |= (
+              if type == "object" then
+                .nanocode_health = ((.nanocode_health) // (.reserved_3) // ($eb + 3))
+                | .pebble_health = ((.pebble_health) // (.reserved_4) // ($eb + 4))
+                | del(.reserved_3, .reserved_4)
+              else . end
+            )
+        )
+      )
+  ' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  current_version=8
+}
+
 ports_migrate() {
   [[ -f "$PORTS_REGISTRY" ]] || return 0
   require_cmd jq
@@ -843,6 +902,7 @@ ports_migrate() {
   if [[ "$current_version" -lt 6 ]]; then ports_migrate_v6; current_version=6; fi
   ports_migrate_v6_1
   if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
+  if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
 }
 
 ports_allocate() {
@@ -912,9 +972,11 @@ ports_allocate() {
           {
             darkirc_adapter: $ebase,
             darkirc_irc: ($ebase + 1),
-            darkirc_rpc: ($ebase + 2)
+            darkirc_rpc: ($ebase + 2),
+            nanocode_health: ($ebase + 3),
+            pebble_health: ($ebase + 4)
           }
-          + (reduce range(3; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(5; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -1300,7 +1362,8 @@ build_darkirc() {
 
   if [[ -n "$tenant_name" ]]; then
     build_user="$tenant_name"
-    local envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
+    local envf
+    envf="$(tenant_env_dir "$tenant_name")/lunarwing.env"
     if [[ -f "$envf" ]]; then
       darkirc_src="$(grep -s '^DARKIRC_SOURCE=' "$envf" | cut -d= -f2-)" || true
     fi
@@ -1620,6 +1683,8 @@ write_tenant_lunarwing_env() {
   local tensorzero_url="${4:-$DEFAULT_TENSORZERO_URL}"
   local llm_api_key="${5:-}"
   local llm_base_url="${6:-}"
+  local nanocode_model="${7:-}"
+  local nanocode_base_url="${8:-}"
 
   local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
@@ -1634,10 +1699,9 @@ write_tenant_lunarwing_env() {
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
 
-  local state_dir run_dir repo_dir
+  local state_dir run_dir
   state_dir="$(tenant_state_dir "$name")"
   run_dir="$(tenant_run_dir "$name")"
-  repo_dir="$(tenant_repo "$name")"
 
   # Idempotent on re-run (F4-A/F4-B): PRESERVE existing secrets when lunarwing.env
   # already exists. Regenerating SECRETS_MASTER_KEY would permanently orphan the
@@ -1653,6 +1717,10 @@ write_tenant_lunarwing_env() {
   # XMPP password: an explicit --xmpp-password wins; else preserve an existing one;
   # else mint a fresh one (first-time provision).
   [[ -n "$xmpp_password" ]] || { xmpp_password="$(_env_existing "$path" XMPP_PASSWORD)"; xmpp_password="${xmpp_password:-$(generate_token | cut -c1-32)}"; }
+  # Nanocode model/base_url overrides: an explicit flag wins; else preserve an
+  # existing value so re-running add-tenant without the flags keeps prior settings.
+  [[ -n "$nanocode_model" ]]    || nanocode_model="$(_env_existing "$path" NANOCODE_MODEL)"
+  [[ -n "$nanocode_base_url" ]] || nanocode_base_url="$(_env_existing "$path" NANOCODE_BASE_URL)"
   # Stable + migration-safe; resolved before the heredoc so it can read an
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
@@ -1753,6 +1821,11 @@ ENVEOF
     printf '\nDARKIRC_ADAPTER_URL=http://127.0.0.1:%s\nDARKIRC_ADAPTER_SECRET=%s\n' \
       "$darkirc_adapter_port" "$darkirc_adapter_secret" >> "$path"
   fi
+  # Nanocode worker LLM overrides (consumed by the worker container via env;
+  # see start_tenant_nanocode / render_worker_quadlet). Written only when set so
+  # an unconfigured tenant gets the image's baked-in nanocode.json defaults.
+  [[ -n "$nanocode_model" ]]    && printf '\nNANOCODE_MODEL=%s\n'    "$nanocode_model"     >> "$path"
+  [[ -n "$nanocode_base_url" ]] && printf 'NANOCODE_BASE_URL=%s\n' "$nanocode_base_url" >> "$path"
   chown "$name:$name" "$path"
   say "wrote: $path"
 }
@@ -2180,6 +2253,46 @@ configure_pebble() {
   fi
 }
 
+# ── Nanocode worker LLM configuration ─────────────────────────────────────────
+#
+# Sets the nanocode worker's TensorZero model + baseURL overrides for a tenant by
+# upserting NANOCODE_MODEL / NANOCODE_BASE_URL into lunarwing.env (the same source
+# add-tenant writes, and that both init paths inject into the container). Mirrors
+# configure-pebble, but stored in lunarwing.env (not a separate nanocode.env).
+
+configure_nanocode() {
+  local name="$1"
+  local model="${2:-}"
+  local base_url="${3:-}"
+
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  [[ -n "$model" || -n "$base_url" ]] \
+    || die "configure-nanocode: pass --model <model> and/or --base-url <url>"
+
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$env_path" ]] || die "env file not found: $env_path (run add-tenant first)"
+
+  # Upsert: drop any existing override lines, then append the provided values.
+  local tmp
+  tmp="$(mktemp)"
+  grep -v -e '^NANOCODE_MODEL=' -e '^NANOCODE_BASE_URL=' "$env_path" >"$tmp" || true
+  [[ -n "$model" ]]    && printf 'NANOCODE_MODEL=%s\n'    "$model"    >>"$tmp"
+  [[ -n "$base_url" ]] && printf 'NANOCODE_BASE_URL=%s\n' "$base_url" >>"$tmp"
+  cat "$tmp" >"$env_path"
+  rm -f "$tmp"
+  chown "$name:$name" "$env_path"
+  chmod 600 "$env_path"
+  say "nanocode LLM overrides written to $env_path for tenant '$name'"
+
+  local container_name="lunarwing-nanocode-$name"
+  if _ctr "$name" inspect "$container_name" &>/dev/null 2>&1; then
+    say "note: restart the nanocode worker to pick up the new config:"
+    say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
+  fi
+}
+
 # ── Nanocode worker container ─────────────────────────────────────────────────
 
 start_tenant_nanocode() {
@@ -2247,6 +2360,13 @@ start_tenant_nanocode() {
       local llm_api_key
       llm_api_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" | cut -d= -f2- || true)"
       [[ -n "$llm_api_key" ]] && env_flags+=(-e "TENSORZERO_API_KEY=$llm_api_key")
+
+      # Nanocode LLM overrides (model / TensorZero baseURL), if set on the tenant.
+      local nanocode_model nanocode_base_url
+      nanocode_model="$(grep '^NANOCODE_MODEL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$nanocode_model" ]] && env_flags+=(-e "NANOCODE_MODEL=$nanocode_model")
+      nanocode_base_url="$(grep '^NANOCODE_BASE_URL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$nanocode_base_url" ]] && env_flags+=(-e "NANOCODE_BASE_URL=$nanocode_base_url")
     fi
 
     # Override with nanocode-specific env file if present
@@ -2260,13 +2380,15 @@ start_tenant_nanocode() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
-    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
-    # 127.0.0.1:8443/health, served by health_server.py). The probe runs inside
-    # the container's network namespace, so this needs no -p publish and never
-    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
-    # container stuck "unhealthy" even though the WS bridge was fine.
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (in-container).
+    # v8: also publish the tenant's dedicated nanocode_health port -> container
+    # 8443, so the host self-heal pipeline can probe /health directly.
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" nanocode_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -2278,6 +2400,7 @@ start_tenant_nanocode() {
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
+      "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
@@ -2373,13 +2496,15 @@ start_tenant_pebble() {
     chown "$name:$name" "$workspace_dir"
     chmod 777 "$workspace_dir"
 
-    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (curl
-    # 127.0.0.1:8443/health, served by src/health.rs). The probe runs inside the
-    # container's network namespace, so this needs no -p publish and never
-    # conflicts across tenants; HEALTH_PORT=0 left the probe unreachable and the
-    # container stuck "unhealthy" even though the WS bridge was fine.
+    # HEALTH_PORT=8443 matches the image's baked HEALTHCHECK (in-container).
+    # v8: also publish the tenant's dedicated pebble_health port -> container
+    # 8443, so the host self-heal pipeline can probe /health directly.
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" pebble_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -2390,6 +2515,7 @@ start_tenant_pebble() {
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
+      "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
@@ -2809,9 +2935,10 @@ EOF
 # Returns early (no unit) when the worker has no allocated wss port.
 render_worker_quadlet() {
   local name="$1" worker="$2" health_port="${3:-8443}"
-  local qdir wss_port workspace_dir env_dir tenant_env_path worker_env_path
+  local qdir wss_port workspace_dir env_dir tenant_env_path worker_env_path host_health_port
   qdir="$(tenant_quadlet_dir "$name")"
   wss_port="$(ports_get "$name" "${worker}_wss")"
+  host_health_port="$(ports_get "$name" "${worker}_health")"
   [[ -n "$wss_port" ]] || return 0
   env_dir="$(tenant_env_dir "$name")"
   tenant_env_path="$env_dir/lunarwing.env"
@@ -2823,6 +2950,9 @@ render_worker_quadlet() {
   local agent_token tz_key
   agent_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
   tz_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  local nanocode_model nanocode_base_url
+  nanocode_model="$(grep '^NANOCODE_MODEL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+  nanocode_base_url="$(grep '^NANOCODE_BASE_URL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
   # systemd treats % as a unit specifier; escape so a token containing % survives.
   agent_token="${agent_token//%/%%}"
   tz_key="${tz_key//%/%%}"
@@ -2847,6 +2977,10 @@ Environment=HEALTH_PORT=${health_port}
 Environment=WS_BIND_HOST=0.0.0.0
 Environment=WS_PATH=/ws/agent
 EOF
+    # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
+    # the host self-heal pipeline can probe /health directly. The container still
+    # listens on HEALTH_PORT=8443 internally (matches the image's baked HEALTHCHECK).
+    [[ -n "$host_health_port" ]] && printf 'PublishPort=127.0.0.1:%s:8443\n' "$host_health_port"
     if [[ "$worker" == "nanocode" ]]; then
       printf 'Environment=NANOCODE_MODE=websocket\n'
       printf 'Environment=WS_ROLE=server\n'
@@ -2855,6 +2989,8 @@ EOF
     fi
     [[ -n "$agent_token" ]] && printf 'Environment=AGENT_AUTH_TOKEN=%s\n' "$agent_token"
     [[ "$worker" == "nanocode" && -n "$tz_key" ]] && printf 'Environment=TENSORZERO_API_KEY=%s\n' "$tz_key"
+    [[ "$worker" == "nanocode" && -n "$nanocode_model" ]] && printf 'Environment=NANOCODE_MODEL=%s\n' "$nanocode_model"
+    [[ "$worker" == "nanocode" && -n "$nanocode_base_url" ]] && printf 'Environment=NANOCODE_BASE_URL=%s\n' "$nanocode_base_url"
     # Operator override file (optional). EnvironmentFile= has existed since the
     # Quadlet 4.4 debut, so it is safe at our >= 4.6 floor.
     [[ -f "$worker_env_path" ]] && printf 'EnvironmentFile=%s\n' "$worker_env_path"
@@ -4044,6 +4180,8 @@ add_tenant() {
   local llm_api_key="${8:-}"
   local llm_base_url="${9:-$DEFAULT_LLM_BASE_URL}"
   local enable_darkirc="${10:-false}"
+  local nanocode_model="${11:-}"
+  local nanocode_base_url="${12:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -4076,7 +4214,7 @@ add_tenant() {
   say ""
 
   say "--- Generating environment files ---"
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   if [[ "$enable_darkirc" == "true" ]]; then
@@ -4503,7 +4641,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false"
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -4516,6 +4654,8 @@ main() {
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
+          --nanocode-model)    nanocode_model="$2"; shift 2 ;;
+          --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
@@ -4526,12 +4666,12 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false"
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -4543,6 +4683,8 @@ main() {
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
           --gotify-url)      gotify_url="$2"; shift 2 ;;
           --gotify-title)    gotify_title="$2"; shift 2 ;;
+          --nanocode-model)    nanocode_model="$2"; shift 2 ;;
+          --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$names_csv" ]]; then names_csv="$1"; shift
@@ -4561,7 +4703,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
       done
       ;;
 
@@ -4743,6 +4885,25 @@ main() {
       [[ -n "$nanogpt_key" ]] || die "configure-pebble requires --nanogpt-api-key"
       ports_registry_init
       configure_pebble "$(sanitize_name "$name")" "$nanogpt_key" "$pebble_model"
+      ;;
+
+    configure-nanocode)
+      require_root
+      local name="" nc_model="" nc_base_url=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --model)    nc_model="$2"; shift 2 ;;
+          --base-url) nc_base_url="$2"; shift 2 ;;
+          -*)         die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-nanocode <name> [--model <model>] [--base-url <url>]"
+      configure_nanocode "$name" "$nc_model" "$nc_base_url"
       ;;
 
     patch-env)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# build-lunarwing.sh — LunarWing native build script for Pi 5
+# build-lunarwing.sh — LunarWing native build script for a Pi 5
 # ============================================================
 #
 # Builds the LunarWing (ic) crate natively on aarch64.
@@ -14,7 +14,7 @@
 #   -j, --jobs N      Number of parallel jobs (default: 2)
 #   -t, --target DIR  Override CARGO_TARGET_DIR
 #   -r, --repo DIR    Override repo root path
-#   --profile MODE    Build profile: release (default) or debug
+#   --profile MODE    Build profile: release (default) or debug   PRO TIP DONT USE DEBUG LOL
 #   --wasm            Also build Telegram WASM channel (separate target dir)
 #   --no-kill         Don't kill stale cargo/rustc processes
 #   -v, --verbose     Show cargo output in real-time

@@ -1,5 +1,7 @@
 # PEBBLE.md
 
+This file is out of date slightly.
+
 This file gives Pebble repo-specific guidance for working in this project.
 
 ## Project Overview

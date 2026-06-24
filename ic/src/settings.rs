@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 /// A custom LLM provider defined by the user through the web UI.
@@ -812,9 +813,10 @@ pub struct ExternalWorkerSettings {
     pub name: String,
     /// WebSocket URL (e.g., "ws://localhost:9090/ws/agent").
     pub url: String,
-    /// Bearer token for authentication (empty = no auth).
-    #[serde(default)]
-    pub auth_token: Option<String>,
+    /// Bearer token for authentication (empty = no auth). Secret-bearing: not
+    /// serialized out; `Debug` redacts via secrecy.
+    #[serde(default, skip_serializing)]
+    pub auth_token: Option<SecretString>,
     /// Default task timeout in milliseconds.
     #[serde(default = "default_external_worker_timeout")]
     pub timeout_ms: u64,
