@@ -524,11 +524,8 @@ impl LoadBalancer {
     ///   (ties resolve to the lowest index).
     ///
     /// The returned lease must be held for the task's lifetime so the count
-    /// reflects actual load; it decrements on drop.
-    ///
-    /// Note: multi-endpoint connection-failure failover is currently wired only
-    /// for RoundRobin; LeastConnections failover/circuit-breaking is tracked
-    /// separately (see M9 in SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md).
+    /// reflects actual load; it decrements on drop. For failover retries that
+    /// should skip a just-failed endpoint, use [`acquire_excluding`](Self::acquire_excluding).
     pub fn acquire(&self) -> EndpointLease {
         let len = self.inner.endpoints.len();
         let idx = match self.strategy {
@@ -1573,3 +1570,4 @@ mod tests {
         assert_eq!(lb.acquire().url, "ws://a:9090");
     }
 }
+
