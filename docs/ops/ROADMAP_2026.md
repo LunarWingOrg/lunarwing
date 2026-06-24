@@ -14,6 +14,8 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.7 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new); planned input-validation security improvements; some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.8 |
 | Agent SSH/Mosh Harness | v1.1.8 |
+| Remote Nanocode External Worker | v1.1.8 |
+| Further Nanocode External Worker Polish | v1.1.8 |
 | Re-add the custom Git WASM workspace tool; Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup; TensorZero upgrade + optional tighter integration across deployments + Gateway/ClickHouse/UI healthcheck test expansion | v1.1.8 |
 | Add Opencode external worker similar to nanocode worker | v1.1.8 |
 | In-place Upgrade Harness v2 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.1.8 |
