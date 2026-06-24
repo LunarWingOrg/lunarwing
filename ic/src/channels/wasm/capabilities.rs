@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::tools::wasm::{Capabilities as ToolCapabilities, RateLimitConfig};
 
-/// Minimum allowed polling interval (30 seconds).
-pub const MIN_POLL_INTERVAL_MS: u32 = 30_000;
+/// Minimum allowed polling interval (10 seconds).
+pub const MIN_POLL_INTERVAL_MS: u32 = 10_000;
 
 /// Default emit rate limit.
 pub const DEFAULT_EMIT_RATE_PER_MINUTE: u32 = 100;
