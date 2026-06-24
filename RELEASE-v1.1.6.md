@@ -10,7 +10,7 @@ The second major theme is **DarkIRC multi-tenant hardening**: the DarkIRC adapte
 
 A third focus is the **v8 ports schema**: dedicated per-tenant health ports for the nanocode and pebble workers, finally giving the host self-heal pipeline a direct `/health` probe path that was impossible with the hardcoded port model.
 
-Additional features include **per-tenant nanocode model/baseURL overrides**, a **rootless-podman babysitter** with fault-injection test scripts, a **shellcheck quality gate** for the multi-tenant admin script, and the decision to **deprecate the codex worker** (following OpenAI's removal of chat completions support).
+Additional features include **per-tenant nanocode model/baseURL overrides**, a **rootless-podman babysitter** with fault-injection test scripts, a **shellcheck quality gate** for the multi-tenant admin script, a legacy upgrade script which can perform in place upgrades of LunarWing agents from the legacy 1.0.0-1.0.5 period up to 1.1.2 safely and effectively (with rollback in case something goes wrong), and the decision to **deprecate the codex worker** (following OpenAI's removal of chat completions support).
 
 This release **does not** add database schema changes.
 
@@ -120,7 +120,7 @@ These test the **OpenRC + supervise-daemon + rootless-podman babysitter layer**,
 
 ### Codex Worker Deprecation
 
-Following OpenAI's removal of the chat completions API (which the codex worker depends on), **codex (`codex4lunarwing/`) is deprecated** and will be removed in a future release. Nanocode and pebble workers remain fully supported.
+Following OpenAI's removal of the chat completions API (which the codex worker depends on), **codex (`codex4lunarwing/`) is deprecated** and will be removed in a future release very soon. Nanocode and pebble workers remain fully supported. This is the reason why it's not been getting updates or getting routed into the other mechanisms as a first class citizen.
 
 ### Cargo Test Fixes
 
@@ -167,33 +167,20 @@ Following OpenAI's removal of the chat completions API (which the codex worker d
 
 ## Known Issues (not a complete list — see `docs/bugs` and `docs/proposals` for more)
 
-### Resolved since v1.1.5
-
-- **DarkIRC WASM channel not fully multi-tenant-aware.** The v1.1.3 work namespaced state under `state/<tenant_id>/…`, but the adapter side and live multi-tenant validation remained outstanding. v1.1.6 closes the adapter gaps: the `:6680` fallback is eliminated (fail-closed), auth is enforced, the destructive `/poll` is replaced with at-least-once delivery, and DarkIRC is opt-in per tenant. DarkIRC MT setups now work correctly (further hardening in `docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md`).
-- **Rootless container supervision gap (crash-recovery latency).** The `lunarwing-ctr-babysit.sh` parent-supervisor closes the gap: crashed containers are respawned in seconds rather than waiting up to ~30 min for the self-heal sweep. Validated by `fault-inject-respawn.sh` and `fault-inject-crash-loop.sh`.
-- **A few non-critical cargo tests fail.** 16 tests were fixed in this release (`docs/proposals/CARGO_TESTS_FIX.md`). The remaining failures are a small handful of env-dependent e2e tests.
-- **External Worker planned enhancements (targeted v1.1.6).** Fully implemented: connection pool, load balancer, typed TaskContext, credential injection, failover, graceful drain, SecretString, integration tests.
-
-### New in v1.1.6
-
 - **Worker failover is connection-failure-only (not protocol-error/timeout).** The circuit-breaker (`acquire_excluding`) retries to the next endpoint only on `ExternalWorkerConnectionFailed`. A worker that accepts the WS, completes the handshake, then dies mid-task returns `ExternalWorkerProtocolError` and is **not** retried. This is deliberate (retrying a partially-executed task risks side effects) but may be revisited.
 - **No backpressure / concurrency cap on external worker tasks.** `max_idle_per_endpoint` bounds only idle pooled connections, not in-flight tasks. A burst of `create_job` calls opens unbounded WS connections (no semaphore). Mitigated on loopback but could be an issue for remote worker endpoints.
 - **`LoadBalancer::new` uses `assert!` + `lb.unwrap()`.** Currently safe (the manager always passes ≥1 endpoint via `endpoints()` fallback) but violates the repo's no-panics-in-production rule. Tracked as L5.
 - **`tokens` command prints bearer tokens in cleartext.** `show_tokens()` outputs full gateway tokens to stdout with no `--reveal` gate. Tracked as M2.
 - **`chmod 777` on worker workspace dirs.** Needed because workers run as non-root container users mapped to subuids, but it means any local host user can read/tamper with tenant workspaces. The proper fix requires a `:U` bind-mount flag or UID coordination. Tracked as M1.
 - **Hardcoded `DEFAULT_TENSORZERO_URL` (192.168.1.157).** Override via `LUNARWING_MT_TENSORZERO_URL`. The nanocode baseURL is now separately configurable per tenant. Tracked as L2.
-
-### Carried forward (unchanged in v1.1.6)
-
-- **XMPP inbound file transfer — live e2e validation still pending.** The full receive pipeline is unit-tested but has not been exercised end-to-end against a real server. (Carried from v1.1.2/v1.1.3/v1.1.4/v1.1.5.)
-- **Inbound XMPP downloads have no SSRF guard.** The client fetches sender-supplied URLs without blocking private/loopback IPs. (Carried from v1.1.4.)
-- **Cross-machine migration is PostgreSQL-only.** libSQL tenants are refused by the migration tooling. (Carried from v1.1.5.)
-- **Machine migration is a cutover with per-tenant downtime.** (Carried from v1.1.5.)
-- **WeeChat health-glob flap.** An optional/stopped weechat backend matches the `lunarwing-*` health-discovery glob. Workaround: only enable weechat units for tenants that use it. (Carried from v1.1.4/v1.1.5.)
-- **`podman save | load` image distribution is slow.** The `_ensure_tenant_image` prune fix addresses accumulation but not transfer speed. A shared read-only image store remains a future optimization. (Carried from v1.1.5.)
-- **`/api/logs/download` has no UI button.** The endpoint exists but the gateway UI button has not been added. (Carried from v1.1.2.)
-- **Multica bridge remains pre-release/experimental.** (Carried from v1.1.5.)
-- **OMEBO/secret continuity not separately spot-checked during migration.** Expected to carry (the store + vault key travel in the bundle) but unverified. (Carried from v1.1.5.)
+- **XMPP inbound file transfer — live e2e validation still pending.** The full receive pipeline is unit-tested but has not been exercised end-to-end against a real server.
+- **Inbound XMPP downloads have no SSRF guard.** The client fetches sender-supplied URLs without blocking private/loopback IPs.
+- **Kawarimi cross-machine migration is PostgreSQL-only.** libSQL tenants are refused by the migration tooling.
+- **Machine migration is a cutover with per-tenant downtime.**
+- **WeeChat health-glob flap.** An optional/stopped weechat backend matches the `lunarwing-*` health-discovery glob. Known Workaround: only enable weechat units for tenants that use it
+- **`podman save | load` image distribution is slow.** The `_ensure_tenant_image` prune fix addresses accumulation but not transfer speed. A shared read-only image store remains a future optimization
+- **`/api/logs/download` has no UI button.** The endpoint exists but the gateway UI button has not been added
+- **Multica bridge remains pre-release/experimental.**
 
 ---
 
