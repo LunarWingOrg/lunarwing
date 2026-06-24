@@ -30,9 +30,9 @@ tica UI reskin continuation | v1.1.9 |
 | Feature | Target |
 |---------|--------|
 | v2 engine implementation; LunarWing UI performance overhaul; self-healing capability expansion | v1.2.0 |
+| LunarWing decision on migrating from Github to Forgejo or Gitlab (GH can still be used as a mirror) | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | LunarWing developer CI/CD pipeline, including x86-64 and AARCH64 builds | v1.2.1 |
-| LunarWing decision on switching to Codeberg or self-hosted GitLab on *source.lunarwing.org* rather than GitHub to host the monorepo (GH can still be used as a mirror) | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | New suite of planned features adopting concepts from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
