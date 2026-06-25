@@ -2,14 +2,14 @@
 
 This directory contains the installable `xmpp` WASM channel package.
 
-It is the IronClaw-facing adapter layer for XMPP:
+It is the LunarWing-facing adapter layer for XMPP:
 
-- `xmpp.wasm` is installed into `~/.ironclaw/channels/`
+- `xmpp.wasm` is installed into `~/.lunarwing/channels/`
 - `xmpp.capabilities.json` defines setup secrets, setup fields, and HTTP permissions
 - the channel talks to a local `xmpp-bridge` process over loopback HTTP
 
 The actual XMPP protocol session, MUC membership, reconnect loop, and current
-OMEMO behavior live in [bridges/xmpp-bridge](/home/cmc/ironclaw/bridges/xmpp-bridge).
+OMEMO behavior live in `bridges/xmpp-bridge/`.
 Configured `rooms` are auto-joined by the bridge on connect.
 Configured `encrypted_rooms` are treated as fail-closed encrypted groupchats:
 they are validated as non-anonymous, members-only rooms, member/admin/owner
@@ -26,8 +26,8 @@ That produces `channels-src/xmpp/xmpp.wasm`.
 ## Install
 
 ```bash
-mkdir -p ~/.ironclaw/channels
-cp channels-src/xmpp/xmpp.wasm channels-src/xmpp/xmpp.capabilities.json ~/.ironclaw/channels/
+mkdir -p ~/.lunarwing/channels
+cp channels-src/xmpp/xmpp.wasm channels-src/xmpp/xmpp.capabilities.json ~/.lunarwing/channels/
 ```
 
 ## Configure
@@ -51,6 +51,6 @@ The channel expects these setup fields:
 - `device_id`
 - `omemo_store_dir`
 
-Use `ironclaw onboard`, the channel setup UI, or extension configuration flows
+Use `lunarwing onboard`, the channel setup UI, or extension configuration flows
 to persist them. `max_messages_per_hour` caps outbound XMPP sends per bot
 instance; set it to `0` to disable the cap.
