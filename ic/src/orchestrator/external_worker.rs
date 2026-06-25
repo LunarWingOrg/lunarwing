@@ -103,6 +103,21 @@ pub fn build_task_context(
     }
 }
 
+fn extract_host(url: &str) -> Option<String> {
+    let stripped = url.strip_prefix("ws://").or_else(|| url.strip_prefix("wss://"))?;
+    let host_port = stripped.split('/').next()?;
+    let host = host_port.rsplit_once(':').map(|(h, _)| h).unwrap_or(host_port);
+    Some(host.to_string())
+}
+
+fn is_loopback(host: &str) -> bool {
+    host == "localhost"
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "[::1]"
+        || host == "0.0.0.0"
+}
+
 #[derive(Debug, Deserialize)]
 struct TaskResultPayload {
     #[allow(dead_code)]
@@ -147,6 +162,19 @@ impl ExternalWorkerManager {
     pub fn new(configs: Vec<ExternalWorkerConfig>) -> Self {
         let mut load_balancers = HashMap::new();
         for config in &configs {
+            for endpoint in config.endpoints() {
+                if let Some(host) = extract_host(&endpoint.url)
+                    && endpoint.url.starts_with("ws://")
+                    && !is_loopback(&host)
+                {
+                    tracing::warn!(
+                        "External worker '{}' endpoint uses cleartext ws:// for non-loopback host '{}'. \
+                         Credentials and task data will be sent unencrypted. Use wss:// for remote workers.",
+                        config.name,
+                        host
+                    );
+                }
+            }
             let endpoints = config.endpoints();
             load_balancers.insert(
                 config.name.clone(),
@@ -1569,6 +1597,30 @@ mod tests {
         assert_eq!(lb.acquire().url, "ws://a:9090");
         assert_eq!(lb.acquire().url, "ws://b:9090");
         assert_eq!(lb.acquire().url, "ws://a:9090");
+    }
+
+    #[test]
+    fn extract_host_parses_ws_urls() {
+        assert_eq!(
+            extract_host("ws://127.0.0.1:9090/ws/agent"),
+            Some("127.0.0.1".to_string())
+        );
+        assert_eq!(
+            extract_host("wss://worker.example.com:443/ws"),
+            Some("worker.example.com".to_string())
+        );
+        assert_eq!(extract_host("ws://localhost/path"), Some("localhost".to_string()));
+        assert!(extract_host("not-a-url").is_none());
+    }
+
+    #[test]
+    fn is_loopback_detects_local_hosts() {
+        assert!(is_loopback("127.0.0.1"));
+        assert!(is_loopback("localhost"));
+        assert!(is_loopback("::1"));
+        assert!(is_loopback("[::1]"));
+        assert!(!is_loopback("worker.example.com"));
+        assert!(!is_loopback("192.168.1.100"));
     }
 }
 
