@@ -800,6 +800,86 @@ Built when jobs fail or get stuck:
 
 ---
 
+## 12d. Secrets System (`secrets/` — 2,424 lines)
+
+### Security Model
+
+```
+User stores secret → AES-256-GCM encrypt → Store in DB (encrypted only)
+                                              │
+WASM/tool requests HTTP → Host checks allowlist → Decrypt (in memory only)
+                                              │
+                         Inject into request → Execute → Leak-scan response
+                         (WASM never sees value)        (before returning to WASM)
+```
+
+Core principle: plaintext secrets exist only briefly in memory during credential injection. They are **never** stored in plaintext, **never** logged, **never** visible to WASM sandboxes.
+
+### Cryptography (`crypto.rs`)
+
+- **Algorithm:** AES-256-GCM (authenticated encryption).
+- **Key derivation:** HKDF-SHA256 with per-secret random salt (32 bytes).
+- **Nonce:** 12 bytes, randomly generated per encryption (never reused).
+- **Tag:** 16 bytes (GCM built-in).
+- **Format:** `encrypted_value = nonce || ciphertext || tag`.
+- **Master key:** Minimum 32 bytes, validated at construction.
+- **HKDF info string:** `"near-agent-secrets-v1"` (versioned for future migration).
+
+Each secret gets its own salt, so identical plaintexts produce different ciphertexts. Tamper detection via GCM authentication tag — any modification to ciphertext or nonce causes decryption failure.
+
+### Types (`types.rs`)
+
+| Type | Purpose |
+|------|---------|
+| `Secret` | Stored struct: encrypted_value, key_salt, provider hint, expiry, usage tracking. Debug impl redacts all sensitive fields. |
+| `DecryptedSecret` | Wraps `secrecy::SecretString`, zeros on drop, never appears in Debug. Only accessible via `.expose()` returning `&str`. |
+| `SecretRef` | Name + provider, no value. What WASM tools receive. |
+| `CreateSecretParams` | Builder pattern, names auto-lowercased for case-insensitive matching. |
+| `CredentialLocation` | Enum: `AuthorizationBearer`, `AuthorizationBasic{username}`, `Header{name,prefix}`, `QueryParam{name}`, `UrlPath{placeholder}`. |
+| `CredentialMapping` | Maps secret_name → location with host glob patterns + path prefix patterns. Most specific match wins. |
+
+Path traversal defense: `path_matches_prefix()` rejects paths with `/.` or `/..` segments before matching. Glob: `*.example.com` matches subdomains.
+
+### Store (`store.rs`)
+
+`SecretsStore` trait with three implementations:
+
+| Implementation | Backend | Use Case |
+|----------------|---------|----------|
+| `PostgresSecretsStore` | PostgreSQL | Production |
+| `LibSqlSecretsStore` | libSQL | Edge/embedded |
+| `InMemorySecretsStore` | HashMap | Testing |
+
+Operations: create (upsert on conflict), get (with expiration check), get_decrypted, exists, list (names only), delete, record_usage, is_accessible.
+
+**Access control** (`is_accessible`): checks secret exists AND is in `allowed_secrets` list. Supports glob patterns (`openai_*` matches `openai_api_key`). Case-insensitive.
+
+**Upsert behavior:** `ON CONFLICT (user_id, name) DO UPDATE` — re-storing rotates the salt and re-encrypts.
+
+### Keychain Integration (`keychain.rs`)
+
+Master key resolution order:
+1. `SECRETS_MASTER_KEY` environment variable (hex-encoded, for CI/Docker).
+2. OS keychain (auto-generated on first run).
+
+Platform implementations:
+- **macOS:** `security-framework` → Keychain Services.
+- **Linux:** `secret-service` → GNOME Keyring / KWallet (DH encryption, unlock support).
+- **Windows:** Not implemented (env var only).
+
+Key stored as hex string. Service: `"ironclaw"`, account: `"master_key"`. Auto-unlocks locked collections.
+
+### Gaps in the Secrets System
+
+1. **No secret rotation policy** — no automatic rotation, no rotation reminders, no external secret manager integration (Vault, AWS Secrets Manager).
+2. **No Windows keychain support** — env var is the only option on Windows.
+3. **No per-user encryption keys** — all secrets encrypted with the same master key (compromise = all secrets exposed).
+4. **No audit log for secret access** — `record_usage` tracks count + last_used, but no WHO/WHEN/WHAT log.
+5. **No secret versioning** — upsert replaces; old value gone with no history.
+6. **No `UrlPath` or `AuthorizationBasic` proxy injection** — documented limitation in the HTTP proxy (HTTPS tunnels can't be modified).
+
+---
+
 ## 13. Self-Repair & Resilience
 
 ### Stuck Job Detection
