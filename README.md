@@ -64,13 +64,13 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Gotify** -- WASM tool for agent-initiated push notifications
 * **Vision Service / OCR Sidecar** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, caching, rate limiting, and metrics (`projects/ocr-sidecar/`)
 * **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the Vision Service sidecar (`ic/tools-src/vision-analyze/`)
-* **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (seperate repo)
+* **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (separate repo)
 
 ### Worker Containers
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
-* **Re worked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obselete worker modes in favor of specialized worker container support (`ic/src/worker/`)
-* **Re worked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
+* **Reworked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obsolete worker modes in favor of specialized worker container support (`ic/src/worker/`)
+* **Reworked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
 ### Infrastructure & Operations
 * Specialized secret management wrapper scripts for both PostgreSQL and libSQL
@@ -86,7 +86,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 
 ### Development & Testing
 * Automated test suite with trace-replay E2E testing (no real LLM required)
-* Worker test harness for all 4+ worker types with Docker Compose isolation (`tests/`)
+* Worker test harness for all 4 worker types with Docker Compose isolation (`tests/`)
 * REPLv2 server and client with better output formatting and subagent support, backout and approval support included
 * Support for external agentic coding tools via external worker mode
 * Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support as well as a production-grade developer testing suite
@@ -99,7 +99,7 @@ The LunarWing core development team is not affiliated with NearAI.
 
 Our core team uses a self-hosted Vikunja kanban board to track tasks. Additionally, we use our own LunarWing agents to keep track of project progress.
 
-#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponserships/grants. This will be updated in the future if it changes.
+#### As of now, we are entirely self-funded and work on this project on a voluntary basis. No VCs, Corporate Overlords, or sponsorships/grants. This will be updated in the future if it changes.
 
 ## Instance Setup
 
@@ -321,7 +321,7 @@ Full documentation index: [docs/README.md](docs/README.md)
 - **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
 - **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
 - **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
-- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.4
+- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.6
 - **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
 - **Active proposals:** [docs/proposals/](docs/proposals/)
 - **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)

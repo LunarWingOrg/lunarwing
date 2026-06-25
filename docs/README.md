@@ -84,8 +84,6 @@ Deployment, operations, multitenancy, and production guides.
 | [`MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md`](ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md) | Review notes for the 1.1.4 MT upgrade tooling |
 | [`MT-LEGACY-UPGRADE-NOTES.md`](ops/MT-LEGACY-UPGRADE-NOTES.md) | Legacy same-host version upgrade runbook (v1.0.3–v1.0.8 → v1.1.x) |
 | [`SELF_REPAIR_IMPROVEMENTS_GENTOO.md`](ops/SELF_REPAIR_IMPROVEMENTS_GENTOO.md) | Self-heal fd-leak fix found on a live OpenRC MT host |
-| [`GOALS_1.1.5.md`](ops/GOALS_1.1.5.md) | v1.1.5 release checklist (current) |
-| [`GOALS_1.1.4.md`](ops/GOALS_1.1.4.md) | v1.1.4 release checklist (shipped; kept — still referenced by MT work) |
 | [`ROADMAP_2026.MD`](ops/ROADMAP_2026.MD) | 2026 roadmap |
 | [`FUTURE_RELEASE_ITEMS.md`](ops/FUTURE_RELEASE_ITEMS.md) | Longer-horizon / unscheduled ideas |
 | [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Forward-looking cleanup checklist |
@@ -152,16 +150,6 @@ the reorg.
 ### 📦 [`releases/`](releases/)
 
 Release notes and changelogs (immutable historical records).
-
-| File | Description |
-|------|-------------|
-| [`RELEASE-v1.0.7.md`](releases/RELEASE-v1.0.7.md) | v1.0.7 release notes (2026-05-17) |
-| [`RELEASE-v1.1.0.md`](releases/RELEASE-v1.1.0.md) | v1.1.0 "Evolution" release notes |
-| [`RELEASE-v1.1.1.md`](releases/RELEASE-v1.1.1.md) | v1.1.1 "Freedom" release notes |
-| [`RELEASE-v1.1.2.md`](releases/RELEASE-v1.1.2.md) | v1.1.2 "Kunai" release notes |
-| [`RELEASE-v1.1.3.md`](releases/RELEASE-v1.1.3.md) | v1.1.3 "Dark Forest" release notes |
-| [`RELEASE-v1.1.4.md`](releases/RELEASE-v1.1.4.md) | v1.1.4 "Phoenix" release notes |
-| [`CHANGELOG-AGENTS.md`](releases/CHANGELOG-AGENTS.md) | `ic/AGENTS.md` change history |
 
 ---
 
