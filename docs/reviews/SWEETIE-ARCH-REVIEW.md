@@ -1052,6 +1052,62 @@ Confirms external worker ecosystems are becoming **platformized** — each runti
 
 ---
 
+## 12g. `nanocode-config/` — TensorZero + NanoCode Configuration Hub
+
+> **⚠️ NOTE: This directory appears stale.** It is unclear whether any current code references it. It has not been removed or archived yet pending confirmation. The analysis below documents what exists for reference.
+
+### Overview
+
+This directory is (or was) the **LLM routing configuration hub** for the LunarWing ecosystem — orchestrating model routing across agents, workers, and platforms via a TensorZero gateway. It also contains a full vendored copy of the NanoCode project and a Neovim plugin.
+
+### Contents
+
+**`tensorzero.toml` (47KB, 1,700+ lines)** — operational LLM routing configuration:
+- **253 model definitions** across providers: NanoGPT, DeepSeek, Qwen, GLM, Kimi, Gemma, GPT-OSS, Gemini, MiniMax, Nemotron, local models, and more.
+- **151 function definitions** — routing strategies for different use cases:
+  - `default_chat`, `coding`, `nanocode`, `opencode`, `codex` — general and code-specific routing.
+  - `ironclaw`, `openclaw` — agent-specific routing with 17-20+ variants each.
+  - `ironclaw_hardened`, `openclaw_hardened` — tiered fallback chains (local → DS31 → Qwen → Chutes).
+  - `summarization`, `document_qa` — specialized task routing.
+- **Experimentation blocks** — weighted routing (e.g., 70/30 split) with fallback chains.
+- **TEE-aware routing** — TEE (Trusted Execution Environment) models get separate routing keys for confidential computing.
+- **Per-model timeouts** — TTFT and total timeouts tuned per provider.
+
+**`opencode.json`** — NanoCode/OpenCode agent configuration:
+- 9 plugins (agent-identity, agent-memory, agent-skills, background, envsitter-guard, oh-my-openagent, planning-toolkit, opentmux, subtask2).
+- MCP servers: Context7, Exa.
+- Provider: TensorZero gateway on local network.
+
+**`nanocode/` (4,543 files)** — full vendored/forked copy of NanoCode:
+- TypeScript/JavaScript packages, GitHub Actions, Nix packaging, infra-as-code, E2E tests, `.opencode/` agent definitions.
+
+**`nanocode.nvim/`** — full Lua Neovim plugin for NanoCode integration:
+- API (command, operator, prompt), CLI (client/server), providers (kitty, snacks, terminal, tmux, wezterm), UI components, health checks.
+
+**Example configs** — multiple setup variants for different deployment scenarios.
+
+**`tensorzero-proxy.py` (30KB)** — Python proxy for TensorZero gateway.
+
+### LLM Supply Chain (if still in use)
+
+```
+Agent Request (ironclaw/openclaw/coding/nanocode/codex)
+    ↓
+TensorZero Gateway (port 3000) — tensorzero.toml routing
+    ↓
+Model Selection (by function + experimentation weights)
+    ↓
+Provider Routing (NanoGPT / DeepSeek / OpenRouter / Chutes / Local)
+    ↓
+TEE-aware delivery (trusted execution for sensitive operations)
+    ↓
+Fallback chains (primary → secondary → tertiary → local)
+```
+
+The hardened function variants with tiered fallback suggest high-availability design — graceful degradation through tiers down to local models when cloud providers are unavailable.
+
+---
+
 ## 13. Self-Repair & Resilience
 
 ### Stuck Job Detection
