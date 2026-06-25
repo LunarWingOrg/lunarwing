@@ -86,9 +86,9 @@ There's already a proposal: `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_A
 
 ### 2C. M13 — DarkIRC guide stale paths
 **Source:** DOCS_AUDIT.md M13
-**Verified:** **CONFIRMED — still stale.** Both `BUILD_INSTRUCTIONS.md` and `DARKIRC_BUILD_GUIDE.md` in `docs/guides/darkirc_channel_for_ironclaw/` contain extensive `~/ironclaw/`, `ironclaw.db`, `target/release/ironclaw`, `~/.ironclaw/ironclaw.db` paths (14 occurrences each across both files). These are the last docs inside docs/ with stale IronClaw runtime paths.
+**Status:** **DONE** — both `BUILD_INSTRUCTIONS.md` and `DARKIRC_BUILD_GUIDE.md` fully updated: all `~/ironclaw/` → `~/lunarwing/`, `ironclaw.db` → `lunarwing.db`, `target/release/ironclaw` → `target/release/lunarwing`, `ironclaw pairing` → `lunarwing pairing`, `ironclaw memory` → `lunarwing memory`, `ironclaw config` → `lunarwing config`, `ironclaw onboard` → `lunarwing onboard`. Zero ironclaw references remaining in either file.
 
-**Effort:** 15-20 minutes. S/find-replace `~/ironclaw` → `~/lunarwing`, `ironclaw.db` → `lunarwing.db`, `target/release/ironclaw` → `target/release/lunarwing`, etc.
+**Note:** `DARKIRC_MT_ADAPTER.md` (third file in that directory) has 2 references to `darkirc_channel_for_ironclaw/` but those are the actual repo directory name — accurate, not stale. Left as-is until the directory itself is renamed (Tier 2B).
 
 ---
 
