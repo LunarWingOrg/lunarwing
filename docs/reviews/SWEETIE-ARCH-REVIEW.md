@@ -961,6 +961,97 @@ Plugin discovery scans active WASM tools, dev-loaded tools, and active WASM chan
 
 ---
 
+## 12f. Scripts & Operational Tooling
+
+### Build Script (`scripts/build-lunarwing.sh`)
+
+Specialized native build script for low-resource ARM hosts (especially Raspberry Pi 5):
+- Default parallelism intentionally low (Pi-safe).
+- Warns on tmpfs target dirs, low RAM, likely OOM conditions.
+- Kills stale `cargo`/`rustc` processes and clears stale lockfiles before building.
+- Supports optional WASM channel build with separate target dir.
+- Produces structured output with timing, artifact location, crate count.
+
+Confirms the project is **deployed on resource-constrained edge hardware**, not just dev workstations.
+
+### Infrastructure Health Check (`ic-infrastructure-health-check/`)
+
+**`infrastructure-health-check.sh`** — main health aggregation entrypoint:
+- Writes reports to `<base_dir>/workspace/reports/health/`.
+- Concurrency-safe tempdir usage (`mktemp -d` per run, `trap EXIT` cleanup).
+- Detects init system: systemd, OpenRC, or launchd.
+- Runs 8+ component checks in **parallel** with 30s timeout each:
+  gateway, xmpp, omemo, ratelimit, clickhouse, tensorzero, models, service-manager.
+- JSON contract for every check — validates output, separates stderr from stdout.
+- Aggregates into overall status (healthy / degraded / critical) + alerts list.
+
+**Component health scripts** (one per concern):
+`health-gateway.sh`, `health-xmpp.sh`, `health-omemo.sh`, `health-ratelimit.sh`, `health-clickhouse.sh`, `health-tensorzero.sh`, `health-models.sh`, `health-systemd.sh`, `health-openrc.sh`, `health-launchd.sh`.
+
+**Test suite** (`tests/`):
+- Chaos harness, self-heal matrix tests, service-manager-specific tests.
+- Ops layer exercised like product code.
+
+### Self-Healing Watchdog (`lunarwing-self-heal.sh`)
+
+Serious automated remediation system (~1,000 lines):
+
+**Remediation features:**
+- Grace period before first restart (consecutive unhealthy checks required).
+- Exponential backoff with jitter between remediation attempts (optional linear strategy).
+- Flapping guard: too many restarts within window → escalate, stop looping.
+- Post-restart verification: re-runs component health check, not just `is-active`.
+- State auto-prune: removes non-escalated entries untouched past TTL.
+- Escalation notifications via `send-notification.sh` (with timeout protection).
+- Report staleness guard: refuses to act on reports older than configurable threshold.
+
+**Multi-tenant aware:**
+- Resolves tenant-specific unit naming patterns for 10+ service prefixes.
+- Per-tenant systemd units are USER units, restarted via `sudo -u <user> systemctl --user`.
+- Distinguishes logical components from actual per-tenant init units.
+- Configurable: `REMEDY_LOGICAL=false` to avoid phantom restarts of base services.
+
+**Service manager support:** systemd (incl. per-tenant user units), OpenRC, launchd.
+
+### Worker Runtime Packaging (`codex4lunarwing/`, `lunarcode4lunarwing/`, `pebble4lunarwing/`)
+
+Each external worker runtime has its own miniature execution harness:
+- `entrypoint.sh` — container entrypoint.
+- `health_server.py` — HTTP health endpoint for the worker.
+- TypeScript bridge/runtime/executor scripts — orchestration glue.
+- `smoke_test.ts` — runtime self-test.
+
+Confirms external worker ecosystems are becoming **platformized** — each runtime is a self-contained package.
+
+### Other Script Infrastructure
+
+| Location | Purpose |
+|----------|---------|
+| `fresh_run.sh` | Manual recovery recipe / runbook fragment (not reusable code). |
+| `ic_sm/scripts_4_db/insert_secret_*.py` | Admin bootstrap for secrets in PostgreSQL/libSQL. |
+| `.github/scripts/` | Label management, PR body generation, staging promotion automation. |
+| `darkirc_channel_for_ironclaw/` | DarkIRC channel adapter (Python) with integration tests. |
+| `ironclaw_weechat_wss/` | WeeChat relay WebSocket adapter. |
+| `gotify-wasm/` | Gotify notification WASM tool with build script. |
+| `tensorzero-proxy-configurations/` | TensorZero proxy scripts (including experimental enhanced versions). |
+| `tests/mock_orchestrator/hub.py` | Mock orchestrator for testing. |
+
+### Observations
+
+**Strengths:**
+- Production-grade ops capability: health checks, automated remediation, multi-tenant awareness, flap detection.
+- Cross-init portability is first-class (systemd + OpenRC + launchd).
+- Ops scripts have their own test suite.
+- Edge/low-resource deployment is supported with purpose-built tooling.
+
+**Concerns:**
+- Top-level `scripts/` is thin — operational tooling is **scattered** across multiple directories.
+- No unified `ops/` or `admin/` root yet.
+- `fresh_run.sh` is runbook residue, not formalized tooling.
+- Fragmentation makes discovery harder for new operators.
+
+---
+
 ## 13. Self-Repair & Resilience
 
 ### Stuck Job Detection
