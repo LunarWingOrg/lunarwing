@@ -131,6 +131,10 @@ Following OpenAI's removal of the chat completions API (which the codex worker d
 - Fixed 3 existing shellcheck warnings on `lunarwing-mt-admin.sh` (SC2120 `require_root` references `$*` with no args; SC2155 `local x=$(...)` masking return; SC2034 unused `repo_dir`).
 - Added `ic/scripts/.shellcheckrc` + `ic/scripts/check-mt-admin.sh` (gate script: `shellcheck -S warning`, exits 0/1/2). The gate passes clean (0 warnings).
 
+### New policy introduced for AI Code contributions
+
+- Before submitting any code to the project generated via assistance of LLMs: Please read `docs/guides/AI-CODE-CONTRIBUTION-POLICY.md` for guidance.
+
 ---
 
 ## Bug Fixes
