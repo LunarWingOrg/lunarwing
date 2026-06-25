@@ -1,8 +1,8 @@
 # Post-v1.1.6 Documentation Improvement Plan
 
-**Date:** 2026-06-25
+**Date:** 2026-06-25 (updated 2026-06-25)
 **Author:** Kumogakure
-**Branch:** `kumogakure-post-1.1.6-doc-review-1`
+**Branch:** `kumogakure-post-1.1.6-doc-review-3`
 **Scope:** Full documentation improvement across the entire repo (docs/ and non-docs/)
 
 ## Context
@@ -10,9 +10,11 @@
 This plan synthesizes three sources:
 1. **KUMOGAKURE-POST-1.1.6-REVIEW** — code review of v1.1.6 (committed to this branch)
 2. **docs/DOCS_AUDIT_GLM.md** — Zread-powered doc audit by sun (committed to this branch)
-3. **Prior doc cleanup work** — my non-docs staleness audit from June 23 (session 20260623). **Caveat:** much of that may already be done — the `docs/` reorg (DOCS_REORG_CHECKLIST.md) was marked complete June 19, and several DOCS_AUDIT items were closed. Each item below must be verified against current file state before acting.
+3. **Prior doc cleanup work** — non-docs staleness audit from June 23 (session 20260623).
 
-The `docs/` tree was reorganized on June 19 (vendored nanocode archived, history separated, index rebuilt). That work was solid. This plan focuses on what remains.
+The `docs/` tree was reorganized on June 19 (vendored nanocode archived, history
+separated, index rebuilt). Sun applied Tier 1 fixes from the original plan in
+PRs #84 + #85 (branches `kumogakure-post-1.1.6-doc-review-2` and staging).
 
 ---
 
@@ -20,51 +22,32 @@ The `docs/` tree was reorganized on June 19 (vendored nanocode archived, history
 
 ### 1A. README.md truncated sentences + typos
 **Source:** DOCS_AUDIT_GLM.md items 8 and 9
-**Verified:** Yes — confirmed in current README.md
 
-- Line 43: "Proprietary service centered channels... are int" — **truncated mid-word**
-- Line 67: "seperate repo" → "separate repo"
-- Line 72: "obselete" → "obsolete"
-- Line 72-73: "Re worked" → "Reworked" (remove space), "getting debloated" — rewrite to past tense or mark as WIP
-- Line 102: "sponserships" → "sponsorships"
-- Line 32: Redundant bare `[LunarWing](https://lunarwing.org/)` link — remove
-
-**Effort:** 10 minutes. Pure text fixes.
+- ~~Line 43: "Proprietary service centered channels... are int" — **truncated mid-word**~~
+  **DONE** — sentence now reads correctly in full.
+- ~~Line 67: "seperate repo" → "separate repo"~~ **DONE**
+- ~~Line 72: "obselete" → "obsolete"~~ **DONE**
+- ~~Line 72-73: "Re worked" → "Reworked" (remove space)~~ **DONE** — now reads "Reworked Built-in Worker - Debloated" / "Reworked Sandbox Worker - Debloated"
+- ~~Line 102: "sponserships" → "sponsorships"~~ **DONE**
+- ~~Line 32: Redundant bare `[LunarWing](https://lunarwing.org/)` link~~ **STILL PRESENT** — the bare link remains on line 32. Low priority cosmetic.
 
 ### 1B. README.md release notes range is stale
 **Source:** DOCS_AUDIT_GLM.md item 1
-**Verified:** Yes — line 324 says "v1.0.7 → v1.1.4", but v1.1.5 and v1.1.6 now exist
 
-- Update to "v1.0.7 → v1.1.6"
-- Also add `RELEASE-v1.1.5.md` and `RELEASE-v1.1.6.md` to the releases index in `docs/README.md` (currently stops at v1.1.4 in that index too)
-
-**Effort:** 5 minutes.
+- ~~Line 324: "v1.0.7 → v1.1.4"~~ **DONE** — now reads "v1.0.7 → v1.1.6"
 
 ### 1C. README.md worker count + codex deprecation
 **Source:** DOCS_AUDIT_GLM.md items 3 and 4; v1.1.6 release notes
-**Verified:** Yes
 
-- Line 89: "4+ worker types" — v1.1.6 deprecated codex. Current supported: Nanocode, Pebble, Built-in, Sandbox = 4. Say "4" or "3 external + built-in/sandbox"
-- Line 209-221: Worker test harness section references `tests/README.md` which still says "Codex" and `codex4ironclaw/` — update or note codex as deprecated
-- Worker descriptions (lines 69-73): rewrite the "Re worked Built-in Worker - Debloated" / "Re worked Sandbox Worker - Debloated" entries into clean past-tense descriptions
-
-**Effort:** 20 minutes. Needs accuracy check against current worker state.
+- ~~Line 89: "4+ worker types"~~ **PARTIALLY DONE** — now reads "all 4 worker types" (was "4+"). The number is accurate.
+- **STILL OPEN** — Line 218: Worker test harness still has `python runner.py --worker codex   # single worker type` with codex as the example. Codex is deprecated (v1.1.6). Should use nanocode or pebble as the example instead.
+- ~~Worker descriptions "Re worked" / "getting debloated"~~ **DONE** — cleaned up to "Reworked ... Debloated"
 
 ### 1D. docs/README.md index missing v1.1.5 and v1.1.6 releases
-**Verified:** Yes — the releases table in docs/README.md stops at `RELEASE-v1.1.4.md`
+**Status:** **STILL OPEN** — The releases section in `docs/README.md` (lines 150-153) has no per-release table entries at all (the table was removed, replaced with a bare section header + description). The release files exist in `docs/releases/` (v1.0.7 through v1.1.6) but aren't individually indexed. This is acceptable as-is since the releases directory is self-discoverable, but the section could list them for completeness.
 
-- Add entries for v1.1.5 (Kawarimi) and v1.1.6 (Reversible Extinction)
-
-**Effort:** 5 minutes.
-
-### 1E. docs/ops/ missing v1.1.6 GOALS and shipped GOALS cleanup
-**Verified:** Yes
-
-- `docs/ops/GOALS_1.1.6.md` exists but is NOT listed in docs/README.md ops section
-- `GOALS_1.1.4.md` and `GOALS_1.1.5.md` should be archived to `ops/history/` (shipped releases)
-- GOALS_1.1.6 should be listed in the index
-
-**Effort:** 10 minutes.
+### 1E. docs/ops/ GOALS cleanup
+**Status:** **DONE** — `GOALS_1.1.4.md`, `GOALS_1.1.5.md`, and `GOALS_1.1.6.md` all moved to `docs/ops/history/`. No GOALS files remain in `docs/ops/` root.
 
 ---
 
@@ -72,7 +55,7 @@ The `docs/` tree was reorganized on June 19 (vendored nanocode archived, history
 
 ### 2A. Finish the IronClaw → LunarWing rename outside docs/
 **Source:** DOCS_AUDIT.md remaining items (M2, M3, M10, M12, M13, M22, L6, L9, L11, L13)
-**Verified:** Yes — 47 files outside docs/ still contain "ironclaw" references
+**Verified:** 30 files outside docs/ still contain "ironclaw" references (down from 47 at plan creation — some cleaned during the review-2 merge)
 
 Per DOCS_AUDIT.md scope note: every remaining item except M13 is outside `docs/`. These are in `ic/`, root-level, and worker container dirs.
 
@@ -103,11 +86,9 @@ There's already a proposal: `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_A
 
 ### 2C. M13 — DarkIRC guide stale paths
 **Source:** DOCS_AUDIT.md M13
-**Verified:** Needs verification
+**Verified:** **CONFIRMED — still stale.** Both `BUILD_INSTRUCTIONS.md` and `DARKIRC_BUILD_GUIDE.md` in `docs/guides/darkirc_channel_for_ironclaw/` contain extensive `~/ironclaw/`, `ironclaw.db`, `target/release/ironclaw`, `~/.ironclaw/ironclaw.db` paths (14 occurrences each across both files). These are the last docs inside docs/ with stale IronClaw runtime paths.
 
-`docs/guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md` reportedly still has `~/ironclaw/`, `ironclaw.db`, `target/release/ironclaw` paths. This is the one remaining doc *inside* docs/ with stale paths.
-
-**Effort:** 15 minutes if confirmed.
+**Effort:** 15-20 minutes. S/find-replace `~/ironclaw` → `~/lunarwing`, `ironclaw.db` → `lunarwing.db`, `target/release/ironclaw` → `target/release/lunarwing`, etc.
 
 ---
 
@@ -115,7 +96,7 @@ There's already a proposal: `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_A
 
 ### 3A. Add status labels to proposals
 **Source:** DOCS_AUDIT_GLM.md item 4
-**Verified:** Yes — ~35 active proposals in docs/proposals/, no status indicators
+**Verified:** ~35 active proposals in `docs/proposals/`, zero have status indicators.
 
 **Approach:**
 - Don't add YAML frontmatter (would require changing the rendering pipeline). Instead, add a `**Status:** draft | accepted | implemented | rejected` line at the top of each file.
@@ -125,21 +106,24 @@ There's already a proposal: `docs/proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_A
 
 ### 3B. Tame docs/ops/ bloat
 **Source:** DOCS_AUDIT_GLM.md item 3
-**Verified:** Partially — the reorg moved DarkFi analyses to docs/ops/ (from ic/), but they're analysis docs not ops docs
+**Verified:** GOALS cleanup is DONE. DarkFi analysis files still in `docs/ops/` (5 files: `darkfi_analysis_complete_summary.md`, `darkfi_detailed_technical_analysis.md`, `darkfi_message_throughput_analysis.md`, `darkfi_optimization_recommendations.md`, `darkfi_quick_reference.md`). These are technical analysis docs, not operational runbooks — better fit in `docs/reference/` or `docs/internal/`.
 
-- 5 DarkFi analysis files → better fit in `docs/reference/` or `docs/internal/`
-- Shipped GOALS_1.1.4, GOALS_1.1.5 → `ops/history/` (already has a history/ subdir)
-- Add a `README.md` to `docs/ops/` explaining categorization (active ops vs shipped checklists vs analysis)
+- Move 5 DarkFi analysis files → `docs/reference/` or `docs/internal/`
+- Add a `README.md` to `docs/ops/` explaining categorization
 
-**Effort:** 30 minutes.
+**Effort:** 20 minutes.
 
 ### 3C. Fix hardcoded absolute user paths
 **Source:** DOCS_AUDIT_GLM.md item 5; DOCS_AUDIT.md M15
-**Verified:** Needs re-verification — M15 was partially closed
+**Verified:** **CONFIRMED** — 4 active files (excluding history/vendored) still have `/home/sun` or `/home/cmc` paths:
+- `docs/ops/MULTITENANCY-PRODUCTION.md`
+- `docs/ops/RELEASE-COMMANDS.md`
+- `docs/releases/RELEASE-v1.1.0.md` (historical, may be acceptable)
+- `docs/releases/RELEASE-v1.1.1.md` (historical, may be acceptable)
 
-Paths like `/home/sun/...` and `/home/cmc/...` in docs. Replace with `$HOME`, relative paths, or `<user>`.
+Replace with `$HOME`, relative paths, or `<user>` in the ops docs. Release notes are immutable historical records — leave those alone.
 
-**Effort:** 30 minutes of grep + fix.
+**Effort:** 15 minutes for the 2 ops files.
 
 ### 3D. Add "Prerequisites" and "Verification" sections to guides
 **Source:** DOCS_AUDIT_GLM.md item 6
@@ -183,7 +167,7 @@ Add a note to `docs/guides/AI-CODE-CONTRIBUTION-POLICY.md` (or CONTRIBUTING.md) 
 
 ---
 
-## What's Already Done (from prior work + v1.1.6)
+## What's Already Done (from prior work + v1.1.6 + review-2 merge)
 
 To avoid re-doing completed work:
 - ✅ docs/ reorg (DOCS_REORG_CHECKLIST — all 10 areas complete)
@@ -196,18 +180,23 @@ To avoid re-doing completed work:
 - ✅ docs/guides/AI-CODE-CONTRIBUTION-POLICY.md created (v1.1.6)
 - ✅ Shellcheck quality gate for mt-admin (v1.1.6)
 - ✅ DarkFi analyses moved from ic/ to docs/ops/ (v1.1.6)
+- ✅ README.md truncated sentence (line 43) fixed
+- ✅ README.md typos: "seperate" → "separate", "obselete" → "obsolete", "sponserships" → "sponsorships"
+- ✅ README.md "Re worked" → "Reworked" worker descriptions cleaned up
+- ✅ README.md release notes range updated to v1.0.7 → v1.1.6
+- ✅ README.md worker count "4+" → "4"
+- ✅ GOALS_1.1.4/1.1.5/1.1.6 archived to docs/ops/history/
+- ✅ RELEASE-v1.1.6.md moved into docs/releases/
 
 ---
 
-## Recommended Execution Order
+## Recommended Execution Order (remaining work)
 
-1. **TIER 1 (all)** — quick wins, fix the embarrassing stuff first (truncated sentences, typos, stale release range). ~50 minutes total.
-2. **TIER 2A** — the ironclaw rename sweep outside docs/. This is the highest correctness-value work. ~2-3 hours.
-3. **TIER 2C** — M13 DarkIRC guide paths. Quick if confirmed.
-4. **TIER 3A+3B** — proposals status labels + ops cleanup. Structural improvements. ~2 hours.
-5. **TIER 3C+3D** — path fixes + guide standardization. Polish. ~3 hours.
-6. **TIER 4** — CI checks and process. Future-proofing. ~2 hours.
+1. **1A remaining + 1C remaining** — remove redundant bare LunarWing link on line 32; replace codex example in worker harness section with nanocode. ~5 minutes.
+2. **2C** — DarkIRC guide stale paths (28 occurrences across 2 files). ~20 minutes.
+3. **2A** — the ironclaw rename sweep outside docs/. Highest correctness-value work. ~2-3 hours.
+4. **3A + 3B** — proposals status labels + DarkFi ops cleanup. ~2 hours.
+5. **3C + 3D** — path fixes + guide standardization. Polish. ~3 hours.
+6. **4** — CI checks and process. Future-proofing. ~2 hours.
 
-Total estimated: ~10 hours of focused work. Can be split across multiple sessions or delegated.
-
-Each tier can be committed independently. TIER 1 is safe to do immediately with zero risk.
+Total remaining: ~8 hours of focused work. Each tier can be committed independently.
