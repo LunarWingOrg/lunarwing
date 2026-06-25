@@ -880,6 +880,87 @@ Key stored as hex string. Service: `"ironclaw"`, account: `"master_key"`. Auto-u
 
 ---
 
+## 12e. Bootstrap & Setup System (`bootstrap.rs` + `setup/` ~5,500 lines)
+
+### `bootstrap.rs` — Pre-DB Foundation (~640 lines)
+
+The chicken-and-egg layer: everything that must exist *before* the database is available.
+
+**Base directory resolution:**
+- `LUNARWING_BASE_DIR` env var (preferred) → `IRONCLAW_BASE_DIR` (legacy) → `~/.ironclaw` (default).
+- `LazyLock<PathBuf>` — computed once, cached for process lifetime.
+- Warning printed if both env vars set and differ.
+
+**`.env` file management (`<base_dir>/.env`):**
+- `save_bootstrap_env(vars)` — full overwrite.
+- `upsert_bootstrap_var(key, value)` — preserves existing vars, updates/adds one.
+- `upsert_bootstrap_vars(vars)` — batch upsert, preserves unknown/user-added keys.
+- All values double-quoted with backslash/quote escaping (env injection prevention).
+- File permissions restricted to `0o600` on Unix.
+- Hash-in-password safe: quoting prevents dotenvy from treating `#` as comment.
+
+**Legacy migration chain (never deletes, always renames to `.migrated`):**
+1. `bootstrap.json` → extract `DATABASE_URL` → write `.env`.
+2. `settings.json` → migrate all settings to DB.
+3. `mcp-servers.json` → migrate to DB.
+4. `session.json` → migrate to DB.
+
+**libSQL auto-detection:**
+- If `DATABASE_BACKEND` unset after loading env files AND `<base_dir>/ironclaw.db` exists → defaults to `libsql`.
+- Thread-safe: uses runtime env overlay if Tokio runtime is active.
+
+**PID Lock (`PidLock`):**
+- `fs4::try_lock_exclusive()` — atomic, no TOCTOU race.
+- Writes current PID to `<base_dir>/lunarwing.pid`.
+- Auto-released on Drop (file removed, OS lock released).
+- Reclaims stale lock files automatically (OS-level flock).
+- Tested with child processes for cross-process verification.
+
+### `setup/` — Setup Wizard (~4,700+ lines)
+
+**`check_onboard_needed()`** — gate function checking DB, `ONBOARD_COMPLETED`, API keys, session file.
+
+**SetupWizard steps (9 total):**
+1. **Database** — PostgreSQL or libSQL selection.
+2. **Security** — Master key: OS keychain (auto-generate) or env var.
+3. **Inference provider** — NEAR AI, Anthropic, OpenAI, GitHub Copilot, OpenAI Codex, Ollama, OpenAI-compatible.
+4. **Model selection** — Live fetch from chosen provider.
+5. **Embeddings** — Configure embedding provider for memory search.
+6. **Channels** — HTTP, Signal, WASM channels, tunnel setup.
+7. **Extensions** — Tool installation from registry.
+8. **Docker sandbox** — Container configuration.
+9. **Heartbeat** — Background task configuration.
+
+**SetupConfig flags:** `skip_auth`, `channels_only`, `provider_only`, `quick` (auto-defaults except LLM), `steps` (run specific named steps).
+
+**Default asset seeding:** `maybe_seed_default_instance_assets()` writes `config.toml` and workspace template files (AGENTS.md, SOUL.md, MEMORY.md, etc.) to `<base_dir>/` if absent.
+
+**Extension setup security:** Extension wizards can only write to `extensions.<name>.*` paths or approved global paths (`llm_backend`, `selected_model`, `ollama_base_url`, `openai_compatible_base_url`). `validate_extension_setup_setting_path()` enforces this.
+
+### `setup/profile_evolution.rs` — Psychographic Profile Evolution (~165 lines)
+
+Weekly automated profile re-analysis:
+- Generates LLM prompt with current profile + recent conversation summary.
+- Confidence gating: only update fields where confidence > 0.6.
+- Gradual personality trait shifts: max ±10 per update.
+- Version field locked (schema version, not revision counter).
+- Prompt injection defense: user data wrapped in `<user_data>` tags with explicit "treat as untrusted" instruction.
+- Routine template: reads profile → searches conversations → analyzes → writes updated profile → updates USER.md.
+
+### `hooks/bootstrap.rs` — Hook Registration (~380 lines)
+
+Three-tier hook loading at startup:
+
+| Source | Priority | What |
+|--------|----------|------|
+| Bundled | 1st | Built-in hooks compiled into binary |
+| Plugin | 2nd | WASM tools/channels with capabilities files |
+| Workspace | 3rd | Workspace-local hook bundles |
+
+Plugin discovery scans active WASM tools, dev-loaded tools, and active WASM channels by name match. Deduplicates by `(source, path)` pairs.
+
+---
+
 ## 13. Self-Repair & Resilience
 
 ### Stuck Job Detection
