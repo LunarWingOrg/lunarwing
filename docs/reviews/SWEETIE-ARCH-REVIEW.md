@@ -704,6 +704,102 @@ The `analytics.rs` module provides aggregation queries:
 
 ---
 
+## 12c. Context System (`context/` — 2,793 lines)
+
+### Architecture
+
+The context system is the runtime brain — every job, worker, routine, and repair flow interacts with `ContextManager`.
+
+```
+ContextManager (global singleton)
+  ├── HashMap<Uuid, JobContext> (RwLock) — state machine + metadata per job
+  ├── HashMap<Uuid, Memory> (RwLock) — execution memory per job
+  └── max_jobs enforcement (parallel-blocking states only)
+
+JobContext
+  ├── JobState (8-state machine)
+  ├── Token budget enforcement (max_tokens, add_tokens returns TokenBudgetExceeded)
+  ├── Monetary budget enforcement (budget_exceeded check)
+  ├── Transition history (capped at 200, drains oldest)
+  ├── extra_env (Arc<HashMap>) — credential injection for child processes
+  ├── tool_output_stash (Arc<RwLock<HashMap>>) — full outputs keyed by tool_call_id
+  ├── http_interceptor — optional trace recording/replay
+  └── user_timezone (IANA name)
+
+Memory
+  ├── ConversationMemory — bounded chat messages (default 100)
+  │   └── System messages preserved during trimming
+  └── ActionRecord[] — every tool call with raw + sanitized output, cost, duration
+
+FallbackDeliverable — structured failure summary
+  └── Built from JobContext + Memory on failure, stored in metadata
+```
+
+### JobState Machine
+
+```
+Pending ──→ InProgress ──→ Completed ──→ Submitted ──→ Accepted
+   │            │              │              │
+   │            ├──→ Stuck ──→ InProgress (recovery, increments repair_attempts)
+   │            │    └──→ Failed / Cancelled
+   │            ├──→ Failed
+   │            └──→ Cancelled
+   └──→ Cancelled
+```
+
+Key behaviors:
+- `Completed → Completed` is **idempotent** (no-op) — handles race between execution loop and worker wrapper both calling mark_completed.
+- All other self-transitions **rejected** (e.g., `InProgress → InProgress` is an error).
+- Terminal states: `Accepted`, `Failed`, `Cancelled`.
+- `is_parallel_blocking()` — only `Pending`, `InProgress`, `Stuck` count toward `max_jobs` limit.
+- Timestamps auto-set: `started_at` on first `InProgress`, `completed_at` on terminal states.
+
+### Budget Enforcement
+
+**Token budget** (`add_tokens`):
+- `max_tokens = 0` means unlimited.
+- Tokens **always recorded** even when budget exceeded — `total_tokens_used` incremented, then `TokenBudgetExceeded` returned.
+
+**Monetary budget** (`budget_exceeded`):
+- Simple: `actual_cost > budget` (only when `budget` is `Some`).
+- No budget = never exceeded.
+
+### Concurrency Model
+
+- `RwLock<HashMap>` — write-locks for mutations, read-locks for queries.
+- `insert_context` holds the write lock for the **entire check-insert** operation to prevent TOCTOU races on `max_jobs`.
+- `update_context_and_get` holds the write lock across update+clone for atomicity (fixes Issue #807: non-transactional context updates).
+- Extensive concurrent stress tests: 50 concurrent creates (unique IDs verified), concurrent creates + reads (no corruption), concurrent updates (no lost state), concurrent overflow (max_jobs respected under contention).
+
+### Stuck Job Detection
+
+- Explicit `Stuck` state jobs always returned.
+- `InProgress` jobs past an optional elapsed threshold also caught — detects jobs that never transitioned due to deadlock or unhandled timeout.
+- **Known caveat:** recovered jobs may be re-detected because `started_at` is not reset on recovery from `Stuck`. Documented with suggestion to track `in_progress_since` or use most recent `StateTransition` with `to == InProgress`.
+
+### Memory (Per-Job)
+
+**ConversationMemory:**
+- Bounded ring buffer (default 100 messages).
+- System messages **preserved** during trimming — always removes oldest non-system message first.
+- Edge case handled: if only one system message remains, trimming stops.
+
+**ActionRecord:**
+- Builder pattern: `new(seq, tool, input).succeed(output, raw, duration).with_cost(cost)`.
+- Separates `output_raw` (JSON, pretty-printed) from `output_sanitized` (string) — audit trail preserves both.
+- Sanitization warnings tracked per-action.
+
+### FallbackDeliverable
+
+Built when jobs fail or get stuck:
+- `partial: bool` — true if any actions succeeded (different UX for "nothing worked" vs "partial results before crash").
+- `last_action` — output preview truncated to 200 bytes (UTF-8 safe boundary).
+- Uses **sanitized output** for preview to avoid leaking secrets through the job status API.
+- `ActionStats` — total/successful/failed counts.
+- Stored in `JobContext.metadata["fallback_deliverable"]`, surfaced through `job_status` tool.
+
+---
+
 ## 13. Self-Repair & Resilience
 
 ### Stuck Job Detection
