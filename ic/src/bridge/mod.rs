@@ -7,8 +7,9 @@
 pub mod auth_manager;
 mod effect_adapter;
 mod llm_adapter;
-mod router;
+pub mod router;
 pub mod skill_migration;
+pub mod ssh;
 mod store_adapter;
 
 pub use effect_adapter::EffectBridgeAdapter;

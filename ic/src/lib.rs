@@ -87,6 +87,12 @@ pub mod testing;
 pub use config::Config;
 pub use error::{Error, Result};
 
+// Re-export SSH bridge types
+pub use bridge::ssh::{
+    SSHBridge, SSHHostConfig, SSHKeyType, HostKeyMode, SSHCredentials, SshBridgeError, SshEvent,
+    AuditLogger, NullAuditLogger,
+};
+
 /// Re-export commonly used types.
 pub mod prelude {
     pub use crate::channels::{Channel, IncomingMessage, MessageStream};

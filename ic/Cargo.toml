@@ -147,6 +147,11 @@ wasmparser = "0.220"  # WASM binary parsing for validation
 aes-gcm = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
+
+# SSH client (pure Rust, async)
+russh = "0.45"
+russh-keys = "0.45"
+
 sha2 = "0.10"
 blake3 = "1"
 rand = "0.8"
