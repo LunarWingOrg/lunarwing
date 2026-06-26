@@ -24,7 +24,9 @@
 
 use std::sync::Arc;
 
+use secrecy::SecretString;
 use tracing::{info, warn, instrument};
+use zeroize::Zeroizing;
 
 use crate::bridge::ssh::{SSHCredentials, SSHKeyType, SshBridgeError, Result};
 use crate::secrets::{SecretsStore, SecretError, CreateSecretParams};
@@ -125,7 +127,7 @@ impl SshSecretsManager {
         // Try to load passphrase
         let passphrase_secret_name = format!("{}_passphrase", secret_name);
         let passphrase = match self.secrets_store.get_decrypted(&self.tenant_id, &passphrase_secret_name).await {
-            Ok(decrypted) => Some(decrypted),
+            Ok(decrypted) => Some(SecretString::from(decrypted.expose().to_string())),
             Err(SecretError::NotFound(_)) => None,
             Err(e) => {
                 warn!(
@@ -267,7 +269,7 @@ mod tests {
         manager.store_key("example.com", key_data, None).await.unwrap();
 
         let creds = manager.load_key("example.com").await.unwrap().unwrap();
-        assert_eq!(creds.key_data, key_data);
+        assert_eq!(creds.key_data.as_slice(), key_data);
         assert!(creds.passphrase.is_none());
     }
 
@@ -279,8 +281,9 @@ mod tests {
         manager.store_key("secure.example.com", key_data, Some("mypassword")).await.unwrap();
 
         let creds = manager.load_key("secure.example.com").await.unwrap().unwrap();
-        assert_eq!(creds.key_data, key_data);
-        assert_eq!(creds.passphrase, Some("mypassword".to_string()));
+        assert_eq!(creds.key_data.as_slice(), key_data);
+        assert!(creds.passphrase.is_some());
+        assert_eq!(creds.passphrase.as_ref().unwrap().expose_secret(), "mypassword");
     }
 
     #[tokio::test]

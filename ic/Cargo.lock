@@ -4705,6 +4705,7 @@ dependencies = [
  "x25519-dalek",
  "xmpp-parsers",
  "zbus",
+ "zeroize",
  "zip",
 ]
 
