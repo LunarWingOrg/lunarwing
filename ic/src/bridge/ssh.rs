@@ -58,7 +58,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -577,7 +577,9 @@ mod tests {
     async fn test_create_bridge() {
         let tenant_id = Uuid::new_v4();
         let hosts = HashMap::new();
-        let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new());
+        let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+        )));
         let audit_logger = Arc::new(NullAuditLogger);
 
         let bridge = SSHBridge::new(tenant_id, hosts, secrets_store, audit_logger)
@@ -591,7 +593,9 @@ mod tests {
     async fn test_add_host() {
         let tenant_id = Uuid::new_v4();
         let mut hosts = HashMap::new();
-        let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new());
+        let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+        )));
         let audit_logger = Arc::new(NullAuditLogger);
 
         let bridge = SSHBridge::new(tenant_id, hosts, secrets_store, audit_logger)

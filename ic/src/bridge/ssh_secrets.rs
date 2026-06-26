@@ -254,10 +254,13 @@ impl SshSecretsManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secrets::InMemorySecretsStore;
+    use crate::secrets::{InMemorySecretsStore, SecretsCrypto};
+    use secrecy::ExposeSecret;
 
     fn make_test_manager() -> SshSecretsManager {
-        let store: Arc<dyn SecretsStore + Send + Sync> = Arc::new(InMemorySecretsStore::new());
+        let store: Arc<dyn SecretsStore + Send + Sync> = Arc::new(InMemorySecretsStore::new(Arc::new(
+            SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+        )));
         SshSecretsManager::new(store, "test-tenant")
     }
 
