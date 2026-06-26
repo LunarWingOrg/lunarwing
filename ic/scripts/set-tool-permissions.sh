@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# WARNING: THIS IS A DEV TOOLING SCRIPT. NORMAL USERS SHOULD NOT RUN THIS SCRIPT EVER.
+#
 #
 # set-tool-permissions.sh — grant "always_allow" tool permissions for a
 # LunarWing tenant by upserting rows into the agent `settings` table.
