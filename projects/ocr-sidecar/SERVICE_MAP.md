@@ -1,1 +1,1 @@
-#D
+# Ensure OpenRC and SystemD

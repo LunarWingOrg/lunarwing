@@ -717,7 +717,7 @@ projects/ocr-sidecar/
 │   ├── integration_tests.rs # Unit tests
 │   └── load_test.sh         # Load testing script
 ├── Dockerfile              # Container build
-├── docker-compose.yml      # Compose configuration
+├── compose.yaml      # Compose configuration
 ├── ic-ocr                  # CLI wrapper script
 ├── systemd/
 │   └── ocr-sidecar.service # Systemd unit file
