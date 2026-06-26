@@ -1,57 +1,107 @@
 # SSH Harness — Implementation Plan
 
-## Phase 1: Core Struct (`src/bridge/ssh.rs`)
+**Status:** Phase 1 complete (2026-06-25)
 
-### 1.1 Define Types
+## Phase 1: Core Struct (`src/bridge/ssh.rs`) ✅ COMPLETE
+
+### 1.1 Types Implemented
 
 ```rust
 pub struct SSHBridge {
-    hosts: HashMap<String, SSHHostConfig>,
+    tenant_id: Uuid,
+    hosts: Arc<RwLock<HashMap<String, SSHHostConfig>>>,
+    secrets_store: Arc<dyn SecretsStore + Send + Sync>,  // Used in Phase 3+
+    audit_logger: Arc<dyn AuditLogger + Send + Sync>,
+    agent_server: Option<Arc<SSHAgentServer>>,
 }
 
 pub struct SSHHostConfig {
-    pub hostname: String,
-    pub username: String,
+    pub host: String,
     pub port: u16,
+    pub user: String,
+    pub key_type: SSHKeyType,  // Ed25519, Ecdsa, Rsa
+    pub host_key_mode: HostKeyMode,  // Strict, AcceptFirst
+    pub known_host_key: Option<String>,
+    pub connect_timeout_secs: u64,
+    pub operation_timeout_secs: u64,
+    pub keepalive_interval_secs: u64,
+    pub keepalive_max_misses: u32,
 }
 
 pub struct SSHCredentials {
-    pub key: String, // Or Vec<u8> for binary key data
+    pub key_data: Vec<u8>,
+    pub passphrase: Option<String>,  // Support for encrypted keys
 }
 
-pub enum BridgeError {
-    HostNotFound,
-    SecretNotFound(String),
+pub enum SshBridgeError {
+    // Config errors
+    HostNotFound(String),
+    InvalidHostConfig(String),
     ValidationFailed(String),
+    // Secret errors
+    SecretNotFound(String),
+    SecretDecryptionFailed(String),
+    // Key errors
+    InvalidKeyFormat(String),
+    KeyValidationFailed(String),
+    PassphraseRequired,
+    PassphraseIncorrect,
+    // Host key errors
+    HostKeyMismatch { expected: String, actual: String },
+    UnknownHostKey { fingerprint: String },
+    // Connection errors
+    ConnectionTimeout(u64),
+    ConnectionRefused(String),
+    AuthenticationFailed { user: String, host: String },
+    PermissionDenied(String),
+    // Agent errors
+    AgentSocketUnavailable,
+    AgentProtocolError(String),
+    // Internal
+    Internal(String),
+    Io(std::io::Error),
 }
 ```
 
-### 1.2 Implement Methods
+### 1.2 Additional Infrastructure Built
+
+- **`SshEvent` enum** — Audit events (HostAdded, HostRemoved, ConnectionAttempt, CommandExecuted, KeyRotated, HostKeyChanged, AgentStarted, AgentStopped)
+- **`AuditLogger` trait** — Pluggable audit logging with `NullAuditLogger` for testing
+- **`SSHAgentServer` struct** — Placeholder for Phase 6 (worker integration)
+- **Helper functions** — `is_valid_hostname()`, `sanitize_secret_name()`
+
+### 1.3 Methods Implemented
 
 ```rust
 impl SSHBridge {
-    pub fn new(hosts: HashMap<String, SSHHostConfig>) -> Self {
-        Self { hosts }
-    }
-
-    pub fn get_config(&self, host: &str) -> Result<SSHHostConfig, BridgeError> {
-        self.hosts.get(host).cloned().ok_or_else(|| BridgeError::HostNotFound)
-    }
-
-    pub fn get_credentials(&self, host: &str, secrets: &SecretsStore) -> Result<SSHCredentials, BridgeError> {
-        let key_id = format!("ssh_key_{}", host);
-        let key = secrets.get(&key_id)?
-            .ok_or_else(|| BridgeError::SecretNotFound(key_id))?;
-        Ok(SSHCredentials { key })
-    }
-
-    pub fn validate(&self) -> Result<(), BridgeError> {
-        // Validate host configs
-        // Optional: connectivity tests
-        Ok(())
-    }
+    pub async fn new(...) -> Result<Self>
+    pub async fn validate(&self) -> Result<()>
+    pub async fn get_host_config(&self, hostname: &str) -> Result<SSHHostConfig>
+    pub async fn list_hosts(&self) -> Vec<SSHHostConfig>
+    pub async fn add_host(&self, config: SSHHostConfig) -> Result<()>
+    pub async fn remove_host(&self, hostname: &str) -> Result<()>
+    pub async fn start_agent_server(&mut self) -> Result<()>  // Placeholder
+    pub async fn stop_agent_server(&mut self) -> Result<()>
+    pub fn get_agent_socket_path(&self) -> Option<String>
 }
 ```
+
+### 1.4 Tests
+
+- `test_valid_hostname` ✅
+- `test_sanitize_secret_name` ✅
+- `test_create_bridge` ✅
+- `test_add_host` ✅
+
+**Notes:**
+- Phase 1 exceeded scope slightly (added audit logging, host key verification modes, connection config)
+- All code compiles and tests pass
+- `secrets_store` field marked `#[allow(dead_code)]` — used in Phase 3
+- `sanitize_secret_name` unused until Phase 3
+
+---
+
+## Phase 2: Config Storage (Next)
 
 ## Phase 2: Config Storage
 
