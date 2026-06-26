@@ -4737,6 +4737,7 @@ start_tenant() {
 stop_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
 
   say "=== Stopping tenant: $name ==="
 
