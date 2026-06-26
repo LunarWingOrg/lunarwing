@@ -1,0 +1,45 @@
+#!/sbin/openrc-run
+# OpenRC init script for LunarWing Vision OCR Sidecar (Docker)
+#
+# Install:
+#   cp lunarvision-sidecar /etc/init.d/lunarvision-sidecar
+#   chmod +x /etc/init.d/lunarvision-sidecar
+#   rc-update add lunarvision-sidecar default
+#
+# Config: /etc/lunarwing/lunarvision.env (sourced if present)
+
+name="lunarvision-sidecar"
+description="LunarWing Vision OCR Sidecar (Docker)"
+
+command="/usr/bin/docker-compose"
+command_args="up --build"
+command_background=true
+pidfile="/run/lunarvision-sidecar.pid"
+output_log="/var/log/lunarwing/lunarvision-sidecar.log"
+error_log="/var/log/lunarwing/lunarvision-sidecar.err"
+
+# Adjust this if your compose file lives elsewhere
+directory="${LUNARVISION_COMPOSE_DIR:-/opt/lunarwing/projects/ocr-sidecar}"
+
+# Source env file if present
+if [ -f /etc/lunarwing/lunarvision.env ]; then
+    . /etc/lunarwing/lunarvision.env
+fi
+
+depend() {
+    need docker
+    after net
+}
+
+start_pre() {
+    checkpath --directory --owner root:root --mode 0755 /var/log/lunarwing
+    ebegin "Pulling and building LunarVision sidecar"
+    cd "$directory" && docker-compose build >/dev/null 2>&1
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping LunarVision sidecar"
+    cd "$directory" && docker-compose down
+    eend $?
+}
