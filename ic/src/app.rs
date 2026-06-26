@@ -10,6 +10,8 @@
 use std::sync::Arc;
 
 use crate::agent::SessionManager as AgentSessionManager;
+use crate::bridge::ssh::SSHBridge;
+use crate::bridge::ssh_secrets::SshSecretsManager;
 use crate::channels::web::log_layer::LogBroadcaster;
 use crate::config::Config;
 use crate::context::ContextManager;
@@ -57,6 +59,8 @@ pub struct AppComponents {
     pub catalog_entries: Vec<crate::extensions::RegistryEntry>,
     pub dev_loaded_tool_names: Vec<String>,
     pub builder: Option<Arc<dyn crate::tools::SoftwareBuilder>>,
+    /// SSH bridge — centralized host config + agent socket (Phase 4+)
+    pub ssh_bridge: Option<Arc<SSHBridge>>,
 }
 
 /// Options that control optional init phases.
@@ -1072,6 +1076,7 @@ impl AppBuilder {
             catalog_entries,
             dev_loaded_tool_names,
             builder,
+            ssh_bridge,
         })
     }
 }
