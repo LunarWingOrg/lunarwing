@@ -4,11 +4,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
-    routing::{delete, get, post},
+    routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, instrument};
@@ -19,7 +18,7 @@ use crate::bridge::ssh::{
 };
 use crate::bridge::ssh_agent::SshAgentServer;
 use crate::bridge::ssh_secrets::SshSecretsManager;
-use crate::secrets::types::SecretError;
+use crate::secrets::SecretError;
 use secrecy::SecretString;
 
 pub struct SshApiState {
@@ -126,7 +125,7 @@ async fn get_host(State(state): State<Arc<SshApiState>>, Path(host): Path<String
 async fn add_host(State(state): State<Arc<SshApiState>>, Json(request): Json<HostRequest>) -> Result<Json<ApiResponse<String>>, ApiError> {
     let config = SSHHostConfig::from(request);
     let host = config.host.clone();
-    let mut bridge = state.bridge.write().await;
+    let bridge = state.bridge.write().await;
     bridge.add_host(config).await?;
     info!("Added host: {}", host);
     Ok(Json(ApiResponse::success(format!("Host {} added", host))))
@@ -134,7 +133,7 @@ async fn add_host(State(state): State<Arc<SshApiState>>, Json(request): Json<Hos
 
 #[instrument(skip(state))]
 async fn remove_host(State(state): State<Arc<SshApiState>>, Path(host): Path<String>) -> Result<Json<ApiResponse<String>>, ApiError> {
-    let mut bridge = state.bridge.write().await;
+    let bridge = state.bridge.write().await;
     bridge.remove_host(&host).await?;
     info!("Removed host: {}", host);
     Ok(Json(ApiResponse::success(format!("Host {} removed", host))))

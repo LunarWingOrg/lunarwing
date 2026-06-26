@@ -3,14 +3,14 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use futures::Future;
 use russh_keys::agent::server::{Agent, MessageType};
-use russh_keys::key::{self, KeyPair};
+use russh_keys::key::KeyPair;
 use secrecy::ExposeSecret;
 use tokio::net::UnixListener;
-use tokio::sync::Mutex;
 use tokio_stream::wrappers::UnixListenerStream;
 use tracing::{info, warn, error};
 
@@ -54,7 +54,7 @@ impl SshAgent {
 fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
     let key_str = String::from_utf8_lossy(&creds.key_data).to_string();
     let passphrase = creds.passphrase.as_ref().map(|s| s.expose_secret().as_ref());
-    russh_keys::format::decode_secret_key(&key_str, passphrase)
+    russh_keys::decode_secret_key(&key_str, passphrase)
         .map_err(|e| SshBridgeError::InvalidKeyFormat(format!("Key parse error: {}", e)))
 }
 
@@ -114,17 +114,16 @@ impl SshAgentServer {
             }
         }
 
-        let keys_clone = Arc::clone(&keys_map);
-        let _socket_path_clone = socket_path.clone();
+        let socket_path_display = socket_path.to_string_lossy().to_string();
 
         Ok(Arc::new(Self {
             socket_path,
-            keys: keys_clone,
+            keys: Arc::clone(&keys_map),
             _join_handle: tokio::spawn(async move {
                 let stream = UnixListenerStream::new(listener);
-                let agent = SshAgent { keys: keys_clone };
+                let agent = SshAgent { keys: Arc::clone(&keys_map) };
                 if let Err(e) = russh_keys::agent::server::serve(stream, agent).await {
-                    error!("SSH agent server error on {}: {}", socket_path.display(), e);
+                    error!("SSH agent server error on {socket_path_display}: {e}");
                 }
             }),
         }))
