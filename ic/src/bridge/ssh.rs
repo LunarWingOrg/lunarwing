@@ -58,11 +58,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{info, warn, instrument};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::secrets::SecretsStore;
 
@@ -222,13 +224,14 @@ impl std::fmt::Display for HostKeyMode {
     }
 }
 
-/// SSH credentials (sensitive, stored in secrets store)
-#[derive(Debug, Clone)]
+/// SSH credentials (sensitive — zeroized on drop)
+#[derive(Debug)]
 pub struct SSHCredentials {
-    /// Raw key bytes (PEM or OpenSSH format)
-    pub key_data: Vec<u8>,
-    /// Passphrase if encrypted, None if not
-    pub passphrase: Option<String>,
+    /// Raw key bytes (PEM or OpenSSH format). Zeroizing wrapper ensures the
+    /// key material is overwritten in memory when this struct is dropped.
+    pub key_data: Zeroizing<Vec<u8>>,
+    /// Passphrase if encrypted, None if not. SecretString zeroes on drop.
+    pub passphrase: Option<SecretString>,
 }
 
 // ============================================================================
@@ -295,13 +298,27 @@ impl AuditLogger for NullAuditLogger {
 // SSH Bridge Core
 // ============================================================================
 
-/// SSH Agent server — Handles ssh-agent protocol requests
+/// SSH Agent server — Handles ssh-agent protocol requests.
+/// Holds in-memory keys for signing; all key material is zeroized on drop.
 /// (Phase 6 implementation — placeholder for now)
 pub struct SSHAgentServer {
     /// Unix socket path
     pub socket_path: PathBuf,
+    /// In-memory key store (hostname → key bytes). Zeroizing ensures keys
+    /// are wiped from memory when the server is dropped / gateway shuts down.
+    keys: HashMap<String, Zeroizing<Vec<u8>>>,
     /// Task handle for the agent listener
     _join_handle: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for SSHAgentServer {
+    fn drop(&mut self) {
+        // Explicitly clear the key map — Zeroizing<Vec<u8>> zeroes each entry
+        // as it's dropped, ensuring no key material survives in memory.
+        self.keys.clear();
+        // Best-effort socket cleanup.
+        let _ = std::fs::remove_file(&self.socket_path);
+    }
 }
 
 /// SSH Bridge — Centralized SSH access for a tenant

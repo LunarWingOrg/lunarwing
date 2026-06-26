@@ -117,7 +117,7 @@ impl SshSecretsManager {
 
         // Try to load the key
         let key_data = match self.secrets_store.get_decrypted(&self.tenant_id, &secret_name).await {
-            Ok(decrypted) => decrypted.expose().as_bytes().to_vec(),
+            Ok(decrypted) => Zeroizing::new(decrypted.expose().as_bytes().to_vec()),
             Err(SecretError::NotFound(_)) => return Ok(None),
             Err(e) => return Err(SshBridgeError::SecretDecryptionFailed(format!("Failed to load key: {}", e))),
         };
@@ -125,7 +125,7 @@ impl SshSecretsManager {
         // Try to load passphrase
         let passphrase_secret_name = format!("{}_passphrase", secret_name);
         let passphrase = match self.secrets_store.get_decrypted(&self.tenant_id, &passphrase_secret_name).await {
-            Ok(decrypted) => Some(decrypted.expose().to_string()),
+            Ok(decrypted) => Some(decrypted),
             Err(SecretError::NotFound(_)) => None,
             Err(e) => {
                 warn!(
