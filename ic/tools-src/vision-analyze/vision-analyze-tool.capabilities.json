@@ -1,12 +1,37 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "wit_version": "0.3.0",
-  "description": "Analyze images using OCR and vision-language models. Extract text, describe scenes, or get answers about image content. Supports smart auto-routing between OCR and vision backends.",
+  "description": "Analyze images using the LunarWing Vision Service. Supports OCR text extraction (mode: text), vision-language description (mode: describe), or smart auto-routing (mode: auto). Requires the OCR sidecar running on localhost:8088.",
   "capabilities": {
     "http": {
       "allowlist": [
         {
-          "host": "*",
+          "host": "127.0.0.1:8088",
+          "path_prefix": "/v1/",
+          "methods": ["POST"]
+        },
+        {
+          "host": "127.0.0.1:8088",
+          "path_prefix": "/ocr",
+          "methods": ["POST"]
+        },
+        {
+          "host": "127.0.0.1:8088",
+          "path_prefix": "/vision/",
+          "methods": ["POST"]
+        },
+        {
+          "host": "127.0.0.1:8088",
+          "path_prefix": "/health",
+          "methods": ["GET"]
+        },
+        {
+          "host": "localhost:8088",
+          "path_prefix": "/",
+          "methods": ["POST", "GET"]
+        },
+        {
+          "host": "host.containers.internal:8088",
           "path_prefix": "/",
           "methods": ["POST", "GET"]
         }
@@ -22,17 +47,6 @@
   },
   "setup": {
     "required_secrets": [],
-    "env_vars": [
-      {
-        "name": "VISION_SERVICE_URL",
-        "default": "http://127.0.0.1:8088",
-        "description": "URL of the vision analysis service"
-      },
-      {
-        "name": "VISION_AUTH_TOKEN",
-        "default": "",
-        "description": "Optional bearer token for vision service authentication"
-      }
-    ]
+    "env_vars": []
   }
 }
