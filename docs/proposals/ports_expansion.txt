@@ -1,0 +1,5 @@
+- Vision sidecar health check — nanocode_health and pebble_health exist          for self-heal pipeline probing, but there's no vision_health for the           sidecar. The vision sidecar exposes /health on its internal port (             8088), but the self-heal pipeline can't probe it without a dedicated           host-side port mapping. Currently the sidecar is only on                       vision_service (20005) which maps to the internal 8088 for the actual          service — a separate health port like nanocode/pebble would let the            self-heal pipeline probe independently.                                 
+     - SSH agent — no port allocated. SSH harness runs over SSH_AUTH_SOCK (    
+       Unix socket), not a TCP port, so it doesn't need a registry slot. Not   
+       missing, just different mechanism.  
+also decision to use another range in the 30000 area or to just simply use something like an external tool such as a traefik or such
