@@ -1340,6 +1340,31 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(metrics_handler);
 
+    let legacy_ocr_route = warp::path("ocr")
+        .and(warp::post())
+        .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+        .and(warp::body::bytes())
+        .and(rate_limit_filter(state_clone.clone()))
+        .and(auth_filter(state_clone.config.clone()))
+        .and(with_state(state_clone.clone()))
+        .and_then(ocr_handler);
+
+    let legacy_vision_route = warp::path("vision")
+        .and(warp::path("analyze"))
+        .and(warp::post())
+        .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+        .and(warp::body::bytes())
+        .and(rate_limit_filter(state.clone()))
+        .and(auth_filter(state.config.clone()))
+        .and(with_state(state.clone()))
+        .and_then(vision_analyze_handler);
+
+    let legacy_metrics_route = warp::path("vision")
+        .and(warp::path("metrics"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(metrics_handler);
+
     let openapi_route = warp::path("openapi.json")
         .and(warp::get())
         .and_then(openapi_handler);
@@ -1354,7 +1379,10 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(health_handler);
 
-    let routes = ocr_route
+    let routes = legacy_ocr_route
+        .or(legacy_vision_route)
+        .or(legacy_metrics_route)
+        .or(ocr_route)
         .or(vision_route)
         .or(metrics_route)
         .or(openapi_route)
