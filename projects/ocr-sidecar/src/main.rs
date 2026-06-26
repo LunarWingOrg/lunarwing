@@ -20,6 +20,7 @@ const CACHE_FILE_EXT: &str = ".cache";
 struct Config {
     auth_token: Option<String>,
     port: u16,
+    health_port: u16,
     vl_url: Option<String>,
     vl_api_key: Option<String>,
     vl_model: String,
@@ -1241,6 +1242,10 @@ async fn main() {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(8088);
+    let health_port = std::env::var("OCR_HEALTH_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8089);
 
     let vl_url = std::env::var("VL_URL").ok();
     let vl_api_key = std::env::var("VL_API_KEY").ok();
@@ -1262,6 +1267,7 @@ async fn main() {
     let config = Config {
         auth_token,
         port,
+        health_port,
         vl_url,
         vl_api_key,
         vl_model,
@@ -1379,6 +1385,20 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(health_handler);
 
+    // The health route runs on a SEPARATE port (OCR_HEALTH_PORT, default 8089)
+    // so that a saturated or panicked OCR/vision handler cannot prevent the
+    // host self-heal pipeline from probing /health. This mirrors the
+    // nanocode/pebble worker pattern (WSS + dedicated 8443 health port).
+    let health_state = state.clone();
+    let health_port = config.health_port;
+    tokio::spawn(async move {
+        tracing::info!("Health endpoint listening on port {}", health_port);
+        warp::serve(health_route)
+            .run(([0, 0, 0, 0], health_port))
+            .await;
+    });
+
+    // Main API routes — everything except /health, served on OCR_PORT.
     let routes = legacy_ocr_route
         .or(legacy_vision_route)
         .or(legacy_metrics_route)
@@ -1387,13 +1407,13 @@ async fn main() {
         .or(metrics_route)
         .or(openapi_route)
         .or(prometheus_route)
-        .or(health_route)
         .recover(handle_rejection);
 
     tracing::info!("Starting Vision Service on port {}", config.port);
     tracing::info!("PaddleOCR fallback: {}, Cache: {}, Rate limit: {}/s",
         config.enable_paddleocr, config.enable_cache, config.rate_limit_per_second);
 
+    let _ = health_state; // keep alive for the duration of main
     warp::serve(routes)
         .run(([0, 0, 0, 0], config.port))
         .await;

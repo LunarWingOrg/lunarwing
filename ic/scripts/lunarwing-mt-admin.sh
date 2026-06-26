@@ -906,6 +906,7 @@ ports_migrate() {
   if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
   if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
   if [[ "$current_version" -lt 9 ]]; then ports_migrate_v9; fi
+  if [[ "$current_version" -lt 10 ]]; then ports_migrate_v10; fi
 }
 
 # v8 -> v9: rename extended_ports.reserved_5 -> vision_service.
@@ -937,6 +938,44 @@ ports_migrate_v9() {
   local tmp
   tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
   jq '.version = 9' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+}
+
+# v9 -> v10: dedicate extended_ports.reserved_6 -> vision_health.
+# The vision sidecar now listens on two internal ports: 8088 (OCR_PORT) for
+# API traffic and 8089 (OCR_HEALTH_PORT) for /health only. This dedicates a
+# host-side port (extended_base+6) mapped to 8089 so the host self-heal
+# pipeline can probe /health independently of OCR traffic — mirroring the
+# nanocode_health / pebble_health pattern (v8).
+ports_migrate_v10() {
+  if jq -e '.tenants | to_entries[] | select(.value.extended_ports | has("vision_health") | not) | select(.value.extended_ports | has("reserved_6"))' "$PORTS_REGISTRY" >/dev/null 2>&1; then
+    say "migrating port registry -> v10 (assign vision_health from reserved_6 slot) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .tenants |= with_entries(
+          .value |= (
+            if (.extended_ports | type == "object") then
+              .extended_ports |= (
+                .vision_health = ((.vision_health) // (.reserved_6) // ((.extended_base // 0) + 6))
+                | del(.reserved_6)
+              )
+            else . end
+          )
+        )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v10 (vision_health dedicated at extended_base+6)"
+  fi
+
+  # Always bump the version when the dispatcher calls v10, even if there were
+  # no tenants to migrate (e.g. empty registry) — otherwise .version stays
+  # stale and ports_allocate writes v10-shaped tenants into a v9-labeled file.
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '.version = 10' "$PORTS_REGISTRY" >"$tmp"
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
 }
@@ -1011,9 +1050,10 @@ ports_allocate() {
             darkirc_rpc: ($ebase + 2),
             nanocode_health: ($ebase + 3),
             pebble_health: ($ebase + 4),
-            vision_service: ($ebase + 5)
+            vision_service: ($ebase + 5),
+            vision_health: ($ebase + 6)
           }
-          + (reduce range(6; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(7; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -1094,8 +1134,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.extended_ports.darkirc_adapter // "-")\t\(.value.extended_ports.darkirc_irc // "-")\t\(.value.extended_ports.darkirc_rpc // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,DARKIRC_ADPT,DARKIRC_IRC,DARKIRC_RPC,ORCH,NANOCODE,PEBBLE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.extended_ports.darkirc_adapter // "-")\t\(.value.extended_ports.darkirc_irc // "-")\t\(.value.extended_ports.darkirc_rpc // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")\t\(.value.extended_ports.vision_service // "-")\t\(.value.extended_ports.vision_health // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,DARKIRC_ADPT,DARKIRC_IRC,DARKIRC_RPC,ORCH,NANOCODE,PEBBLE,VISION_SVC,VISION_HLTH"
 }
 
 tenant_exists_in_registry() {
@@ -2598,6 +2638,7 @@ stop_tenant_pebble() {
 
 VISION_SIDECAR_IMAGE=lunarwing/vision-service:latest
 VISION_SIDECAR_INTERNAL_PORT=8088
+VISION_SIDECAR_HEALTH_PORT=8089
 
 build_vision_sidecar_image() {
   ensure_container_runtime
@@ -2627,6 +2668,7 @@ write_tenant_vision_env() {
     cat >"$env_path" <<ENVEOF
 LUNARWING_AUTH_TOKEN=$token
 OCR_PORT=$VISION_SIDECAR_INTERNAL_PORT
+OCR_HEALTH_PORT=$VISION_SIDECAR_HEALTH_PORT
 ENVEOF
   )
   chown "$name:$name" "$env_path"
@@ -2680,11 +2722,20 @@ start_tenant_vision() {
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
 
+    # v10: also publish the tenant's dedicated vision_health port -> container
+    # 8089, so the host self-heal pipeline can probe /health directly (mirrors
+    # the nanocode/pebble health_publish pattern).
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" vision_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:${VISION_SIDECAR_HEALTH_PORT}")
+
     say "creating vision sidecar container $container_name on port $vision_port"
     _ctr "$name" run -d \
       --name "$container_name" \
       --env-file "$vision_env_path" \
       -p "127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}" \
+      "${health_publish[@]}" \
       "${restart_arg[@]}" \
       "$VISION_SIDECAR_IMAGE" >/dev/null
     say "vision sidecar ready ($container_name, port $vision_port)"
@@ -2738,6 +2789,7 @@ description="LunarWing vision sidecar ($name)"
 : "\${vis_uid:=$uid}"
 : "\${vis_port:=$vision_port}"
 : "\${vis_internal_port:=$VISION_SIDECAR_INTERNAL_PORT}"
+: "\${vis_health_internal_port:=$VISION_SIDECAR_HEALTH_PORT}"
 : "\${vis_image:=$VISION_SIDECAR_IMAGE}"
 : "\${vis_env_file:=$(tenant_env_dir "$name")/vision.env}"
 : "\${vis_wait:=30}"
@@ -2757,7 +2809,7 @@ _vis() {
 
 _vis_healthy() {
     [ "\$(_vis inspect -f '{{.State.Running}}' "\${vis_container}" 2>/dev/null)" = "true" ] || return 1
-    _vis exec "\${vis_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${vis_internal_port}/health" 2>/dev/null
+    _vis exec "\${vis_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${vis_health_internal_port}/health" 2>/dev/null
 }
 
 start() {
@@ -2795,10 +2847,11 @@ INITEOF
 
 render_vision_quadlet() {
   local name="$1"
-  local qdir vision_port env_path token
+  local qdir vision_port vision_health_port env_path token
   qdir="$(tenant_quadlet_dir "$name")"
   vision_port="$(ports_get "$name" vision_service)"
   [[ -n "$vision_port" ]] || return 0
+  vision_health_port="$(ports_get "$name" vision_health)" || true
   env_path="$(tenant_env_dir "$name")/vision.env"
   [[ -f "$env_path" ]] || write_tenant_vision_env "$name" >/dev/null
   token="$(grep '^LUNARWING_AUTH_TOKEN=' "$env_path" 2>/dev/null | cut -d= -f2- || true)"
@@ -2819,8 +2872,13 @@ ContainerName=lunarwing-vision-${name}
 Image=${VISION_SIDECAR_IMAGE}
 PublishPort=127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}
 Environment=OCR_PORT=${VISION_SIDECAR_INTERNAL_PORT}
+Environment=OCR_HEALTH_PORT=${VISION_SIDECAR_HEALTH_PORT}
 Environment=LUNARWING_AUTH_TOKEN=${token}
 EOF
+    # Publish the per-tenant dedicated vision health port (v10) -> container's
+    # 8089, so the host self-heal pipeline can probe /health independently of
+    # OCR traffic. The sidecar listens on OCR_HEALTH_PORT=8089 internally.
+    [[ -n "$vision_health_port" ]] && printf 'PublishPort=127.0.0.1:%s:%s\n' "$vision_health_port" "$VISION_SIDECAR_HEALTH_PORT"
     if [[ -f "$env_path" ]]; then
       printf 'EnvironmentFile=%s\n' "$env_path"
     fi

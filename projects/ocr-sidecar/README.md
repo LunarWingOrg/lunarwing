@@ -175,7 +175,8 @@ OCR_PORT=8088 ./ic-ocr /tmp/screenshot.png
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OCR_PORT` | `8088` | HTTP server port |
+| `OCR_PORT` | `8088` | HTTP server port (OCR + vision API) |
+| `OCR_HEALTH_PORT` | `8089` | Dedicated health endpoint port (`/health` only) |
 | `LUNARWING_AUTH_TOKEN` | none | Bearer token for auth |
 | `VL_URL` | none | Vision-Language backend URL (e.g., llama.cpp OpenAI-compatible endpoint) |
 | `VL_API_KEY` | none | API key for VL backend (optional) |

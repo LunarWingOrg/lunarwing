@@ -595,7 +595,8 @@ LUNARWING_AUTH_TOKEN=secret VL_URL=http://localhost:8080/v1/chat/completions car
 
 | Variable | Default | Phase | Description |
 |----------|---------|-------|-------------|
-| `OCR_PORT` | `8088` | 1 | HTTP server port |
+| `OCR_PORT` | `8088` | 1 | HTTP server port (OCR + vision API) |
+| `OCR_HEALTH_PORT` | `8089` | 1 | Dedicated health endpoint port (`/health` only) |
 | `LUNARWING_AUTH_TOKEN` | none | 1 | Bearer token for auth |
 | `VL_URL` | none | 2 | Vision-Language backend URL |
 | `VL_API_KEY` | none | 2 | API key for VL backend |
