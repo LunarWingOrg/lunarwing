@@ -188,6 +188,8 @@ Commands:
   build-pebble-worker             Build the pebble worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
+  build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
+
   build-darkirc                   Build darkirc daemon from external source
                                    (shared binary, not per-tenant)
 
@@ -2595,7 +2597,7 @@ build_vision_sidecar_image() {
   [[ -d "$sidecar_dir" ]] || { say "WARNING: $sidecar_dir not found; skipping vision sidecar build"; return 0; }
   if [[ -f "$sidecar_dir/Dockerfile" ]]; then
     "$CONTAINER_RT" build --network=host --format docker -t "$VISION_SIDECAR_IMAGE" -f "$sidecar_dir/Dockerfile" "$sidecar_dir" >/dev/null \
-      || { say "WARNING: vision sidecar image build failed (build-tenant --with-vision will retry)"; return 1; }
+      || { say "WARNING: vision sidecar image build failed (run 'build-vision-sidecar' to retry)"; return 1; }
     say "vision sidecar image built: $VISION_SIDECAR_IMAGE"
   else
     say "WARNING: $sidecar_dir/Dockerfile missing; cannot build vision sidecar"
@@ -4922,9 +4924,11 @@ doctor() {
   if command -v docker >/dev/null 2>&1; then
     _check "nanocode worker image exists" docker image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" docker image inspect lunarwing-worker-pebble:latest
+    _check "vision sidecar image exists" docker image inspect "$VISION_SIDECAR_IMAGE"
   elif command -v podman >/dev/null 2>&1; then
     _check "nanocode worker image exists" podman image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" podman image inspect lunarwing-worker-pebble:latest
+    _check "vision sidecar image exists" podman image inspect "$VISION_SIDECAR_IMAGE"
   fi
 
   say ""
@@ -5101,6 +5105,11 @@ main() {
         esac
       done
       build_pebble_worker "$no_cache"
+      ;;
+
+    build-vision-sidecar)
+      require_root
+      build_vision_sidecar_image
       ;;
 
     install-wasm)
