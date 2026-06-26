@@ -9,7 +9,7 @@ Type=simple
 WorkingDirectory=/opt/lunarwing/projects/ocr-sidecar
 Environment=LUNARWING_AUTH_TOKEN=${LUNARWING_AUTH_TOKEN}
 Environment=OCR_PORT=8088
-EnvironmentFile=-/etc/lunarwing/lunarvision.env
+EnvironmentFile=-/etc/lunarwing/ocr-sidecar.env
 ExecStartPre=/usr/bin/docker-compose down --remove-orphans
 ExecStart=/usr/bin/docker-compose up --build
 ExecStop=/usr/bin/docker-compose down
