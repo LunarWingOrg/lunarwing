@@ -4512,6 +4512,7 @@ add_tenant() {
   say ""
 
   say "--- Generating environment files ---"
+  write_tenant_vision_env "$name" >/dev/null
   write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
@@ -4522,7 +4523,6 @@ add_tenant() {
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
-  write_tenant_vision_env "$name" >/dev/null
   if ! "$CONTAINER_RT" image inspect "$VISION_SIDECAR_IMAGE" &>/dev/null; then
     build_vision_sidecar_image || true
   fi
