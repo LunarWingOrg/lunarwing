@@ -9,6 +9,9 @@ Lightweight OCR and vision analysis sidecar service for LunarWing. Provides a RE
 cd projects/ocr-sidecar
 docker-compose up --build
 
+# Or with Podman
+podman compose up --build
+
 # Or run locally (requires Rust + Tesseract)
 cargo run
 ```
@@ -94,8 +97,27 @@ Health check endpoint (no auth required).
 {
   "status": "ok",
   "tesseract_version": "tesseract 5.3.1",
-  "uptime_secs": 0
+  "uptime_secs": 0,
+  "vl_available": false
 }
+```
+
+`vl_available` is `true` when `VL_URL` is configured.
+
+### GET /metrics
+Prometheus metrics endpoint (no auth required). Emits text/plain Prometheus format.
+
+**Enabled by default.** Disable with `ENABLE_PROMETHEUS=false`.
+
+Exposes counters (`requests_total`, `cache_hits_total`, `errors_total`, `vl_tokens_used_total`), gauges (`cache_hit_ratio`, `cache_entries`, `vl_available`, `uptime_seconds`, `avg_latency_ms`), and histograms (`request_duration_seconds`, `ocr_confidence`).
+
+```yaml
+# Prometheus scrape config
+scrape_configs:
+  - job_name: 'lunarvision'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['127.0.0.1:8088']
 ```
 
 ### GET /vision/metrics
@@ -158,8 +180,10 @@ OCR_PORT=8088 ./ic-ocr /tmp/screenshot.png
 | `VL_URL` | none | Vision-Language backend URL (e.g., llama.cpp OpenAI-compatible endpoint) |
 | `VL_API_KEY` | none | API key for VL backend (optional) |
 | `VL_MODEL` | `qwen3-vl` | VL model name |
+| `VL_TIMEOUT_SECS` | `30` | Timeout for VL backend requests |
 | `ENABLE_PADDLEOCR` | `false` | Enable PaddleOCR fallback when Tesseract confidence < 0.7 |
 | `ENABLE_CACHE` | `true` | Enable response caching (5 min TTL) |
+| `ENABLE_PROMETHEUS` | `true` | Enable `/metrics` Prometheus endpoint |
 | `RATE_LIMIT_PER_SECOND` | `10` | Per-IP rate limit for OCR/vision endpoints |
 
 ## Supported Image Formats
@@ -195,6 +219,12 @@ Common error codes:
 ```bash
 docker build -t lunarwing/ocr-sidecar .
 docker run -p 8088:8088 -e LUNARWING_AUTH_TOKEN=secret lunarwing/ocr-sidecar
+```
+
+### Podman
+```bash
+podman build -t lunarwing/ocr-sidecar .
+podman run -p 8088:8088 -e LUNARWING_AUTH_TOKEN=secret lunarwing/ocr-sidecar
 ```
 
 ### Systemd

@@ -335,6 +335,7 @@ declare -A SERVICE_MAP=(
     [xmpp]="xmpp-bridge"
     [tensorzero]="tensorzero-gateway"
     [clickhouse]="clickhouse-server"
+    [lunarvision]="${LUNARVISION_SERVICE:-ocr-sidecar}"
 )
 
 # Component → health-check script, for post-restart verification.
@@ -343,6 +344,7 @@ declare -A COMPONENT_CHECK_MAP=(
     [xmpp]="health-xmpp.sh"
     [tensorzero]="health-tensorzero.sh"
     [clickhouse]="health-clickhouse.sh"
+    [lunarvision]="health-lunarvision.sh"
 )
 
 # Components that represent features of another service, not their own service.
