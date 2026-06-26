@@ -77,8 +77,12 @@ pub struct SshAgentServer {
 impl Drop for SshAgentServer {
     fn drop(&mut self) {
         self._join_handle.abort();
-        let mut keys = self.keys.blocking_lock();
-        keys.clear();
+        // Best-effort key clearing: try_lock avoids panicking when Drop runs
+        // inside a tokio runtime (blocking_lock would). If the lock is
+        // contended, the keys will be zeroized when the last Arc clone drops.
+        if let Ok(mut keys) = self.keys.try_lock() {
+            keys.clear();
+        }
         let _ = std::fs::remove_file(&self.socket_path);
         info!("SSH agent server stopped: {}", self.socket_path.display());
     }
