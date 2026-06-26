@@ -11,7 +11,6 @@ use std::sync::Arc;
 
 use crate::agent::SessionManager as AgentSessionManager;
 use crate::bridge::ssh::SSHBridge;
-use crate::bridge::ssh_secrets::SshSecretsManager;
 use crate::channels::web::log_layer::LogBroadcaster;
 use crate::config::Config;
 use crate::context::ContextManager;
@@ -60,7 +59,9 @@ pub struct AppComponents {
     pub dev_loaded_tool_names: Vec<String>,
     pub builder: Option<Arc<dyn crate::tools::SoftwareBuilder>>,
     /// SSH bridge — centralized host config + agent socket (Phase 4+)
-    pub ssh_bridge: Option<Arc<SSHBridge>>,
+    /// Wrapped in `RwLock` so the API layer can perform mutable operations
+    /// (add/remove host) while other consumers hold shared read access.
+    pub ssh_bridge: Option<Arc<tokio::sync::RwLock<SSHBridge>>>,
 }
 
 /// Options that control optional init phases.
@@ -1049,6 +1050,37 @@ impl AppBuilder {
         // user-explicit overrides (see port analysis P0-A in IronClaw 0.28.2).
         cleanup_ghost_seeded_tool_permissions(&tools, self.db.as_ref(), &self.config.owner_id)
             .await;
+
+        // ── SSH bridge (Phase 4) ───────────────────────────────────────
+        let ssh_bridge = if !self.config.ssh.hosts.is_empty() {
+            if let Some(ref secrets) = self.secrets_store {
+                let host_map = self.config.ssh.to_host_map();
+                let tenant_id =
+                    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, self.config.owner_id.as_bytes());
+                let audit_logger = Arc::new(crate::bridge::ssh::NullAuditLogger);
+                match SSHBridge::new(tenant_id, host_map, Arc::clone(secrets), audit_logger).await {
+                    Ok(bridge) => {
+                        if let Err(e) = bridge.validate().await {
+                            tracing::warn!(error = %e, "SSH bridge validation failed");
+                        }
+                        tracing::info!(
+                            hosts = self.config.ssh.hosts.len(),
+                            "SSH bridge initialized"
+                        );
+                        Some(Arc::new(tokio::sync::RwLock::new(bridge)))
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Failed to create SSH bridge");
+                        None
+                    }
+                }
+            } else {
+                tracing::debug!("SSH hosts configured but no secrets store available, skipping SSH bridge");
+                None
+            }
+        } else {
+            None
+        };
 
         Ok(AppComponents {
             config: self.config,
