@@ -103,6 +103,17 @@ impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
             },
         }
     }
+
+    fn schema() -> String {
+        SCHEMA.to_string()
+    }
+
+    fn description() -> String {
+        "Analyze images using OCR and vision-language models. Extract text, describe scenes, \
+         or answer questions about image content. Supports smart auto-routing between OCR and \
+         vision backends. Accepts base64 images or workspace file paths."
+            .to_string()
+    }
 }
 
 fn execute_inner(params_json: &str) -> Result<String, String> {
@@ -241,3 +252,31 @@ fn get_image_data(req: &VisionRequest) -> Result<String, String> {
 }
 
 export!(VisionAnalyzeTool);
+const SCHEMA: &str = r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "VisionAnalyzeParams",
+  "description": "Parameters for analyzing images with OCR and vision-language models",
+  "required": ["image"],
+  "properties": {
+    "image": {
+      "type": "string",
+      "description": "Base64-encoded image data or workspace file path (e.g., './screenshot.png' or '~/image.jpg')"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["text", "describe", "auto"],
+      "default": "auto",
+      "description": "Analysis mode: 'text' for OCR only, 'describe' for vision-language description, 'auto' for smart routing"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "Custom question or prompt for vision analysis (e.g., 'What colors are in this image?')"
+    },
+    "ocr_lang": {
+      "type": "string",
+      "default": "eng",
+      "description": "OCR language code (e.g., 'eng', 'fra', 'deu')"
+    }
+  }
+}"#;
