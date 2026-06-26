@@ -4611,7 +4611,7 @@ dependencies = [
  "aws-sdk-bedrockruntime",
  "aws-smithy-types",
  "axum 0.8.9",
- "base64 0.22.1",
+ "base64 0.21.7",
  "blake3",
  "bollard",
  "bytes",

@@ -152,6 +152,7 @@ hmac = "0.12"
 russh = "0.45"
 russh-keys = "0.45"
 
+# Cryptography utilities
 sha2 = "0.10"
 blake3 = "1"
 rand = "0.8"
@@ -185,7 +186,7 @@ http = "1"
 # External worker WebSocket client
 tokio-tungstenite = "0.26"
 bytes = "1"
-base64 = "0.22.1"
+base64 = "0.21"
 mime_guess = "2.0.5"
 clap_complete = "4.5.0"
 lru = "0.16.3"
