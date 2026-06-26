@@ -85,7 +85,7 @@ impl AgentConfig {
             auto_approve_tools: true,
             default_timezone: "UTC".to_string(),
             max_tokens_per_job: 0,
-            handle_message_timeout: Duration::from_secs(300),
+            handle_message_timeout: Duration::from_secs(400),
             self_repair_op_timeout: Duration::from_secs(60),
             session_prune_timeout: Duration::from_secs(30),
             reflex: ReflexConfig::default(),

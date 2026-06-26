@@ -41,7 +41,7 @@ impl LlmConfig {
             gemini_oauth: None,
             openai_codex: None,
             request_timeout_secs: 120,
-            llm_turn_budget_secs: 270,
+            llm_turn_budget_secs: 370,
             cheap_model: None,
             smart_routing_cascade: false,
             max_retries: 0,
@@ -240,7 +240,7 @@ impl LlmConfig {
         // turn timeout — so a hung backend fails gracefully instead of being
         // hard-killed mid-turn (which clears the thread's pending queue and drops
         // the user's queued follow-up). See ic/src/llm/timeout.rs. 0 disables.
-        let llm_turn_budget_secs = parse_optional_env("LLM_TURN_BUDGET_SECS", 270)?;
+        let llm_turn_budget_secs = parse_optional_env("LLM_TURN_BUDGET_SECS", 370)?;
 
         let gemini_oauth = if backend_lower == "gemini_oauth" || backend_lower == "gemini-oauth" {
             let model = Self::resolve_model("GEMINI_MODEL", settings, "gemini-2.5-flash")?;
