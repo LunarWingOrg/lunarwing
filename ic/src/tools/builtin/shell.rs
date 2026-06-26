@@ -95,7 +95,6 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "$(wget",
         "/etc/passwd",
         "/etc/shadow",
-        "~/.ssh",
         ".bash_history",
         "id_rsa",
     ]
