@@ -578,7 +578,7 @@ mod tests {
         let tenant_id = Uuid::new_v4();
         let hosts = HashMap::new();
         let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
-            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 
@@ -594,7 +594,7 @@ mod tests {
         let tenant_id = Uuid::new_v4();
         let mut hosts = HashMap::new();
         let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
-            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 

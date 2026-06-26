@@ -259,7 +259,7 @@ mod tests {
 
     fn make_test_manager() -> SshSecretsManager {
         let store: Arc<dyn SecretsStore + Send + Sync> = Arc::new(InMemorySecretsStore::new(Arc::new(
-            SecretsCrypto::new(secrecy::SecretString::from("test-master-key")).unwrap(),
+            SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
         )));
         SshSecretsManager::new(store, "test-tenant")
     }
