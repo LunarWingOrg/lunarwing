@@ -100,6 +100,57 @@ tenant_state_dir() { printf '%s/state' "$(tenant_lw_root "$1")"; }
 tenant_log_dir() { printf '%s/logs' "$(tenant_lw_root "$1")"; }
 tenant_run_dir() { printf '%s/run' "$(tenant_lw_root "$1")"; }
 
+# ── Container config-hash tracking ────────────────────────────────────────────
+#
+# Quadlet and imperative `podman run` both create a container with config
+# (env vars, volumes, ports) baked in at creation time. `systemctl restart`
+# and `podman start` only restart the EXISTING container — they do NOT pick
+# up changes to the .container file or a re-rendered `podman run` command.
+# This causes stale-env bugs on upgrade (e.g. AGENT_AUTH_TOKEN missing,
+# SSH_AUTH_SOCK not mounted) because the old container survives the re-render.
+#
+# Fix: after rendering a quadlet or before an imperative `podman run`, compute
+# a hash of the config source and compare it to the hash stored when the
+# container was last created. If they differ, force-recreate the container.
+# The hash is stored in a sidecar file next to the container's quadlet/state.
+
+# Directory for config-hash sidecars (created on first use).
+_hash_dir() { printf '%s/.config/lunarwing/container-hashes' "$(tenant_home "$1")"; }
+
+# Compute and store the hash of a config file (e.g. a .container quadlet).
+# Usage: _store_container_hash <tenant> <container-name> <config-file>
+_store_container_hash() {
+  local name="$1" container="$2" config_file="$3" hdir hash
+  hdir="$(_hash_dir "$name")"
+  mkdir -p "$hdir" 2>/dev/null || true
+  hash="$(sha256sum "$config_file" 2>/dev/null | cut -d' ' -f1 || true)"
+  [[ -n "$hash" ]] && printf '%s\n' "$hash" >"$hdir/${container}.hash"
+}
+
+# Check whether the config file's hash matches the stored hash.
+# Returns 0 (match / first-run) or 1 (mismatch / needs recreate).
+# Usage: _container_config_changed <tenant> <container-name> <config-file>
+_container_config_changed() {
+  local name="$1" container="$2" config_file="$3" hdir stored current
+  hdir="$(_hash_dir "$name")"
+  [[ -f "$config_file" ]] || return 0  # no config file = no opinion
+  current="$(sha256sum "$config_file" 2>/dev/null | cut -d' ' -f1 || true)"
+  [[ -n "$current" ]] || return 0      # can't hash = don't force recreate
+  stored=""
+  [[ -f "$hdir/${container}.hash" ]] && stored="$(cat "$hdir/${container}.hash" 2>/dev/null || true)"
+  [[ -z "$stored" || "$stored" != "$current" ]]
+}
+
+# Force-recreate a Quadlet-managed container: stop the service, remove the
+# stale container, then start the service (Quadlet re-runs `podman run`).
+# Usage: _recreate_quadlet_container <tenant> <service-name> <container-name>
+_recreate_quadlet_container() {
+  local name="$1" svc="$2" container="$3"
+  say "config changed for $container; force-recreating"
+  _systemctl_user "$name" stop "$svc" >/dev/null 2>&1 || true
+  _ctr "$name" rm -f "$container" >/dev/null 2>&1 || true
+}
+
 tenant_darkirc_enabled() {
   local name="$1"
   local val
@@ -2414,9 +2465,17 @@ start_tenant_nanocode() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-nanocode-${name}.container"
     render_worker_quadlet "$name" nanocode 8443
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    # Force-recreate if the quadlet config changed since the container was
+    # last created (Quadlet restarts the existing container without picking
+    # up new env vars / volumes).
+    if _container_config_changed "$name" "lunarwing-nanocode-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-nanocode-${name}.service" "lunarwing-nanocode-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-nanocode-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-nanocode-${name}" "$quadlet_file"
       say "nanocode worker ready via quadlet (lunarwing-nanocode-${name}.service, WSS port $wss_port)"
     else
       say "WARNING: lunarwing-nanocode-${name}.service failed to start" >&2
@@ -2426,13 +2485,32 @@ start_tenant_nanocode() {
   fi
 
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
-    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+    # Check if the container's config is stale (env vars / volumes changed
+    # since it was created). The imperative path hashes lunarwing.env since
+    # there's no quadlet file to compare against.
+    local env_file_for_hash
+    env_file_for_hash="$(tenant_env_dir "$name")/lunarwing.env"
+    if _container_config_changed "$name" "$container_name" "$env_file_for_hash"; then
+      say "config changed for $container_name; force-recreating"
+      _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+    elif _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "nanocode worker already running ($container_name, WSS port $wss_port)"
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" nanocode
+      return 0
     else
       say "starting existing nanocode worker container $container_name"
       _ctr "$name" start "$container_name" >/dev/null
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" nanocode
+      say "nanocode worker ready ($container_name, WSS port $wss_port)"
+      return 0
     fi
-  else
+  fi
+
+  # Container doesn't exist (or was force-removed above) — create it fresh.
+  if ! _ctr "$name" inspect "$container_name" &>/dev/null; then
     say "creating nanocode worker container $container_name on WSS port $wss_port"
 
     # Read tenant env for secrets to pass through
@@ -2503,6 +2581,7 @@ start_tenant_nanocode() {
       "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
       --mode websocket >/dev/null
+    _store_container_hash "$name" "$container_name" "$(tenant_env_dir "$name")/lunarwing.env"
   fi
 
   _register_worker_unit "$name" nanocode
@@ -2550,9 +2629,14 @@ start_tenant_pebble() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-pebble-${name}.container"
     render_worker_quadlet "$name" pebble 8443
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _container_config_changed "$name" "lunarwing-pebble-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-pebble-${name}.service" "lunarwing-pebble-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-pebble-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-pebble-${name}" "$quadlet_file"
       say "pebble worker ready via quadlet (lunarwing-pebble-${name}.service, WSS port $wss_port)"
     else
       say "WARNING: lunarwing-pebble-${name}.service failed to start" >&2
@@ -2562,13 +2646,28 @@ start_tenant_pebble() {
   fi
 
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
-    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+    local env_file_for_hash
+    env_file_for_hash="$(tenant_env_dir "$name")/lunarwing.env"
+    if _container_config_changed "$name" "$container_name" "$env_file_for_hash"; then
+      say "config changed for $container_name; force-recreating"
+      _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+    elif _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "pebble worker already running ($container_name, WSS port $wss_port)"
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" pebble
+      return 0
     else
       say "starting existing pebble worker container $container_name"
       _ctr "$name" start "$container_name" >/dev/null
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" pebble
+      say "pebble worker ready ($container_name, WSS port $wss_port)"
+      return 0
     fi
-  else
+  fi
+
+  if ! _ctr "$name" inspect "$container_name" &>/dev/null; then
     say "creating pebble worker container $container_name on WSS port $wss_port"
 
     local tenant_env_path
@@ -2622,6 +2721,7 @@ start_tenant_pebble() {
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
+    _store_container_hash "$name" "$container_name" "$(tenant_env_dir "$name")/lunarwing.env"
   fi
 
   _register_worker_unit "$name" pebble
@@ -2706,9 +2806,14 @@ start_tenant_vision() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-vision-${name}.container"
     render_vision_quadlet "$name"
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _container_config_changed "$name" "lunarwing-vision-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-vision-${name}.service" "lunarwing-vision-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-vision-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-vision-${name}" "$quadlet_file"
       say "vision sidecar ready via quadlet (lunarwing-vision-${name}.service, port $vision_port)"
     else
       say "WARNING: lunarwing-vision-${name}.service failed to start" >&2
