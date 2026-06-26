@@ -1,8 +1,8 @@
 [Unit]
-Description=LunarWing Vision OCR Sidecar
+Description=LunarWing Vision OCR Sidecar (Podman rootless)
 Documentation=https://github.com/LunarWingOrg/lunarwing/tree/main/projects/ocr-sidecar
-After=docker.service
-Requires=docker.service
+After=podman.service
+Requires=podman.service
 
 [Service]
 Type=simple
@@ -10,18 +10,16 @@ WorkingDirectory=/opt/lunarwing/projects/ocr-sidecar
 Environment=LUNARWING_AUTH_TOKEN=${LUNARWING_AUTH_TOKEN}
 Environment=OCR_PORT=8088
 EnvironmentFile=-/etc/lunarwing/ocr-sidecar.env
-ExecStartPre=/usr/bin/docker-compose down --remove-orphans
-ExecStart=/usr/bin/docker-compose up --build
-ExecStop=/usr/bin/docker-compose down
+ExecStartPre=/usr/bin/podman compose down --remove-orphans || true
+ExecStart=/usr/bin/podman compose up --build
+ExecStop=/usr/bin/podman compose down
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120
 
-# Hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/opt/lunarwing/projects/ocr-sidecar
-PrivateTmp=true
+# Rootless Podman: this unit runs as the user, not root
+# Install to: ~/.config/systemd/user/ocr-sidecar.service
+# Enable with: systemctl --user enable --now ocr-sidecar.service
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

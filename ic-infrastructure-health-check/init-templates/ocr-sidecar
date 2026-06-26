@@ -1,18 +1,21 @@
 #!/sbin/openrc-run
-# OpenRC init script for LunarWing Vision OCR Sidecar (Docker)
+# OpenRC init script for LunarWing Vision OCR Sidecar (Podman rootless)
 #
 # Install:
-#   cp ocr-sidecar /etc/init.d/ocr-sidecar
-#   chmod +x /etc/init.d/ocr-sidecar
-#   rc-update add ocr-sidecar default
+#   sudo cp ocr-sidecar /etc/init.d/ocr-sidecar
+#   sudo chmod +x /etc/init.d/ocr-sidecar
+#   sudo rc-update add ocr-sidecar default
+#
+# For rootless Podman, run as the user who owns the containers:
+#   sudo usermod -aG podman <username>
 #
 # Config: /etc/lunarwing/ocr-sidecar.env (sourced if present)
 
 name="ocr-sidecar"
-description="LunarWing Vision OCR Sidecar (Docker)"
+description="LunarWing Vision OCR Sidecar (Podman rootless)"
 
-command="/usr/bin/docker-compose"
-command_args="up --build"
+command="/usr/bin/podman"
+command_args="compose up --build"
 command_background=true
 pidfile="/run/ocr-sidecar.pid"
 output_log="/var/log/lunarwing/ocr-sidecar.log"
@@ -27,19 +30,19 @@ if [ -f /etc/lunarwing/ocr-sidecar.env ]; then
 fi
 
 depend() {
-    need docker
+    need podman
     after net
 }
 
 start_pre() {
     checkpath --directory --owner root:root --mode 0755 /var/log/lunarwing
     ebegin "Pulling and building OCR sidecar"
-    cd "$directory" && docker-compose build >/dev/null 2>&1
+    cd "$directory" && podman compose build >/dev/null 2>&1
     eend $?
 }
 
 stop() {
     ebegin "Stopping OCR sidecar"
-    cd "$directory" && docker-compose down
+    cd "$directory" && podman compose down
     eend $?
 }
