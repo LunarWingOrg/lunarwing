@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Build stage ---------------------------------------------------------
-FROM rust:1.75-slim-bookworm AS builder
+FROM rust:1.92-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libtesseract-dev \
