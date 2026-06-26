@@ -7,6 +7,8 @@
 //! - Per-tenant isolation
 //! - SSH agent socket for worker integration
 //!
+//! See `ssh_secrets.rs` for secrets integration utilities.
+//!
 //! # Security Model
 //!
 //! ```text
