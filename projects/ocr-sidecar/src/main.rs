@@ -13,6 +13,7 @@ use warp::http::StatusCode;
 const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 const CACHE_TTL_SECS: u64 = 300;
 const CACHE_MAX_ENTRIES: usize = 10000;
+const CACHE_FILE_EXT: &str = ".cache";
 
 #[derive(Clone)]
 struct Config {
@@ -1025,6 +1026,124 @@ async fn prometheus_metrics_handler(state: AppState) -> Result<impl Reply, Rejec
     Ok(warp::reply::with_header(buf, "Content-Type", "text/plain; version=0.0.4; charset=utf-8"))
 }
 
+async fn openapi_handler() -> Result<impl Reply, Rejection> {
+    let spec = serde_json::json!({
+        "openapi": "3.0.3",
+        "info": {
+            "title": "LunarWing OCR Sidecar",
+            "description": "OCR and vision-language analysis service",
+            "version": "1.0.0"
+        },
+        "servers": [
+            {"url": "/v1", "description": "Versioned API"}
+        ],
+        "paths": {
+            "/ocr": {
+                "post": {
+                    "summary": "Extract text from an image",
+                    "tags": ["ocr"],
+                    "security": [{"bearerAuth": []}],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/OcrRequest"}
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "OCR result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OcrResponse"}}}},
+                        "429": {"description": "Rate limited"}
+                    }
+                }
+            },
+            "/vision/analyze": {
+                "post": {
+                    "summary": "Unified vision analysis with smart routing",
+                    "tags": ["vision"],
+                    "security": [{"bearerAuth": []}],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/VisionAnalyzeRequest"}
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "Analysis result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VisionAnalyzeResponse"}}}}
+                    }
+                }
+            },
+            "/vision/metrics": {
+                "get": {
+                    "summary": "JSON metrics",
+                    "tags": ["metrics"],
+                    "responses": {"200": {"description": "Metrics"}}
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "summary": "Health check",
+                "tags": ["health"],
+                "responses": {"200": {"description": "Service status"}}
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Prometheus metrics",
+                "tags": ["metrics"],
+                "responses": {"200": {"description": "Prometheus text format", "content": {"text/plain": {}}}}
+            }
+        },
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {"type": "http", "scheme": "bearer"}
+            },
+            "schemas": {
+                "OcrRequest": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {
+                        "image": {"type": "string", "description": "Base64-encoded image"},
+                        "ocr_lang": {"type": "string", "default": "eng"}
+                    }
+                },
+                "OcrResponse": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "engine": {"type": "string"},
+                        "elapsed_ms": {"type": "integer"}
+                    }
+                },
+                "VisionAnalyzeRequest": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {
+                        "image": {"type": "string"},
+                        "mode": {"type": "string", "enum": ["text", "describe", "auto"], "default": "auto"},
+                        "prompt": {"type": "string"},
+                        "ocr_lang": {"type": "string", "default": "eng"},
+                        "detail_level": {"type": "string", "default": "medium"}
+                    }
+                },
+                "VisionAnalyzeResponse": {
+                    "type": "object",
+                    "properties": {
+                        "mode_used": {"type": "string"},
+                        "ocr": {"type": "object"},
+                        "vision": {"type": "object"},
+                        "meta": {"type": "object"}
+                    }
+                }
+            }
+        }
+    });
+    Ok(warp::reply::json(&spec))
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -1094,7 +1213,10 @@ async fn main() {
 
     let state_clone = state.clone();
 
-    let ocr_route = warp::path("ocr")
+    let api_v1 = warp::path("v1");
+
+    let ocr_route = api_v1
+        .and(warp::path("ocr"))
         .and(warp::post())
         .and(warp::body::content_length_limit(MAX_BODY_SIZE))
         .and(warp::body::bytes())
@@ -1103,7 +1225,8 @@ async fn main() {
         .and(with_state(state_clone.clone()))
         .and_then(ocr_handler);
 
-    let vision_route = warp::path("vision")
+    let vision_route = api_v1
+        .and(warp::path("vision"))
         .and(warp::path("analyze"))
         .and(warp::post())
         .and(warp::body::content_length_limit(MAX_BODY_SIZE))
@@ -1113,11 +1236,16 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(vision_analyze_handler);
 
-    let metrics_route = warp::path("vision")
+    let metrics_route = api_v1
+        .and(warp::path("vision"))
         .and(warp::path("metrics"))
         .and(warp::get())
         .and(with_state(state.clone()))
         .and_then(metrics_handler);
+
+    let openapi_route = warp::path("openapi.json")
+        .and(warp::get())
+        .and_then(openapi_handler);
 
     let prometheus_route = warp::path("metrics")
         .and(warp::get())
@@ -1132,6 +1260,7 @@ async fn main() {
     let routes = ocr_route
         .or(vision_route)
         .or(metrics_route)
+        .or(openapi_route)
         .or(prometheus_route)
         .or(health_route)
         .recover(handle_rejection);

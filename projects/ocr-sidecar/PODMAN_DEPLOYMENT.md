@@ -180,7 +180,7 @@ If you're migrating from Docker:
 
 ```bash
 # Stop Docker containers
-docker-compose down
+podman compose down
 
 # Remove Docker images (optional)
 docker rmi lunarwing/vision-service

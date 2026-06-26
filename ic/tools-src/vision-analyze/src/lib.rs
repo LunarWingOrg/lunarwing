@@ -17,7 +17,14 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_VISION_URL: &str = "http://127.0.0.1:8088";
-const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
+const MAX_RETRIES: u32 = 3;
+const BASE_DELAY_MS: u64 = 250;
+const MAX_DELAY_MS: u64 = 5000;
+
+fn is_retryable(status: u16) -> bool {
+    matches!(status, 429 | 502 | 503 | 504)
+} // 10MB
 
 struct VisionAnalyzeTool;
 
@@ -144,11 +151,12 @@ fn execute_inner(params: &str) -> Result<String, String> {
     });
 
     // Determine endpoint
-    let endpoint = if params.mode == "text" && params.prompt.is_none() {
-        format!("{}/ocr", vision_url)
+    let base = if params.mode == "text" && params.prompt.is_none() {
+        "/v1/ocr"
     } else {
-        format!("{}/vision/analyze", vision_url)
+        "/v1/vision/analyze"
     };
+    let endpoint = format!("{vision_url}{base}");
 
     // Build headers
     let mut headers = serde_json::json!({
@@ -163,79 +171,79 @@ fn execute_inner(params: &str) -> Result<String, String> {
     }
 
     // Make HTTP request
-    let body_bytes = request_body.to_string().into_bytes();
-    let response = near::agent::host::http_request(
-        "POST",
-        &endpoint,
-        &headers.to_string(),
-        Some(&body_bytes),
-        Some(60000), // 60s timeout
-    )
-    .map_err(|e| format!("Vision service request failed: {e}"))?;
+    let mut last_error = String::new();
+    let mut delay_ms = BASE_DELAY_MS;
 
-    if response.status < 200 || response.status >= 300 {
+    for attempt in 0..=MAX_RETRIES {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            delay_ms = (delay_ms * 2).min(MAX_DELAY_MS);
+        }
+
+        let body_bytes = request_body.to_string().into_bytes();
+        let response = near::agent::host::http_request(
+            "POST",
+            &endpoint,
+            &headers.to_string(),
+            Some(&body_bytes),
+            Some(60000),
+        )
+        .map_err(|e| {
+            last_error = format!("Vision service request failed: {e}");
+        });
+
+        let Ok(response) = response else {
+            continue;
+        };
+
+        if response.status < 200 || response.status >= 300 {
+            if is_retryable(response.status) && attempt < MAX_RETRIES {
+                last_error = format!(
+                    "Vision service returned {} (retry {}/{})",
+                    response.status,
+                    attempt + 1,
+                    MAX_RETRIES
+                );
+                continue;
+            }
+            let body_str = String::from_utf8_lossy(&response.body);
+            return Err(format!(
+                "Vision service error {}: {}",
+                response.status, body_str
+            ));
+        }
+
         let body_str = String::from_utf8_lossy(&response.body);
-        return Err(format!(
-            "Vision service error {}: {}",
-            response.status, body_str
-        ));
+        let vision_response: serde_json::Value = serde_json::from_str(&body_str)
+            .map_err(|e| format!("Failed to parse vision service response: {e}"))?;
+
+        let output = if endpoint.ends_with("/ocr") {
+            ToolOutput {
+                mode_used: "text".to_string(),
+                text: vision_response["text"].as_str().map(|s| s.to_string()),
+                description: None,
+                answer: None,
+                confidence: None,
+                backends: vec!["tesseract".to_string()],
+                latency_ms: vision_response["elapsed_ms"].as_u64().unwrap_or(0),
+            }
+        } else {
+            let mode_used = vision_response["mode_used"].as_str().unwrap_or("auto").to_string();
+            let ocr_text = vision_response["ocr"]["full_text"].as_str().map(|s| s.to_string());
+            let description = vision_response["vision"]["description"].as_str().map(|s| s.to_string());
+            let answer = vision_response["vision"]["prompt_answer"].as_str().map(|s| s.to_string());
+            let confidence = vision_response["ocr"]["avg_confidence"].as_f64().map(|f| f as f32);
+            let backends: Vec<String> = vision_response["meta"]["backends_used"].as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            let latency = vision_response["meta"]["latency_ms"].as_u64().unwrap_or(0);
+            ToolOutput { mode_used, text: ocr_text, description, answer, confidence, backends, latency_ms: latency }
+        };
+
+        return serde_json::to_string(&output).map_err(|e| format!("Failed to serialize output: {e}"));
     }
 
-    // Parse response
-    let body_str = String::from_utf8_lossy(&response.body);
-    let vision_response: serde_json::Value = serde_json::from_str(&body_str)
-        .map_err(|e| format!("Failed to parse vision service response: {e}"))?;
-
-    // Extract relevant fields based on endpoint used
-    let output = if endpoint.ends_with("/ocr") {
-        ToolOutput {
-            mode_used: "text".to_string(),
-            text: vision_response["text"].as_str().map(|s| s.to_string()),
-            description: None,
-            answer: None,
-            confidence: None,
-            backends: vec!["tesseract".to_string()],
-            latency_ms: vision_response["elapsed_ms"].as_u64().unwrap_or(0),
-        }
-    } else {
-        let mode_used = vision_response["mode_used"]
-            .as_str()
-            .unwrap_or("auto")
-            .to_string();
-        let ocr_text = vision_response["ocr"]["full_text"]
-            .as_str()
-            .map(|s| s.to_string());
-        let description = vision_response["vision"]["description"]
-            .as_str()
-            .map(|s| s.to_string());
-        let answer = vision_response["vision"]["prompt_answer"]
-            .as_str()
-            .map(|s| s.to_string());
-        let confidence = vision_response["ocr"]["avg_confidence"]
-            .as_f64()
-            .map(|f| f as f32);
-        let backends: Vec<String> = vision_response["meta"]["backends_used"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let latency = vision_response["meta"]["latency_ms"].as_u64().unwrap_or(0);
-
-        ToolOutput {
-            mode_used,
-            text: ocr_text,
-            description,
-            answer,
-            confidence,
-            backends,
-            latency_ms: latency,
-        }
-    };
-
-    serde_json::to_string(&output).map_err(|e| format!("Failed to serialize output: {e}"))
+    Err(last_error)
 }
 
 fn is_valid_base64(s: &str) -> bool {
