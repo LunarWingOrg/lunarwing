@@ -107,7 +107,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 
 | Feature | OpenClaw | LunarWing | Notes |
 |---------|----------|----------|-------|
-| DM pairing codes | ✅ | ✅ | `ironclaw pairing list/approve`, host APIs |
+| DM pairing codes | ✅ | ✅ | `lunarwing pairing list/approve`, host APIs |
 | Allowlist/blocklist | ✅ | 🚧 | `allow_from` + pairing store + hardened command/group allowlists |
 | Self-message bypass | ✅ | ❌ | Own messages skip pairing |
 | Mention-based activation | ✅ | ✅ | bot_username + respond_to_all_group_messages |
@@ -273,7 +273,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Dynamic loading | ✅ | ✅ | WASM modules |
 | Manifest validation | ✅ | ✅ | WASM metadata |
 | HTTP path registration | ✅ | ❌ | Plugin routes |
-| Workspace-relative install | ✅ | ✅ | ~/.ironclaw/tools/ |
+| Workspace-relative install | ✅ | ✅ | ~/.lunarwing/tools/ |
 | Channel plugins | ✅ | ✅ | WASM channels |
 | Auth plugins | ✅ | ❌ | |
 | Memory plugins | ✅ | ❌ | Custom backends + selectable memory slot |
@@ -302,7 +302,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Config validation/schema | ✅ | ✅ | Type-safe Config struct + `openclaw config validate` |
 | Hot-reload | ✅ | ❌ | |
 | Legacy migration | ✅ | ➖ | |
-| State directory | ✅ `~/.openclaw-state/` | ✅ `~/.ironclaw/` | |
+| State directory | ✅ `~/.openclaw-state/` | ✅ `~/.lunarwing/` | |
 | Credentials directory | ✅ | ✅ | Session files |
 | Full model compat fields in schema | ✅ | ❌ | pi-ai model compat exposed in config |
 
@@ -444,7 +444,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Tailscale identity | ✅ | ❌ | |
 | Trusted-proxy auth | ✅ | ❌ | Header-based reverse proxy auth |
 | OAuth flows | ✅ | 🚧 | |
-| DM pairing verification | ✅ | ✅ | ironclaw pairing approve, host APIs |
+| DM pairing verification | ✅ | ✅ | lunarwing pairing approve, host APIs |
 | Allowlist/blocklist | ✅ | 🚧 | allow_from + pairing store |
 | Per-group tool policies | ✅ | ❌ | |
 | Exec approvals | ✅ | ✅ | TUI overlay |
@@ -503,7 +503,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 
 - ✅ TUI channel with approval overlays
 - ✅ HTTP webhook channel
-- ✅ DM pairing (ironclaw pairing list/approve, host APIs)
+- ✅ DM pairing (lunarwing pairing list/approve, host APIs)
 - ✅ WASM tool sandbox
 - ✅ Workspace/memory with hybrid search + embeddings batching
 - ✅ Prompt injection defense

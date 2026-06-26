@@ -30,7 +30,7 @@ The harness is cross-platform. Single-tenant `up`/`down` uses direct PID managem
 Use the default `/tmp` root for throwaway tests:
 
 ```bash
-cd /home/cmc/lunarwing/ic
+cd $LUNARWING_ROOT/ic
 scripts/lunarwing-xmpp-test-env.sh init
 ```
 
@@ -38,7 +38,7 @@ Use a persistent root when you want the same env, logs, database, and OMEMO
 store after reboot:
 
 ```bash
-cd /home/cmc/lunarwing/ic
+cd $LUNARWING_ROOT/ic
 export LUNARWING_TEST_ROOT="$HOME/.local/state/lunarwing-xmpp-test"
 scripts/lunarwing-xmpp-test-env.sh init
 ```
@@ -130,7 +130,7 @@ If you need custom PostgreSQL credentials, create the container yourself and
 point `LUNARWING_TEST_DATABASE_URL` at it as shown below.
 
 ```bash
-cd /home/cmc/lunarwing/ic
+cd $LUNARWING_ROOT/ic
 
 export LUNARWING_TEST_ROOT=/tmp/lunarwing-fresh-harness
 export PG_CONTAINER=lunarwing-test-postgres
@@ -217,11 +217,11 @@ scripts/lunarwing-xmpp-test-env.sh verify
 `build` also compiles the actual REPLv2 client with `cargo build --release`
 from:
 
-- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo`
+- `$LUNARWING_ROOT/replv2git/git-ironclaw-unix-socket-client-repo`
 
 The expected binary is:
 
-- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo/target/release/unix-socket-client-v2`
+- `$LUNARWING_ROOT/replv2git/git-ironclaw-unix-socket-client-repo/target/release/unix-socket-client-v2`
 
 To target the active harness daemon cleanly:
 
@@ -250,7 +250,7 @@ There is no database password in this mode; the only secrets below are the
 gateway token and optional LLM API key.
 
 ```bash
-cd /home/cmc/lunarwing/ic
+cd $LUNARWING_ROOT/ic
 
 export BASE=/tmp/lunarwing-libsql
 export GATEWAY_TOKEN='replace-me-gateway-token'

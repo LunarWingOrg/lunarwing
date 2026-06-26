@@ -215,7 +215,7 @@ cd tests
 pip install -r requirements.txt
 python runner.py --mode smoke     # happy paths only (CI)
 python runner.py --mode full      # + chaos scenarios (nightly)
-python runner.py --worker codex   # single worker type
+python runner.py --worker nanocode   # single worker type
 ```
 
 See [tests/README.md](tests/README.md) for the full test matrix and mock service architecture.

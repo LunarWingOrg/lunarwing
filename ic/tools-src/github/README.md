@@ -1,4 +1,4 @@
-# GitHub Tool for IronClaw
+# GitHub Tool for LunarWing
 
 WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 
@@ -17,7 +17,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 3. Store the token:
 
    ```
-   ironclaw secret set github_token YOUR_TOKEN
+   lunarwing secret set github_token YOUR_TOKEN
    ```
 
 ## Usage Examples
@@ -28,7 +28,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_repo",
   "owner": "nearai",
-  "repo": "ironclaw"
+  "repo": "lunarwing"
 }
 ```
 
@@ -38,7 +38,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "list_issues",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "state": "open",
   "limit": 10
 }
@@ -50,7 +50,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "create_issue",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "title": "Bug: Something is broken",
   "body": "Detailed description...",
   "labels": ["bug", "help wanted"]
@@ -63,7 +63,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "list_pull_requests",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "state": "open",
   "limit": 5
 }
@@ -75,7 +75,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "create_pr_review",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "pr_number": 42,
   "body": "LGTM! Great work.",
   "event": "APPROVE"
@@ -88,7 +88,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "create_pull_request",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "title": "feat: add event-driven routines",
   "head": "feat/event-routines",
   "base": "main",
@@ -102,7 +102,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "merge_pull_request",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "pr_number": 42,
   "merge_method": "squash"
 }
@@ -114,7 +114,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "list_issue_comments",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "issue_number": 42,
   "limit": 10
 }
@@ -126,7 +126,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "create_issue_comment",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "issue_number": 42,
   "body": "Thanks for reporting this!"
 }
@@ -138,7 +138,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "list_pull_request_comments",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "pr_number": 42,
   "limit": 30
 }
@@ -150,7 +150,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "reply_pull_request_comment",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "comment_id": 123456789,
   "body": "Fixed in the latest commit."
 }
@@ -162,7 +162,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_pull_request_reviews",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "pr_number": 42
 }
 ```
@@ -173,7 +173,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_combined_status",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "ref": "main"
 }
 ```
@@ -184,7 +184,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_file_content",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "path": "README.md",
   "ref": "main"
 }
@@ -196,7 +196,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "trigger_workflow",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "workflow_id": "ci.yml",
   "ref": "main",
   "inputs": {
@@ -211,7 +211,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_workflow_runs",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "limit": 5
 }
 ```
@@ -222,7 +222,7 @@ WASM tool for GitHub integration - manage repos, issues, PRs, and workflows.
 {
   "action": "get_workflow_runs",
   "owner": "nearai",
-  "repo": "ironclaw",
+  "repo": "lunarwing",
   "limit": 5,
   "page": 2
 }
@@ -251,7 +251,7 @@ Invalid event: 'INVALID'. Must be one of: APPROVE, REQUEST_CHANGES, COMMENT
 ### Missing Token
 
 ```text
-GitHub token not found in secret store. Set it with: ironclaw secret set github_token <token>...
+GitHub token not found in secret store. Set it with: lunarwing secret set github_token <token>...
 ```
 
 ## Troubleshooting
@@ -265,7 +265,7 @@ GitHub token not found in secret store. Set it with: ironclaw secret set github_
 ### "GitHub API error 401: Bad credentials"
 
 - The token might be invalid or expired.
-- Update the token: `ironclaw secret set github_token NEW_TOKEN`.
+- Update the token: `lunarwing secret set github_token NEW_TOKEN`.
 
 ### Rate Limiting
 

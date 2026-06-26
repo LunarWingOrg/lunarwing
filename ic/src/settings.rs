@@ -665,7 +665,7 @@ fn default_timezone() -> String {
 }
 
 fn default_handle_message_timeout() -> u64 {
-    300
+    400
 }
 
 fn default_self_repair_op_timeout() -> u64 {
@@ -830,7 +830,7 @@ pub struct ExternalWorkerSettings {
 }
 
 fn default_external_worker_timeout() -> u64 {
-    300_000
+    400_000
 }
 
 fn default_sandbox_policy() -> String {

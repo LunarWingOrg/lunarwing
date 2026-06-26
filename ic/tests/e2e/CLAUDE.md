@@ -86,7 +86,7 @@ All fixtures are defined in `tests/e2e/conftest.py`. Running `pytest scenarios/`
 
 The function-scoped `page` fixture means **each test gets a clean browser context** (cookies, storage, etc.) but reuses the same LunarWing server and browser process. Tests that need the server URL directly (e.g., `test_auth_rejection`) accept `lunarwing_server` as an additional parameter.
 
-### Environment passed to ironclaw in tests
+### Environment passed to lunarwing in tests
 
 The `lunarwing_server` fixture injects a minimal, deterministic environment:
 
@@ -179,4 +179,4 @@ async def test_my_ui_feature(page):
 
 ## CI Integration
 
-E2E tests run in CI with `cargo-llvm-cov` for coverage collection. The CI workflow (`fix(ci): persist all cargo-llvm-cov env vars for E2E coverage` — PR #559) sets `LLVM_PROFILE_FILE` and related vars before spawning the ironclaw binary so coverage from E2E runs is captured.
+E2E tests run in CI with `cargo-llvm-cov` for coverage collection. The CI workflow (`fix(ci): persist all cargo-llvm-cov env vars for E2E coverage` — PR #559) sets `LLVM_PROFILE_FILE` and related vars before spawning the lunarwing binary so coverage from E2E runs is captured.
