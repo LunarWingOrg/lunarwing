@@ -1,9 +1,9 @@
 # LunarWing Infrastructure Health Check System
 
-_Last updated: 2026-06-16 — self-heal watchdog v1.2.0._
+_Last updated: 2026-06-24 — self-heal watchdog v1.2.0; LunarVision check added._
 
 Automated health monitoring and self-healing for LunarWing infrastructure.
-Eight parallel component checks aggregate into a JSON report; a separate
+Nine parallel component checks aggregate into a JSON report; a separate
 watchdog reads that report and auto-remediates unhealthy services with a grace
 period, exponential backoff, a flapping guard, post-restart verification, and
 multi-tenant awareness.
@@ -20,6 +20,7 @@ cron-wrapper.sh
   │     ├── health-clickhouse.sh       (query time, disk, memory)
   │     ├── health-tensorzero.sh       (proxy p50/p95, error rate, queue, GPU)
   │     ├── health-models.sh           (LLM provider APIs)
+  │     ├── health-lunarvision.sh      (OCR + VL sidecar: health, metrics, VL status)
   │     └── health-{systemd,openrc,launchd}.sh  (service manager — one, auto-detected)
   │
   └── lunarwing-self-heal.sh           (reads report → restarts → verifies → escalates)
@@ -110,6 +111,7 @@ Every check writes a single JSON object to stdout (logs go to stderr) and exits
 | clickhouse | health-clickhouse.sh | ClickHouse responsiveness + resources | `query_time_ms`, `disk_pct`, `memory_pct` |
 | tensorzero | health-tensorzero.sh | Proxy latency/errors (from ClickHouse) + GPU | `p50_ms`, `p95_ms`, `error_rate`, `queue_depth`, `gpu_utilization` |
 | models | health-models.sh | OpenRouter / OpenAI / Anthropic / local LLM APIs | per-provider `status`, `latency_ms`, `last_error` |
+| lunarvision | health-lunarvision.sh | OCR + VL sidecar `/health` and `/vision/metrics` | `service_status`, `ocr_available`, `vl_available`, `capabilities`, `latency_ms`, cache `hit_rate`, `rate_limited`, `avg_latency_ms` |
 | systemd / openrc / launchd | health-{systemd,openrc,launchd}.sh | Service-manager unit state (incl. per-tenant) | `metrics.units` / `.services` / `.agents` |
 
 A check that cannot reach its target generally reports `critical`; several
@@ -141,6 +143,13 @@ checks can instead be **disabled** so they report `healthy` with
 | `OMEMO_STORE` | health-omemo.sh | `$BASE/omemo` | OMEMO key/bundle/session store |
 | `RATELIMIT_DIR` | health-ratelimit.sh | `$BASE/ratelimit` | Rate-limit state directory |
 | `HEALTH_MODELS_ENABLED` | health-models.sh | `true` | Non-`true` disables (reports healthy/disabled) |
+| `HEALTH_LUNARVISION_ENABLED` | health-lunarvision.sh | `true` | Non-`true` disables (reports healthy/disabled) |
+| `HEALTH_LUNARVISION_URL` | health-lunarvision.sh | `http://127.0.0.1:8088` | OCR + VL sidecar base URL |
+| `HEALTH_LUNARVISION_TIMEOUT` | health-lunarvision.sh | `5` | curl timeout (seconds) for `/health` and `/vision/metrics` |
+| `HEALTH_LUNARVISION_FETCH_METRICS` | health-lunarvision.sh | `true` | Also probe `/vision/metrics` for request counts, cache stats, rate limiting |
+| `HEALTH_LUNARVISION_REQUIRE_VL` | health-lunarvision.sh | `false` | Degrade if the VL backend is not confirmed available |
+| `HEALTH_LUNARVISION_LATENCY_DEGRADED_MS` | health-lunarvision.sh | `2000` | Health-endpoint latency threshold for `degraded` |
+| `HEALTH_LUNARVISION_LATENCY_CRITICAL_MS` | health-lunarvision.sh | `5000` | Health-endpoint latency threshold for `critical` |
 | `OPENROUTER_API_KEY` | health-models.sh | (empty) | OpenRouter key; unset → provider `unknown` (degraded) |
 | `OPENAI_API_KEY` | health-models.sh | (empty) | OpenAI key; unset → provider `unknown` (degraded) |
 | `ANTHROPIC_API_KEY` | health-models.sh | (empty) | Anthropic key; unset → provider `unknown` (degraded) |
@@ -166,6 +175,7 @@ spurious `critical`:
 HEALTH_XMPP_SERVER=''        # skip the XMPP reachability probe
 HEALTH_OMEMO_ENABLED=false   # skip the OMEMO store probe
 HEALTH_MODELS_ENABLED=false  # skip the LLM-provider probe
+HEALTH_LUNARVISION_ENABLED=false  # skip the OCR/VL sidecar probe
 HEALTHCHECK_NOTIFY=false     # don't page on every per-run degrade (let self-heal escalations page instead)
 ```
 
@@ -389,6 +399,7 @@ bash tests/test-health-openrc.sh            # health-openrc.sh probe scenarios (
 | `matrix` | `test-self-heal-matrix.sh` | The full A–O matrix in `--dry-run` against synthetic reports (~120 assertions). |
 | `chaos` | `chaos-harness.sh` | Drives the **real** self-heal loop (kill → restart → verify → recover/escalate) against a mock init system. |
 | `openrc` | `test-health-openrc.sh` | Exercises `health-openrc.sh` (discovery dedup, real exit-code capture, per-unit timeout, missing/stopped units). |
+| `lunarvision` | `test-health-lunarvision.sh` | Exercises `health-lunarvision.sh` (mock curl, 68 assertions: reachability, HTTP codes, JSON parsing, VL availability logic, metrics integration, cache/rate-limit stats, capabilities inference, disabled mode). |
 | — | `lib.sh` | Shared harness + the mock init system (sourced, not run directly). |
 
 `run-all.sh` runs each suite in its own process, tallies per-suite

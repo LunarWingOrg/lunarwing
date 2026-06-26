@@ -1,7 +1,7 @@
 ---
 plan name: rootless-podman-babysitter
 plan description: Implement podman wait babysitter for OpenRC rootless container supervision
-plan status: active
+plan status: finished (needs review of full implementation)
 ---
 
 ## Idea

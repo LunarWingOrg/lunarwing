@@ -87,7 +87,7 @@ The LunarWing Vision Service is a unified image analysis service that provides O
 External Clients:
   ic-ocr (bash CLI) ──→ POST /ocr
   HTTP clients ──→ POST /vision/analyze
-  WASM tool ──→ POST /vision/analyze (via IronClaw)
+  WASM tool ──→ POST /vision/analyze (via LunarWing)
 ```
 
 ---
@@ -95,7 +95,7 @@ External Clients:
 ## Phase 1: OCR Sidecar MVP
 
 ### Goal
-Ship a working OCR sidecar with REST API that all IronClaw siblings can call for text extraction from images.
+Ship a working OCR sidecar with REST API that all LunarWing siblings can call for text extraction from images.
 
 ### Implementation
 
@@ -319,7 +319,7 @@ Returns real-time counters:
 ## Phase 4: WASM Tool Integration
 
 ### Goal
-Provide native IronClaw integration via a sandboxed WebAssembly component.
+Provide native LunarWing integration via a sandboxed WebAssembly component.
 
 ### Implementation
 
@@ -345,11 +345,11 @@ Provide native IronClaw integration via a sandboxed WebAssembly component.
 cd ic/tools-src/vision-analyze
 cargo build --target wasm32-wasip1 --release
 
-# Register with IronClaw
-ironclaw tool install target/wasm32-wasip1/release/vision_analyze_tool.wasm
+# Register with LunarWing
+lunarwing tool install target/wasm32-wasip1/release/vision_analyze_tool.wasm
 ```
 
-#### Usage from IronClaw
+#### Usage from LunarWing
 
 ```
 @vision_analyze image="./screenshot.png" mode="auto"
@@ -695,12 +695,12 @@ tesseract --version
 
 ### WASM Tool Not Working
 
-**Problem**: `@vision_analyze` not found in IronClaw
+**Problem**: `@vision_analyze` not found in LunarWing
 **Solutions**:
-1. Verify tool is installed: `ironclaw tool list`
+1. Verify tool is installed: `lunarwing tool list`
 2. Check WASM file exists and is valid
 3. Verify `VISION_SERVICE_URL` is set correctly
-4. Check IronClaw logs for WASM runtime errors
+4. Check LunarWing logs for WASM runtime errors
 
 ---
 
@@ -783,7 +783,7 @@ curl -X POST http://localhost:8088/ocr \
 
 ## License
 
-Same as LunarWing/IronClaw
+Same as LunarWing
 
 ## Credits
 

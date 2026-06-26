@@ -10,8 +10,6 @@ mod llm_adapter;
 pub mod router;
 pub mod skill_migration;
 pub mod ssh;
-pub mod ssh_hostkeys;
-pub mod ssh_secrets;
 mod store_adapter;
 
 pub use effect_adapter::EffectBridgeAdapter;

@@ -13,7 +13,7 @@ exclude = [
 
 [package]
 name = "lunarwing"
-version = "1.1.6"
+version = "1.1.3"
 edition = "2024"
 rust-version = "1.92"
 description = "Secure, privacy-first AI agent with XMPP/OMEMO, Gotify, and open-protocol channels"
@@ -102,12 +102,12 @@ tokio-util = { version = "0.7", features = ["compat"] }
 cron = "0.13"
 
 # Internal crates
-lunarwing_common = { path = "crates/lunarwing_common", version = "1.1.6" }
-lunarwing_engine = { path = "crates/lunarwing_engine", version = "1.1.6" }
-lunarwing_skills = { path = "crates/lunarwing_skills", version = "1.1.6" }
+lunarwing_common = { path = "crates/lunarwing_common", version = "1.1.3" }
+lunarwing_engine = { path = "crates/lunarwing_engine", version = "1.1.3" }
+lunarwing_skills = { path = "crates/lunarwing_skills", version = "1.1.3" }
 
 # Safety/sanitization
-lunarwing_safety = { path = "crates/lunarwing_safety", version = "1.1.6" }
+lunarwing_safety = { path = "crates/lunarwing_safety", version = "1.1.3" }
 regex = "1"
 aho-corasick = "1"
 
@@ -126,7 +126,6 @@ semver = "1"
 
 # Secrecy for sensitive values
 secrecy = { version = "0.10", features = ["serde"] }
-zeroize = "1"
 
 # URL parsing and encoding
 url = "2"
@@ -152,8 +151,6 @@ hmac = "0.12"
 # SSH client (pure Rust, async)
 russh = "0.45"
 russh-keys = "0.45"
-
-# Cryptography utilities
 sha2 = "0.10"
 blake3 = "1"
 rand = "0.8"
@@ -187,7 +184,7 @@ http = "1"
 # External worker WebSocket client
 tokio-tungstenite = "0.26"
 bytes = "1"
-base64 = "0.21"
+base64 = "0.22.1"
 mime_guess = "2.0.5"
 clap_complete = "4.5.0"
 lru = "0.16.3"

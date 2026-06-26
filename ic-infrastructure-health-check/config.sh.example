@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# LunarWing Infrastructure Health Check — Configuration Example
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy to config.sh and edit as needed:
+#   cp config.sh.example config.sh
+#
+# Then source it from cron-wrapper.sh or set in your environment / systemd unit.
+# Every variable below has a sensible default — all are optional.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Global / cross-component
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Base directory for LunarWing installs. Most checks derive paths from this.
+#LUNARWING_BASE_DIR="/opt/lunarwing"
+
+# IronClaw data directory (locks, sessions, state).
+#IRONCLAW_BASE_DIR="/var/lib/ironclaw"
+
+# Rate-limit state directory (shared between gateway and health check).
+#RATELIMIT_DIR="/var/lib/lunarwing/ratelimit"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Notification
+# ═════════════════════════════════════════════════════════════════════════════
+
+# When false, don't page on every per-run degrade — let self-heal escalations
+# page instead. Useful to reduce noise during transient blips.
+#HEALTHCHECK_NOTIFY=true
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: gateway (agent sessions)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# No tunable env vars — uses LUNARWING_BASE_DIR / IRONCLAW_BASE_DIR.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: xmpp (XMPP bridge reachability + latency)
+# ═════════════════════════════════════════════════════════════════════════════
+
+#HEALTH_XMPP_SERVER="xmpp.sobe.world"
+#HEALTH_XMPP_PORT=5222
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: omemo (OMEMO encryption store)
+# ═══════════════════════════════════════════════════════ engine ══════════════
+
+# Set to non-"true" to disable the OMEMO store probe entirely.
+#HEALTH_OMEMO_ENABLED=true
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: ratelimit (rate-limiter state directory)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Uses RATELIMIT_DIR (see Global section).
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: clickhouse (ClickHouse analytics DB)
+# ═══════════════════════════════  key engine ═════════════════════════════════
+
+# No tunable env vars — uses LUNARWING_BASE_DIR for connection config.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: tensorzero (TensorZero gateway / model router)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# No tunable env vars — probes local gateway endpoint.
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: models (LLM provider APIs)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Set to non-"true" to disable the LLM-provider probe entirely.
+#HEALTH_MODELS_ENABLED=true
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: lunarvision (OCR + VL sidecar) — Added 2026-06-24
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Set to non-"true" to disable the LunarVision probe entirely.
+#HEALTH_LUNARVISION_ENABLED=true
+
+# Sidecar base URL (where the OCR/VL service is listening).
+#HEALTH_LUNARVISION_URL="http://127.0.0.1:8088"
+
+# curl timeout in seconds for /health and /vision/metrics probes.
+#HEALTH_LUNARVISION_TIMEOUT=5
+
+# Also probe /vision/metrics for request counts, cache stats, and rate
+# limiting data. Set to "false" for a lighter check (health endpoint only).
+#HEALTH_LUNARVISION_FETCH_METRICS=true
+
+# Degrade if the VL backend is not confirmed available. Useful when your
+# deployment requires vision-language capabilities, not just OCR.
+#HEALTH_LUNARVISION_REQUIRE_VL=false
+
+# Health-endpoint latency thresholds (milliseconds).
+#HEALTH_LUNARVISION_LATENCY_DEGRADED_MS=2000
+#HEALTH_LUNARVISION_LATENCY_CRITICAL_MS=5000
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Component: svcmgr (service manager — systemd / openrc / launchd)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# The service manager check is auto-detected. One environment variable is
+# available for OpenRC specifically:
+#HEALTH_OPENRC_STATUS_TIMEOUT=8

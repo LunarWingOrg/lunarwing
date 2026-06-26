@@ -1,0 +1,27 @@
+[Unit]
+Description=LunarWing Vision OCR Sidecar
+Documentation=https://github.com/LunarWingOrg/lunarwing/tree/main/projects/ocr-sidecar
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/lunarwing/projects/ocr-sidecar
+Environment=LUNARWING_AUTH_TOKEN=${LUNARWING_AUTH_TOKEN}
+Environment=OCR_PORT=8088
+EnvironmentFile=-/etc/lunarwing/lunarvision.env
+ExecStartPre=/usr/bin/docker-compose down --remove-orphans
+ExecStart=/usr/bin/docker-compose up --build
+ExecStop=/usr/bin/docker-compose down
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/lunarwing/projects/ocr-sidecar
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

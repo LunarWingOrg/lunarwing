@@ -22,6 +22,7 @@ mod sandbox;
 mod search;
 mod secrets;
 mod skills;
+pub mod ssh;
 mod transcription;
 mod tunnel;
 mod wasm;
@@ -56,6 +57,7 @@ pub use self::sandbox::{
 pub use self::search::WorkspaceSearchConfig;
 pub use self::secrets::SecretsConfig;
 pub use self::skills::SkillsConfig;
+pub use self::ssh::{SshConfig, SshHostEntry};
 pub use self::transcription::TranscriptionConfig;
 pub use self::tunnel::TunnelConfig;
 pub use self::wasm::WasmConfig;
@@ -96,6 +98,7 @@ pub struct Config {
     pub safety: SafetyConfig,
     pub wasm: WasmConfig,
     pub secrets: SecretsConfig,
+    pub ssh: SshConfig,
     pub builder: BuilderModeConfig,
     pub heartbeat: HeartbeatConfig,
     pub hygiene: HygieneConfig,
@@ -161,6 +164,7 @@ impl Config {
                 ..WasmConfig::default()
             },
             secrets: SecretsConfig::default(),
+            ssh: SshConfig::default(),
             builder: BuilderModeConfig {
                 enabled: false,
                 ..BuilderModeConfig::default()
@@ -336,6 +340,7 @@ impl Config {
             safety: resolve_safety_config(settings)?,
             wasm: WasmConfig::resolve(settings)?,
             secrets: SecretsConfig::resolve().await?,
+            ssh: SshConfig::default(),
             builder: BuilderModeConfig::resolve(settings)?,
             heartbeat: HeartbeatConfig::resolve(settings)?,
             hygiene: HygieneConfig::resolve()?,

@@ -92,8 +92,6 @@ pub use bridge::ssh::{
     SSHBridge, SSHHostConfig, SSHKeyType, HostKeyMode, SSHCredentials, SshBridgeError, SshEvent,
     AuditLogger, NullAuditLogger,
 };
-pub use bridge::ssh_hostkeys::{HostKeyVerifier, StoredHostKey, VerifyResult};
-pub use bridge::ssh_secrets::SshSecretsManager;
 
 /// Re-export commonly used types.
 pub mod prelude {
