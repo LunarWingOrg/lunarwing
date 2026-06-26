@@ -30,14 +30,14 @@ impl SshAgent {
 
     pub async fn add_key(&self, hostname: String, creds: SSHCredentials) -> Result<()> {
         let key_pair = parse_key(&creds)?;
-        let mut keys = self.keys.lock().await;
+        let mut keys = self.keys.lock().unwrap();
         keys.insert(hostname.clone(), Arc::new(key_pair));
         info!("Added key to SSH agent for host {}", hostname);
         Ok(())
     }
 
     pub async fn remove_key(&self, hostname: &str) -> Result<bool> {
-        let mut keys = self.keys.lock().await;
+        let mut keys = self.keys.lock().unwrap();
         let removed = keys.remove(hostname).is_some();
         if removed {
             info!("Removed key from SSH agent for host {}", hostname);
@@ -46,7 +46,7 @@ impl SshAgent {
     }
 
     pub async fn list_keys(&self) -> Vec<String> {
-        let keys = self.keys.lock().await;
+        let keys = self.keys.lock().unwrap();
         keys.keys().cloned().collect()
     }
 }
@@ -75,7 +75,7 @@ pub struct SshAgentServer {
 impl Drop for SshAgentServer {
     fn drop(&mut self) {
         self._join_handle.abort();
-        let mut keys = self.keys.blocking_lock();
+        let mut keys = self.keys.lock().unwrap();
         keys.clear();
         let _ = std::fs::remove_file(&self.socket_path);
         info!("SSH agent server stopped: {}", self.socket_path.display());
@@ -107,7 +107,7 @@ impl SshAgentServer {
         for (hostname, creds) in keys {
             match parse_key(&creds) {
                 Ok(key_pair) => {
-                    let mut guard = keys_map.lock().await;
+                    let mut guard = keys_map.lock().unwrap();
                     guard.insert(hostname, Arc::new(key_pair));
                 }
                 Err(e) => warn!("Failed to parse key for {}: {}", hostname, e),
@@ -133,21 +133,21 @@ impl SshAgentServer {
 
     pub async fn add_key(&self, hostname: String, creds: SSHCredentials) -> Result<()> {
         let key_pair = parse_key(&creds)?;
-        let mut keys = self.keys.lock().await;
+        let mut keys = self.keys.lock().unwrap();
         keys.insert(hostname.clone(), Arc::new(key_pair));
         info!("Added key to SSH agent for host {}", hostname);
         Ok(())
     }
 
     pub async fn remove_key(&self, hostname: &str) -> Result<bool> {
-        let mut keys = self.keys.lock().await;
+        let mut keys = self.keys.lock().unwrap();
         let removed = keys.remove(hostname).is_some();
         if removed { info!("Removed key from SSH agent for host {}", hostname); }
         Ok(removed)
     }
 
     pub async fn list_keys(&self) -> Vec<String> {
-        let keys = self.keys.lock().await;
+        let keys = self.keys.lock().unwrap();
         keys.keys().cloned().collect()
     }
 }
