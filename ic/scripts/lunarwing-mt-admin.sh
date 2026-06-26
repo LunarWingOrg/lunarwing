@@ -2482,6 +2482,10 @@ start_tenant_nanocode() {
     local host_health_port
     host_health_port="$(ports_get "$name" nanocode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
+    # SSH agent socket (only if the gateway started one for this tenant).
+    local -a ssh_mount=()
+    local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
+    [[ -S "$ssh_agent_socket" ]] && ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -2492,6 +2496,7 @@ start_tenant_nanocode() {
       -e WS_BIND_HOST=0.0.0.0 \
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
+      "${ssh_mount[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
@@ -2598,6 +2603,10 @@ start_tenant_pebble() {
     local host_health_port
     host_health_port="$(ports_get "$name" pebble_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
+    # SSH agent socket (only if the gateway started one for this tenant).
+    local -a ssh_mount=()
+    local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
+    [[ -S "$ssh_agent_socket" ]] && ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -2607,6 +2616,7 @@ start_tenant_pebble() {
       -e WS_BIND_HOST=0.0.0.0 \
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
+      "${ssh_mount[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
@@ -3311,6 +3321,14 @@ render_worker_quadlet() {
   agent_token="${agent_token//%/%%}"
   tz_key="${tz_key//%/%%}"
 
+  # SSH agent socket: if the gateway started an SSH agent server, its socket
+  # lives at /tmp/ssh-agent-<tenant_name>.sock. Bind-mount it into the worker
+  # container at a fixed path and set SSH_AUTH_SOCK so workers can sign SSH
+  # requests without ever holding key material on disk.
+  local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
+  local -a ssh_mount=()
+  [[ -S "$ssh_agent_socket" ]] && ssh_mount=("Volume=${ssh_agent_socket}:/tmp/ssh-agent.sock")
+
   {
     cat <<EOF
 [Unit]
@@ -3331,6 +3349,8 @@ Environment=HEALTH_PORT=${health_port}
 Environment=WS_BIND_HOST=0.0.0.0
 Environment=WS_PATH=/ws/agent
 EOF
+    # SSH agent socket mount + env (only if the socket exists).
+    [[ -n "${ssh_mount:-}" ]] && printf '%s\n' "${ssh_mount[@]}" && printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
     # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
     # the host self-heal pipeline can probe /health directly. The container still
     # listens on HEALTH_PORT=8443 internally (matches the image's baked HEALTHCHECK).

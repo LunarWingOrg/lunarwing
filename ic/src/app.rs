@@ -1057,11 +1057,23 @@ impl AppBuilder {
                 let host_map = self.config.ssh.to_host_map();
                 let tenant_id =
                     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, self.config.owner_id.as_bytes());
+                let tenant_name = self.config.owner_id.clone();
                 let audit_logger = Arc::new(crate::bridge::ssh::NullAuditLogger);
-                match SSHBridge::new(tenant_id, host_map, Arc::clone(secrets), audit_logger).await {
-                    Ok(bridge) => {
+                match SSHBridge::new(tenant_id, tenant_name, host_map, Arc::clone(secrets), audit_logger).await {
+                    Ok(mut bridge) => {
                         if let Err(e) = bridge.validate().await {
                             tracing::warn!(error = %e, "SSH bridge validation failed");
+                        }
+                        // Start the SSH agent server so workers can use it via
+                        // SSH_AUTH_SOCK. The socket path is predictable:
+                        // /tmp/ssh-agent-<owner_id>.sock
+                        if let Err(e) = bridge.start_agent_server().await {
+                            tracing::warn!(error = %e, "SSH agent server failed to start");
+                        } else {
+                            tracing::info!(
+                                socket = ?bridge.get_agent_socket_path(),
+                                "SSH agent server started"
+                            );
                         }
                         tracing::info!(
                             hosts = self.config.ssh.hosts.len(),
