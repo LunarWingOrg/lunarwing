@@ -915,8 +915,7 @@ ports_migrate_v9() {
     local tmp
     tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
     jq '
-      .version = 9
-      | .tenants |= with_entries(
+      .tenants |= with_entries(
           .value |= (
             if (.extended_ports | type == "object") then
               .extended_ports |= (
@@ -931,6 +930,15 @@ ports_migrate_v9() {
     mv "$tmp" "$PORTS_REGISTRY"
     say "port registry migrated to v9 (vision_service dedicated at extended_base+5)"
   fi
+
+  # Always bump the version when the dispatcher calls v9, even if there were
+  # no tenants to migrate (e.g. empty registry) — otherwise .version stays
+  # stale and ports_allocate writes v9-shaped tenants into a v8-labeled file.
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '.version = 9' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
 }
 
 ports_allocate() {
