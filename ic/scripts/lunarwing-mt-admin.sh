@@ -3525,7 +3525,15 @@ _wait_user_manager() {
 start_tenant_systemd() {
   local name="$1"
   _systemctl_user "$name" daemon-reload
-  local enable_list=("lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-vision-${name}.service")
+  # Quadlet-generated units (pg, nanocode, pebble, vision) are NOT in the
+  # enable_list: `systemctl enable` fails on generated/transient units with
+  # "Failed to enable unit: ... is transient or generated", and under
+  # `set -euo pipefail` that non-zero exit aborts the entire enable batch —
+  # leaving every regular service disabled. Each Quadlet unit is already
+  # started by its own start_tenant_* function (which renders the quadlet,
+  # reloads the daemon, and starts the unit). The imperative `start` below
+  # is belt-and-suspenders for the vision unit (harmless if already running).
+  local enable_list=("lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-weechat-adapter-${name}.service")
   if tenant_darkirc_enabled "$name"; then
     enable_list+=("lunarwing-darkirc-${name}.service" "lunarwing-darkirc-adapter-${name}.service")
   fi
