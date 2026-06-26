@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Build stage ---------------------------------------------------------
-FROM rust:1.75-slim-bookworm AS builder
+FROM rust:1.92-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libtesseract-dev \
         libleptonica-dev \
+        libssl-dev \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,12 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/lunarwing-ocr-sidecar /usr/local/bin/
+WORKDIR /app
+COPY --from=builder /app/target/release/lunarwing-ocr-sidecar /app/lunarwing-ocr-sidecar
 
 EXPOSE 8088
 
-ENV OCR_PORT=8088
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
+    CMD curl -f http://localhost:8088/health || exit 1
 
-USER nobody
-
-CMD ["lunarwing-ocr-sidecar"]
+CMD ["/app/lunarwing-ocr-sidecar"]

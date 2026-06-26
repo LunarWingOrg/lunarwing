@@ -1,6 +1,7 @@
 use std::convert::Infallible;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use dashmap::DashMap;
@@ -13,6 +14,7 @@ use warp::http::StatusCode;
 const MAX_BODY_SIZE: u64 = 10 * 1024 * 1024;
 const CACHE_TTL_SECS: u64 = 300;
 const CACHE_MAX_ENTRIES: usize = 10000;
+const CACHE_FILE_EXT: &str = ".cache";
 
 #[derive(Clone)]
 struct Config {
@@ -25,6 +27,8 @@ struct Config {
     enable_paddleocr: bool,
     enable_cache: bool,
     enable_prometheus: bool,
+    cache_persist: bool,
+    cache_dir: Option<PathBuf>,
     rate_limit_per_second: u32,
 }
 
@@ -38,10 +42,73 @@ struct AppState {
     tesseract_version: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct CachedResponse {
     response: String,
-    created_at: Instant,
+    created_at_nanos: u128,
+}
+
+impl CachedResponse {
+    fn new(response: String) -> Self {
+        Self {
+            response,
+            created_at_nanos: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+        }
+    }
+
+    fn age_secs(&self) -> u64 {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        if now <= self.created_at_nanos { return 0; }
+        ((now - self.created_at_nanos) / 1_000_000_000) as u64
+    }
+}
+
+fn cache_file_path(cache_dir: &Option<PathBuf>, key: &str) -> Option<PathBuf> {
+    let dir = cache_dir.as_ref()?;
+    let safe_name = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(key.as_bytes());
+    Some(dir.join(format!("safe_name{CACHE_FILE_EXT}")))
+}
+
+fn persist_cache_entry(cache_dir: &Option<PathBuf>, key: &str, entry: &CachedResponse) {
+    let Some(path) = cache_file_path(cache_dir, key) else { return };
+    if let Ok(json) = serde_json::to_string(entry) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+fn load_cache_entry(cache_dir: &Option<PathBuf>, key: &str) -> Option<String> {
+    let path = cache_file_path(cache_dir, key)?;
+    let data = std::fs::read_to_string(&path).ok()?;
+    let entry: CachedResponse = serde_json::from_str(&data).ok()?;
+    if entry.age_secs() < CACHE_TTL_SECS {
+        Some(entry.response)
+    } else {
+        let _ = std::fs::remove_file(&path);
+        None
+    }
+}
+
+fn load_cache_from_disk(cache: &DashMap<String, CachedResponse>, cache_dir: &Option<PathBuf>) {
+    let Some(dir) = cache_dir else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if !name_str.ends_with(CACHE_FILE_EXT) { continue; }
+        let Ok(data) = std::fs::read_to_string(entry.path()) else { continue };
+        let Ok(cached): std::result::Result<CachedResponse, _> = serde_json::from_str(&data) else { continue };
+        if cached.age_secs() < CACHE_TTL_SECS {
+            cache.insert(name_str.to_string(), cached);
+        } else {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -504,29 +571,45 @@ fn generate_cache_key(image_b64: &str, prompt: &Option<String>, mode: &str, deta
     format!("{:x}", hasher.finalize())
 }
 
-fn check_cache(cache: &DashMap<String, CachedResponse>, key: &str) -> Option<String> {
+fn check_cache(
+    cache: &DashMap<String, CachedResponse>,
+    key: &str,
+    cache_dir: &Option<PathBuf>,
+) -> Option<String> {
     if let Some(entry) = cache.get(key) {
-        if entry.created_at.elapsed().as_secs() < CACHE_TTL_SECS {
+        if entry.age_secs() < CACHE_TTL_SECS {
             return Some(entry.response.clone());
-        } else {
-            // Expired entry — remove it (lazy eviction)
-            drop(entry);
-            cache.remove(key);
         }
+        drop(entry);
+        cache.remove(key);
+    }
+    if let Some(dir) = cache_dir {
+        return load_cache_entry(&Some(dir.clone()), key);
     }
     None
 }
 
-fn store_cache(cache: &DashMap<String, CachedResponse>, key: String, response: String) {
-    cache.insert(key, CachedResponse {
-        response,
-        created_at: Instant::now(),
-    });
+fn store_cache(
+    cache: &DashMap<String, CachedResponse>,
+    key: String,
+    response: String,
+    cache_dir: &Option<PathBuf>,
+) {
+    let entry = CachedResponse::new(response);
+    if let Some(dir) = cache_dir {
+        persist_cache_entry(&Some(dir.clone()), &key, &entry);
+    }
+    cache.insert(key, entry);
 
-    // Opportunistic eviction: if cache has grown large, sweep expired entries
     if cache.len() > CACHE_MAX_ENTRIES {
-        let now = Instant::now();
-        cache.retain(|_, v| now.duration_since(v.created_at).as_secs() < CACHE_TTL_SECS);
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        cache.retain(|_, v| {
+            let age = v.age_secs();
+            age < CACHE_TTL_SECS
+        });
     }
 }
 
@@ -724,10 +807,16 @@ async fn vision_analyze_handler(
     validate_image_format(&image_bytes)
         .map_err(warp::reject::custom)?;
 
+    let cache_dir = if state.config.cache_persist {
+        state.config.cache_dir.clone()
+    } else {
+        None
+    };
+
     // Check cache
     if state.config.enable_cache {
         let cache_key = generate_cache_key(&req.image, &req.prompt, &req.mode, &req.detail_level);
-        if let Some(cached) = check_cache(&state.cache, &cache_key) {
+        if let Some(cached) = check_cache(&state.cache, &cache_key, &cache_dir) {
             state.metrics.cache_hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Ok(warp::reply::json(&serde_json::json!({
                 "cached": true,
@@ -798,7 +887,7 @@ async fn vision_analyze_handler(
     if state.config.enable_cache {
         let cache_key = generate_cache_key(&req.image, &req.prompt, &req.mode, &req.detail_level);
         if let Ok(json_str) = serde_json::to_string(&response) {
-            store_cache(&state.cache, cache_key, json_str);
+            store_cache(&state.cache, cache_key, json_str, &cache_dir);
         }
     }
 
@@ -1025,6 +1114,124 @@ async fn prometheus_metrics_handler(state: AppState) -> Result<impl Reply, Rejec
     Ok(warp::reply::with_header(buf, "Content-Type", "text/plain; version=0.0.4; charset=utf-8"))
 }
 
+async fn openapi_handler() -> Result<impl Reply, Rejection> {
+    let spec = serde_json::json!({
+        "openapi": "3.0.3",
+        "info": {
+            "title": "LunarWing OCR Sidecar",
+            "description": "OCR and vision-language analysis service",
+            "version": "1.0.0"
+        },
+        "servers": [
+            {"url": "/v1", "description": "Versioned API"}
+        ],
+        "paths": {
+            "/ocr": {
+                "post": {
+                    "summary": "Extract text from an image",
+                    "tags": ["ocr"],
+                    "security": [{"bearerAuth": []}],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/OcrRequest"}
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "OCR result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OcrResponse"}}}},
+                        "429": {"description": "Rate limited"}
+                    }
+                }
+            },
+            "/vision/analyze": {
+                "post": {
+                    "summary": "Unified vision analysis with smart routing",
+                    "tags": ["vision"],
+                    "security": [{"bearerAuth": []}],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/VisionAnalyzeRequest"}
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {"description": "Analysis result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VisionAnalyzeResponse"}}}}
+                    }
+                }
+            },
+            "/vision/metrics": {
+                "get": {
+                    "summary": "JSON metrics",
+                    "tags": ["metrics"],
+                    "responses": {"200": {"description": "Metrics"}}
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "summary": "Health check",
+                "tags": ["health"],
+                "responses": {"200": {"description": "Service status"}}
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Prometheus metrics",
+                "tags": ["metrics"],
+                "responses": {"200": {"description": "Prometheus text format", "content": {"text/plain": {}}}}
+            }
+        },
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {"type": "http", "scheme": "bearer"}
+            },
+            "schemas": {
+                "OcrRequest": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {
+                        "image": {"type": "string", "description": "Base64-encoded image"},
+                        "ocr_lang": {"type": "string", "default": "eng"}
+                    }
+                },
+                "OcrResponse": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "engine": {"type": "string"},
+                        "elapsed_ms": {"type": "integer"}
+                    }
+                },
+                "VisionAnalyzeRequest": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {
+                        "image": {"type": "string"},
+                        "mode": {"type": "string", "enum": ["text", "describe", "auto"], "default": "auto"},
+                        "prompt": {"type": "string"},
+                        "ocr_lang": {"type": "string", "default": "eng"},
+                        "detail_level": {"type": "string", "default": "medium"}
+                    }
+                },
+                "VisionAnalyzeResponse": {
+                    "type": "object",
+                    "properties": {
+                        "mode_used": {"type": "string"},
+                        "ocr": {"type": "object"},
+                        "vision": {"type": "object"},
+                        "meta": {"type": "object"}
+                    }
+                }
+            }
+        }
+    });
+    Ok(warp::reply::json(&spec))
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -1045,6 +1252,8 @@ async fn main() {
     let enable_paddleocr = std::env::var("ENABLE_PADDLEOCR").map(|v| v == "1" || v == "true").unwrap_or(false);
     let enable_cache = std::env::var("ENABLE_CACHE").map(|v| v == "1" || v == "true").unwrap_or(true);
     let enable_prometheus = std::env::var("ENABLE_PROMETHEUS").map(|v| v == "1" || v == "true").unwrap_or(true);
+    let cache_persist = std::env::var("CACHE_PERSIST").map(|v| v == "1" || v == "true").unwrap_or(false);
+    let cache_dir = std::env::var("CACHE_DIR").ok().map(PathBuf::from);
     let rate_limit_per_second = std::env::var("RATE_LIMIT_PER_SECOND")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -1060,6 +1269,8 @@ async fn main() {
         enable_paddleocr,
         enable_cache,
         enable_prometheus,
+        cache_persist,
+        cache_dir,
         rate_limit_per_second,
     };
 
@@ -1092,9 +1303,17 @@ async fn main() {
         tesseract_version,
     };
 
+    if state.config.cache_persist {
+        load_cache_from_disk(&state.cache, &state.config.cache_dir);
+        tracing::info!("Loaded {} cache entries from disk", state.cache.len());
+    }
+
     let state_clone = state.clone();
 
-    let ocr_route = warp::path("ocr")
+    let api_v1 = warp::path("v1");
+
+    let ocr_route = api_v1
+        .and(warp::path("ocr"))
         .and(warp::post())
         .and(warp::body::content_length_limit(MAX_BODY_SIZE))
         .and(warp::body::bytes())
@@ -1103,7 +1322,8 @@ async fn main() {
         .and(with_state(state_clone.clone()))
         .and_then(ocr_handler);
 
-    let vision_route = warp::path("vision")
+    let vision_route = api_v1
+        .and(warp::path("vision"))
         .and(warp::path("analyze"))
         .and(warp::post())
         .and(warp::body::content_length_limit(MAX_BODY_SIZE))
@@ -1113,11 +1333,41 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(vision_analyze_handler);
 
-    let metrics_route = warp::path("vision")
+    let metrics_route = api_v1
+        .and(warp::path("vision"))
         .and(warp::path("metrics"))
         .and(warp::get())
         .and(with_state(state.clone()))
         .and_then(metrics_handler);
+
+    let legacy_ocr_route = warp::path("ocr")
+        .and(warp::post())
+        .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+        .and(warp::body::bytes())
+        .and(rate_limit_filter(state_clone.clone()))
+        .and(auth_filter(state_clone.config.clone()))
+        .and(with_state(state_clone.clone()))
+        .and_then(ocr_handler);
+
+    let legacy_vision_route = warp::path("vision")
+        .and(warp::path("analyze"))
+        .and(warp::post())
+        .and(warp::body::content_length_limit(MAX_BODY_SIZE))
+        .and(warp::body::bytes())
+        .and(rate_limit_filter(state.clone()))
+        .and(auth_filter(state.config.clone()))
+        .and(with_state(state.clone()))
+        .and_then(vision_analyze_handler);
+
+    let legacy_metrics_route = warp::path("vision")
+        .and(warp::path("metrics"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(metrics_handler);
+
+    let openapi_route = warp::path("openapi.json")
+        .and(warp::get())
+        .and_then(openapi_handler);
 
     let prometheus_route = warp::path("metrics")
         .and(warp::get())
@@ -1129,9 +1379,13 @@ async fn main() {
         .and(with_state(state.clone()))
         .and_then(health_handler);
 
-    let routes = ocr_route
+    let routes = legacy_ocr_route
+        .or(legacy_vision_route)
+        .or(legacy_metrics_route)
+        .or(ocr_route)
         .or(vision_route)
         .or(metrics_route)
+        .or(openapi_route)
         .or(prometheus_route)
         .or(health_route)
         .recover(handle_rejection);

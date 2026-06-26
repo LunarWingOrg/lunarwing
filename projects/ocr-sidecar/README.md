@@ -7,7 +7,7 @@ Lightweight OCR and vision analysis sidecar service for LunarWing. Provides a RE
 ```bash
 # Build and run with Docker Compose
 cd projects/ocr-sidecar
-docker-compose up --build
+podman compose up --build
 
 # Or with Podman
 podman compose up --build

@@ -1,0 +1,16 @@
+diff --git a/ic/src/tools/wasm/wrapper.rs b/ic/src/tools/wasm/wrapper.rs
+index 88420fa7..db7d02c3 100644
+--- a/ic/src/tools/wasm/wrapper.rs
++++ b/ic/src/tools/wasm/wrapper.rs
+@@ -397,7 +397,10 @@ impl near::agent::host::Host for StoreData {
+             .unwrap_or(10 * 1024 * 1024);
+ 
+         // Resolve hostname and reject private/internal IPs to prevent DNS rebinding.
+-        reject_private_ip(&url)?;
++        // ALLOW_PRIVATE_IPS=1 opts out for local dev (reach a loopback Multica board).
++        if std::env::var("ALLOW_PRIVATE_IPS").ok().as_deref() != Some("1") {
++            reject_private_ip(&url)?;
++        }
+ 
+         // Make HTTP request using a dedicated single-threaded runtime.
+         // We're inside spawn_blocking, so we can't rely on the main runtime's
