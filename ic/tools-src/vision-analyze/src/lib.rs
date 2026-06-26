@@ -1,38 +1,100 @@
 //! Vision Analysis WASM Tool for IronClaw.
 //!
-//! Analyzes images using the LunarWing Vision Service.
-//! Supports OCR text extraction, image description, and custom queries.
+//! Thin client that forwards image analysis requests to the LunarWing
+//! Vision Service (OCR sidecar). Does one HTTP call and returns the result.
 //!
-//! # Usage
+//! # Design Principles
 //!
-//! The tool accepts either a base64-encoded image or a workspace file path.
-//! Mode can be "text" (OCR only), "describe" (vision-language), or "auto" (smart routing).
+//! - No `std::env::var()` — WASM sandbox has no env access
+//! - No `std::thread::sleep()` — WASM sandbox has no threads
+//! - No auth logic — host injects credentials at HTTP boundary
+//! - No retry — fail fast; retries belong in the host/agent layer
+//! - Strict URL allowlist — localhost sidecar only
 
 wit_bindgen::generate!({
     world: "sandboxed-tool",
     path: "../../wit/tool.wit",
 });
 
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_VISION_URL: &str = "http://127.0.0.1:8088";
-const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024;
-const MAX_RETRIES: u32 = 3;
-const BASE_DELAY_MS: u64 = 250;
-const MAX_DELAY_MS: u64 = 5000;
+// ── Constants ───────────────────────────────────────────────────────────────
 
-fn is_retryable(status: u16) -> bool {
-    matches!(status, 429 | 502 | 503 | 504)
-} // 10MB
+const DEFAULT_VISION_URL: &str = "http://127.0.0.1:8088";
+const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB
+
+/// Allowed hosts for the vision service URL.
+/// Anything else is rejected before making a request.
+const ALLOWED_HOSTS: &[&str] = &[
+    "127.0.0.1:8088",
+    "localhost:8088",
+    "host.containers.internal:8088",
+    "[::1]:8088",
+];
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct VisionRequest {
+    /// Base64-encoded image, or a workspace file path.
+    image: Option<String>,
+    /// Workspace file path to read image from.
+    file_path: Option<String>,
+    /// Analysis mode: "text" (OCR), "describe" (VL), "auto" (smart routing).
+    #[serde(default = "default_mode")]
+    mode: String,
+    /// Optional prompt for VL queries.
+    #[serde(default)]
+    prompt: Option<String>,
+    /// OCR language (default: "eng").
+    #[serde(default = "default_lang")]
+    ocr_lang: String,
+    /// Detail level for VL: "low", "medium", "high".
+    #[serde(default = "default_detail")]
+    detail_level: String,
+    /// Vision service URL (must be on the localhost allowlist).
+    #[serde(default = "default_url")]
+    service_url: String,
+}
+
+fn default_mode() -> String { "auto".to_string() }
+fn default_lang() -> String { "eng".to_string() }
+fn default_detail() -> String { "medium".to_string() }
+fn default_url() -> String { DEFAULT_VISION_URL.to_string() }
+
+#[derive(Debug, Serialize)]
+struct SidecarRequest {
+    image: String,
+    mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompt: Option<String>,
+    ocr_lang: String,
+    detail_level: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OcrOnlyRequest {
+    image: String,
+    ocr_lang: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ToolOutput {
+    status: String,
+    endpoint: String,
+    #[serde(flatten)]
+    data: serde_json::Value,
+}
+
+// ── Tool Implementation ─────────────────────────────────────────────────────
 
 struct VisionAnalyzeTool;
 
 impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
     fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
         match execute_inner(&req.params) {
-            Ok(result) => exports::near::agent::tool::Response {
-                output: Some(result),
+            Ok(output) => exports::near::agent::tool::Response {
+                output: Some(output),
                 error: None,
             },
             Err(e) => exports::near::agent::tool::Response {
@@ -54,202 +116,142 @@ impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct AnalyzeParams {
-    /// Base64-encoded image or workspace file path
-    image: String,
-    /// Analysis mode: "text" | "describe" | "auto"
-    #[serde(default = "default_mode")]
-    mode: String,
-    /// Custom question or prompt for vision analysis
-    #[serde(default)]
-    prompt: Option<String>,
-    /// OCR language (default: "eng")
-    #[serde(default = "default_lang")]
-    ocr_lang: String,
-}
+fn execute_inner(params_json: &str) -> Result<String, String> {
+    let req: VisionRequest = serde_json::from_str(params_json)
+        .map_err(|e| format!("Invalid parameters: {e}"))?;
 
-fn default_mode() -> String {
-    "auto".to_string()
-}
-fn default_lang() -> String {
-    "eng".to_string()
-}
+    // Validate service URL against allowlist
+    let service_url = validate_service_url(&req.service_url)?;
 
-#[derive(Debug, Serialize)]
-struct ToolOutput {
-    mode_used: String,
-    text: Option<String>,
-    description: Option<String>,
-    answer: Option<String>,
-    confidence: Option<f32>,
-    backends: Vec<String>,
-    latency_ms: u64,
-}
+    // Get image data — either from direct base64 or workspace file
+    let image_b64 = get_image_data(&req)?;
 
-fn execute_inner(params: &str) -> Result<String, String> {
-    let params: AnalyzeParams =
-        serde_json::from_str(params).map_err(|e| format!("Invalid parameters: {e}"))?;
-
-    if params.image.is_empty() {
-        return Err("'image' must not be empty".into());
-    }
-
-    // Determine if image is a file path or base64
-    let image_b64 = if params.image.starts_with("/")
-        || params.image.starts_with("./")
-        || params.image.starts_with("~/")
-    {
-        // Read from workspace
-        let path = if params.image.starts_with("~/") {
-            params.image.replacen("~", ".", 1)
-        } else {
-            params.image.clone()
-        };
-
-        let content = near::agent::host::workspace_read(&path)
-            .ok_or_else(|| format!("Could not read workspace file: {}", path))?;
-
-        // Check if content is already base64
-        if is_valid_base64(&content) {
-            content
-        } else {
-            // Assume it's binary and encode
-            base64::engine::general_purpose::STANDARD.encode(content.as_bytes())
-        }
-    } else {
-        // Assume it's base64
-        if !is_valid_base64(&params.image) {
-            return Err("Invalid base64 image data".into());
-        }
-        params.image.clone()
-    };
-
-    // Check image size
-    let decoded_len = base64::engine::general_purpose::STANDARD
-        .decode(&image_b64)
-        .map_err(|e| format!("Invalid base64: {e}"))?
-        .len();
-
-    if decoded_len > MAX_IMAGE_SIZE {
+    // Validate image size (rough estimate from base64 length)
+    let decoded_size = image_b64.len() * 3 / 4;
+    if decoded_size > MAX_IMAGE_SIZE {
         return Err(format!(
-            "Image too large: {} bytes (max: {})",
-            decoded_len, MAX_IMAGE_SIZE
+            "Image too large: ~{} bytes (max {} bytes)",
+            decoded_size, MAX_IMAGE_SIZE
         ));
     }
 
-    // Get vision service URL from env or use default
-    let vision_url =
-        std::env::var("VISION_SERVICE_URL").unwrap_or_else(|_| DEFAULT_VISION_URL.to_string());
-
-    // Build request payload
-    let request_body = serde_json::json!({
-        "image": image_b64,
-        "mode": params.mode,
-        "prompt": params.prompt,
-        "ocr_lang": params.ocr_lang,
-    });
-
-    // Determine endpoint
-    let base = if params.mode == "text" && params.prompt.is_none() {
-        "/v1/ocr"
-    } else {
-        "/v1/vision/analyze"
-    };
-    let endpoint = format!("{vision_url}{base}");
-
-    // Build headers
-    let mut headers = serde_json::json!({
-        "Content-Type": "application/json"
-    });
-
-    // Add auth token if available
-    if let Ok(token) = std::env::var("VISION_AUTH_TOKEN") {
-        if !token.is_empty() {
-            headers["Authorization"] = serde_json::json!(format!("Bearer {}", token));
-        }
+    // Validate mode
+    match req.mode.as_str() {
+        "text" | "describe" | "auto" => {}
+        other => return Err(format!("Invalid mode '{other}'. Use: text, describe, auto")),
     }
 
-    // Make HTTP request
-    let mut last_error = String::new();
-    let mut delay_ms = BASE_DELAY_MS;
-
-    for attempt in 0..=MAX_RETRIES {
-        if attempt > 0 {
-            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-            delay_ms = (delay_ms * 2).min(MAX_DELAY_MS);
-        }
-
-        let body_bytes = request_body.to_string().into_bytes();
-        let response = near::agent::host::http_request(
-            "POST",
-            &endpoint,
-            &headers.to_string(),
-            Some(&body_bytes),
-            Some(60000),
+    // Route to the appropriate endpoint
+    let (endpoint, body_json) = if req.mode == "text" {
+        let body = OcrOnlyRequest {
+            image: image_b64,
+            ocr_lang: req.ocr_lang,
+        };
+        (
+            format!("{service_url}/v1/ocr"),
+            serde_json::to_string(&body).map_err(|e| format!("Serialize error: {e}"))?,
         )
-        .map_err(|e| {
-            last_error = format!("Vision service request failed: {e}");
-        });
+    } else {
+        let body = SidecarRequest {
+            image: image_b64,
+            mode: req.mode,
+            prompt: req.prompt,
+            ocr_lang: req.ocr_lang,
+            detail_level: req.detail_level,
+        };
+        (
+            format!("{service_url}/v1/vision/analyze"),
+            serde_json::to_string(&body).map_err(|e| format!("Serialize error: {e}"))?,
+        )
+    };
 
-        let Ok(response) = response else {
-            continue;
+    // Single HTTP request — no retry
+    let headers = r#"{"Content-Type": "application/json"}"#;
+    let body_bytes = body_json.into_bytes();
+
+    let response = near::agent::host::http_request(
+        "POST",
+        &endpoint,
+        headers,
+        Some(&body_bytes),
+        Some(60000), // 60s timeout — VL inference can be slow
+    )
+    .map_err(|e| format!("Vision service request failed: {e}"))?;
+
+    if response.status >= 200 && response.status < 300 {
+        let body_str = String::from_utf8(response.body)
+            .map_err(|_| "Vision service returned non-UTF8 response".to_string())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body_str)
+            .map_err(|e| format!("Vision service returned invalid JSON: {e}"))?;
+
+        let output = ToolOutput {
+            status: "success".to_string(),
+            endpoint,
+            data,
         };
 
-        if response.status < 200 || response.status >= 300 {
-            if is_retryable(response.status) && attempt < MAX_RETRIES {
-                last_error = format!(
-                    "Vision service returned {} (retry {}/{})",
-                    response.status,
-                    attempt + 1,
-                    MAX_RETRIES
-                );
-                continue;
-            }
-            let body_str = String::from_utf8_lossy(&response.body);
-            return Err(format!(
-                "Vision service error {}: {}",
-                response.status, body_str
-            ));
-        }
+        serde_json::to_string(&output)
+            .map_err(|e| format!("Serialize output error: {e}"))
+    } else {
+        let body_str = String::from_utf8(response.body).unwrap_or_default();
+        Err(format!(
+            "Vision service returned HTTP {}: {}",
+            response.status, body_str
+        ))
+    }
+}
 
-        let body_str = String::from_utf8_lossy(&response.body);
-        let vision_response: serde_json::Value = serde_json::from_str(&body_str)
-            .map_err(|e| format!("Failed to parse vision service response: {e}"))?;
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
-        let output = if endpoint.ends_with("/ocr") {
-            ToolOutput {
-                mode_used: "text".to_string(),
-                text: vision_response["text"].as_str().map(|s| s.to_string()),
-                description: None,
-                answer: None,
-                confidence: None,
-                backends: vec!["tesseract".to_string()],
-                latency_ms: vision_response["elapsed_ms"].as_u64().unwrap_or(0),
-            }
-        } else {
-            let mode_used = vision_response["mode_used"].as_str().unwrap_or("auto").to_string();
-            let ocr_text = vision_response["ocr"]["full_text"].as_str().map(|s| s.to_string());
-            let description = vision_response["vision"]["description"].as_str().map(|s| s.to_string());
-            let answer = vision_response["vision"]["prompt_answer"].as_str().map(|s| s.to_string());
-            let confidence = vision_response["ocr"]["avg_confidence"].as_f64().map(|f| f as f32);
-            let backends: Vec<String> = vision_response["meta"]["backends_used"].as_array()
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-                .unwrap_or_default();
-            let latency = vision_response["meta"]["latency_ms"].as_u64().unwrap_or(0);
-            ToolOutput { mode_used, text: ocr_text, description, answer, confidence, backends, latency_ms: latency }
-        };
+/// Validate that the service URL points to a localhost-only sidecar.
+fn validate_service_url(url: &str) -> Result<String, String> {
+    let url = url.trim_end_matches('/');
 
-        return serde_json::to_string(&output).map_err(|e| format!("Failed to serialize output: {e}"));
+    let host_port = url
+        .strip_prefix("http://")
+        .ok_or_else(|| format!("Service URL must use http://, got: {url}"))?;
+
+    let host_port = host_port.split('/').next().unwrap_or(host_port);
+
+    if !ALLOWED_HOSTS.contains(&host_port) {
+        return Err(format!(
+            "Service URL host '{host_port}' not in allowlist. Allowed: {}",
+            ALLOWED_HOSTS.join(", ")
+        ));
     }
 
-    Err(last_error)
+    Ok(url.to_string())
 }
 
-fn is_valid_base64(s: &str) -> bool {
-    base64::engine::general_purpose::STANDARD.decode(s).is_ok()
+/// Get base64-encoded image data from either direct input or workspace file.
+fn get_image_data(req: &VisionRequest) -> Result<String, String> {
+    match (&req.image, &req.file_path) {
+        (Some(b64), None) => {
+            if b64.is_empty() {
+                return Err("'image' field is empty".to_string());
+            }
+            Ok(b64.clone())
+        }
+        (None, Some(path)) => {
+            let content = near::agent::host::workspace_read(path)
+                .ok_or_else(|| format!("Could not read workspace file: {path}"))?;
+
+            if content.is_empty() {
+                return Err(format!("Workspace file is empty: {path}"));
+            }
+            Ok(content.trim().to_string())
+        }
+        (Some(_), Some(_)) => {
+            Err("Provide either 'image' or 'file_path', not both".to_string())
+        }
+        (None, None) => {
+            Err("Provide either 'image' (base64) or 'file_path' (workspace path)".to_string())
+        }
+    }
 }
 
+export!(VisionAnalyzeTool);
 const SCHEMA: &str = r#"{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",

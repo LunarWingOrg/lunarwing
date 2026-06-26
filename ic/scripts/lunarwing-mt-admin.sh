@@ -188,6 +188,8 @@ Commands:
   build-pebble-worker             Build the pebble worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
+  build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
+
   build-darkirc                   Build darkirc daemon from external source
                                    (shared binary, not per-tenant)
 
@@ -903,6 +905,40 @@ ports_migrate() {
   ports_migrate_v6_1
   if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
   if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
+  if [[ "$current_version" -lt 9 ]]; then ports_migrate_v9; fi
+}
+
+# v8 -> v9: rename extended_ports.reserved_5 -> vision_service.
+ports_migrate_v9() {
+  if jq -e '.tenants | to_entries[] | select(.value.extended_ports | has("vision_service") | not) | select(.value.extended_ports | has("reserved_5"))' "$PORTS_REGISTRY" >/dev/null 2>&1; then
+    say "migrating port registry -> v9 (assign vision_service from reserved_5 slot) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .tenants |= with_entries(
+          .value |= (
+            if (.extended_ports | type == "object") then
+              .extended_ports |= (
+                .vision_service = ((.vision_service) // (.reserved_5) // ((.extended_base // 0) + 5))
+                | del(.reserved_5)
+              )
+            else . end
+          )
+        )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v9 (vision_service dedicated at extended_base+5)"
+  fi
+
+  # Always bump the version when the dispatcher calls v9, even if there were
+  # no tenants to migrate (e.g. empty registry) — otherwise .version stays
+  # stale and ports_allocate writes v9-shaped tenants into a v8-labeled file.
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '.version = 9' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
 }
 
 ports_allocate() {
@@ -974,9 +1010,10 @@ ports_allocate() {
             darkirc_irc: ($ebase + 1),
             darkirc_rpc: ($ebase + 2),
             nanocode_health: ($ebase + 3),
-            pebble_health: ($ebase + 4)
+            pebble_health: ($ebase + 4),
+            vision_service: ($ebase + 5)
           }
-          + (reduce range(5; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(6; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -1041,6 +1078,12 @@ ports_get() {
   if [[ -n "$port" ]]; then
     printf '%s' "$port"
     return 0
+  fi
+  # Back-compat: pre-v9 registries had `reserved_5` where `vision_service` now
+  # lives. Read either name; new tenants only ever carry `vision_service`.
+  if [[ "$port_name" == "vision_service" ]]; then
+    port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_5 // empty" "$PORTS_REGISTRY")"
+    [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
   fi
   return 1
 }
@@ -1821,6 +1864,16 @@ ENVEOF
     printf '\nDARKIRC_ADAPTER_URL=http://127.0.0.1:%s\nDARKIRC_ADAPTER_SECRET=%s\n' \
       "$darkirc_adapter_port" "$darkirc_adapter_secret" >> "$path"
   fi
+
+  # LunarVision OCR/vision sidecar
+  local vision_port vision_token
+  vision_port="$(ports_get "$name" vision_service)" || true
+  if [[ -n "$vision_port" ]]; then
+    vision_token="$(_env_existing "$(tenant_env_dir "$name")/vision.env" LUNARWING_AUTH_TOKEN)"
+    vision_token="${vision_token:-$(generate_token)}"
+    printf '\nVISION_SERVICE_URL=http://127.0.0.1:%s\nVISION_AUTH_TOKEN=%s\n' \
+      "$vision_port" "$vision_token" >> "$path"
+  fi
   # Nanocode worker LLM overrides (consumed by the worker container via env;
   # see start_tenant_nanocode / render_worker_quadlet). Written only when set so
   # an unconfigured tenant gets the image's baked-in nanocode.json defaults.
@@ -2541,6 +2594,249 @@ stop_tenant_pebble() {
   fi
 }
 
+# ── LunarVision OCR/vision sidecar ──────────────────────────────────────────
+
+VISION_SIDECAR_IMAGE=lunarwing/vision-service:latest
+VISION_SIDECAR_INTERNAL_PORT=8088
+
+build_vision_sidecar_image() {
+  ensure_container_runtime
+  local sidecar_dir="$SOURCE_REPO/projects/ocr-sidecar"
+  [[ -d "$sidecar_dir" ]] || { say "WARNING: $sidecar_dir not found; skipping vision sidecar build"; return 0; }
+  if [[ -f "$sidecar_dir/Dockerfile" ]]; then
+    "$CONTAINER_RT" build --network=host --format docker -t "$VISION_SIDECAR_IMAGE" -f "$sidecar_dir/Dockerfile" "$sidecar_dir" >/dev/null \
+      || { say "WARNING: vision sidecar image build failed (run 'build-vision-sidecar' to retry)"; return 1; }
+    say "vision sidecar image built: $VISION_SIDECAR_IMAGE"
+  else
+    say "WARNING: $sidecar_dir/Dockerfile missing; cannot build vision sidecar"
+    return 1
+  fi
+}
+
+write_tenant_vision_env() {
+  local name="$1"
+  local env_dir env_path
+  env_dir="$(tenant_env_dir "$name")"
+  env_path="$env_dir/vision.env"
+  local token
+  token="$(_env_existing "$env_path" LUNARWING_AUTH_TOKEN)"
+  token="${token:-$(generate_token)}"
+  mkdir -p "$env_dir"
+  (
+    umask 077
+    cat >"$env_path" <<ENVEOF
+LUNARWING_AUTH_TOKEN=$token
+OCR_PORT=$VISION_SIDECAR_INTERNAL_PORT
+ENVEOF
+  )
+  chown "$name:$name" "$env_path"
+  printf '%s' "$token"
+}
+
+start_tenant_vision() {
+  local name="$1"
+  ensure_container_runtime
+
+  local vision_port
+  vision_port="$(ports_get "$name" vision_service)" || true
+  if [[ -z "$vision_port" ]]; then
+    say "no vision_service port allocated for $name (skipping vision sidecar)"
+    return 0
+  fi
+
+  if ! _ensure_tenant_image "$name" "$VISION_SIDECAR_IMAGE"; then
+    say "vision sidecar image not available; run 'build-vision-sidecar' first (skipping)"
+    return 0
+  fi
+
+  local container_name="lunarwing-vision-$name"
+
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    _wait_user_manager "$name"
+    render_vision_quadlet "$name"
+    _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _systemctl_user "$name" start "lunarwing-vision-${name}.service" >/dev/null 2>&1; then
+      say "vision sidecar ready via quadlet (lunarwing-vision-${name}.service, port $vision_port)"
+    else
+      say "WARNING: lunarwing-vision-${name}.service failed to start" >&2
+      _systemctl_user "$name" status "lunarwing-vision-${name}.service" --no-pager >&2 || true
+    fi
+    return 0
+  fi
+
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "vision sidecar already running ($container_name, port $vision_port)"
+    else
+      _ctr "$name" start "$container_name" >/dev/null
+      say "vision sidecar restarted ($container_name, port $vision_port)"
+    fi
+  else
+    local vision_env_path
+    vision_env_path="$(tenant_env_dir "$name")/vision.env"
+    [[ -f "$vision_env_path" ]] || write_tenant_vision_env "$name" >/dev/null
+
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+
+    say "creating vision sidecar container $container_name on port $vision_port"
+    _ctr "$name" run -d \
+      --name "$container_name" \
+      --env-file "$vision_env_path" \
+      -p "127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}" \
+      "${restart_arg[@]}" \
+      "$VISION_SIDECAR_IMAGE" >/dev/null
+    say "vision sidecar ready ($container_name, port $vision_port)"
+  fi
+
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" ]]; then
+    render_vision_openrc_unit "$name"
+    rc-update add "$container_name" default >/dev/null 2>&1 || true
+    rc-service "$container_name" start >/dev/null 2>&1 || \
+      say "WARNING: rc-service $container_name start returned non-zero (container may already be up)"
+  fi
+}
+
+stop_tenant_vision() {
+  local name="$1"
+  ensure_container_runtime
+
+  local container_name="lunarwing-vision-$name"
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "vision sidecar stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+    say "vision sidecar stopped ($container_name)"
+  fi
+}
+
+render_vision_openrc_unit() {
+  local name="$1"
+  ensure_container_runtime
+  local vision_port runtime_bin container uid home
+  vision_port="$(ports_get "$name" vision_service)"
+  [[ -n "$vision_port" ]] || return 0
+  [[ -n "${CONTAINER_RT:-}" ]] && runtime_bin="$(command -v "$CONTAINER_RT" 2>/dev/null || true)"
+  container="lunarwing-vision-${name}"
+  uid="$(id -u "$name" 2>/dev/null || echo "")"
+  home="$(tenant_home "$name")"
+
+  cat >"/etc/init.d/${container}" <<INITEOF
+#!/sbin/openrc-run
+
+description="LunarWing vision sidecar ($name)"
+
+: "\${vis_runtime:=$runtime_bin}"
+: "\${vis_container:=$container}"
+: "\${vis_rootless:=$MT_ROOTLESS}"
+: "\${vis_user:=$name}"
+: "\${vis_home:=$home}"
+: "\${vis_uid:=$uid}"
+: "\${vis_port:=$vision_port}"
+: "\${vis_internal_port:=$VISION_SIDECAR_INTERNAL_PORT}"
+: "\${vis_image:=$VISION_SIDECAR_IMAGE}"
+: "\${vis_env_file:=$(tenant_env_dir "$name")/vision.env}"
+: "\${vis_wait:=30}"
+
+depend() {
+    need net localmount
+    after firewall lunarwing-${name}
+}
+
+_vis() {
+    if [ "\${vis_rootless}" = "true" ]; then
+        sudo -u "\${vis_user}" env HOME="\${vis_home}" XDG_RUNTIME_DIR="/run/user/\${vis_uid}" "\${vis_runtime}" "\$@"
+    else
+        "\${vis_runtime}" "\$@"
+    fi
+}
+
+_vis_healthy() {
+    [ "\$(_vis inspect -f '{{.State.Running}}' "\${vis_container}" 2>/dev/null)" = "true" ] || return 1
+    _vis exec "\${vis_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${vis_internal_port}/health" 2>/dev/null
+}
+
+start() {
+    [ -n "\${vis_runtime}" ] && [ -x "\${vis_runtime}" ] || { ewarn "no container runtime; skipping vision for $name"; return 0; }
+    ebegin "Starting vision sidecar (\${vis_container})"
+    if [ "\${vis_rootless}" = "true" ]; then
+        checkpath -d -m 0700 -o "\${vis_user}:\${vis_user}" "/run/user/\${vis_uid}"
+    fi
+    _vis start "\${vis_container}" >/dev/null 2>&1 || { eend 1 "container start failed"; return 1; }
+    _w=0
+    while ! _vis_healthy; do
+        _w=\$((_w + 1))
+        [ "\$_w" -lt "\${vis_wait}" ] || { eend 1 "vision sidecar not healthy after \${vis_wait}s"; return 1; }
+        sleep 1
+    done
+    eend 0
+}
+
+stop() {
+    [ -n "\${vis_runtime}" ] && [ -x "\${vis_runtime}" ] || return 0
+    ebegin "Stopping vision sidecar (\${vis_container})"
+    _vis stop --time 30 "\${vis_container}" >/dev/null 2>&1
+    eend 0
+}
+
+status() {
+    if _vis_healthy; then
+        einfo "\${vis_container}: started"; return 0
+    fi
+    einfo "\${vis_container}: stopped"; return 3
+}
+INITEOF
+  chmod 0755 "/etc/init.d/${container}"
+}
+
+render_vision_quadlet() {
+  local name="$1"
+  local qdir vision_port env_path token
+  qdir="$(tenant_quadlet_dir "$name")"
+  vision_port="$(ports_get "$name" vision_service)"
+  [[ -n "$vision_port" ]] || return 0
+  env_path="$(tenant_env_dir "$name")/vision.env"
+  [[ -f "$env_path" ]] || write_tenant_vision_env "$name" >/dev/null
+  token="$(grep '^LUNARWING_AUTH_TOKEN=' "$env_path" 2>/dev/null | cut -d= -f2- || true)"
+  token="${token//%/%%}"
+  mkdir -p "$qdir"
+
+  {
+    cat <<EOF
+[Unit]
+Description=LunarWing vision sidecar ($name)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Container]
+ContainerName=lunarwing-vision-${name}
+Image=${VISION_SIDECAR_IMAGE}
+PublishPort=127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}
+Environment=OCR_PORT=${VISION_SIDECAR_INTERNAL_PORT}
+Environment=LUNARWING_AUTH_TOKEN=${token}
+EOF
+    if [[ -f "$env_path" ]]; then
+      printf 'EnvironmentFile=%s\n' "$env_path"
+    fi
+
+    cat <<EOF
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+  } > "$qdir/lunarwing-vision-${name}.container"
+}
+
 # ── PostgreSQL container ─────────────────────────────────────────────────────
 
 start_tenant_postgres() {
@@ -3239,6 +3535,14 @@ _wait_user_manager() {
 start_tenant_systemd() {
   local name="$1"
   _systemctl_user "$name" daemon-reload
+  # Quadlet-generated units (pg, nanocode, pebble, vision) are NOT in the
+  # enable_list: `systemctl enable` fails on generated/transient units with
+  # "Failed to enable unit: ... is transient or generated", and under
+  # `set -euo pipefail` that non-zero exit aborts the entire enable batch —
+  # leaving every regular service disabled. Each Quadlet unit is already
+  # started by its own start_tenant_* function (which renders the quadlet,
+  # reloads the daemon, and starts the unit). The imperative `start` below
+  # is belt-and-suspenders for the vision unit (harmless if already running).
   local enable_list=("lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-weechat-adapter-${name}.service")
   if tenant_darkirc_enabled "$name"; then
     enable_list+=("lunarwing-darkirc-${name}.service" "lunarwing-darkirc-adapter-${name}.service")
@@ -3248,6 +3552,7 @@ start_tenant_systemd() {
     _systemctl_user "$name" start "lunarwing-darkirc-${name}.service"
     sleep 2
   fi
+  _systemctl_user "$name" start "lunarwing-vision-${name}.service" 2>/dev/null || true
   _systemctl_user "$name" start "lunarwing-${name}.service"
   sleep 2
   if _systemctl_user "$name" is-active --quiet "lunarwing-${name}.service"; then
@@ -3264,7 +3569,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-pg-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-vision-${name}.service" "lunarwing-pg-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -3281,18 +3586,20 @@ uninstall_tenant_systemd() {
     rm -f "$user_unit_dir/$svc"
   done
 
-  # Quadlet .container units (rootless pg + workers). Remove the worker containers
-  # (their workspace data is bind-mounted in the home); the pg container + named
-  # volume are handled by stop_tenant_postgres / reset_tenant_postgres so non-purge
-  # removals keep the data for a later re-add.
+  # Quadlet .container units (rootless pg + workers + vision sidecar). Remove the
+  # worker containers (their workspace data is bind-mounted in the home); the pg
+  # container + named volume are handled by stop_tenant_postgres /
+  # reset_tenant_postgres so non-purge removals keep the data for a later re-add.
   local qdir; qdir="$(tenant_quadlet_dir "$name")"
   rm -f "$qdir/lunarwing-pg-${name}.container" \
         "$qdir/lunarwing-nanocode-${name}.container" \
-        "$qdir/lunarwing-pebble-${name}.container"
+        "$qdir/lunarwing-pebble-${name}.container" \
+        "$qdir/lunarwing-vision-${name}.container"
   if id -u "$name" >/dev/null 2>&1; then
     for w in nanocode pebble; do
       _ctr "$name" rm -f "lunarwing-${w}-${name}" >/dev/null 2>&1 || true
     done
+    _ctr "$name" rm -f "lunarwing-vision-${name}" >/dev/null 2>&1 || true
   fi
 
   _systemctl_user "$name" daemon-reload 2>/dev/null || true
@@ -3905,7 +4212,7 @@ start_tenant_openrc() {
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  local boot_svcs=("lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}")
+  local boot_svcs=("lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-vision-${name}")
   if tenant_darkirc_enabled "$name"; then
     boot_svcs+=("lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}")
   fi
@@ -3936,6 +4243,7 @@ stop_tenant_openrc() {
   for worker in nanocode pebble; do
     rc-service "lunarwing-${worker}-${name}-sup" stop 2>/dev/null || true
   done
+  rc-service "lunarwing-vision-${name}" stop 2>/dev/null || true
   # Postgres last: the daemon depends on it, so it stops after its consumers.
   rc-service "lunarwing-pg-${name}-sup" stop 2>/dev/null || true
   rc-service "lunarwing-pg-${name}" stop 2>/dev/null || true
@@ -3944,7 +4252,7 @@ stop_tenant_openrc() {
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-darkirc-adapter-${name}" "lunarwing-darkirc-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-darkirc-adapter-${name}" "lunarwing-darkirc-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-vision-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -4214,6 +4522,7 @@ add_tenant() {
   say ""
 
   say "--- Generating environment files ---"
+  write_tenant_vision_env "$name" >/dev/null
   write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
   write_tenant_proxy_env "$name" "$tensorzero_url"
@@ -4224,6 +4533,9 @@ add_tenant() {
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+  if ! "$CONTAINER_RT" image inspect "$VISION_SIDECAR_IMAGE" &>/dev/null; then
+    build_vision_sidecar_image || true
+  fi
   say ""
 
   say "--- Starting PostgreSQL ---"
@@ -4354,6 +4666,7 @@ start_tenant() {
   start_tenant_postgres "$name"
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
+  start_tenant_vision "$name"
 
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" ]]; then
@@ -4376,6 +4689,7 @@ stop_tenant() {
     stop_tenant_openrc "$name"
   fi
 
+  stop_tenant_vision "$name"
   stop_tenant_pebble "$name"
   stop_tenant_nanocode "$name"
   stop_tenant_postgres "$name"
@@ -4618,9 +4932,11 @@ doctor() {
   if command -v docker >/dev/null 2>&1; then
     _check "nanocode worker image exists" docker image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" docker image inspect lunarwing-worker-pebble:latest
+    _check "vision sidecar image exists" docker image inspect "$VISION_SIDECAR_IMAGE"
   elif command -v podman >/dev/null 2>&1; then
     _check "nanocode worker image exists" podman image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" podman image inspect lunarwing-worker-pebble:latest
+    _check "vision sidecar image exists" podman image inspect "$VISION_SIDECAR_IMAGE"
   fi
 
   say ""
@@ -4797,6 +5113,11 @@ main() {
         esac
       done
       build_pebble_worker "$no_cache"
+      ;;
+
+    build-vision-sidecar)
+      require_root
+      build_vision_sidecar_image
       ;;
 
     install-wasm)
