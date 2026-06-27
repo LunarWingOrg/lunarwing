@@ -277,6 +277,11 @@ Commands:
     --base-url <url>               TensorZero baseURL (NANOCODE_BASE_URL; full URL)
                                    (restart the worker after: stop-tenant && start-tenant)
 
+  configure-ssh <name>             Provision SSH harness for an existing tenant
+    --host <host>                  SSH host (default: 127.0.0.1)
+    --user <user>                  SSH user (default: tenant name)
+                                   (restart the tenant after to upload the key: restart-tenant)
+
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
 
@@ -5582,6 +5587,34 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: configure-nanocode <name> [--model <model>] [--base-url <url>]"
       configure_nanocode "$name" "$nc_model" "$nc_base_url"
+      ;;
+
+    configure-ssh)
+      require_root
+      local name="" ssh_host="" ssh_user=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --host) ssh_host="$2"; shift 2 ;;
+          --user) ssh_user="$2"; shift 2 ;;
+          -*)     die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-ssh <name> [--host <host>] [--user <user>]"
+      name="$(sanitize_name "$name")"
+      ports_registry_init
+      tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+      [[ -n "$ssh_host" ]] || ssh_host="127.0.0.1"
+      [[ -n "$ssh_user" ]] || ssh_user="$name"
+      ensure_ssh_config "$name" "$ssh_host" "$ssh_user"
+      provision_tenant_ssh_key "$name" "$ssh_host" "$ssh_user"
+      say ""
+      say "SSH harness configured for tenant '$name' (host=$ssh_host user=$ssh_user)"
+      say "Run '$0 restart-tenant $name' to start the daemon and upload the key to the secrets store"
       ;;
 
     patch-env)
