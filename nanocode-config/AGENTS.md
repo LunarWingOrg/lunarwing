@@ -38,9 +38,8 @@ There is no formal build pipeline or test framework in this repo. Use lightweigh
 
 ### Naming
 - Prefer lowercase, descriptive filenames (e.g., `optionalprovider.json`, `newoptionalprovider.json`, `tensorzero.toml`)
-- Model IDs should remain explicit and routeable: `tensorzero::function_name::coding` or `[models.qwen397b_openrouter]`
+- Model IDs should remain explicit and routeable: `tensorzero::function_name::FrontierCODE` or `[models.qwen397b_openrouter]`
 - TensorZero model keys use snake_case with provider suffixes (e.g., `ds_native`, `qwen397b_openrouter`, `glm5_nanogpt_tee`)
-- TensorZero function keys use snake_case (e.g., `default_chat`, `coding`, `ironclaw`, `openclaw_hardened`)
 - JSON provider keys use lowercase (e.g., `cliproxyapi`, `tensorzero`)
 
 ### Secrets Management
@@ -97,7 +96,7 @@ There is no formal build pipeline or test framework in this repo. Use lightweigh
     }
   }
   ```
-- Model IDs in provider JSON should match TensorZero function references (e.g., `"tensorzero::function_name::coding"`)
+- Model IDs in provider JSON should match TensorZero function references (e.g., `"tensorzero::function_name::FrontierCODE"`)
 
 ## Commit & Pull Request Guidelines
 - Use short, imperative commit subjects: `Update tensorzero.toml`, `Create NOTES.md`, `Add Qwen 3.5 397B model config`

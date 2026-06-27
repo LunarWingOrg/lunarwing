@@ -13,7 +13,7 @@
 
   "models": {
     "tensorzero::function_name::coding": {
-      "name": "tensorzero::function_name::coding"
+      "name": "tensorzero::function_name::FrontierCODE"
     }
   }
 
