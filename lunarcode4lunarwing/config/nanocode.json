@@ -1,6 +1,6 @@
 {
   "$schema": "https://github.com/nanogpt-community/nanocode/config.json",
-  "model": "nanogpt/tensorzero::function_name::FrontierCODE",
+  "model": "tensorzero::function_name::FrontierCODE",
   "theme": "moonlight",
   "plugin": [
     "opencode-agent-memory",
