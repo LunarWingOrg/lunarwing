@@ -114,30 +114,65 @@ impl SshAgentServer {
 
         info!("SSH agent server listening: {}", socket_path.display());
 
-        let keys_map: Arc<Mutex<HashMap<String, Arc<KeyPair>>>> = Arc::new(Mutex::new(HashMap::new()));
+        // Parse keys upfront so we can add them via the agent client protocol
+        // after the server starts. The russh_keys agent server maintains its
+        // OWN internal KeyStore (separate from SshAgent.keys), so keys must be
+        // added via the agent protocol (ADD_IDENTITY message) — not just
+        // stored in the SshAgent struct.
+        let mut parsed_keys: Vec<(String, KeyPair)> = Vec::new();
         for (hostname, creds) in keys {
             match parse_key(&creds) {
                 Ok(key_pair) => {
-                    let mut guard = keys_map.lock().await;
-                    guard.insert(hostname, Arc::new(key_pair));
+                    parsed_keys.push((hostname, key_pair));
                 }
                 Err(e) => warn!("Failed to parse key for {}: {}", hostname, e),
             }
         }
 
+        let keys_map: Arc<Mutex<HashMap<String, Arc<KeyPair>>>> = Arc::new(Mutex::new(HashMap::new()));
         let keys_clone = Arc::clone(&keys_map);
         let socket_path_for_log = socket_path.clone();
+        let socket_path_for_client = socket_path.clone();
+
+        let join_handle = tokio::spawn(async move {
+            let stream = UnixListenerStream::new(listener);
+            let agent = SshAgent { keys: keys_clone };
+            if let Err(e) = russh_keys::agent::server::serve(stream, agent).await {
+                error!("SSH agent server error on {}: {}", socket_path_for_log.display(), e);
+            }
+        });
+
+        // Give the server a moment to start accepting connections, then add
+        // keys via the agent client protocol so they land in the server's
+        // internal KeyStore (which the server reads for REQUEST_IDENTITIES
+        // and SIGN requests).
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        for (hostname, key_pair) in parsed_keys {
+            // Store in our map first (for status reporting via the API) since
+            // add_identity takes a reference and doesn't consume the key.
+            let key_arc = Arc::new(key_pair.clone());
+            {
+                let mut guard = keys_map.lock().await;
+                guard.insert(hostname.clone(), key_arc);
+            }
+            match russh_keys::agent::client::AgentClient::connect_uds(&socket_path_for_client).await {
+                Ok(mut client) => {
+                    if let Err(e) = client.add_identity(&key_pair, &[]).await {
+                        warn!("Failed to add key for {} via agent protocol: {}", hostname, e);
+                    } else {
+                        info!("Added key for {} to SSH agent via protocol", hostname);
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to connect to agent client for {}: {}", hostname, e);
+                }
+            }
+        }
 
         Ok(Arc::new(Self {
             socket_path,
-            keys: keys_clone.clone(),
-            _join_handle: tokio::spawn(async move {
-                let stream = UnixListenerStream::new(listener);
-                let agent = SshAgent { keys: keys_clone };
-                if let Err(e) = russh_keys::agent::server::serve(stream, agent).await {
-                    error!("SSH agent server error on {}: {}", socket_path_for_log.display(), e);
-                }
-            }),
+            keys: keys_map,
+            _join_handle: join_handle,
         }))
     }
 
