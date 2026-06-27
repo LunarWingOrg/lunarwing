@@ -11,6 +11,8 @@
 //! Full-job routines are delegated to the existing `Scheduler`.
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -1096,8 +1098,31 @@ struct EngineContext {
     sandbox_readiness: SandboxReadiness,
 }
 
+impl EngineContext {
+    fn clone_ctx(&self) -> EngineContext {
+        EngineContext {
+            config: self.config.clone(),
+            store: self.store.clone(),
+            llm: self.llm.clone(),
+            workspace: self.workspace.clone(),
+            notify_tx: self.notify_tx.clone(),
+            running_count: self.running_count.clone(),
+            scheduler: self.scheduler.clone(),
+            extension_manager: self.extension_manager.clone(),
+            tools: self.tools.clone(),
+            safety: self.safety.clone(),
+            sandbox_readiness: self.sandbox_readiness,
+        }
+    }
+}
+
 /// Execute a routine run. Handles both lightweight and full_job modes.
-async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) {
+fn execute_routine(
+    ctx: EngineContext,
+    routine: Routine,
+    run: RoutineRun,
+) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move {
     // Increment running count (atomic: survives panics in the execution below)
     ctx.running_count.fetch_add(1, Ordering::Relaxed);
 
@@ -1181,19 +1206,21 @@ async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) 
         0
     };
 
-    let next_fire = if status == RunStatus::Failed && is_retryable_error {
-        if let Some(delay) = routine.guardrails.retry.compute_delay(new_failures) {
-            tracing::info!(
-                routine = %routine.name,
-                attempt = new_failures,
-                max = routine.guardrails.retry.max_retries,
-                delay_secs = delay.as_secs(),
-                "Scheduling retry after transient failure"
-            );
-            Some(now + chrono::Duration::from_std(delay).unwrap_or_default())
-        } else {
-            compute_normal_next_fire(&routine)
-        }
+    let retry_delay = if status == RunStatus::Failed && is_retryable_error {
+        routine.guardrails.retry.compute_delay(new_failures)
+    } else {
+        None
+    };
+
+    let next_fire = if let Some(delay) = retry_delay {
+        tracing::info!(
+            routine = %routine.name,
+            attempt = new_failures,
+            max = routine.guardrails.retry.max_retries,
+            delay_secs = delay.as_secs(),
+            "Scheduling deferred retry after transient failure"
+        );
+        Some(now + chrono::Duration::from_std(delay).unwrap_or_default())
     } else {
         compute_normal_next_fire(&routine)
     };
@@ -1257,6 +1284,69 @@ async fn execute_routine(ctx: EngineContext, routine: Routine, run: RoutineRun) 
         thread_id.as_deref(),
     )
     .await;
+
+    if let Some(delay) = retry_delay {
+        let ctx = ctx.clone_ctx();
+        let routine_id = routine.id;
+        let routine_name = routine.name.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+
+            let routine = match ctx.store.get_routine(routine_id).await {
+                Ok(Some(r)) => r,
+                Ok(None) => {
+                    tracing::warn!(routine = %routine_name, "Routine deleted before retry fired");
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!(routine = %routine_name, "Failed to reload routine for retry: {e}");
+                    return;
+                }
+            };
+
+            if !routine.enabled {
+                tracing::info!(routine = %routine_name, "Routine disabled before retry fired, skipping");
+                return;
+            }
+
+            if routine.consecutive_failures > routine.guardrails.retry.max_retries {
+                tracing::info!(
+                    routine = %routine_name,
+                    failures = routine.consecutive_failures,
+                    max = routine.guardrails.retry.max_retries,
+                    "Retry limit exceeded, not retrying"
+                );
+                return;
+            }
+
+            let run = RoutineRun {
+                id: Uuid::new_v4(),
+                routine_id: routine.id,
+                trigger_type: "retry".to_string(),
+                trigger_detail: Some(format!("attempt {}", routine.consecutive_failures)),
+                started_at: Utc::now(),
+                completed_at: None,
+                status: RunStatus::Running,
+                result_summary: None,
+                tokens_used: None,
+                job_id: None,
+                created_at: Utc::now(),
+            };
+
+            if let Err(e) = ctx.store.create_routine_run(&run).await {
+                tracing::error!(routine = %routine_name, "Failed to create retry run record: {e}");
+                return;
+            }
+
+            tracing::info!(
+                routine = %routine_name,
+                run_id = %run.id,
+                "Executing deferred retry"
+            );
+            execute_routine(ctx, routine, run).await;
+        });
+    }
+    })
 }
 
 /// Sanitize a routine name for use in workspace paths.
@@ -1400,7 +1490,7 @@ async fn execute_lightweight(
     let safe_name = sanitize_routine_name(&routine.name);
     let state_path = format!("routines/{safe_name}/state.md");
     let state_content = match ctx.workspace.read(&state_path).await {
-        Ok(doc) => Some(doc.content),
+        Ok(doc) => Some(sanitize_state_content(&doc.content)),
         Err(_) => None,
     };
 
@@ -1464,6 +1554,57 @@ fn sanitize_prompt_field(value: &str) -> String {
         .take(MAX_LEN)
         .map(|c| if c == '`' { '\'' } else { c })
         .collect()
+}
+
+/// Maximum length for sanitized routine state content injected into prompts.
+const MAX_STATE_CONTENT_CHARS: usize = 4096;
+
+/// Patterns that indicate the LLM is outputting tool calls as text instead
+/// of using the proper tool-calling API. These are hallucinated formats that
+/// should never appear in legitimate routine output or persisted state.
+const HALLUCINATED_TOOL_CALL_MARKERS: &[&str] = &[
+    "<function=",
+    "<parameter=",
+    "</function>",
+    "</parameter>",
+    "<function_call>",
+    "</function_call>",
+];
+
+fn contains_hallucinated_tool_calls(content: &str) -> bool {
+    HALLUCINATED_TOOL_CALL_MARKERS
+        .iter()
+        .any(|marker| content.contains(marker))
+}
+
+fn strip_hallucinated_tool_calls(content: &str) -> String {
+    content
+        .lines()
+        .filter(|line| {
+            !HALLUCINATED_TOOL_CALL_MARKERS
+                .iter()
+                .any(|marker| line.contains(marker))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+fn sanitize_state_content(content: &str) -> String {
+    let no_tool_calls = strip_hallucinated_tool_calls(content);
+
+    let no_control: String = no_tool_calls
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect();
+
+    if no_control.len() <= MAX_STATE_CONTENT_CHARS {
+        no_control
+    } else {
+        let end = crate::util::floor_char_boundary(&no_control, MAX_STATE_CONTENT_CHARS);
+        format!("{}... [state truncated]", &no_control[..end])
+    }
 }
 
 fn build_lightweight_prompt(
@@ -1603,12 +1744,24 @@ fn handle_text_response(
         return Ok((RunStatus::Ok, None, total_tokens));
     }
 
+    let cleaned = if contains_hallucinated_tool_calls(content) {
+        tracing::warn!(
+            "Routine LLM output contained text-formatted tool calls; stripping before persistence"
+        );
+        strip_hallucinated_tool_calls(content)
+    } else {
+        content.to_string()
+    };
+
+    if cleaned.is_empty() {
+        let consumed = tokens_to_option(total_input_tokens, total_output_tokens);
+        return Err(RoutineError::EmptyResponse {
+            partial_tokens: consumed,
+        });
+    }
+
     let total_tokens = Some((total_input_tokens + total_output_tokens) as i32);
-    Ok((
-        RunStatus::Attention,
-        Some(content.to_string()),
-        total_tokens,
-    ))
+    Ok((RunStatus::Attention, Some(cleaned), total_tokens))
 }
 
 /// Execute a lightweight routine with tool execution support (agentic loop).
@@ -2082,10 +2235,12 @@ mod tests {
     use uuid::Uuid;
 
     use crate::agent::routine::{
-        NotifyConfig, Routine, RoutineAction, RoutineGuardrails, RunStatus, Trigger,
+        NotifyConfig, RetryPolicy, Routine, RoutineAction, RoutineGuardrails, RunStatus, Trigger,
     };
     use crate::channels::IncomingMessage;
     use crate::config::RoutineConfig;
+    use crate::llm::FinishReason;
+    use std::time::Duration;
 
     #[test]
     fn test_notification_gating() {
@@ -2656,5 +2811,154 @@ mod tests {
         let result = sanitize_summary(&s);
         assert!(result.len() <= 503);
         assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_contains_hallucinated_tool_calls_detects_function_tag() {
+        assert!(super::contains_hallucinated_tool_calls(
+            "<function=gotify_send_message>"
+        ));
+    }
+
+    #[test]
+    fn test_contains_hallucinated_tool_calls_detects_parameter_tag() {
+        assert!(super::contains_hallucinated_tool_calls(
+            "<parameter=message>hello</parameter>"
+        ));
+    }
+
+    #[test]
+    fn test_contains_hallucinated_tool_calls_clean_text() {
+        assert!(!super::contains_hallucinated_tool_calls(
+            "BTC $60262.00 (+1.73%), ETH $1581.61 (+2.68%)"
+        ));
+        assert!(!super::contains_hallucinated_tool_calls("ROUTINE_OK"));
+        assert!(!super::contains_hallucinated_tool_calls(""));
+    }
+
+    #[test]
+    fn test_strip_hallucinated_tool_calls_removes_tags() {
+        let input = "\u{3C}function=gotify_send_message\u{3E}\n\u{3C}parameter=message\u{3E}\nBTC prices\n\u{3C}/parameter\u{3E}\n\u{3C}/function\u{3E}";
+        let result = super::strip_hallucinated_tool_calls(input);
+        assert_eq!(result, "BTC prices");
+    }
+
+    #[test]
+    fn test_strip_hallucinated_tool_calls_keeps_clean_lines() {
+        let input = "Line one\n\u{3C}function=foo\u{3E}\nLine three\n\u{3C}/function\u{3E}\nLine five";
+        let result = super::strip_hallucinated_tool_calls(input);
+        assert_eq!(result, "Line one\nLine three\nLine five");
+    }
+
+    #[test]
+    fn test_strip_hallucinated_tool_calls_all_contaminated() {
+        let input = "\u{3C}function=gotify\u{3E}\n\u{3C}parameter=message\u{3E}\n\u{3C}/parameter\u{3E}\n\u{3C}/function\u{3E}";
+        let result = super::strip_hallucinated_tool_calls(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_sanitize_state_content_strips_tool_calls() {
+        let state = "Last run: OK\n\u{3C}function=gotify_send_message\u{3E}\n\u{3C}parameter=message\u{3E}hello\u{3C}/parameter\u{3E}\n\u{3C}/function\u{3E}";
+        let result = super::sanitize_state_content(state);
+        assert!(!result.contains("function"));
+        assert!(result.contains("Last run: OK"));
+    }
+
+    #[test]
+    fn test_sanitize_state_content_strips_control_chars() {
+        let state = "Hello\x00\x01\x02World";
+        let result = super::sanitize_state_content(state);
+        assert_eq!(result, "HelloWorld");
+    }
+
+    #[test]
+    fn test_sanitize_state_content_preserves_newlines() {
+        let state = "Line 1\nLine 2\nLine 3";
+        let result = super::sanitize_state_content(state);
+        assert_eq!(result, "Line 1\nLine 2\nLine 3");
+    }
+
+    #[test]
+    fn test_sanitize_state_content_truncates() {
+        let state = "x".repeat(5000);
+        let result = super::sanitize_state_content(&state);
+        assert!(result.len() < state.len());
+        assert!(result.ends_with("... [state truncated]"));
+    }
+
+    #[test]
+    fn test_handle_text_response_strips_hallucinated_tool_calls() {
+        use super::handle_text_response;
+        let content = "\u{3C}function=gotify_send_message\u{3E}\n\u{3C}parameter=message\u{3E}\nBTC prices\n\u{3C}/parameter\u{3E}\n\u{3C}/function\u{3E}";
+        let result = handle_text_response(content, FinishReason::Stop, 100, 50);
+        assert!(result.is_ok());
+        let (status, summary, _tokens) = result.unwrap();
+        assert_eq!(status, RunStatus::Attention);
+        let s = summary.expect("should have summary");
+        assert!(!s.contains("function"));
+    }
+
+    #[test]
+    fn test_handle_text_response_all_hallucinated_returns_error() {
+        use super::handle_text_response;
+        let content = "\u{3C}function=gotify\u{3E}\n\u{3C}parameter=message\u{3E}hello\u{3C}/parameter\u{3E}\n\u{3C}/function\u{3E}";
+        let result = handle_text_response(content, FinishReason::Stop, 100, 50);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_retry_compute_delay_returns_none_when_exhausted() {
+        let policy = RetryPolicy {
+            max_retries: 3,
+            initial_delay_secs: 60,
+            backoff_multiplier: 2.0,
+            max_delay_secs: 3600,
+        };
+        assert!(policy.compute_delay(0).is_none());
+        assert!(policy.compute_delay(1).is_some());
+        assert!(policy.compute_delay(2).is_some());
+        assert!(policy.compute_delay(3).is_some());
+        assert!(policy.compute_delay(4).is_none());
+    }
+
+    #[test]
+    fn test_retry_compute_delay_exponential_backoff() {
+        let policy = RetryPolicy {
+            max_retries: 5,
+            initial_delay_secs: 10,
+            backoff_multiplier: 3.0,
+            max_delay_secs: 1000,
+        };
+        let d1 = policy.compute_delay(1).unwrap();
+        let d2 = policy.compute_delay(2).unwrap();
+        let d3 = policy.compute_delay(3).unwrap();
+        assert_eq!(d1, Duration::from_secs(10));
+        assert_eq!(d2, Duration::from_secs(30));
+        assert_eq!(d3, Duration::from_secs(90));
+    }
+
+    #[test]
+    fn test_retry_compute_delay_capped_by_max() {
+        let policy = RetryPolicy {
+            max_retries: 10,
+            initial_delay_secs: 100,
+            backoff_multiplier: 10.0,
+            max_delay_secs: 500,
+        };
+        let d = policy.compute_delay(3).unwrap();
+        assert_eq!(d, Duration::from_secs(500));
+    }
+
+    #[test]
+    fn test_retry_compute_delay_zero_retries_means_no_retry() {
+        let policy = RetryPolicy {
+            max_retries: 0,
+            initial_delay_secs: 60,
+            backoff_multiplier: 2.0,
+            max_delay_secs: 3600,
+        };
+        assert!(policy.compute_delay(1).is_none());
+        assert!(policy.compute_delay(5).is_none());
     }
 }
