@@ -15,6 +15,8 @@ Start with these deeper docs as needed:
 - `src/workspace/README.md`
 - `src/NETWORK_SECURITY.md`
 - `tests/e2e/CLAUDE.md`
+- `crates/lunarwing_engine/CLAUDE.md`
+- In this repo, `ic/` contains the core daemon; however, the product name is LunarWing.
 
 ## Architecture Mental Model
 
@@ -32,7 +34,19 @@ Start with these deeper docs as needed:
 - LLM providers and routing: `src/llm/`
 - Workspace, memory, embeddings, search: `src/workspace/`
 - Extensions, tools, channels, MCP, WASM: `src/extensions/`, `src/tools/`, `src/channels/`
-- OpenClaw port staging work: `openclaw-ports/`. For OpenClaw port tasks, keep edits inside `openclaw-ports/` unless the user explicitly approves touching core IronClaw files.
+- Docker sandbox and network proxy: `src/sandbox/`
+- Container orchestrator and external workers: `src/orchestrator/`
+- Secrets management: `src/secrets/`
+- Lifecycle hooks: `src/hooks/`
+- Tunnel abstraction (cloudflare, ngrok, tailscale): `src/tunnel/`
+- SKILL.md prompt extensions: `src/skills/`
+- Engine V2 bridge: `src/bridge/`
+- Execution gate and approval pending state: `src/gate/`
+- DM pairing for channels: `src/pairing/`
+- Webhook ingress for tools: `src/webhooks/`
+- Observability: `src/observability/`
+- Extension registry catalog: `src/registry/`
+- OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
 
 ## Ownership and Composition Rules
 
@@ -43,15 +57,21 @@ Start with these deeper docs as needed:
 
 ## Repo-Wide Coding Rules
 
-- Avoid `.unwrap()` and `.expect()` in production; prefer proper error handling. They are fine in tests, and in production only for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Edition**: Rust 2024, MSRV 1.96.
+- **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
+- **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
+- **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are fine in tests and for truly infallible invariants (e.g., literals/regexes) with a safety comment.
+- **Types**: Use strong types and enums over stringly-typed control flow when the shape is known.
+- **Naming**: Follow standard Rust conventions (`snake_case` for functions/variables, `PascalCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants).
+- **Complexity**: Keep functions under 100 lines, cognitive complexity under 15, and arguments under 7.
+- **Secrets**: Use the `secrecy` crate for sensitive values; never log or expose secrets.
+- **Logging**: Use `tracing` macros (`info!`, `warn!`, `error!`) rather than `println!`.
 - Keep clippy clean with zero warnings.
-- Prefer `crate::` imports for cross-module references.
-- Use strong types and enums over stringly-typed control flow when the shape is known.
 
 ## Database, Setup, and Config Rules
 
-- New persistence behavior must support both PostgreSQL and libSQL.
-- Add new DB operations to the shared DB trait first, then implement both backends.
+- PostgreSQL is the primary backend and is far more heavily supported. libSQL support is aspirational — not every feature needs it, but do not regress existing libSQL coverage when possible.
+- Add new DB operations to the shared DB trait first, then implement both backends. If libSQL work would be disproportionate to the feature, PostgreSQL-only is acceptable with a note in the relevant spec.
 - Treat bootstrap config, DB-backed settings, and encrypted secrets as distinct layers; do not collapse them casually.
 - If onboarding or setup behavior changes, update `src/setup/README.md` in the same branch.
 - Do not break config precedence, bootstrap env loading, DB-backed config reload, or post-secrets LLM re-resolution.
@@ -75,6 +95,7 @@ Start with these deeper docs as needed:
 ## Local XMPP and Service Operations
 
 - Treat systemd unit environment values as secret-bearing. Do not paste passwords, bearer tokens, or webhook secrets into user-facing output; summarize or redact them.
+- **Both systemd and OpenRC must be supported.** systemd is the primary target and can be fully verified on the dev VM. OpenRC code must still be correct and maintained — the dev VM cannot run OpenRC tests, but OpenRC-specific logic should be kept in the same service-management abstraction rather than duplicated.
 - `xmpp-bridge.service` is coupled to `lunarwing.service` with `PartOf=lunarwing.service`, so LunarWing restarts can also restart the bridge. Do not assume the bridge caused a LunarWing stop just because both units restarted together.
 - For install-style harness tests on Linux, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
 - The harness and service path intentionally seed `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless the task explicitly changes the network or SSL assumptions.
