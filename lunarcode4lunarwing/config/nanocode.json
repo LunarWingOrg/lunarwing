@@ -1,6 +1,6 @@
 {
   "$schema": "https://github.com/nanogpt-community/nanocode/config.json",
-  "model": "nanogpt/tensorzero::function_name::coding",
+  "model": "nanogpt/tensorzero::function_name::lunarwing",
   "theme": "moonlight",
   "plugin": [
     "opencode-agent-memory",
@@ -15,10 +15,12 @@
         "baseURL": "http://192.168.1.157:3000/openai/v1/"
       },
       "models": {
-        "tensorzero::function_name::coding": {
-          "name": "tensorzero::function_name::coding"
+        "tensorzero::function_name::lunarwing": {
+          "name": "tensorzero::function_name::lunarwing"
         }
       }
     }
   }
 }
+
+

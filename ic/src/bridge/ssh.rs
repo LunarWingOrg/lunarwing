@@ -66,6 +66,7 @@ use tracing::{info, warn, instrument};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+use crate::bridge::ssh_agent::SshAgentServer;
 use crate::secrets::SecretsStore;
 
 // ============================================================================
@@ -298,62 +299,44 @@ impl AuditLogger for NullAuditLogger {
 // SSH Bridge Core
 // ============================================================================
 
-/// SSH Agent server — Handles ssh-agent protocol requests.
-/// Holds in-memory keys for signing; all key material is zeroized on drop.
-/// (Phase 6 implementation — placeholder for now)
-pub struct SSHAgentServer {
-    /// Unix socket path
-    pub socket_path: PathBuf,
-    /// In-memory key store (hostname → key bytes). Zeroizing ensures keys
-    /// are wiped from memory when the server is dropped / gateway shuts down.
-    keys: HashMap<String, Zeroizing<Vec<u8>>>,
-    /// Task handle for the agent listener
-    _join_handle: tokio::task::JoinHandle<()>,
-}
-
-impl Drop for SSHAgentServer {
-    fn drop(&mut self) {
-        // Explicitly clear the key map — Zeroizing<Vec<u8>> zeroes each entry
-        // as it's dropped, ensuring no key material survives in memory.
-        self.keys.clear();
-        // Best-effort socket cleanup.
-        let _ = std::fs::remove_file(&self.socket_path);
-    }
-}
-
 /// SSH Bridge — Centralized SSH access for a tenant
 pub struct SSHBridge {
-    /// Tenant ID
+    /// Tenant ID (UUID, derived from owner_id)
     tenant_id: Uuid,
+    /// Tenant name (owner_id) — used for the agent socket path so the
+    /// mt-admin script can predict the path: /tmp/ssh-agent-<tenant_name>.sock
+    tenant_name: String,
     /// Host configurations (non-sensitive)
     hosts: Arc<RwLock<HashMap<String, SSHHostConfig>>>,
-    /// Secrets store for key access (used in Phase 3+)
-    #[allow(dead_code)]
+    /// Secrets store for key access
     secrets_store: Arc<dyn SecretsStore + Send + Sync>,
     /// Audit logger
     audit_logger: Arc<dyn AuditLogger + Send + Sync>,
     /// SSH agent server (if running)
-    agent_server: Option<Arc<SSHAgentServer>>,
+    agent_server: Option<Arc<SshAgentServer>>,
 }
 
 impl SSHBridge {
     /// Create a new SSH Bridge for a tenant
     ///
     /// # Arguments
-    /// * `tenant_id` — Tenant identifier
+    /// * `tenant_id` — Tenant UUID (derived from owner_id via UUID v5)
+    /// * `tenant_name` — Tenant name (owner_id) for predictable socket paths
     /// * `hosts` — Map of host configurations (hostname -> config)
     /// * `secrets_store` — Secrets store for accessing encrypted keys
     /// * `audit_logger` — Audit logger for SSH events
     pub async fn new(
         tenant_id: Uuid,
+        tenant_name: String,
         hosts: HashMap<String, SSHHostConfig>,
         secrets_store: Arc<dyn SecretsStore + Send + Sync>,
         audit_logger: Arc<dyn AuditLogger + Send + Sync>,
     ) -> Result<Self> {
-        info!(tenant_id = %tenant_id, hosts_count = hosts.len(), "Creating SSH bridge");
+        info!(tenant_id = %tenant_id, tenant_name = %tenant_name, hosts_count = hosts.len(), "Creating SSH bridge");
 
         Ok(Self {
             tenant_id,
+            tenant_name,
             hosts: Arc::new(RwLock::new(hosts)),
             secrets_store,
             audit_logger,
@@ -460,37 +443,76 @@ impl SSHBridge {
 
     /// Start the SSH agent server (for worker integration)
     ///
-    /// Creates a Unix socket that workers can connect to for SSH authentication.
-    /// Keys are loaded from the secrets store and never written to disk.
+    /// Creates a Unix socket at `/home/<tenant_name>/lunarwing/run/ssh-agent.sock`
+    /// that workers can connect to for SSH authentication. Keys are loaded from
+    /// the secrets store and never written to disk. The socket path uses the
+    /// tenant's run directory (not /tmp) because the daemon runs with
+    /// PrivateTmp=true — a /tmp socket would be invisible to podman containers
+    /// and couldn't be bind-mounted into workers. The mt-admin script predicts
+    /// this path for mounting: <tenant_home>/lunarwing/run/ssh-agent.sock.
     #[instrument(skip(self))]
     pub async fn start_agent_server(&mut self) -> Result<()> {
-        let socket_path = format!("/tmp/ssh-agent-{}.sock", self.tenant_id);
-        let socket_path = PathBuf::from(&socket_path);
+        // Use the tenant's run directory instead of /tmp (PrivateTmp-safe).
+        let run_dir = format!("/home/{}/lunarwing/run", self.tenant_name);
+        let socket_path = PathBuf::from(format!("{run_dir}/ssh-agent.sock"));
 
-        // Check if socket already exists
-        if socket_path.exists() {
-            warn!(
-                socket_path = %socket_path.display(),
-                "SSH agent socket already exists, removing"
+        // Load keys from the secrets store for each configured host.
+        let hosts = self.hosts.read().await;
+        let mut keys = HashMap::new();
+        for hostname in hosts.keys() {
+            let secret_name = format!(
+                "ssh_key_{}",
+                hostname
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                    .collect::<String>()
             );
-            std::fs::remove_file(&socket_path)?;
+            match self.secrets_store.get_decrypted(&self.tenant_name, &secret_name).await {
+                Ok(decrypted) => {
+                    let key_data = decrypted.expose().as_bytes().to_vec();
+                    // Try to load passphrase if present.
+                    let passphrase_secret = format!("{}_passphrase", secret_name);
+                    let passphrase = match self.secrets_store
+                        .get_decrypted(&self.tenant_name, &passphrase_secret)
+                        .await
+                    {
+                        Ok(p) => Some(SecretString::from(p.expose().to_string())),
+                        Err(_) => None,
+                    };
+                    keys.insert(
+                        hostname.clone(),
+                        SSHCredentials { key_data: Zeroizing::new(key_data), passphrase },
+                    );
+                    info!(tenant_name = %self.tenant_name, host = %hostname, "Loaded SSH key for agent");
+                }
+                Err(crate::secrets::SecretError::NotFound(_)) => {
+                    warn!(
+                        tenant_name = %self.tenant_name,
+                        host = %hostname,
+                        "No SSH key found in secrets store; agent will start without this host's key"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        tenant_name = %self.tenant_name,
+                        host = %hostname,
+                        error = %e,
+                        "Failed to load SSH key from secrets store"
+                    );
+                }
+            }
         }
+        drop(hosts);
 
-        // TODO: Implement actual agent server
-        // For now, just log that we'd start it
+        // Start the real agent server (from ssh_agent.rs).
+        let server = SshAgentServer::start(socket_path.clone(), keys).await?;
+
         info!(
             tenant_id = %self.tenant_id,
+            tenant_name = %self.tenant_name,
             socket_path = %socket_path.display(),
-            "SSH agent server would start here (Phase 6 implementation)"
+            "SSH agent server started"
         );
-
-        // Placeholder for future implementation
-        // This will:
-        // 1. Create Unix socket listener
-        // 2. Spawn async task to handle connections
-        // 3. Load keys from secrets store into memory
-        // 4. Handle ssh-agent protocol requests
-        // 5. Sign data using in-memory keys
 
         self.audit_logger
             .log(SshEvent::AgentStarted {
@@ -498,16 +520,14 @@ impl SSHBridge {
             })
             .await?;
 
+        self.agent_server = Some(server);
         Ok(())
     }
 
     /// Stop the SSH agent server
     pub async fn stop_agent_server(&mut self) -> Result<()> {
         if self.agent_server.take().is_some() {
-            // TODO: Implement graceful shutdown
-            info!(tenant_id = %self.tenant_id, "SSH agent server stopped");
-
-            // Note: We don't have the socket_path here anymore, but that's fine for now
+            info!(tenant_name = %self.tenant_name, "SSH agent server stopped");
         }
         Ok(())
     }
@@ -516,7 +536,12 @@ impl SSHBridge {
     pub fn get_agent_socket_path(&self) -> Option<String> {
         self.agent_server
             .as_ref()
-            .map(|s| s.socket_path.to_string_lossy().to_string())
+            .map(|s| s.socket_path().to_string_lossy().to_string())
+    }
+
+    /// Get a reference to the running agent server (for wiring into the API state)
+    pub fn agent_server(&self) -> Option<Arc<SshAgentServer>> {
+        self.agent_server.clone()
     }
 }
 
@@ -582,7 +607,7 @@ mod tests {
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 
-        let bridge = SSHBridge::new(tenant_id, hosts, secrets_store, audit_logger)
+        let bridge = SSHBridge::new(tenant_id, "test-tenant".to_string(), hosts, secrets_store, audit_logger)
             .await
             .unwrap();
 
@@ -592,13 +617,13 @@ mod tests {
     #[tokio::test]
     async fn test_add_host() {
         let tenant_id = Uuid::new_v4();
-        let mut hosts = HashMap::new();
+        let hosts = HashMap::new();
         let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
             crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 
-        let bridge = SSHBridge::new(tenant_id, hosts, secrets_store, audit_logger)
+        let bridge = SSHBridge::new(tenant_id, "test-tenant".to_string(), hosts, secrets_store, audit_logger)
             .await
             .unwrap();
 

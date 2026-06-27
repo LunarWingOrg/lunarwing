@@ -30,9 +30,9 @@ pub struct SshApiState {
 pub fn create_router(state: Arc<SshApiState>) -> Router {
     Router::new()
         .route("/hosts", get(list_hosts).post(add_host))
-        .route("/hosts/:host", get(get_host).delete(remove_host))
-        .route("/hosts/:host/key", post(upload_key).delete(delete_key))
-        .route("/hosts/:host/key/status", get(key_status))
+        .route("/hosts/{host}", get(get_host).delete(remove_host))
+        .route("/hosts/{host}/key", post(upload_key).delete(delete_key))
+        .route("/hosts/{host}/key/status", get(key_status))
         .route("/agent/status", get(agent_status))
         .route("/agent/keys", get(agent_keys))
         .with_state(state)

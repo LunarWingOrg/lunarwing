@@ -28,9 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=builder /app/target/release/lunarwing-ocr-sidecar /app/lunarwing-ocr-sidecar
 
-EXPOSE 8088
+EXPOSE 8088 8089
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=5s \
-    CMD curl -f http://localhost:8088/health || exit 1
+    CMD curl -f http://localhost:8089/health || exit 1
 
 CMD ["/app/lunarwing-ocr-sidecar"]

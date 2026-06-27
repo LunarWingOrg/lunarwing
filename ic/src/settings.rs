@@ -191,6 +191,10 @@ pub struct Settings {
     #[serde(default)]
     pub sandbox: SandboxSettings,
 
+    /// SSH bridge configuration (host entries, timeouts).
+    #[serde(default)]
+    pub ssh: crate::config::SshConfig,
+
     /// Safety configuration.
     #[serde(default)]
     pub safety: SafetySettings,
@@ -814,7 +818,9 @@ pub struct ExternalWorkerSettings {
     /// WebSocket URL (e.g., "ws://localhost:9090/ws/agent").
     pub url: String,
     /// Bearer token for authentication (empty = no auth). Secret-bearing: not
-    /// serialized out; `Debug` redacts via secrecy.
+    /// serialized out (SecretString has no Serialize impl); `Debug` redacts via
+    /// secrecy. merge_from preserves auth_token via a direct post-merge fixup
+    /// because skip_serializing drops it during the serde_json transport.
     #[serde(default, skip_serializing)]
     pub auth_token: Option<SecretString>,
     /// Default task timeout in milliseconds.
@@ -1281,6 +1287,27 @@ impl Settings {
 
         if let Ok(merged) = serde_json::from_value(self_json) {
             *self = merged;
+        }
+
+        // Post-merge fixup: `skip_serializing` fields (auth_token on
+        // ExternalWorkerSettings and WorkerEndpoint) are dropped by the
+        // serde_json::to_value round-trip above. Restore them directly from
+        // the TOML-parsed `other` so the daemon can authenticate to workers.
+        // Without this, the daemon connects without a Bearer token and gets
+        // a 401 from every external worker.
+        for self_ew in &mut self.sandbox.external_workers {
+            if let Some(other_ew) = other.sandbox.external_workers.iter().find(|o| o.name == self_ew.name) {
+                if self_ew.auth_token.is_none() {
+                    self_ew.auth_token = other_ew.auth_token.clone();
+                }
+                for self_ep in &mut self_ew.endpoints {
+                    if let Some(other_ep) = other_ew.endpoints.iter().find(|o| o.url == self_ep.url) {
+                        if self_ep.auth_token.is_none() {
+                            self_ep.auth_token = other_ep.auth_token.clone();
+                        }
+                    }
+                }
+            }
         }
     }
 

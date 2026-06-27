@@ -7,9 +7,11 @@ services:
     container_name: lunarwing-ocr-sidecar
     ports:
       - "8088:8088"
+      - "8089:8089"
     environment:
       - LUNARWING_AUTH_TOKEN=${LUNARWING_AUTH_TOKEN:?Set LUNARWING_AUTH_TOKEN}
       - OCR_PORT=8088
+      - OCR_HEALTH_PORT=8089
       - VL_URL=${VL_URL:-}
       - VL_API_KEY=${VL_API_KEY:-}
       - VL_MODEL=${VL_MODEL:-qwen3-vl}
@@ -21,7 +23,7 @@ services:
     volumes:
       - ocr_cache:/app/cache
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8089/health"]
       interval: 30s
       timeout: 10s
       retries: 3

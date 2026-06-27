@@ -55,6 +55,16 @@ HEALTH_GOTIFY_URL="${LUNARWING_MT_GOTIFY_URL:-}"
 HEALTH_GOTIFY_TOKEN="${LUNARWING_MT_GOTIFY_TOKEN:-}"
 HEALTH_OPT_OUT=false   # set true by --no-health
 
+# ── SSH harness defaults ──────────────────────────────────────────────────────
+# SSH is enabled by default for new tenants: the harness provisions an ed25519
+# key pair, configures a localhost SSH host in config.toml, and uploads the
+# private key to the encrypted secrets store after the daemon starts. Workers
+# get the SSH agent socket bind-mounted so they can authenticate over SSH
+# without ever holding key material on disk. Opt out per-tenant with --no-ssh,
+# or fleet-wide with LUNARWING_MT_SSH_ENABLED=false.
+DEFAULT_SSH_ENABLED="${LUNARWING_MT_SSH_ENABLED:-true}"
+SSH_OPT_OUT=false   # set true by --no-ssh
+
 # ── Per-tenant PostgreSQL image ──────────────────────────────────────────────
 # Fully-qualified (registry host included) so rootless podman resolves it WITHOUT
 # depending on the host's unqualified-search-registries: docker silently defaults
@@ -99,6 +109,57 @@ tenant_quadlet_dir() { printf '%s/.config/containers/systemd' "$(tenant_home "$1
 tenant_state_dir() { printf '%s/state' "$(tenant_lw_root "$1")"; }
 tenant_log_dir() { printf '%s/logs' "$(tenant_lw_root "$1")"; }
 tenant_run_dir() { printf '%s/run' "$(tenant_lw_root "$1")"; }
+
+# ── Container config-hash tracking ────────────────────────────────────────────
+#
+# Quadlet and imperative `podman run` both create a container with config
+# (env vars, volumes, ports) baked in at creation time. `systemctl restart`
+# and `podman start` only restart the EXISTING container — they do NOT pick
+# up changes to the .container file or a re-rendered `podman run` command.
+# This causes stale-env bugs on upgrade (e.g. AGENT_AUTH_TOKEN missing,
+# SSH_AUTH_SOCK not mounted) because the old container survives the re-render.
+#
+# Fix: after rendering a quadlet or before an imperative `podman run`, compute
+# a hash of the config source and compare it to the hash stored when the
+# container was last created. If they differ, force-recreate the container.
+# The hash is stored in a sidecar file next to the container's quadlet/state.
+
+# Directory for config-hash sidecars (created on first use).
+_hash_dir() { printf '%s/.config/lunarwing/container-hashes' "$(tenant_home "$1")"; }
+
+# Compute and store the hash of a config file (e.g. a .container quadlet).
+# Usage: _store_container_hash <tenant> <container-name> <config-file>
+_store_container_hash() {
+  local name="$1" container="$2" config_file="$3" hdir hash
+  hdir="$(_hash_dir "$name")"
+  mkdir -p "$hdir" 2>/dev/null || true
+  hash="$(sha256sum "$config_file" 2>/dev/null | cut -d' ' -f1 || true)"
+  [[ -n "$hash" ]] && printf '%s\n' "$hash" >"$hdir/${container}.hash"
+}
+
+# Check whether the config file's hash matches the stored hash.
+# Returns 0 (match / first-run) or 1 (mismatch / needs recreate).
+# Usage: _container_config_changed <tenant> <container-name> <config-file>
+_container_config_changed() {
+  local name="$1" container="$2" config_file="$3" hdir stored current
+  hdir="$(_hash_dir "$name")"
+  [[ -f "$config_file" ]] || return 0  # no config file = no opinion
+  current="$(sha256sum "$config_file" 2>/dev/null | cut -d' ' -f1 || true)"
+  [[ -n "$current" ]] || return 0      # can't hash = don't force recreate
+  stored=""
+  [[ -f "$hdir/${container}.hash" ]] && stored="$(cat "$hdir/${container}.hash" 2>/dev/null || true)"
+  [[ -z "$stored" || "$stored" != "$current" ]]
+}
+
+# Force-recreate a Quadlet-managed container: stop the service, remove the
+# stale container, then start the service (Quadlet re-runs `podman run`).
+# Usage: _recreate_quadlet_container <tenant> <service-name> <container-name>
+_recreate_quadlet_container() {
+  local name="$1" svc="$2" container="$3"
+  say "config changed for $container; force-recreating"
+  _systemctl_user "$name" stop "$svc" >/dev/null 2>&1 || true
+  _ctr "$name" rm -f "$container" >/dev/null 2>&1 || true
+}
 
 tenant_darkirc_enabled() {
   local name="$1"
@@ -158,6 +219,7 @@ Commands:
     --tensorzero-url <url>         Upstream TensorZero URL
     --gotify-url <url>             Custom Gotify server URL (e.g. https://gotify.example.com)
     --no-health                    Don't enable the host-global health/self-heal pipeline
+    --no-ssh                       Don't provision SSH harness (key pair, config, agent)
     --enable-darkirc               Provision DarkIRC daemon + adapter for this tenant
                                    (disabled by default; darkirc services are NOT created)
     --nanocode-model <model>       Override the nanocode worker's LLM model
@@ -215,8 +277,17 @@ Commands:
     --base-url <url>               TensorZero baseURL (NANOCODE_BASE_URL; full URL)
                                    (restart the worker after: stop-tenant && start-tenant)
 
+  configure-ssh <name>             Provision SSH harness for an existing tenant
+    --host <host>                  SSH host (default: 127.0.0.1)
+    --user <user>                  SSH user (default: tenant name)
+                                   (restart the tenant after to upload the key: restart-tenant)
+
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
+
+  migrate-owner-scope <name>       Rekey DB data from 'default' to tenant scope
+    --from <old_scope>             Old owner_id (default: 'default')
+                                   (run after patch-env adds LUNARWING_OWNER_ID)
 
   list-tenants                     Show all tenants with ports and status
   status <name>                    Detailed status for one tenant
@@ -906,6 +977,7 @@ ports_migrate() {
   if [[ "$current_version" -lt 7 ]]; then ports_migrate_v7; fi
   if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
   if [[ "$current_version" -lt 9 ]]; then ports_migrate_v9; fi
+  if [[ "$current_version" -lt 10 ]]; then ports_migrate_v10; fi
 }
 
 # v8 -> v9: rename extended_ports.reserved_5 -> vision_service.
@@ -937,6 +1009,44 @@ ports_migrate_v9() {
   local tmp
   tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
   jq '.version = 9' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+}
+
+# v9 -> v10: dedicate extended_ports.reserved_6 -> vision_health.
+# The vision sidecar now listens on two internal ports: 8088 (OCR_PORT) for
+# API traffic and 8089 (OCR_HEALTH_PORT) for /health only. This dedicates a
+# host-side port (extended_base+6) mapped to 8089 so the host self-heal
+# pipeline can probe /health independently of OCR traffic — mirroring the
+# nanocode_health / pebble_health pattern (v8).
+ports_migrate_v10() {
+  if jq -e '.tenants | to_entries[] | select(.value.extended_ports | has("vision_health") | not) | select(.value.extended_ports | has("reserved_6"))' "$PORTS_REGISTRY" >/dev/null 2>&1; then
+    say "migrating port registry -> v10 (assign vision_health from reserved_6 slot) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .tenants |= with_entries(
+          .value |= (
+            if (.extended_ports | type == "object") then
+              .extended_ports |= (
+                .vision_health = ((.vision_health) // (.reserved_6) // ((.extended_base // 0) + 6))
+                | del(.reserved_6)
+              )
+            else . end
+          )
+        )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v10 (vision_health dedicated at extended_base+6)"
+  fi
+
+  # Always bump the version when the dispatcher calls v10, even if there were
+  # no tenants to migrate (e.g. empty registry) — otherwise .version stays
+  # stale and ports_allocate writes v10-shaped tenants into a v9-labeled file.
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '.version = 10' "$PORTS_REGISTRY" >"$tmp"
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
 }
@@ -1011,9 +1121,10 @@ ports_allocate() {
             darkirc_rpc: ($ebase + 2),
             nanocode_health: ($ebase + 3),
             pebble_health: ($ebase + 4),
-            vision_service: ($ebase + 5)
+            vision_service: ($ebase + 5),
+            vision_health: ($ebase + 6)
           }
-          + (reduce range(6; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(7; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -1094,8 +1205,8 @@ ports_list() {
     say "no port registry found; run add-tenant first"
     return 0
   fi
-  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.extended_ports.darkirc_adapter // "-")\t\(.value.extended_ports.darkirc_irc // "-")\t\(.value.extended_ports.darkirc_rpc // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")"' "$PORTS_REGISTRY" \
-    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,DARKIRC_ADPT,DARKIRC_IRC,DARKIRC_RPC,ORCH,NANOCODE,PEBBLE"
+  jq -r '.tenants | to_entries[] | "\(.key)\t\(.value.ports.gateway)\t\(.value.ports.http)\t\(.value.ports.bridge)\t\(.value.ports.postgres)\t\(.value.ports.proxy)\t\(.value.ports.weechat)\t\(.value.ports.weechat_adapter // "-")\t\(.value.extended_ports.darkirc_adapter // "-")\t\(.value.extended_ports.darkirc_irc // "-")\t\(.value.extended_ports.darkirc_rpc // "-")\t\(.value.ports.orchestrator)\t\(.value.ports.nanocode_wss // "-")\t\(.value.ports.pebble_wss // "-")\t\(.value.extended_ports.vision_service // "-")\t\(.value.extended_ports.vision_health // "-")"' "$PORTS_REGISTRY" \
+    | column -t -N "TENANT,GATEWAY,HTTP,BRIDGE,PG,PROXY,WEECHAT,WS_ADPT,DARKIRC_ADPT,DARKIRC_IRC,DARKIRC_RPC,ORCH,NANOCODE,PEBBLE,VISION_SVC,VISION_HLTH"
 }
 
 tenant_exists_in_registry() {
@@ -1395,6 +1506,18 @@ build_tenant() {
 
   if [[ "$with_pebble" == "true" ]]; then
     build_pebble_worker "false"
+  fi
+
+  # After a rebuild, the tenant will be restarted with the new binary. If the
+  # tenant has LUNARWING_OWNER_ID but still has orphaned 'default'-scoped DB
+  # data (e.g. upgrading from a pre-owner-id version), auto-migrate so the
+  # new binary doesn't lose access to existing conversations and memory.
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path" 2>/dev/null && _owner_scope_needs_migration "$name"; then
+    say ""
+    say "--- Auto-migrating owner scope ---"
+    migrate_owner_scope "$name" || say "WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
   fi
 }
 
@@ -1797,6 +1920,7 @@ ALLOW_PRIVATE_IPS=1
 
 # Runtime identity
 AGENT_NAME=$name
+LUNARWING_OWNER_ID=$name
 SECRETS_MASTER_KEY=$secrets_key
 
 # XMPP
@@ -2112,6 +2236,148 @@ HDR
   say "wrote $worker external-worker config to $config_path (ws://127.0.0.1:$wss_port/ws/agent)"
 }
 
+# ── SSH harness config.toml generation ────────────────────────────────────────
+#
+# Appends a [[ssh.hosts]] block to the tenant's config.toml so the gateway
+# initializes the SSH bridge + agent server at boot. The host defaults to
+# localhost (the tenant's own user) for self-referential worker SSH access.
+# Keys are stored in the encrypted secrets store (uploaded after the daemon
+# starts via upload_tenant_ssh_key), NOT in config.toml.
+#
+# Idempotent: skips if an SSH host entry already exists in config.toml.
+# APPENDS only — never overwrites existing config.toml content.
+ensure_ssh_config() {
+  local name="$1"
+  local ssh_host="${2:-127.0.0.1}"
+  local ssh_user="${3:-$name}"
+  local state_dir config_path
+
+  state_dir="$(tenant_state_dir "$name")"
+  config_path="$state_dir/config.toml"
+
+  # Already configured? Skip so re-runs are idempotent.
+  if [[ -f "$config_path" ]] && grep -q '\[\[ssh\.hosts\]\]' "$config_path" 2>/dev/null; then
+    say "SSH host config already present in $config_path (skipping)"
+    return 0
+  fi
+
+  # Create config.toml with a header if it doesn't exist yet (same pattern as
+  # ensure_external_worker_config). APPEND only — never truncate.
+  if [[ ! -f "$config_path" ]]; then
+    sudo -u "$name" mkdir -p "$state_dir"
+    (
+      umask 077
+      printf '# LunarWing tenant configuration (auto-generated by lunarwing-mt-admin.sh).\n'
+    ) >"$config_path"
+  fi
+
+  # Append the SSH host block. This is valid TOML because [[ssh.hosts]] is an
+  # array-of-tables and we only append when no entry exists yet.
+  {
+    printf '\n# SSH harness — centralized SSH host config for worker integration.\n'
+    printf '# Keys are stored in the encrypted secrets store, not on disk.\n'
+    printf '[[ssh.hosts]]\n'
+    printf 'host = "%s"\n' "$ssh_host"
+    printf 'port = 22\n'
+    printf 'user = "%s"\n' "$ssh_user"
+    printf 'key_type = "ed25519"\n'
+    printf 'host_key_mode = "AcceptFirst"\n'
+  } >>"$config_path"
+
+  chown "$name:$name" "$config_path"
+  chmod 600 "$config_path"
+  say "wrote SSH host config to $config_path (host=$ssh_host user=$ssh_user)"
+}
+
+# ── SSH key provisioning ──────────────────────────────────────────────────────
+#
+# Generates an ed25519 key pair for the tenant and adds the public key to the
+# tenant's authorized_keys. The private key is staged in the tenant's env dir
+# (mode 0600) for upload to the secrets store via upload_tenant_ssh_key after
+# the daemon starts. The staged copy is deleted after upload so no key material
+# is left on disk.
+provision_tenant_ssh_key() {
+  local name="$1"
+  local ssh_host="${2:-127.0.0.1}"
+  local ssh_user="${3:-$name}"
+  local tenant_home ssh_dir key_path pubkey_path staged_key
+
+  tenant_home="$(tenant_home "$name")"
+  ssh_dir="$tenant_home/.ssh"
+  key_path="$ssh_dir/id_ed25519_lunarwing"
+  pubkey_path="${key_path}.pub"
+  staged_key="$(tenant_env_dir "$name")/ssh_key_staged"
+
+  # Generate a key pair if one doesn't already exist (idempotent).
+  if [[ ! -f "$key_path" ]]; then
+    sudo -u "$name" mkdir -p "$ssh_dir"
+    sudo -u "$name" chmod 700 "$ssh_dir"
+    sudo -u "$name" ssh-keygen -t ed25519 -f "$key_path" -N "" \
+      -C "lunarwing-ssh-harness-$name" 2>/dev/null
+    say "generated ed25519 SSH key pair for $name"
+  else
+    say "SSH key already exists for $name (reusing)"
+  fi
+
+  # Add the public key to authorized_keys (idempotent: skip if already present).
+  local authorized_keys="$ssh_dir/authorized_keys"
+  sudo -u "$name" touch "$authorized_keys"
+  sudo -u "$name" chmod 600 "$authorized_keys"
+  if ! sudo -u "$name" grep -qF "$(cat "$pubkey_path" 2>/dev/null)" "$authorized_keys" 2>/dev/null; then
+    sudo -u "$name" bash -c "cat '$pubkey_path' >> '$authorized_keys'"
+    say "added public key to authorized_keys for $name"
+  fi
+
+  # Stage the private key for upload (mode 0600, tenant-owned).
+  # Deleted by upload_tenant_ssh_key after the daemon ingests it.
+  sudo -u "$name" cp "$key_path" "$staged_key"
+  sudo -u "$name" chmod 600 "$staged_key"
+  chown "$name:$name" "$staged_key"
+  say "staged SSH private key for upload to secrets store"
+}
+
+# Upload the staged SSH private key to the secrets store via the gateway's SSH
+# API. Called AFTER the daemon starts (the API is served by the gateway on the
+# HTTP port). Deletes the staged key after upload so no key material persists
+# on disk. Init-system-agnostic — uses HTTP, works on both systemd and OpenRC.
+upload_tenant_ssh_key() {
+  local name="$1"
+  local ssh_host="${2:-127.0.0.1}"
+  local ssh_user="${3:-$name}"
+  local http_port staged_key
+
+  http_port="$(ports_get "$name" http)"
+  staged_key="$(tenant_env_dir "$name")/ssh_key_staged"
+
+  [[ -f "$staged_key" ]] || { say "no staged SSH key for $name (skipping upload)"; return 0; }
+
+  # Wait for the gateway to be reachable (it may still be starting up).
+  local i=0
+  while ! curl -sf --max-time 2 "http://127.0.0.1:${http_port}/agent/status" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [[ $i -lt 15 ]] || { say "WARNING: gateway not reachable on port $http_port after 30s; SSH key not uploaded (upload manually via the API)" >&2; return 1; }
+    sleep 2
+  done
+
+  # Upload the key via the SSH API. The key data is sent as a JSON string
+  # (base64 not needed — the API accepts raw PEM/OpenSSH format).
+  local key_data upload_result
+  key_data="$(cat "$staged_key")"
+  upload_result="$(jq -n --arg key "$key_data" '{key_data: $key}' | \
+    curl -sf -X POST "http://127.0.0.1:${http_port}/hosts/${ssh_host}/key" \
+      -H "Content-Type: application/json" -d @- 2>&1)" || true
+
+  if echo "$upload_result" | jq -e '.success == true' >/dev/null 2>&1; then
+    say "SSH key uploaded to secrets store for host $ssh_host"
+    # Delete the staged key — it's now in the encrypted secrets store only.
+    rm -f "$staged_key"
+    say "staged SSH key deleted (key material now only in secrets store)"
+  else
+    say "WARNING: SSH key upload failed: $upload_result" >&2
+    say "         staged key remains at $staged_key (upload manually or re-run)" >&2
+  fi
+}
+
 patch_tenant_env() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -2120,6 +2386,22 @@ patch_tenant_env() {
   local env_path
   env_path="$(tenant_env_dir "$name")/lunarwing.env"
   [[ -f "$env_path" ]] || die "env file not found: $env_path"
+
+  # LUNARWING_OWNER_ID: sets the daemon's DB-scoping owner_id so sessions,
+  # memory, and settings are isolated per tenant. Without it the daemon
+  # defaults to "default", sharing state across all tenants on the host.
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path"; then
+    say "LUNARWING_OWNER_ID already set in $env_path (skipping)"
+  else
+    printf '\n# Runtime identity (DB scope — must match tenant name)\nLUNARWING_OWNER_ID=%s\n' "$name" >>"$env_path"
+    say "added LUNARWING_OWNER_ID=$name to $env_path"
+    # Auto-migrate existing DB data from 'default' scope to the tenant's scope
+    # so the daemon doesn't lose access to conversations, memory, and settings.
+    if _owner_scope_needs_migration "$name"; then
+      say "  found 'default'-scoped DB data; migrating to '$name' scope"
+      migrate_owner_scope "$name" || say "  WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+    fi
+  fi
 
   local orchestrator_port
   orchestrator_port="$(ports_get "$name" orchestrator)"
@@ -2213,6 +2495,150 @@ patch_tenant_env() {
   # create_job(mode: "nanocode") routing without a hand-edited config file.
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+}
+
+# ── Owner-scope DB migration ──────────────────────────────────────────────────
+#
+# Rekeys all user_id='default' (or a specified old scope) rows to user_id=<name>
+# in the tenant's PostgreSQL. Used when a tenant that was originally created
+# without LUNARWING_OWNER_ID (running as 'default') is upgraded to have its own
+# owner_id scope. Handles unique-constraint collisions by preserving the
+# existing tenant-scoped row and copying content from the old row if the new
+# one is empty.
+#
+# Check whether a tenant's DB has orphaned old-scope rows that need migration.
+# Returns 0 (needs migration) or 1 (already clean / DB unreachable).
+# Usage: _owner_scope_needs_migration <name> [old_scope]
+_owner_scope_needs_migration() {
+  local name="$1"
+  local old_scope="${2:-default}"
+  local pg_port
+  pg_port="$(ports_get "$name" postgres)" 2>/dev/null || return 1
+
+  # If the PG container isn't running, can't check — assume clean.
+  _ctr "$name" inspect -f '{{.State.Running}}' "lunarwing-pg-$name" 2>/dev/null | grep -q true || return 1
+
+  local count
+  count="$(cd / && _ctr "$name" exec lunarwing-pg-$name \
+    psql -U lunarwing -d lunarwing -h 127.0.0.1 -p "$pg_port" -tAc "
+    SELECT count(*) FROM (
+      SELECT user_id FROM settings WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM memory_documents WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM secrets WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM agent_jobs WHERE user_id='$old_scope'
+    ) AS t;" 2>/dev/null || echo 0)"
+
+  [[ "$count" -gt 0 ]] 2>/dev/null
+}
+
+# Usage: migrate_owner_scope <name> [--from <old_scope>]
+migrate_owner_scope() {
+  local name="$1"
+  local old_scope="${2:-default}"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local pg_port
+  pg_port="$(ports_get "$name" postgres)" || die "no postgres port for $name"
+
+  # Quick check: are there any old-scope rows at all?
+  if ! _owner_scope_needs_migration "$name" "$old_scope"; then
+    say "no '$old_scope' rows found for $name; owner scope already clean"
+    return 0
+  fi
+
+  say "migrating owner scope: '$old_scope' -> '$name' (pg port $pg_port)"
+
+  # Tables with a user_id column (base tables only, not views).
+  # Discovered via information_schema — kept as a static list so the migration
+  # is deterministic and doesn't break if a view is added/renamed.
+  local tables="settings conversations memory_documents routines agent_jobs api_tokens heartbeat_state reflex_patterns user_identities secrets tool_rate_limit_state secret_usage_log wasm_channels"
+
+  # Stop the daemon first so it doesn't re-create 'default' rows mid-migration.
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    _systemctl_user "$name" stop "lunarwing-${name}.service" 2>/dev/null || true
+  else
+    rc-service "lunarwing-${name}" stop >/dev/null 2>&1 || true
+  fi
+
+  local psql_cmd
+  psql_cmd="psql -U lunarwing -d lunarwing -h 127.0.0.1 -p $pg_port"
+
+  # Run the migration via the tenant's PG container.
+  local total_migrated=0
+  for tbl in $tables; do
+    # Check if the table exists in this DB (some may not if migrations haven't run).
+    local exists
+    exists="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT 1 FROM information_schema.tables WHERE table_name='$tbl' AND table_schema='public'" 2>/dev/null || true)"
+    [[ "$exists" == "1" ]] || continue
+
+    # For tables with unique constraints on (user_id, ...), delete old-scope
+    # rows that would collide with existing tenant-scoped rows, but first copy
+    # non-empty content from old to new where the new row is empty.
+    # This is table-specific (the unique key differs per table).
+    case "$tbl" in
+      settings)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          DELETE FROM settings d USING settings t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.key=t.key;
+          UPDATE settings SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      memory_documents)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          UPDATE memory_documents t SET content = d.content
+          FROM memory_documents d
+          WHERE d.user_id='$old_scope' AND t.user_id='$name'
+            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id)
+            AND (t.content IS NULL OR t.content = '');
+          DELETE FROM memory_documents d USING memory_documents t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name'
+            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id);
+          UPDATE memory_documents SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      secrets)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          DELETE FROM secrets d USING secrets t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
+          UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      *)
+        # No known unique constraint collision risk — straight update.
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c \
+          "UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" 2>/dev/null || true
+        ;;
+    esac
+
+    local count
+    count="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT count(*) FROM $tbl WHERE user_id='$name'" 2>/dev/null || echo 0)"
+    say "  $tbl: $count rows now scoped to '$name'"
+    total_migrated=$((total_migrated + count))
+  done
+
+  # Verify no old-scope rows remain.
+  local remaining
+  remaining="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc "
+    SELECT count(*) FROM (
+      SELECT user_id FROM settings WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM memory_documents WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM secrets WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM agent_jobs WHERE user_id='$old_scope'
+    ) AS t;" 2>/dev/null || echo "?")"
+
+  say ""
+  if [[ "$remaining" == "0" ]]; then
+    say "migration complete: no '$old_scope' rows remain"
+  else
+    say "WARNING: $remaining '$old_scope' rows remain (check for constraint collisions)"
+  fi
+  say "restart the tenant: $0 start-tenant $name"
 }
 
 extract_host_from_url() {
@@ -2374,9 +2800,17 @@ start_tenant_nanocode() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-nanocode-${name}.container"
     render_worker_quadlet "$name" nanocode 8443
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    # Force-recreate if the quadlet config changed since the container was
+    # last created (Quadlet restarts the existing container without picking
+    # up new env vars / volumes).
+    if _container_config_changed "$name" "lunarwing-nanocode-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-nanocode-${name}.service" "lunarwing-nanocode-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-nanocode-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-nanocode-${name}" "$quadlet_file"
       say "nanocode worker ready via quadlet (lunarwing-nanocode-${name}.service, WSS port $wss_port)"
     else
       say "WARNING: lunarwing-nanocode-${name}.service failed to start" >&2
@@ -2386,13 +2820,32 @@ start_tenant_nanocode() {
   fi
 
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
-    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+    # Check if the container's config is stale (env vars / volumes changed
+    # since it was created). The imperative path hashes lunarwing.env since
+    # there's no quadlet file to compare against.
+    local env_file_for_hash
+    env_file_for_hash="$(tenant_env_dir "$name")/lunarwing.env"
+    if _container_config_changed "$name" "$container_name" "$env_file_for_hash"; then
+      say "config changed for $container_name; force-recreating"
+      _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+    elif _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "nanocode worker already running ($container_name, WSS port $wss_port)"
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" nanocode
+      return 0
     else
       say "starting existing nanocode worker container $container_name"
       _ctr "$name" start "$container_name" >/dev/null
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" nanocode
+      say "nanocode worker ready ($container_name, WSS port $wss_port)"
+      return 0
     fi
-  else
+  fi
+
+  # Container doesn't exist (or was force-removed above) — create it fresh.
+  if ! _ctr "$name" inspect "$container_name" &>/dev/null; then
     say "creating nanocode worker container $container_name on WSS port $wss_port"
 
     # Read tenant env for secrets to pass through
@@ -2442,6 +2895,9 @@ start_tenant_nanocode() {
     local host_health_port
     host_health_port="$(ports_get "$name" nanocode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
+    # SSH agent socket (always included — daemon creates it at startup).
+    local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -2452,12 +2908,14 @@ start_tenant_nanocode() {
       -e WS_BIND_HOST=0.0.0.0 \
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
+      "${ssh_mount[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-nanocode:latest \
       --mode websocket >/dev/null
+    _store_container_hash "$name" "$container_name" "$(tenant_env_dir "$name")/lunarwing.env"
   fi
 
   _register_worker_unit "$name" nanocode
@@ -2505,9 +2963,14 @@ start_tenant_pebble() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-pebble-${name}.container"
     render_worker_quadlet "$name" pebble 8443
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _container_config_changed "$name" "lunarwing-pebble-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-pebble-${name}.service" "lunarwing-pebble-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-pebble-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-pebble-${name}" "$quadlet_file"
       say "pebble worker ready via quadlet (lunarwing-pebble-${name}.service, WSS port $wss_port)"
     else
       say "WARNING: lunarwing-pebble-${name}.service failed to start" >&2
@@ -2517,13 +2980,28 @@ start_tenant_pebble() {
   fi
 
   if _ctr "$name" inspect "$container_name" &>/dev/null; then
-    if _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+    local env_file_for_hash
+    env_file_for_hash="$(tenant_env_dir "$name")/lunarwing.env"
+    if _container_config_changed "$name" "$container_name" "$env_file_for_hash"; then
+      say "config changed for $container_name; force-recreating"
+      _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+    elif _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
       say "pebble worker already running ($container_name, WSS port $wss_port)"
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" pebble
+      return 0
     else
       say "starting existing pebble worker container $container_name"
       _ctr "$name" start "$container_name" >/dev/null
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" pebble
+      say "pebble worker ready ($container_name, WSS port $wss_port)"
+      return 0
     fi
-  else
+  fi
+
+  if ! _ctr "$name" inspect "$container_name" &>/dev/null; then
     say "creating pebble worker container $container_name on WSS port $wss_port"
 
     local tenant_env_path
@@ -2558,6 +3036,10 @@ start_tenant_pebble() {
     local host_health_port
     host_health_port="$(ports_get "$name" pebble_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
+    # SSH agent socket (always included — daemon creates it at startup).
+    local -a ssh_mount=()
+    local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -2567,11 +3049,13 @@ start_tenant_pebble() {
       -e WS_BIND_HOST=0.0.0.0 \
       -e WS_PATH=/ws/agent \
       "${env_flags[@]}" \
+      "${ssh_mount[@]}" \
       -p "127.0.0.1:${wss_port}:${wss_port}" \
       "${health_publish[@]}" \
       -v "$workspace_dir:/workspace:z" \
       "${restart_arg[@]}" \
       lunarwing-worker-pebble:latest >/dev/null
+    _store_container_hash "$name" "$container_name" "$(tenant_env_dir "$name")/lunarwing.env"
   fi
 
   _register_worker_unit "$name" pebble
@@ -2598,6 +3082,7 @@ stop_tenant_pebble() {
 
 VISION_SIDECAR_IMAGE=lunarwing/vision-service:latest
 VISION_SIDECAR_INTERNAL_PORT=8088
+VISION_SIDECAR_HEALTH_PORT=8089
 
 build_vision_sidecar_image() {
   ensure_container_runtime
@@ -2627,6 +3112,7 @@ write_tenant_vision_env() {
     cat >"$env_path" <<ENVEOF
 LUNARWING_AUTH_TOKEN=$token
 OCR_PORT=$VISION_SIDECAR_INTERNAL_PORT
+OCR_HEALTH_PORT=$VISION_SIDECAR_HEALTH_PORT
 ENVEOF
   )
   chown "$name:$name" "$env_path"
@@ -2654,9 +3140,14 @@ start_tenant_vision() {
   ensure_init_system
   if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
     _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-vision-${name}.container"
     render_vision_quadlet "$name"
     _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _container_config_changed "$name" "lunarwing-vision-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-vision-${name}.service" "lunarwing-vision-${name}"
+    fi
     if _systemctl_user "$name" start "lunarwing-vision-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-vision-${name}" "$quadlet_file"
       say "vision sidecar ready via quadlet (lunarwing-vision-${name}.service, port $vision_port)"
     else
       say "WARNING: lunarwing-vision-${name}.service failed to start" >&2
@@ -2680,11 +3171,20 @@ start_tenant_vision() {
     local -a restart_arg=()
     [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
 
+    # v10: also publish the tenant's dedicated vision_health port -> container
+    # 8089, so the host self-heal pipeline can probe /health directly (mirrors
+    # the nanocode/pebble health_publish pattern).
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" vision_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:${VISION_SIDECAR_HEALTH_PORT}")
+
     say "creating vision sidecar container $container_name on port $vision_port"
     _ctr "$name" run -d \
       --name "$container_name" \
       --env-file "$vision_env_path" \
       -p "127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}" \
+      "${health_publish[@]}" \
       "${restart_arg[@]}" \
       "$VISION_SIDECAR_IMAGE" >/dev/null
     say "vision sidecar ready ($container_name, port $vision_port)"
@@ -2738,6 +3238,7 @@ description="LunarWing vision sidecar ($name)"
 : "\${vis_uid:=$uid}"
 : "\${vis_port:=$vision_port}"
 : "\${vis_internal_port:=$VISION_SIDECAR_INTERNAL_PORT}"
+: "\${vis_health_internal_port:=$VISION_SIDECAR_HEALTH_PORT}"
 : "\${vis_image:=$VISION_SIDECAR_IMAGE}"
 : "\${vis_env_file:=$(tenant_env_dir "$name")/vision.env}"
 : "\${vis_wait:=30}"
@@ -2757,7 +3258,7 @@ _vis() {
 
 _vis_healthy() {
     [ "\$(_vis inspect -f '{{.State.Running}}' "\${vis_container}" 2>/dev/null)" = "true" ] || return 1
-    _vis exec "\${vis_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${vis_internal_port}/health" 2>/dev/null
+    _vis exec "\${vis_container}" curl -sf -o /dev/null --max-time 3 "http://127.0.0.1:\${vis_health_internal_port}/health" 2>/dev/null
 }
 
 start() {
@@ -2795,10 +3296,11 @@ INITEOF
 
 render_vision_quadlet() {
   local name="$1"
-  local qdir vision_port env_path token
+  local qdir vision_port vision_health_port env_path token
   qdir="$(tenant_quadlet_dir "$name")"
   vision_port="$(ports_get "$name" vision_service)"
   [[ -n "$vision_port" ]] || return 0
+  vision_health_port="$(ports_get "$name" vision_health)" || true
   env_path="$(tenant_env_dir "$name")/vision.env"
   [[ -f "$env_path" ]] || write_tenant_vision_env "$name" >/dev/null
   token="$(grep '^LUNARWING_AUTH_TOKEN=' "$env_path" 2>/dev/null | cut -d= -f2- || true)"
@@ -2819,8 +3321,13 @@ ContainerName=lunarwing-vision-${name}
 Image=${VISION_SIDECAR_IMAGE}
 PublishPort=127.0.0.1:${vision_port}:${VISION_SIDECAR_INTERNAL_PORT}
 Environment=OCR_PORT=${VISION_SIDECAR_INTERNAL_PORT}
+Environment=OCR_HEALTH_PORT=${VISION_SIDECAR_HEALTH_PORT}
 Environment=LUNARWING_AUTH_TOKEN=${token}
 EOF
+    # Publish the per-tenant dedicated vision health port (v10) -> container's
+    # 8089, so the host self-heal pipeline can probe /health independently of
+    # OCR traffic. The sidecar listens on OCR_HEALTH_PORT=8089 internally.
+    [[ -n "$vision_health_port" ]] && printf 'PublishPort=127.0.0.1:%s:%s\n' "$vision_health_port" "$VISION_SIDECAR_HEALTH_PORT"
     if [[ -f "$env_path" ]]; then
       printf 'EnvironmentFile=%s\n' "$env_path"
     fi
@@ -3253,6 +3760,17 @@ render_worker_quadlet() {
   agent_token="${agent_token//%/%%}"
   tz_key="${tz_key//%/%%}"
 
+  # SSH agent socket: the gateway creates an SSH agent server at startup,
+  # with its socket at <tenant_home>/lunarwing/run/ssh-agent.sock (NOT /tmp,
+  # because the daemon runs with PrivateTmp=true — a /tmp socket would be
+  # invisible to podman containers). Always include the volume mount + env var
+  # in the quadlet, even if the socket doesn't exist yet at render time — the
+  # daemon creates it before the worker needs it (workers only use SSH when a
+  # create_job with SSH commands is invoked, well after startup). If SSH is
+  # not configured for the tenant, the socket simply won't exist and SSH
+  # commands from the worker will fail with a clear "no agent" error.
+  local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+
   {
     cat <<EOF
 [Unit]
@@ -3273,6 +3791,11 @@ Environment=HEALTH_PORT=${health_port}
 Environment=WS_BIND_HOST=0.0.0.0
 Environment=WS_PATH=/ws/agent
 EOF
+    # SSH agent socket mount + env (always included — the daemon creates the
+    # socket at startup; if SSH isn't configured, the socket won't exist and
+    # SSH commands from the worker will fail with a clear "no agent" error).
+    printf 'Volume=%s:/tmp/ssh-agent.sock\n' "$ssh_agent_socket"
+    printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
     # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
     # the host self-heal pipeline can probe /health directly. The container still
     # listens on HEALTH_PORT=8443 internally (matches the image's baked HEALTHCHECK).
@@ -4533,6 +5056,17 @@ add_tenant() {
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+
+  # SSH harness: config.toml [[ssh.hosts]] block + ed25519 key pair.
+  # Enabled by default; opt out with --no-ssh or LUNARWING_MT_SSH_ENABLED=false.
+  if [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]]; then
+    say "--- Provisioning SSH harness ---"
+    ensure_ssh_config "$name"
+    provision_tenant_ssh_key "$name"
+  else
+    say "SSH harness: disabled (enabled=$DEFAULT_SSH_ENABLED, opt-out=$SSH_OPT_OUT)"
+  fi
+
   if ! "$CONTAINER_RT" image inspect "$VISION_SIDECAR_IMAGE" &>/dev/null; then
     build_vision_sidecar_image || true
   fi
@@ -4573,6 +5107,7 @@ add_tenant() {
   say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say "  darkirc:          $( [[ "$enable_darkirc" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-darkirc to enable)" )"
+  say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key will be uploaded on start-tenant)" || echo "disabled (pass --no-ssh)" )"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -4663,9 +5198,34 @@ start_tenant() {
 
   say "=== Starting tenant: $name ==="
 
+  # Safety net: if the tenant has LUNARWING_OWNER_ID set but the DB still has
+  # orphaned 'default'-scoped rows (e.g. an upgrade that didn't run patch-env),
+  # migrate them before starting the daemon so no data is orphaned.
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path" 2>/dev/null && _owner_scope_needs_migration "$name"; then
+    say "found orphaned 'default'-scoped DB data; auto-migrating to '$name' scope"
+    migrate_owner_scope "$name" || say "WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+  fi
+
+  # Pre-create the SSH agent socket path so podman can bind-mount it into
+  # worker containers. The daemon creates the actual Unix socket here at
+  # startup; without a pre-existing path, podman would create it as a
+  # directory (breaking the daemon's socket bind). A touch-file is safe —
+  # the daemon removes it and binds the real socket.
+  local ssh_socket_path
+  ssh_socket_path="$(tenant_run_dir "$name")/ssh-agent.sock"
+  if [[ ! -S "$ssh_socket_path" ]]; then
+    sudo -u "$name" mkdir -p "$(tenant_run_dir "$name")" 2>/dev/null || true
+    sudo -u "$name" touch "$ssh_socket_path" 2>/dev/null || true
+  fi
+
+  # Start the daemon BEFORE the workers so the SSH agent socket exists when
+  # the worker containers are created (podman bind-mounts the file at creation
+  # time; if the socket doesn't exist yet, the mount is a stale touch-file).
+  # The daemon's SSH agent creates the real Unix socket at
+  # <run_dir>/ssh-agent.sock, which the workers bind-mount.
   start_tenant_postgres "$name"
-  start_tenant_nanocode "$name"
-  start_tenant_pebble "$name"
   start_tenant_vision "$name"
 
   ensure_init_system
@@ -4674,11 +5234,22 @@ start_tenant() {
   else
     start_tenant_openrc "$name"
   fi
+
+  # Workers start AFTER the daemon so the SSH agent socket is already a real
+  # Unix socket (not a touch-file) when podman bind-mounts it.
+  start_tenant_nanocode "$name"
+  start_tenant_pebble "$name"
+
+  # Upload the staged SSH key to the secrets store (if one was provisioned
+  # by add-tenant but not yet uploaded). Init-system-agnostic — uses the
+  # gateway's HTTP API, which both systemd and OpenRC serve.
+  upload_tenant_ssh_key "$name" || true
 }
 
 stop_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
 
   say "=== Stopping tenant: $name ==="
 
@@ -4963,6 +5534,7 @@ main() {
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-jid)        xmpp_jid="$2"; shift 2 ;;
           --no-health)       HEALTH_OPT_OUT=true; shift ;;
+          --no-ssh)          SSH_OPT_OUT=true; shift ;;
           --enable-darkirc)  enable_darkirc="true"; shift ;;
           --xmpp-password)   xmpp_password="$2"; shift 2 ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
@@ -4993,6 +5565,7 @@ main() {
           --docker-group)    docker_group="true"; shift ;;
           --xmpp-domain)     xmpp_domain="$2"; shift 2 ;;
           --no-health)       HEALTH_OPT_OUT=true; shift ;;
+          --no-ssh)          SSH_OPT_OUT=true; shift ;;
           --enable-darkirc)  enable_darkirc="true"; shift ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
           --llm-base-url)    llm_base_url="$2"; shift 2 ;;
@@ -5227,6 +5800,34 @@ main() {
       configure_nanocode "$name" "$nc_model" "$nc_base_url"
       ;;
 
+    configure-ssh)
+      require_root
+      local name="" ssh_host="" ssh_user=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --host) ssh_host="$2"; shift 2 ;;
+          --user) ssh_user="$2"; shift 2 ;;
+          -*)     die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-ssh <name> [--host <host>] [--user <user>]"
+      name="$(sanitize_name "$name")"
+      ports_registry_init
+      tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+      [[ -n "$ssh_host" ]] || ssh_host="127.0.0.1"
+      [[ -n "$ssh_user" ]] || ssh_user="$name"
+      ensure_ssh_config "$name" "$ssh_host" "$ssh_user"
+      provision_tenant_ssh_key "$name" "$ssh_host" "$ssh_user"
+      say ""
+      say "SSH harness configured for tenant '$name' (host=$ssh_host user=$ssh_user)"
+      say "Run '$0 restart-tenant $name' to start the daemon and upload the key to the secrets store"
+      ;;
+
     patch-env)
       require_root
       local name="${1:-}"
@@ -5244,6 +5845,25 @@ main() {
       while IFS= read -r name; do
         patch_tenant_env "$name"
       done <<< "$names"
+      ;;
+
+    migrate-owner-scope)
+      require_root
+      local name="" old_scope="default"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --from) old_scope="$2"; shift 2 ;;
+          -*)     die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: migrate-owner-scope <name> [--from <old_scope>]"
+      ports_registry_init
+      migrate_owner_scope "$name" "$old_scope"
       ;;
 
     backup-tenant)

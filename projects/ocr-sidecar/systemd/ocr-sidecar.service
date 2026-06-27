@@ -8,6 +8,7 @@ User=nobody
 Group=nogroup
 WorkingDirectory=/opt/lunarwing-ocr-sidecar
 Environment="OCR_PORT=8088"
+Environment="OCR_HEALTH_PORT=8089"
 Environment="LUNARWING_AUTH_TOKEN=change-me-in-production"
 ExecStart=/usr/local/bin/lunarwing-ocr-sidecar
 Restart=on-failure
