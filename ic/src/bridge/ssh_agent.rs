@@ -103,7 +103,12 @@ impl SshAgentServer {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o600);
+            // 0o666: the socket is in the tenant's run dir (not /tmp), and
+            // rootless podman maps the host UID to root inside the container.
+            // Worker processes run as a different user (e.g. "nanocode") and
+            // need read+write access to the socket. The run dir itself is
+            // tenant-owned, so this doesn't expose the socket to other tenants.
+            let perms = std::fs::Permissions::from_mode(0o666);
             let _ = std::fs::set_permissions(&socket_path, perms);
         }
 
