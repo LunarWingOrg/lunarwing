@@ -191,6 +191,9 @@ pub struct WorkerEndpoint {
     pub url: String,
     // Secret-bearing: never serialized out (`SecretString` has no `Serialize`
     // impl by design). `Debug` auto-redacts via secrecy's `[REDACTED]`.
+    // merge_from preserves auth_token via a direct post-merge fixup in
+    // Settings::merge_from because skip_serializing drops it during the
+    // serde_json transport.
     #[serde(skip_serializing, default)]
     pub auth_token: Option<SecretString>,
     pub weight: Option<u32>,
