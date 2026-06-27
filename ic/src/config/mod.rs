@@ -340,7 +340,7 @@ impl Config {
             safety: resolve_safety_config(settings)?,
             wasm: WasmConfig::resolve(settings)?,
             secrets: SecretsConfig::resolve().await?,
-            ssh: SshConfig::default(),
+            ssh: settings.ssh.clone(),
             builder: BuilderModeConfig::resolve(settings)?,
             heartbeat: HeartbeatConfig::resolve(settings)?,
             hygiene: HygieneConfig::resolve()?,

@@ -191,6 +191,10 @@ pub struct Settings {
     #[serde(default)]
     pub sandbox: SandboxSettings,
 
+    /// SSH bridge configuration (host entries, timeouts).
+    #[serde(default)]
+    pub ssh: crate::config::SshConfig,
+
     /// Safety configuration.
     #[serde(default)]
     pub safety: SafetySettings,
