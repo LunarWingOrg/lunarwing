@@ -285,6 +285,10 @@ Commands:
   patch-env <name>                 Add missing env vars (e.g. ORCHESTRATOR_PORT)
   patch-env-all                    Patch env for all registered tenants
 
+  migrate-owner-scope <name>       Rekey DB data from 'default' to tenant scope
+    --from <old_scope>             Old owner_id (default: 'default')
+                                   (run after patch-env adds LUNARWING_OWNER_ID)
+
   list-tenants                     Show all tenants with ports and status
   status <name>                    Detailed status for one tenant
   tokens [name]                    Print gateway auth tokens (all or one)
@@ -1503,6 +1507,18 @@ build_tenant() {
   if [[ "$with_pebble" == "true" ]]; then
     build_pebble_worker "false"
   fi
+
+  # After a rebuild, the tenant will be restarted with the new binary. If the
+  # tenant has LUNARWING_OWNER_ID but still has orphaned 'default'-scoped DB
+  # data (e.g. upgrading from a pre-owner-id version), auto-migrate so the
+  # new binary doesn't lose access to existing conversations and memory.
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path" 2>/dev/null && _owner_scope_needs_migration "$name"; then
+    say ""
+    say "--- Auto-migrating owner scope ---"
+    migrate_owner_scope "$name" || say "WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+  fi
 }
 
 # ── Darkirc daemon build (shared, not per-tenant) ────────────────────────────
@@ -2371,6 +2387,22 @@ patch_tenant_env() {
   env_path="$(tenant_env_dir "$name")/lunarwing.env"
   [[ -f "$env_path" ]] || die "env file not found: $env_path"
 
+  # LUNARWING_OWNER_ID: sets the daemon's DB-scoping owner_id so sessions,
+  # memory, and settings are isolated per tenant. Without it the daemon
+  # defaults to "default", sharing state across all tenants on the host.
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path"; then
+    say "LUNARWING_OWNER_ID already set in $env_path (skipping)"
+  else
+    printf '\n# Runtime identity (DB scope — must match tenant name)\nLUNARWING_OWNER_ID=%s\n' "$name" >>"$env_path"
+    say "added LUNARWING_OWNER_ID=$name to $env_path"
+    # Auto-migrate existing DB data from 'default' scope to the tenant's scope
+    # so the daemon doesn't lose access to conversations, memory, and settings.
+    if _owner_scope_needs_migration "$name"; then
+      say "  found 'default'-scoped DB data; migrating to '$name' scope"
+      migrate_owner_scope "$name" || say "  WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+    fi
+  fi
+
   local orchestrator_port
   orchestrator_port="$(ports_get "$name" orchestrator)"
 
@@ -2463,6 +2495,150 @@ patch_tenant_env() {
   # create_job(mode: "nanocode") routing without a hand-edited config file.
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+}
+
+# ── Owner-scope DB migration ──────────────────────────────────────────────────
+#
+# Rekeys all user_id='default' (or a specified old scope) rows to user_id=<name>
+# in the tenant's PostgreSQL. Used when a tenant that was originally created
+# without LUNARWING_OWNER_ID (running as 'default') is upgraded to have its own
+# owner_id scope. Handles unique-constraint collisions by preserving the
+# existing tenant-scoped row and copying content from the old row if the new
+# one is empty.
+#
+# Check whether a tenant's DB has orphaned old-scope rows that need migration.
+# Returns 0 (needs migration) or 1 (already clean / DB unreachable).
+# Usage: _owner_scope_needs_migration <name> [old_scope]
+_owner_scope_needs_migration() {
+  local name="$1"
+  local old_scope="${2:-default}"
+  local pg_port
+  pg_port="$(ports_get "$name" postgres)" 2>/dev/null || return 1
+
+  # If the PG container isn't running, can't check — assume clean.
+  _ctr "$name" inspect -f '{{.State.Running}}' "lunarwing-pg-$name" 2>/dev/null | grep -q true || return 1
+
+  local count
+  count="$(cd / && _ctr "$name" exec lunarwing-pg-$name \
+    psql -U lunarwing -d lunarwing -h 127.0.0.1 -p "$pg_port" -tAc "
+    SELECT count(*) FROM (
+      SELECT user_id FROM settings WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM memory_documents WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM secrets WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM agent_jobs WHERE user_id='$old_scope'
+    ) AS t;" 2>/dev/null || echo 0)"
+
+  [[ "$count" -gt 0 ]] 2>/dev/null
+}
+
+# Usage: migrate_owner_scope <name> [--from <old_scope>]
+migrate_owner_scope() {
+  local name="$1"
+  local old_scope="${2:-default}"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+
+  local pg_port
+  pg_port="$(ports_get "$name" postgres)" || die "no postgres port for $name"
+
+  # Quick check: are there any old-scope rows at all?
+  if ! _owner_scope_needs_migration "$name" "$old_scope"; then
+    say "no '$old_scope' rows found for $name; owner scope already clean"
+    return 0
+  fi
+
+  say "migrating owner scope: '$old_scope' -> '$name' (pg port $pg_port)"
+
+  # Tables with a user_id column (base tables only, not views).
+  # Discovered via information_schema — kept as a static list so the migration
+  # is deterministic and doesn't break if a view is added/renamed.
+  local tables="settings conversations memory_documents routines agent_jobs api_tokens heartbeat_state reflex_patterns user_identities secrets tool_rate_limit_state secret_usage_log wasm_channels"
+
+  # Stop the daemon first so it doesn't re-create 'default' rows mid-migration.
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    _systemctl_user "$name" stop "lunarwing-${name}.service" 2>/dev/null || true
+  else
+    rc-service "lunarwing-${name}" stop >/dev/null 2>&1 || true
+  fi
+
+  local psql_cmd
+  psql_cmd="psql -U lunarwing -d lunarwing -h 127.0.0.1 -p $pg_port"
+
+  # Run the migration via the tenant's PG container.
+  local total_migrated=0
+  for tbl in $tables; do
+    # Check if the table exists in this DB (some may not if migrations haven't run).
+    local exists
+    exists="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT 1 FROM information_schema.tables WHERE table_name='$tbl' AND table_schema='public'" 2>/dev/null || true)"
+    [[ "$exists" == "1" ]] || continue
+
+    # For tables with unique constraints on (user_id, ...), delete old-scope
+    # rows that would collide with existing tenant-scoped rows, but first copy
+    # non-empty content from old to new where the new row is empty.
+    # This is table-specific (the unique key differs per table).
+    case "$tbl" in
+      settings)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          DELETE FROM settings d USING settings t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.key=t.key;
+          UPDATE settings SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      memory_documents)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          UPDATE memory_documents t SET content = d.content
+          FROM memory_documents d
+          WHERE d.user_id='$old_scope' AND t.user_id='$name'
+            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id)
+            AND (t.content IS NULL OR t.content = '');
+          DELETE FROM memory_documents d USING memory_documents t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name'
+            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id);
+          UPDATE memory_documents SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      secrets)
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
+          DELETE FROM secrets d USING secrets t
+          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
+          UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';
+        " 2>/dev/null || true
+        ;;
+      *)
+        # No known unique constraint collision risk — straight update.
+        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c \
+          "UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" 2>/dev/null || true
+        ;;
+    esac
+
+    local count
+    count="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT count(*) FROM $tbl WHERE user_id='$name'" 2>/dev/null || echo 0)"
+    say "  $tbl: $count rows now scoped to '$name'"
+    total_migrated=$((total_migrated + count))
+  done
+
+  # Verify no old-scope rows remain.
+  local remaining
+  remaining="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc "
+    SELECT count(*) FROM (
+      SELECT user_id FROM settings WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM memory_documents WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM secrets WHERE user_id='$old_scope'
+      UNION ALL SELECT user_id FROM agent_jobs WHERE user_id='$old_scope'
+    ) AS t;" 2>/dev/null || echo "?")"
+
+  say ""
+  if [[ "$remaining" == "0" ]]; then
+    say "migration complete: no '$old_scope' rows remain"
+  else
+    say "WARNING: $remaining '$old_scope' rows remain (check for constraint collisions)"
+  fi
+  say "restart the tenant: $0 start-tenant $name"
 }
 
 extract_host_from_url() {
@@ -5017,6 +5193,16 @@ start_tenant() {
 
   say "=== Starting tenant: $name ==="
 
+  # Safety net: if the tenant has LUNARWING_OWNER_ID set but the DB still has
+  # orphaned 'default'-scoped rows (e.g. an upgrade that didn't run patch-env),
+  # migrate them before starting the daemon so no data is orphaned.
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  if grep -q '^LUNARWING_OWNER_ID=' "$env_path" 2>/dev/null && _owner_scope_needs_migration "$name"; then
+    say "found orphaned 'default'-scoped DB data; auto-migrating to '$name' scope"
+    migrate_owner_scope "$name" || say "WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+  fi
+
   start_tenant_postgres "$name"
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
@@ -5634,6 +5820,25 @@ main() {
       while IFS= read -r name; do
         patch_tenant_env "$name"
       done <<< "$names"
+      ;;
+
+    migrate-owner-scope)
+      require_root
+      local name="" old_scope="default"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --from) old_scope="$2"; shift 2 ;;
+          -*)     die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: migrate-owner-scope <name> [--from <old_scope>]"
+      ports_registry_init
+      migrate_owner_scope "$name" "$old_scope"
       ;;
 
     backup-tenant)
