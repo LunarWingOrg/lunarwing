@@ -2895,10 +2895,9 @@ start_tenant_nanocode() {
     local host_health_port
     host_health_port="$(ports_get "$name" nanocode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
-    # SSH agent socket (only if the gateway started one for this tenant).
-    local -a ssh_mount=()
-    local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
-    [[ -S "$ssh_agent_socket" ]] && ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    # SSH agent socket (always included — daemon creates it at startup).
+    local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -3037,10 +3036,10 @@ start_tenant_pebble() {
     local host_health_port
     host_health_port="$(ports_get "$name" pebble_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
-    # SSH agent socket (only if the gateway started one for this tenant).
+    # SSH agent socket (always included — daemon creates it at startup).
     local -a ssh_mount=()
-    local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
-    [[ -S "$ssh_agent_socket" ]] && ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -3761,13 +3760,16 @@ render_worker_quadlet() {
   agent_token="${agent_token//%/%%}"
   tz_key="${tz_key//%/%%}"
 
-  # SSH agent socket: if the gateway started an SSH agent server, its socket
-  # lives at /tmp/ssh-agent-<tenant_name>.sock. Bind-mount it into the worker
-  # container at a fixed path and set SSH_AUTH_SOCK so workers can sign SSH
-  # requests without ever holding key material on disk.
-  local ssh_agent_socket="/tmp/ssh-agent-${name}.sock"
-  local -a ssh_mount=()
-  [[ -S "$ssh_agent_socket" ]] && ssh_mount=("Volume=${ssh_agent_socket}:/tmp/ssh-agent.sock")
+  # SSH agent socket: the gateway creates an SSH agent server at startup,
+  # with its socket at <tenant_home>/lunarwing/run/ssh-agent.sock (NOT /tmp,
+  # because the daemon runs with PrivateTmp=true — a /tmp socket would be
+  # invisible to podman containers). Always include the volume mount + env var
+  # in the quadlet, even if the socket doesn't exist yet at render time — the
+  # daemon creates it before the worker needs it (workers only use SSH when a
+  # create_job with SSH commands is invoked, well after startup). If SSH is
+  # not configured for the tenant, the socket simply won't exist and SSH
+  # commands from the worker will fail with a clear "no agent" error.
+  local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
 
   {
     cat <<EOF
@@ -3789,8 +3791,11 @@ Environment=HEALTH_PORT=${health_port}
 Environment=WS_BIND_HOST=0.0.0.0
 Environment=WS_PATH=/ws/agent
 EOF
-    # SSH agent socket mount + env (only if the socket exists).
-    [[ -n "${ssh_mount:-}" ]] && printf '%s\n' "${ssh_mount[@]}" && printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
+    # SSH agent socket mount + env (always included — the daemon creates the
+    # socket at startup; if SSH isn't configured, the socket won't exist and
+    # SSH commands from the worker will fail with a clear "no agent" error).
+    printf 'Volume=%s:/tmp/ssh-agent.sock\n' "$ssh_agent_socket"
+    printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
     # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
     # the host self-heal pipeline can probe /health directly. The container still
     # listens on HEALTH_PORT=8443 internally (matches the image's baked HEALTHCHECK).
@@ -5201,6 +5206,18 @@ start_tenant() {
   if grep -q '^LUNARWING_OWNER_ID=' "$env_path" 2>/dev/null && _owner_scope_needs_migration "$name"; then
     say "found orphaned 'default'-scoped DB data; auto-migrating to '$name' scope"
     migrate_owner_scope "$name" || say "WARNING: owner-scope migration failed (run 'migrate-owner-scope $name' manually)"
+  fi
+
+  # Pre-create the SSH agent socket path so podman can bind-mount it into
+  # worker containers. The daemon creates the actual Unix socket here at
+  # startup; without a pre-existing path, podman would create it as a
+  # directory (breaking the daemon's socket bind). A touch-file is safe —
+  # the daemon removes it and binds the real socket.
+  local ssh_socket_path
+  ssh_socket_path="$(tenant_run_dir "$name")/ssh-agent.sock"
+  if [[ ! -S "$ssh_socket_path" ]]; then
+    sudo -u "$name" mkdir -p "$(tenant_run_dir "$name")" 2>/dev/null || true
+    sudo -u "$name" touch "$ssh_socket_path" 2>/dev/null || true
   fi
 
   start_tenant_postgres "$name"

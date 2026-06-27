@@ -443,14 +443,18 @@ impl SSHBridge {
 
     /// Start the SSH agent server (for worker integration)
     ///
-    /// Creates a Unix socket at `/tmp/ssh-agent-<tenant_name>.sock` that workers
-    /// can connect to for SSH authentication. Keys are loaded from the secrets
-    /// store and never written to disk. The socket path uses the tenant name
-    /// (not the UUID) so the mt-admin script can predict it for bind-mounting
-    /// into worker containers.
+    /// Creates a Unix socket at `/home/<tenant_name>/lunarwing/run/ssh-agent.sock`
+    /// that workers can connect to for SSH authentication. Keys are loaded from
+    /// the secrets store and never written to disk. The socket path uses the
+    /// tenant's run directory (not /tmp) because the daemon runs with
+    /// PrivateTmp=true — a /tmp socket would be invisible to podman containers
+    /// and couldn't be bind-mounted into workers. The mt-admin script predicts
+    /// this path for mounting: <tenant_home>/lunarwing/run/ssh-agent.sock.
     #[instrument(skip(self))]
     pub async fn start_agent_server(&mut self) -> Result<()> {
-        let socket_path = PathBuf::from(format!("/tmp/ssh-agent-{}.sock", self.tenant_name));
+        // Use the tenant's run directory instead of /tmp (PrivateTmp-safe).
+        let run_dir = format!("/home/{}/lunarwing/run", self.tenant_name);
+        let socket_path = PathBuf::from(format!("{run_dir}/ssh-agent.sock"));
 
         // Load keys from the secrets store for each configured host.
         let hosts = self.hosts.read().await;
