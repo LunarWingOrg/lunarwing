@@ -5220,9 +5220,12 @@ start_tenant() {
     sudo -u "$name" touch "$ssh_socket_path" 2>/dev/null || true
   fi
 
+  # Start the daemon BEFORE the workers so the SSH agent socket exists when
+  # the worker containers are created (podman bind-mounts the file at creation
+  # time; if the socket doesn't exist yet, the mount is a stale touch-file).
+  # The daemon's SSH agent creates the real Unix socket at
+  # <run_dir>/ssh-agent.sock, which the workers bind-mount.
   start_tenant_postgres "$name"
-  start_tenant_nanocode "$name"
-  start_tenant_pebble "$name"
   start_tenant_vision "$name"
 
   ensure_init_system
@@ -5231,6 +5234,11 @@ start_tenant() {
   else
     start_tenant_openrc "$name"
   fi
+
+  # Workers start AFTER the daemon so the SSH agent socket is already a real
+  # Unix socket (not a touch-file) when podman bind-mounts it.
+  start_tenant_nanocode "$name"
+  start_tenant_pebble "$name"
 
   # Upload the staged SSH key to the secrets store (if one was provisioned
   # by add-tenant but not yet uploaded). Init-system-agnostic — uses the
