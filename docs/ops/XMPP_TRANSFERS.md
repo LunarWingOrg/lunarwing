@@ -1,5 +1,9 @@
 # XMPP File Transfer Methods — Quick Reference
 
+## Update 2026-06-27
+
+* agent was able to recieve a picture and analyze file meta data. next: hook this up into K.E.R.S. and LunarVision!!!
+
 ### docs/ops/XMPP_TRANSFERS.md
 
 *Created 2026-06-18, Kestrel*

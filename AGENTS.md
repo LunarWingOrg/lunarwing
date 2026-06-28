@@ -48,14 +48,40 @@ Start with these deeper docs as needed:
 - Extension registry catalog: `src/registry/`
 - OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
 
-## Build, Test, and Lint Commands
+## Build Constraints (Arch Linux Dev VM)
 
-Run these from the `ic/` directory:
+This dev/test VM has limited resources. **All cargo commands must follow these rules:**
+
+- **6 threads max**: prefix every cargo command with `taskset -c 0-5`
+- **Use `cargo check` for compile verification, NOT `cargo build`** — full debug builds are wasteful and should be avoided unless producing a release binary.
+- **Use `taskset -c 0-5` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
 
 ```bash
-# Build
-cargo build
-cargo build --all-features
+taskset -c 0-5 cargo check -j6                              # compile check
+taskset -c 0-5 cargo check -j6 --no-default-features --features postgres  # postgres-only
+taskset -c 0-5 cargo check -j6 --no-default-features --features libsql    # libsql-only
+taskset -c 0-5 cargo check -j6 --all-features               # all features
+taskset -c 0-5 cargo test -j6 -- --test-threads=6            # unit tests
+taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples -- -D warnings  # lint
+taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples --all-features -- -D warnings
+```
+
+Long-running commands (5–20+ minutes) **must use tmux**:
+```bash
+tmux new-session -d -s build "taskset -c 0-5 cargo build --release -j6 2>&1 | tee /tmp/build.log"
+```
+
+## Build, Test, and Lint Commands
+
+Run these from the `ic/` directory. Apply `taskset -c 0-5` and `-j6` per the build constraints above.
+
+```bash
+# Compile check (preferred over cargo build for verification)
+cargo check
+cargo check --all-features
+
+# Build (release only when needed for deploy)
+cargo build --release --bin lunarwing
 
 # Run all tests
 cargo test -- --nocapture
@@ -67,7 +93,7 @@ cargo test <test_name> -- --exact --nocapture
 cargo test --test <file_name> -- --nocapture
 
 # Run tests with specific features
-cargo test --no-default-features --features libsql
+cargo test --no-default-features --features postgres
 cargo test --all-features
 
 # Format check
@@ -98,7 +124,7 @@ cargo bench --all-features --no-run
 
 ## Repo-Wide Coding Rules
 
-- **Edition**: Rust 2024, MSRV 1.92.
+- **Edition**: Rust 2024, MSRV 1.96.
 - **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
 - **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
 - **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are allowed only in tests or for truly infallible invariants (e.g., literals/regexes) with a safety comment.
@@ -111,8 +137,8 @@ cargo bench --all-features --no-run
 
 ## Database, Setup, and Config Rules
 
-- New persistence behavior must support both PostgreSQL and libSQL.
-- Add new DB operations to the shared DB trait first, then implement both backends.
+- PostgreSQL is the primary backend and is far more heavily supported. libSQL support is aspirational — not every feature needs it, but do not regress existing libSQL coverage when possible.
+- Add new DB operations to the shared DB trait first, then implement both backends. If libSQL work would be disproportionate to the feature, PostgreSQL-only is acceptable with a note in the relevant spec.
 - Treat bootstrap config, DB-backed settings, and encrypted secrets as distinct layers; do not collapse them casually.
 - If onboarding or setup behavior changes, update `src/setup/README.md` in the same branch.
 - Do not break config precedence, bootstrap env loading, DB-backed config reload, or post-secrets LLM re-resolution.
@@ -136,6 +162,7 @@ cargo bench --all-features --no-run
 ## Local XMPP and Service Operations
 
 - Treat systemd unit environment values as secret-bearing. Do not paste passwords, bearer tokens, or webhook secrets into user-facing output; summarize or redact them.
+- **Both systemd and OpenRC must be supported.** - launchd is prioritized signficantly less. Just prioritize OpenRC and systemd. 
 - `xmpp-bridge.service` is coupled to `lunarwing.service` with `PartOf=lunarwing.service`, so LunarWing restarts can also restart the bridge. Do not assume the bridge caused a LunarWing stop just because both units restarted together.
 - For install-style harness tests, prefer the rendered service units over leaving `scripts/lunarwing-xmpp-test-env.sh up` attached to a transient shell. The durable path is `render-systemd` plus `systemctl --user` on systemd hosts; `render-launchd` plus `launchctl` on macOS; OpenRC validation should use `lunarwing service install` or the committed OpenRC templates.
 - The harness and service path intentionally seed `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable` for private-network Postgres/TensorZero test setups. Preserve those defaults unless the task explicitly changes the network or SSL assumptions.

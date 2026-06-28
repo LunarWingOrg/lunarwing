@@ -1535,15 +1535,7 @@ async fn handle_message_stanza(
     }
 
     let attachments = extract_inbound_attachments(&msg.payloads, &content).await;
-    let content = if !attachments.is_empty()
-        && attachments
-            .iter()
-            .any(|a| a.source_url.as_deref() == Some(content.trim()))
-    {
-        String::new()
-    } else {
-        content
-    };
+    let content = strip_attachment_urls(content, &attachments);
 
     let mut incoming = IncomingMessage::new("xmpp", target_jid.clone(), content)
         .with_owner_id(&config.jid)
@@ -2953,6 +2945,36 @@ fn collect_aesgcm_urls(text: &str, max: usize) -> Vec<String> {
         .collect()
 }
 
+fn strip_attachment_urls(mut content: String, attachments: &[IncomingAttachment]) -> String {
+    for attachment in attachments {
+        if let Some(url) = attachment.source_url.as_deref() {
+            content = content.replace(url, "");
+        }
+    }
+
+    if content.trim().is_empty() {
+        String::new()
+    } else {
+        content
+    }
+}
+
+#[cfg(test)]
+fn incoming_attachment_for_url(url: &str) -> IncomingAttachment {
+    IncomingAttachment {
+        id: Uuid::new_v4().to_string(),
+        kind: AttachmentKind::Document,
+        mime_type: "application/octet-stream".to_string(),
+        filename: None,
+        size_bytes: None,
+        source_url: Some(url.to_string()),
+        storage_key: None,
+        extracted_text: None,
+        data: vec![1],
+        duration_secs: None,
+    }
+}
+
 /// Derive a display filename from a URL's last path segment, stripping any query
 /// or fragment. A missing extension is fine — the segment (e.g. an opaque
 /// XEP-0363 UUID) is still a unique, useful name, which keeps distinct files
@@ -3583,6 +3605,21 @@ mod tests {
         );
         let many: String = (0..5).map(|i| format!("aesgcm://h/{i}.bin#xx ")).collect();
         assert_eq!(collect_aesgcm_urls(&many, 2).len(), 2);
+    }
+
+    #[test]
+    fn strip_attachment_urls_removes_embedded_aesgcm_urls() {
+        let url = "aesgcm://h/a.jpg#aa";
+        let content = format!("check this out {url} thanks");
+        let stripped = strip_attachment_urls(content, &[incoming_attachment_for_url(url)]);
+        assert_eq!(stripped, "check this out  thanks");
+    }
+
+    #[test]
+    fn strip_attachment_urls_clears_url_only_body() {
+        let url = "aesgcm://h/a.jpg#aa";
+        let stripped = strip_attachment_urls(url.to_string(), &[incoming_attachment_for_url(url)]);
+        assert!(stripped.is_empty());
     }
 
     #[test]

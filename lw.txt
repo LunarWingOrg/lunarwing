@@ -1,0 +1,263 @@
+
+==================== tenant: jupiter (uid 1001) ====================
+
+---- daemon | status | lunarwing-jupiter.service ----
+    state: active  (enabled)
+             └─10-timeout-abort.conf
+     Active: active (running) since Sat 2026-06-27 20:56:58 EDT; 8min ago
+ Invocation: 2330c78887a04eabb24556033bfd24d7
+   Main PID: 1266196 (lunarwing)
+      Tasks: 38 (limit: 75889)
+     Memory: 60.5M (peak: 92.1M)
+        CPU: 1.283s
+     CGroup: /user.slice/user-1001.slice/user@1001.service/app.slice/lunarwing-jupiter.service
+             └─1266196 /home/jupiter/lunarwing/ic/target/release/lunarwing --no-onboard run
+
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.928427Z  WARN Adapter /poll returned HTTP 401 channel=darkirc
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.929080Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10002/v1/configure body_len=326
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.929094Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938427Z  INFO HTTP response received status=200 body_len=74
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938468Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938542Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10002/v1/messages?cursor=2 body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938551Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.978320Z  INFO HTTP response received status=200 body_len=13465381
+Jun 27 21:04:59 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:59.012846Z ERROR http_request failed error=Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT'
+Jun 27 21:04:59 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:59.015155Z  WARN XMPP bridge poll failed: bridge request failed: Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT' channel=xmpp
+
+---- daemon | logs (last 40) | lunarwing-jupiter.service ----
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.914345Z  INFO HTTP response received status=200 body_len=2
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.914373Z  INFO http_request completed successfully status=200
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.914431Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10009/api/wait?cursor=0&timeout=20 body_len=0
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.914436Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.915810Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:20000/poll body_len=0
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.915846Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.926467Z  INFO HTTP response received status=401 body_len=25
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.926509Z  INFO http_request completed successfully status=401
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.926687Z  WARN Adapter /poll returned HTTP 401 channel=darkirc
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.929304Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10002/v1/configure body_len=326
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.929320Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.938540Z  INFO HTTP response received status=200 body_len=74
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.938560Z  INFO http_request completed successfully status=200
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.938592Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10002/v1/messages?cursor=2 body_len=0
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.938598Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:28 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:28.983077Z  INFO HTTP response received status=200 body_len=13465381
+Jun 27 21:04:29 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:29.018979Z ERROR http_request failed error=Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT'
+Jun 27 21:04:29 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:29.019290Z  WARN XMPP bridge poll failed: bridge request failed: Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT' channel=xmpp
+Jun 27 21:04:48 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:48.928346Z  INFO HTTP response received status=200 body_len=27
+Jun 27 21:04:48 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:48.928473Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.904729Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10009/api/config body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.904766Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.916235Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:20000/poll body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.916274Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.917586Z  INFO HTTP response received status=200 body_len=2
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.917621Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.917706Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10009/api/wait?cursor=0&timeout=20 body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.917712Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.928192Z  INFO HTTP response received status=401 body_len=25
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.928242Z  INFO http_request completed successfully status=401
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.928427Z  WARN Adapter /poll returned HTTP 401 channel=darkirc
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.929080Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10002/v1/configure body_len=326
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.929094Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938427Z  INFO HTTP response received status=200 body_len=74
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938468Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938542Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10002/v1/messages?cursor=2 body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.938551Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:58.978320Z  INFO HTTP response received status=200 body_len=13465381
+Jun 27 21:04:59 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:59.012846Z ERROR http_request failed error=Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT'
+Jun 27 21:04:59 cablemanagement lunarwing[1266196]: 2026-06-28T01:04:59.015155Z  WARN XMPP bridge poll failed: bridge request failed: Potential secret leak in response: Secret leak blocked: pattern 'google_api_key' matched 'AIza********NBWT' channel=xmpp
+
+---- bridge | status | xmpp-bridge-jupiter.service ----
+    state: active  (enabled)
+● xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter)
+     Loaded: loaded (/home/jupiter/.config/systemd/user/xmpp-bridge-jupiter.service; enabled; preset: disabled)
+    Drop-In: /usr/lib/systemd/user/service.d
+             └─10-timeout-abort.conf
+     Active: active (running) since Sat 2026-06-27 20:56:58 EDT; 8min ago
+ Invocation: 79f42217cb574333839a937a28a6d785
+   Main PID: 1266156 (xmpp-bridge)
+      Tasks: 33 (limit: 75889)
+     Memory: 75.6M (peak: 77.5M)
+        CPU: 153ms
+     CGroup: /user.slice/user-1001.slice/user@1001.service/app.slice/xmpp-bridge-jupiter.service
+             └─1266156 /home/jupiter/lunarwing/ic/bridges/xmpp-bridge/target/release/xmpp-bridge
+
+Jun 27 20:56:58 cablemanagement systemd[110265]: Started xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:56:58 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:56:58.341091Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10002
+Jun 27 20:56:59 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:56:59.159336Z  INFO lunarwing::channels::xmpp: XMPP connected jid=jupiter@xmpp.sobe.world/jupiter
+Jun 27 20:57:07 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:57:07.601033Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 21:03:04 cablemanagement xmpp-bridge[1266156]: 2026-06-28T01:03:04.088853Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:12 cablemanagement xmpp-bridge[1266156]: 2026-06-28T01:04:12.289539Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+
+---- bridge | logs (last 40) | xmpp-bridge-jupiter.service ----
+Jun 27 20:25:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:25:42.493287Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:26:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:26:12.494299Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:26:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:26:42.495239Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:27:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:27:12.496576Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:27:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:27:42.498308Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:28:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:28:12.499776Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:28:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:28:42.501503Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:29:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:29:12.503289Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:29:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:29:42.504738Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:30:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:30:12.506477Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:30:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:30:42.507275Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:31:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:31:12.508300Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:31:42 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:31:42.509331Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:32:12 cablemanagement xmpp-bridge[838085]: 2026-06-28T00:32:12.510508Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:32:31 cablemanagement systemd[110265]: Stopping xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter)...
+Jun 27 20:32:31 cablemanagement systemd[110265]: Stopped xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:32:56 cablemanagement systemd[110265]: Started xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:32:56 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:32:56.883138Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10002
+Jun 27 20:32:57 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:32:57.434757Z  INFO lunarwing::channels::xmpp: XMPP connected jid=jupiter@xmpp.sobe.world/jupiter
+Jun 27 20:33:06 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:33:06.101302Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 20:47:11 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:47:11.236540Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: no OMEMO key for local device
+Jun 27 20:47:11 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:47:11.247572Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:47:12 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:47:12.147477Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: no OMEMO key for local device
+Jun 27 20:47:46 cablemanagement xmpp-bridge[951429]: 2026-06-28T00:47:46.471962Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:49:17 cablemanagement systemd[110265]: Stopping xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter)...
+Jun 27 20:49:17 cablemanagement systemd[110265]: Stopped xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:49:42 cablemanagement systemd[110265]: Started xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:49:42 cablemanagement xmpp-bridge[1202831]: 2026-06-28T00:49:42.557559Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10002
+Jun 27 20:49:43 cablemanagement xmpp-bridge[1202831]: 2026-06-28T00:49:43.375381Z  INFO lunarwing::channels::xmpp: XMPP connected jid=jupiter@xmpp.sobe.world/jupiter
+Jun 27 20:49:51 cablemanagement xmpp-bridge[1202831]: 2026-06-28T00:49:51.851148Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 20:50:37 cablemanagement xmpp-bridge[1202831]: 2026-06-28T00:50:37.785934Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:56:33 cablemanagement systemd[110265]: Stopping xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter)...
+Jun 27 20:56:33 cablemanagement systemd[110265]: Stopped xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:56:33 cablemanagement systemd[110265]: xmpp-bridge-jupiter.service: Consumed 238ms CPU time, 113.2M memory peak.
+Jun 27 20:56:58 cablemanagement systemd[110265]: Started xmpp-bridge-jupiter.service - LunarWing XMPP bridge (jupiter).
+Jun 27 20:56:58 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:56:58.341091Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10002
+Jun 27 20:56:59 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:56:59.159336Z  INFO lunarwing::channels::xmpp: XMPP connected jid=jupiter@xmpp.sobe.world/jupiter
+Jun 27 20:57:07 cablemanagement xmpp-bridge[1266156]: 2026-06-28T00:57:07.601033Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 21:03:04 cablemanagement xmpp-bridge[1266156]: 2026-06-28T01:03:04.088853Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:12 cablemanagement xmpp-bridge[1266156]: 2026-06-28T01:04:12.289539Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+
+==================== tenant: saturn (uid 1002) ====================
+
+---- daemon | status | lunarwing-saturn.service ----
+    state: active  (enabled)
+             └─10-timeout-abort.conf
+     Active: active (running) since Sat 2026-06-27 20:57:27 EDT; 7min ago
+ Invocation: d1d227244f0a4858b9caa954d5df7e26
+   Main PID: 1272564 (lunarwing)
+      Tasks: 39 (limit: 75889)
+     Memory: 61.7M (peak: 65.2M)
+        CPU: 1.197s
+     CGroup: /user.slice/user-1002.slice/user@1002.service/app.slice/lunarwing-saturn.service
+             └─1272564 /home/saturn/lunarwing/ic/target/release/lunarwing --no-onboard run
+
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827949Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10012/v1/configure body_len=323
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827957Z  INFO URL after credential injection url_changed=false
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837582Z  INFO HTTP response received status=200 body_len=72
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837612Z  INFO http_request completed successfully status=200
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837708Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10012/v1/messages/send body_len=356
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837715Z  INFO URL after credential injection url_changed=false
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847126Z  INFO HTTP response received status=200 body_len=11
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847152Z  INFO http_request completed successfully status=200
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847200Z  INFO WASM on_respond returned wasm_result=Ok(())
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847210Z  INFO on_respond WASM execution completed successfully
+
+---- daemon | logs (last 40) | lunarwing-saturn.service ----
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.183050Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.193170Z  INFO HTTP response received status=200 body_len=2
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.193203Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.193269Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10019/api/wait?cursor=0&timeout=20 body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.193276Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.449880Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10012/v1/configure body_len=323
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.449916Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460025Z  INFO HTTP response received status=200 body_len=72
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460073Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460126Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:10012/v1/messages?cursor=3 body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460132Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460186Z  INFO WASM http_request called method=GET original_url=http://127.0.0.1:20010/poll body_len=0
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.460215Z  INFO URL after credential injection url_changed=false
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470129Z  INFO HTTP response received status=200 body_len=427
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470166Z  INFO http_request completed successfully status=200
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470208Z  INFO WASM emit_message called user_id=cmc@xmpp.sobe.world user_name=None content_len=35 attachment_count=0
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470217Z  INFO Message emitted to host state successfully
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470333Z  INFO Processing emitted messages from polling callback channel=xmpp message_count=1
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470366Z  INFO Sending polled message to agent channel=xmpp user_id=cmc@xmpp.sobe.world content_len=35 attachment_count=0
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470381Z  INFO Message successfully sent to agent queue channel=xmpp
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470449Z  INFO HTTP response received status=401 body_len=25
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470472Z  INFO http_request completed successfully status=401
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470586Z  WARN Adapter /poll returned HTTP 401 channel=darkirc
+Jun 27 21:04:58 cablemanagement lunarwing[1272564]: 2026-06-28T01:04:58.470884Z  WARN Skipped hydration for thread id not owned by sender user=saturn thread_id=3bfdad4f-78df-52c2-9fe1-4a1c42466559 exists=false
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827442Z  INFO call_on_respond invoked channel=xmpp message_id=778aaeec-5126-4e91-92ec-b13138421943 content_len=128 thread_id=None attachment_count=0
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827485Z  INFO Credentials available for on_respond credential_count=2 credential_names=["XMPP_BRIDGE_TOKEN", "XMPP_PASSWORD"]
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827703Z  INFO Starting on_respond WASM execution channel=xmpp
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827722Z  INFO Creating WASM store for on_respond
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827788Z  INFO Instantiating WASM component for on_respond
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827889Z  INFO Calling WASM on_respond content_preview=Yep, I'm here and responding. If you were poking a
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827949Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10012/v1/configure body_len=323
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.827957Z  INFO URL after credential injection url_changed=false
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837582Z  INFO HTTP response received status=200 body_len=72
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837612Z  INFO http_request completed successfully status=200
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837708Z  INFO WASM http_request called method=POST original_url=http://127.0.0.1:10012/v1/messages/send body_len=356
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.837715Z  INFO URL after credential injection url_changed=false
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847126Z  INFO HTTP response received status=200 body_len=11
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847152Z  INFO http_request completed successfully status=200
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847200Z  INFO WASM on_respond returned wasm_result=Ok(())
+Jun 27 21:05:03 cablemanagement lunarwing[1272564]: 2026-06-28T01:05:03.847210Z  INFO on_respond WASM execution completed successfully
+
+---- bridge | status | xmpp-bridge-saturn.service ----
+    state: active  (enabled)
+     Loaded: loaded (/home/saturn/.config/systemd/user/xmpp-bridge-saturn.service; enabled; preset: disabled)
+    Drop-In: /usr/lib/systemd/user/service.d
+             └─10-timeout-abort.conf
+     Active: active (running) since Sat 2026-06-27 20:57:27 EDT; 7min ago
+ Invocation: 0225411a266744539da1b28af3978c70
+   Main PID: 1272525 (xmpp-bridge)
+      Tasks: 34 (limit: 75889)
+     Memory: 7.8M (peak: 9.2M)
+        CPU: 84ms
+     CGroup: /user.slice/user-1002.slice/user@1002.service/app.slice/xmpp-bridge-saturn.service
+             └─1272525 /home/saturn/lunarwing/ic/bridges/xmpp-bridge/target/release/xmpp-bridge
+
+Jun 27 20:57:27 cablemanagement systemd[138015]: Started xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:57:27 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:27.882893Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10012
+Jun 27 20:57:28 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:28.686416Z  INFO lunarwing::channels::xmpp: XMPP connected jid=saturn@xmpp.sobe.world/saturn
+Jun 27 20:57:37 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:37.100678Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 21:03:23 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:03:23.329892Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:10 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:04:10.519503Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:10 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:04:10.627982Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:05:04 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:05:04.292404Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+
+---- bridge | logs (last 40) | xmpp-bridge-saturn.service ----
+Jun 27 20:27:11 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:27:11.449364Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:27:41 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:27:41.451325Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:28:11 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:28:11.453343Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:28:41 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:28:41.455342Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:29:11 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:29:11.457459Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:29:41 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:29:41.459283Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:30:11 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:30:11.460311Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:30:41 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:30:41.461804Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:31:11 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:31:11.463407Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:31:41 cablemanagement xmpp-bridge[841507]: 2026-06-28T00:31:41.465414Z ERROR tokio_xmpp::stanzastream: Failed to connect: disconnected. Retrying in 30s.
+Jun 27 20:32:00 cablemanagement systemd[138015]: Stopping xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn)...
+Jun 27 20:32:00 cablemanagement systemd[138015]: Stopped xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:32:25 cablemanagement systemd[138015]: Started xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:32:25 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:32:25.505775Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10012
+Jun 27 20:32:26 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:32:26.012894Z  INFO lunarwing::channels::xmpp: XMPP connected jid=saturn@xmpp.sobe.world/saturn
+Jun 27 20:32:37 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:32:37.648231Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 20:35:46 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:35:46.941378Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: no OMEMO key for local device
+Jun 27 20:36:14 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:36:14.009440Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: no OMEMO key for local device
+Jun 27 20:36:19 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:36:19.954611Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: no OMEMO key for local device
+Jun 27 20:36:25 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:36:25.181657Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:36:37 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:36:37.344105Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:38:22 cablemanagement xmpp-bridge[940832]: 2026-06-28T00:38:22.068009Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:48:46 cablemanagement systemd[138015]: Stopping xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn)...
+Jun 27 20:48:46 cablemanagement systemd[138015]: Stopped xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:49:11 cablemanagement systemd[138015]: Started xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:49:11 cablemanagement xmpp-bridge[1185672]: 2026-06-28T00:49:11.989249Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10012
+Jun 27 20:49:12 cablemanagement xmpp-bridge[1185672]: 2026-06-28T00:49:12.899760Z  INFO lunarwing::channels::xmpp: XMPP connected jid=saturn@xmpp.sobe.world/saturn
+Jun 27 20:49:26 cablemanagement xmpp-bridge[1185672]: 2026-06-28T00:49:26.851562Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 20:52:25 cablemanagement xmpp-bridge[1185672]: 2026-06-28T00:52:25.978076Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:54:00 cablemanagement xmpp-bridge[1185672]: 2026-06-28T00:54:00.656395Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 20:57:02 cablemanagement systemd[138015]: Stopping xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn)...
+Jun 27 20:57:02 cablemanagement systemd[138015]: Stopped xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:57:27 cablemanagement systemd[138015]: Started xmpp-bridge-saturn.service - LunarWing XMPP bridge (saturn).
+Jun 27 20:57:27 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:27.882893Z  INFO xmpp_bridge: xmpp-bridge listening addr=127.0.0.1:10012
+Jun 27 20:57:28 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:28.686416Z  INFO lunarwing::channels::xmpp: XMPP connected jid=saturn@xmpp.sobe.world/saturn
+Jun 27 20:57:37 cablemanagement xmpp-bridge[1272525]: 2026-06-28T00:57:37.100678Z  WARN lunarwing::channels::xmpp: XMPP OMEMO lookup failed, falling back to plaintext DM target=default phase="recipient_devices" error=Failed to send response on channel xmpp: XMPP IQ returned error: StanzaError { type_: Cancel, by: None, defined_condition: RemoteServerNotFound, texts: {"en": "Server-to-server connection failed: unable to resolve service"}, other: None }
+Jun 27 21:03:23 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:03:23.329892Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:10 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:04:10.519503Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:04:10 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:04:10.627982Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing
+Jun 27 21:05:04 cablemanagement xmpp-bridge[1272525]: 2026-06-28T01:05:04.292404Z  WARN lunarwing::channels::xmpp: OMEMO decrypt failed from cmc@xmpp.sobe.world: encrypted payload is missing

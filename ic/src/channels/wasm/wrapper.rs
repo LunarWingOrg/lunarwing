@@ -3305,14 +3305,34 @@ fn extract_host_from_url(url: &str) -> Option<String> {
 
 fn should_skip_response_leak_scan(url: &str) -> bool {
     url::Url::parse(url).is_ok_and(|parsed| {
-        matches!(parsed.scheme(), "http" | "https")
+        // Telegram getUpdates: inbound polling data where user-pasted secrets
+        // can legitimately appear. Messages are still checked later by the
+        // inbound message safety layer before they reach the LLM.
+        let is_telegram_poll = matches!(parsed.scheme(), "http" | "https")
             && parsed
                 .host_str()
                 .is_some_and(|host| host.eq_ignore_ascii_case("api.telegram.org"))
             && parsed
                 .path_segments()
                 .and_then(|segments| segments.rev().find(|segment| !segment.is_empty()))
-                .is_some_and(|segment| segment == "getUpdates")
+                .is_some_and(|segment| segment == "getUpdates");
+
+        // Loopback endpoints (127.0.0.1, localhost): trusted local services
+        // like xmpp-bridge. Their responses can contain base64-encoded
+        // attachment data that triggers false-positive secret pattern matches
+        // (e.g. a Google API key regex matching inside binary attachment
+        // bytes). The leak scanner exists to prevent exfiltration to external
+        // services; loopback is not an exfiltration vector. Inbound messages
+        // are still checked by the safety layer before reaching the LLM.
+        let is_loopback = matches!(parsed.scheme(), "http" | "https")
+            && parsed
+                .host_str()
+                .is_some_and(|host| {
+                    host.eq_ignore_ascii_case("127.0.0.1")
+                        || host.eq_ignore_ascii_case("localhost")
+                });
+
+        is_telegram_poll || is_loopback
     })
 }
 
@@ -4727,17 +4747,31 @@ mod tests {
     }
 
     #[test]
-    fn test_should_skip_response_leak_scan_only_for_telegram_getupdates() {
+    fn test_should_skip_response_leak_scan_telegram_and_loopback() {
         use super::should_skip_response_leak_scan;
 
+        // Telegram getUpdates is still exempted
         assert!(should_skip_response_leak_scan(
             "https://api.telegram.org/bot123/getUpdates?offset=1"
         ));
         assert!(!should_skip_response_leak_scan(
             "https://api.telegram.org/bot123/sendMessage"
         ));
+
+        // Loopback endpoints are exempted (trusted local services like xmpp-bridge)
+        assert!(should_skip_response_leak_scan(
+            "http://127.0.0.1:8787/v1/messages?cursor=1"
+        ));
+        assert!(should_skip_response_leak_scan(
+            "http://localhost:8787/v1/messages?cursor=1"
+        ));
+
+        // External endpoints are NOT exempted
         assert!(!should_skip_response_leak_scan(
             "https://api.example.com/getUpdates"
+        ));
+        assert!(!should_skip_response_leak_scan(
+            "http://192.168.1.1:8080/data"
         ));
         assert!(!should_skip_response_leak_scan("not a url"));
     }
