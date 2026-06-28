@@ -2959,6 +2959,7 @@ fn strip_attachment_urls(mut content: String, attachments: &[IncomingAttachment]
     }
 }
 
+#[cfg(test)]
 fn incoming_attachment_for_url(url: &str) -> IncomingAttachment {
     IncomingAttachment {
         id: Uuid::new_v4().to_string(),

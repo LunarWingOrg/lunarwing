@@ -2,9 +2,11 @@
 
 ## Status
 
-- Draft proposal
-- Investigated on 2026-06-27
-- Not yet validated by a code patch / live re-test
+- **Fixed on 2026-06-27**
+- Files changed: `ic/channels-src/xmpp/src/lib.rs`, `ic/src/channels/wasm/runtime.rs`, `ic/src/channels/xmpp/mod.rs`
+- WASM channel rebuilt: `xmpp.wasm` (176K), validated with `wasm-tools validate`
+- All 70 XMPP tests passing (including OMEMO roundtrips, WASM wrapper integration, aesgcm URL leak regression)
+- **Live test still needed**: send a real PNG over XMPP and confirm cursor advances
 
 ## Problem Summary
 

@@ -1,8 +1,8 @@
-//! XMPP bridge-backed channel for IronClaw.
+//! XMPP bridge-backed channel for LunarWing.
 //!
 //! This WASM channel talks to a local `xmpp-bridge` process over loopback HTTP.
 //! The bridge owns the long-lived XMPP session; the WASM channel handles the
-//! standard IronClaw extension lifecycle and message normalization.
+//! standard LunarWing extension lifecycle and message normalization.
 
 wit_bindgen::generate!({
     world: "sandboxed-channel",
@@ -171,7 +171,7 @@ impl Guest for XmppChannel {
             cursor
         );
         let response: PollResponse = match request_json("GET", &url, None) {
-            Ok(value) => match serde_json::from_slice(&value) {
+            Ok(body) => match serde_json::from_slice(&body) {
                 Ok(value) => value,
                 Err(err) => {
                     channel_host::log(
@@ -190,19 +190,20 @@ impl Guest for XmppChannel {
             }
         };
 
-        for message in &response.messages {
-            let inbound_attachments = decode_inbound_attachments(&message.attachments);
+        let new_cursor = response.cursor;
+        for message in response.messages {
+            let inbound_attachments = decode_inbound_attachments(message.attachments);
             channel_host::emit_message(&EmittedMessage {
-                user_id: message.user_id.clone(),
-                user_name: message.user_name.clone(),
-                content: message.content.clone(),
-                thread_id: message.thread_id.clone(),
+                user_id: message.user_id,
+                user_name: message.user_name,
+                content: message.content,
+                thread_id: message.thread_id,
                 metadata_json: normalize_metadata_json(&message.metadata_json),
                 attachments: inbound_attachments,
             });
         }
 
-        if let Err(err) = write_cursor(response.cursor) {
+        if let Err(err) = write_cursor(new_cursor) {
             channel_host::log(
                 channel_host::LogLevel::Warn,
                 &format!("Failed to persist XMPP bridge cursor: {}", err),
@@ -335,36 +336,50 @@ fn send_message_via_bridge(
 
 /// Decode base64-encoded inbound attachments from the bridge, store their data,
 /// and return WIT InboundAttachment records for emission.
-fn decode_inbound_attachments(attachments: &[BridgeIncomingAttachment]) -> Vec<InboundAttachment> {
+///
+/// Takes ownership of the attachments Vec so that each attachment's base64 string
+/// is consumed and can be freed immediately after decoding — minimizing peak
+/// WASM linear memory usage during attachment-heavy polls.
+fn decode_inbound_attachments(
+    attachments: Vec<BridgeIncomingAttachment>,
+) -> Vec<InboundAttachment> {
     attachments
-        .iter()
+        .into_iter()
         .filter_map(|att| {
-            let data = match base64::engine::general_purpose::STANDARD.decode(&att.data_base64) {
+            let BridgeIncomingAttachment {
+                filename,
+                mime_type,
+                data_base64,
+            } = att;
+
+            let data = match base64::engine::general_purpose::STANDARD.decode(&data_base64) {
                 Ok(d) => d,
                 Err(e) => {
                     channel_host::log(
                         channel_host::LogLevel::Warn,
                         &format!(
                             "Failed to decode base64 for attachment '{}': {}",
-                            att.filename, e
+                            filename, e
                         ),
                     );
                     return None;
                 }
             };
-            let id = format!("oob-{}", att.filename);
+
+            let id = format!("oob-{}", filename);
             let size = data.len() as u64;
             if let Err(e) = channel_host::store_attachment_data(&id, &data) {
                 channel_host::log(
                     channel_host::LogLevel::Warn,
-                    &format!("Failed to store attachment data for '{}': {}", att.filename, e),
+                    &format!("Failed to store attachment data for '{}': {}", filename, e),
                 );
                 return None;
             }
+
             Some(InboundAttachment {
                 id,
-                mime_type: att.mime_type.clone(),
-                filename: Some(att.filename.clone()),
+                mime_type,
+                filename: Some(filename),
                 size_bytes: Some(size),
                 source_url: None,
                 storage_key: None,

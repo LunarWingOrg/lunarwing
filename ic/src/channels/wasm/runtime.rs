@@ -35,8 +35,9 @@ impl Default for WasmChannelRuntimeConfig {
     fn default() -> Self {
         Self {
             default_limits: ResourceLimits {
-                // Channels may need more memory for message buffering
-                memory_bytes: 50 * 1024 * 1024, // 50 MB
+                // Channels may need more memory for message buffering and
+                // attachment decoding (base64 + decoded bytes coexist briefly).
+                memory_bytes: 128 * 1024 * 1024, // 128 MB
                 fuel: 10_000_000,
                 timeout: Duration::from_secs(60),
             },
@@ -285,7 +286,7 @@ mod tests {
         assert!(config.cache_compiled);
         assert!(config.fuel_config.enabled);
         // Channels get more memory than tools
-        assert_eq!(config.default_limits.memory_bytes, 50 * 1024 * 1024);
+        assert_eq!(config.default_limits.memory_bytes, 128 * 1024 * 1024);
     }
 
     #[test]

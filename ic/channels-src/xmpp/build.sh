@@ -27,7 +27,7 @@ if [ -f "$WASM_PATH" ]; then
     "$WASM_TOOLS_BIN" component new "$WASM_PATH" -o xmpp.wasm 2>/dev/null || cp "$WASM_PATH" xmpp.wasm
     "$WASM_TOOLS_BIN" strip xmpp.wasm -o xmpp.wasm
     echo "Built: xmpp.wasm ($(du -h xmpp.wasm | cut -f1))"
-    echo "Copy xmpp.wasm and xmpp.capabilities.json to ~/.ironclaw/channels/"
+    echo "Copy xmpp.wasm and xmpp.capabilities.json to ~/.lunarwing/channels/"
 else
     echo "Error: WASM output not found at $WASM_PATH"
     exit 1
