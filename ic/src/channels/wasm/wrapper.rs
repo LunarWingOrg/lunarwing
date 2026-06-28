@@ -3330,7 +3330,6 @@ fn should_skip_response_leak_scan(url: &str) -> bool {
                 .is_some_and(|host| {
                     host.eq_ignore_ascii_case("127.0.0.1")
                         || host.eq_ignore_ascii_case("localhost")
-                        || host.eq_ignore_ascii_case("::1")
                 });
 
         is_telegram_poll || is_loopback
@@ -4765,9 +4764,6 @@ mod tests {
         ));
         assert!(should_skip_response_leak_scan(
             "http://localhost:8787/v1/messages?cursor=1"
-        ));
-        assert!(should_skip_response_leak_scan(
-            "http://[::1]:8787/v1/messages"
         ));
 
         // External endpoints are NOT exempted
