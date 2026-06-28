@@ -74,7 +74,7 @@
                 "optional": true
             }
         ],
-        "setup_url": "https://github.com/nearai/ironclaw/tree/main/bridges/xmpp-bridge"
+        "setup_url": "https://github.com/LunarWingOrg/lunarwing/tree/main/ic/bridges/xmpp-bridge"
     },
     "capabilities": {
         "http": {
@@ -103,7 +103,9 @@
             "rate_limit": {
                 "requests_per_minute": 120,
                 "requests_per_hour": 7200
-            }
+            },
+            "max_request_bytes": 31457280,
+            "max_response_bytes": 31457280
         },
         "secrets": {
             "allowed_names": [

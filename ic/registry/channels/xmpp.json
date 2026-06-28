@@ -4,7 +4,7 @@
   "kind": "channel",
   "version": "0.1.0",
   "wit_version": "0.3.0",
-  "description": "Talk to IronClaw over XMPP through the local xmpp-bridge service",
+  "description": "Talk to LunarWing over XMPP through the local xmpp-bridge service",
   "keywords": [
     "xmpp",
     "jabber",
@@ -31,7 +31,7 @@
       "xmpp_bridge_token"
     ],
     "shared_auth": null,
-    "setup_url": "https://github.com/nearai/ironclaw/tree/main/bridges/xmpp-bridge"
+    "setup_url": "https://github.com/LunarWingOrg/lunarwing/tree/main/ic/bridges/xmpp-bridge"
   },
   "tags": [
     "messaging"
