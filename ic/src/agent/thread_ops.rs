@@ -322,8 +322,18 @@ impl Agent {
             }
         }
 
-        // Safety validation for user input
-        let validation = self.safety().validate_input(content);
+        // Safety validation for user input.
+        //
+        // When a message has attachments but no text (e.g. an image-only XMPP
+        // share where the aesgcm:// URL was stripped), substitute a placeholder
+        // so the empty-input validator doesn't reject it. The attachment data
+        // itself is already validated by the channel host layer.
+        let validation_content = if content.is_empty() && !message.attachments.is_empty() {
+            "[attachment]"
+        } else {
+            content
+        };
+        let validation = self.safety().validate_input(validation_content);
         if !validation.is_valid {
             let details = validation
                 .errors
