@@ -19,7 +19,7 @@
 22. [ ] fix problems. more testing
 23. [ ] Write up release notes (at root of repo) for v1.1.6 explaining all changes since v1.1.5 as well as accurate known issues list
 24. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (only after #23)
-25. [ ] Create new branch to correspond with release
+25. [ ] Create new branch to correspond with releases
 26. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
