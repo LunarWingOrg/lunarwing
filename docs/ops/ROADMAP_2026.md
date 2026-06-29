@@ -36,7 +36,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Opencode External Worker & Paseo Integration | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v.1.2.3 |
-| Remove support for all the other random unsupported LLM providers | v.1.2.3 |
+| Remove support for all the other random unsupported LLM providers | v1.2.3 |
 | Further external worker polishing | v1.2.3 |
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
