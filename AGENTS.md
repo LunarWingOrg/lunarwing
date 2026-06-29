@@ -124,7 +124,7 @@ cargo bench --all-features --no-run
 
 ## Repo-Wide Coding Rules
 
-- **Edition**: Rust 2024, MSRV 1.96.
+- **Edition**: Rust 2024, MSRV 1.92.
 - **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
 - **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
 - **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are allowed only in tests or for truly infallible invariants (e.g., literals/regexes) with a safety comment.
