@@ -104,6 +104,10 @@ in_phase_range() {
   (( p >= PHASE_START && p <= PHASE_END ))
 }
 
+sanitize() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-' | sed 's/^-//;s/-$//'
+}
+
 # ── Validation ───────────────────────────────────────────────────────────────
 
 validate_config() {
