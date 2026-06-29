@@ -18,6 +18,8 @@ A second focus is **port-registry schema housekeeping**: the v8 schema left an u
 
 A third focus is the **LunarVision (OCR / vision-language) sidecar**: migrated to rootless Podman with a real `HEALTHCHECK`, gained disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, a wired-in health endpoint, and a Prometheus metrics endpoint scaffold. The companion `vision-analyze` WASM tool was rewritten from scratch and re-added to the tool registry.
 
+A fourth focus on the routine system.
+
 Additional work includes **dev-mode operator helper scripts** (sandbox config + tool permissions tuners, with prominent "not for end users" warnings), a **`configure-ssh` subcommand** wired into `lunarwing-mt-admin.sh` (and SSH provisioning folded into `add-tenant`), and several other minor improvements across the board.
 
 This release **does not** add database schema changes, but a small non-destructive data migration (which is done automatically) will be necessary in order to support the new Agent SSH Harness.
@@ -119,6 +121,10 @@ Substantial work on `projects/ocr-sidecar/`:
 ### `vision-analyze` WASM Tool — Rewrite + Re-registration
 
 The `vision-analyze` WASM tool (`ic/tools-src/vision-analyze/`) was **rewritten from scratch** (commit `3fa0d629`) and a `vision-analyze.tools` manifest added so it registers with the rest of the WASM toolset. The earlier in-registry copy was removed mid-cycle as unviable and is now replaced by the rewrite. The tool-registry path and the mt-admin WASM setup were re-added in lockstep.
+
+### Routine changes
+
+Summarize routine changes here.
 
 ### Dev-Mode Operator Helper Scripts — Sandbox Config + Tool Permissions
 
