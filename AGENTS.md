@@ -4,7 +4,7 @@
 
 - `AGENTS.md` is the quick-start contract for coding agents. It is not the full architecture spec.
 - Read the relevant subsystem spec before changing a complex area. When a repo spec exists, treat it as authoritative.
-Start with these deeper docs as needed:
+Start with these deeper docs as needed (keep in mind most of these are outdated so you need to actually verify any information from them):
 - `CLAUDE.md`
 - `src/agent/CLAUDE.md`
 - `src/channels/web/CLAUDE.md`
