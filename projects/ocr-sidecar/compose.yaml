@@ -20,6 +20,8 @@ services:
       - ENABLE_CACHE=${ENABLE_CACHE:-true}
       - ENABLE_PROMETHEUS=${ENABLE_PROMETHEUS:-true}
       - RATE_LIMIT_PER_SECOND=${RATE_LIMIT_PER_SECOND:-10}
+      - CACHE_PERSIST=${CACHE_PERSIST:-true}
+      - CACHE_DIR=${CACHE_DIR:-/app/cache}
     volumes:
       - ocr_cache:/app/cache
     healthcheck:
