@@ -2566,8 +2566,16 @@ migrate_owner_scope() {
   local psql_cmd
   psql_cmd="psql -U lunarwing -d lunarwing -h 127.0.0.1 -p $pg_port"
 
-  # Run the migration via the tenant's PG container.
-  local total_migrated=0
+  # Run the migration via the tenant's PG container. Each table's statements run
+  # in ONE transaction (-1) with ON_ERROR_STOP, so a unique-constraint collision
+  # or FK error rolls that table back atomically instead of half-applying — and
+  # the error is SURFACED and counted (not swallowed) rather than aborting the
+  # whole migration. Every table with a UNIQUE/PK on (user_id, ...) first deletes
+  # the old-scope rows that would collide with an existing tenant-scoped row
+  # (keeping the tenant row; memory_documents also salvages content into an empty
+  # tenant row first), then updates. Tables with no user_id-bearing unique key get
+  # a straight update.
+  local total_migrated=0 migrate_errors=0
   for tbl in $tables; do
     # Check if the table exists in this DB (some may not if migrations haven't run).
     local exists
@@ -2575,44 +2583,71 @@ migrate_owner_scope() {
       "SELECT 1 FROM information_schema.tables WHERE table_name='$tbl' AND table_schema='public'" 2>/dev/null || true)"
     [[ "$exists" == "1" ]] || continue
 
-    # For tables with unique constraints on (user_id, ...), delete old-scope
-    # rows that would collide with existing tenant-scoped rows, but first copy
-    # non-empty content from old to new where the new row is empty.
-    # This is table-specific (the unique key differs per table).
+    local sql
     case "$tbl" in
-      settings)
-        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
-          DELETE FROM settings d USING settings t
-          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.key=t.key;
-          UPDATE settings SET user_id='$name' WHERE user_id='$old_scope';
-        " 2>/dev/null || true
-        ;;
-      memory_documents)
-        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
-          UPDATE memory_documents t SET content = d.content
-          FROM memory_documents d
-          WHERE d.user_id='$old_scope' AND t.user_id='$name'
-            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id)
-            AND (t.content IS NULL OR t.content = '');
-          DELETE FROM memory_documents d USING memory_documents t
-          WHERE d.user_id='$old_scope' AND t.user_id='$name'
-            AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id);
-          UPDATE memory_documents SET user_id='$name' WHERE user_id='$old_scope';
-        " 2>/dev/null || true
-        ;;
-      secrets)
-        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c "
-          DELETE FROM secrets d USING secrets t
-          WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
-          UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';
-        " 2>/dev/null || true
-        ;;
-      *)
-        # No known unique constraint collision risk — straight update.
-        cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -c \
-          "UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" 2>/dev/null || true
-        ;;
+      settings)  # PRIMARY KEY (user_id, key)
+        sql="DELETE FROM settings d USING settings t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.key=t.key;
+             UPDATE settings SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      memory_documents)  # UNIQUE (user_id, path, agent_id) NULLS NOT DISTINCT (V21)
+        sql="UPDATE memory_documents t SET content = d.content
+               FROM memory_documents d
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id)
+                 AND (t.content IS NULL OR t.content = '');
+             DELETE FROM memory_documents d USING memory_documents t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.path=t.path AND (d.agent_id IS NOT DISTINCT FROM t.agent_id);
+             UPDATE memory_documents SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      secrets)  # UNIQUE (user_id, name)
+        sql="DELETE FROM secrets d USING secrets t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
+             UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      routines)  # UNIQUE (user_id, name)
+        sql="DELETE FROM routines d USING routines t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
+             UPDATE routines SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      reflex_patterns)  # UNIQUE (user_id, normalized_pattern)
+        sql="DELETE FROM reflex_patterns d USING reflex_patterns t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.normalized_pattern=t.normalized_pattern;
+             UPDATE reflex_patterns SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      wasm_channels)  # UNIQUE (user_id, name)
+        sql="DELETE FROM wasm_channels d USING wasm_channels t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
+             UPDATE wasm_channels SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      heartbeat_state)  # UNIQUE (user_id, agent_id) — plain (NULLs distinct), so a
+                        # NULL agent_id never collides; only dedup non-NULL matches.
+        sql="DELETE FROM heartbeat_state d USING heartbeat_state t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.agent_id IS NOT NULL AND d.agent_id = t.agent_id;
+             UPDATE heartbeat_state SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      tool_rate_limit_state)  # UNIQUE (wasm_tool_id, user_id)
+        sql="DELETE FROM tool_rate_limit_state d USING tool_rate_limit_state t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.wasm_tool_id=t.wasm_tool_id;
+             UPDATE tool_rate_limit_state SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      conversations)  # partial UNIQUE idx (user_id, routine_id) + (user_id) heartbeat singleton (V11)
+        sql="DELETE FROM conversations d USING conversations t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.metadata->>'routine_id' IS NOT NULL
+                 AND d.metadata->>'routine_id' = t.metadata->>'routine_id';
+             DELETE FROM conversations d USING conversations t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.metadata->>'thread_type'='heartbeat'
+                 AND t.metadata->>'thread_type'='heartbeat';
+             UPDATE conversations SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      *)  # agent_jobs, api_tokens, user_identities, secret_usage_log: no user_id-bearing unique key
+        sql="UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" ;;
     esac
+
+    local out rc=0
+    out="$(cd / && _ctr "$name" exec lunarwing-pg-$name \
+      $psql_cmd -1 -v ON_ERROR_STOP=1 -c "$sql" 2>&1)" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+      say "  WARNING: $tbl rekey failed (rc=$rc): ${out//$'\n'/ }"
+      migrate_errors=$((migrate_errors + 1))
+    fi
 
     local count
     count="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
@@ -2621,23 +2656,36 @@ migrate_owner_scope() {
     total_migrated=$((total_migrated + count))
   done
 
-  # Verify no old-scope rows remain.
-  local remaining
-  remaining="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc "
-    SELECT count(*) FROM (
-      SELECT user_id FROM settings WHERE user_id='$old_scope'
-      UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
-      UNION ALL SELECT user_id FROM memory_documents WHERE user_id='$old_scope'
-      UNION ALL SELECT user_id FROM secrets WHERE user_id='$old_scope'
-      UNION ALL SELECT user_id FROM agent_jobs WHERE user_id='$old_scope'
-    ) AS t;" 2>/dev/null || echo "?")"
+  # Verify no old-scope rows remain — check ALL owner-scoped tables (not just 5)
+  # and name the offenders so a swallowed collision can't hide a partial rekey.
+  local remaining_total=0 offenders="" unchecked=""
+  for tbl in $tables; do
+    local exists2 r
+    exists2="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT 1 FROM information_schema.tables WHERE table_name='$tbl' AND table_schema='public'" 2>/dev/null || true)"
+    [[ "$exists2" == "1" ]] || continue
+    r="$(cd / && _ctr "$name" exec lunarwing-pg-$name $psql_cmd -tAc \
+      "SELECT count(*) FROM $tbl WHERE user_id='$old_scope'" 2>/dev/null || echo "?")"
+    if [[ "$r" =~ ^[0-9]+$ ]]; then
+      [[ "$r" -gt 0 ]] && { offenders+=" $tbl($r)"; remaining_total=$((remaining_total + r)); }
+    else
+      unchecked+=" $tbl"
+    fi
+  done
 
   say ""
-  if [[ "$remaining" == "0" ]]; then
-    say "migration complete: no '$old_scope' rows remain"
+  [[ "$migrate_errors" -gt 0 ]] && \
+    say "WARNING: $migrate_errors table(s) errored during rekey — see the WARNINGs above"
+  if [[ -n "$offenders" ]]; then
+    say "WARNING: $remaining_total '$old_scope' row(s) still remain after migration:$offenders"
+    say "  (usually a unique-constraint collision or a users-table FK gap — inspect before starting)"
+  elif [[ -n "$unchecked" ]]; then
+    say "migration done; could not re-verify:$unchecked (DB read failed)"
   else
-    say "WARNING: $remaining '$old_scope' rows remain (check for constraint collisions)"
+    say "migration complete: no '$old_scope' rows remain in any owner-scoped table"
   fi
+  [[ "$migrate_errors" -eq 0 && -z "$offenders" && -z "$unchecked" ]] || \
+    say "review the WARNINGs above before running 'start-tenant'"
   say "restart the tenant: $0 start-tenant $name"
 }
 
