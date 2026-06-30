@@ -155,6 +155,10 @@ fn should_fallback_routine_notification(error: &ChannelError) -> bool {
 pub struct AgentDeps {
     /// Resolved durable owner scope for the instance.
     pub owner_id: String,
+    /// Per-tenant vision/OCR sidecar URL (from Config.vision_service_url).
+    /// Propagated into JobContext at dispatcher sites so the vision-analyze WASM
+    /// tool receives it via Request.context with host-wins precedence.
+    pub vision_service_url: Option<String>,
     pub store: Option<Arc<dyn Database>>,
     pub llm: Arc<dyn LlmProvider>,
     /// Cheap/fast LLM for lightweight tasks (heartbeat, routing, evaluation).

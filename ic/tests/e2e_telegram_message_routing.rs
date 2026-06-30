@@ -182,6 +182,7 @@ mod tests {
 
         let deps = AgentDeps {
             owner_id: components.config.owner_id.clone(),
+            vision_service_url: components.config.vision_service_url.clone(),
             store: components.db.clone(),
             llm: components.llm.clone(),
             cheap_llm: components.cheap_llm.clone(),

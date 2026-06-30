@@ -1,37 +1,42 @@
 {
   "version": "0.2.0",
   "wit_version": "0.3.0",
-  "description": "Analyze images using the LunarWing Vision Service. Supports OCR text extraction (mode: text), vision-language description (mode: describe), or smart auto-routing (mode: auto). Requires the OCR sidecar running on localhost:8088.",
+  "description": "Analyze images using the LunarWing Vision Service. Supports OCR text extraction (mode: text), vision-language description (mode: describe), or smart auto-routing (mode: auto). The host injects the per-tenant sidecar URL via the job context; falls back to a loopback default.",
   "capabilities": {
     "http": {
       "allowlist": [
         {
-          "host": "127.0.0.1:8088",
+          "host": "127.0.0.1",
           "path_prefix": "/v1/",
           "methods": ["POST"]
         },
         {
-          "host": "127.0.0.1:8088",
+          "host": "127.0.0.1",
           "path_prefix": "/ocr",
           "methods": ["POST"]
         },
         {
-          "host": "127.0.0.1:8088",
+          "host": "127.0.0.1",
           "path_prefix": "/vision/",
           "methods": ["POST"]
         },
         {
-          "host": "127.0.0.1:8088",
+          "host": "127.0.0.1",
           "path_prefix": "/health",
           "methods": ["GET"]
         },
         {
-          "host": "localhost:8088",
+          "host": "localhost",
           "path_prefix": "/",
           "methods": ["POST", "GET"]
         },
         {
-          "host": "host.containers.internal:8088",
+          "host": "host.containers.internal",
+          "path_prefix": "/",
+          "methods": ["POST", "GET"]
+        },
+        {
+          "host": "::1",
           "path_prefix": "/",
           "methods": ["POST", "GET"]
         }

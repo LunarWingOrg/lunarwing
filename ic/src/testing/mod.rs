@@ -560,6 +560,7 @@ impl TestHarnessBuilder {
 
         let deps = AgentDeps {
             owner_id: "default".to_string(),
+            vision_service_url: None,
             store: Some(Arc::clone(&db)),
             llm,
             cheap_llm: None,

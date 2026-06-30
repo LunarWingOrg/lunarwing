@@ -26,12 +26,16 @@ match the old host's.
 > window. This is deliberate: it prevents a torn OMEMO store and prevents losing
 > anything written between snapshot and cutover.
 
-> **Validation status (2026-06-20).** The `export → import → start` migration path has
-> been **live-validated end-to-end on a production tenant** — the migrated tenant came
-> up operational on the new host. OMEMO encrypted-chat and `SECRETS_MASTER_KEY` secret
-> continuity were **not separately spot-checked** during that run; confirm them on the
-> next migration. (The `rehearse-testbot.sh` helper itself remains untested — see *Dry
-> run & rehearsal*.)
+> **Validation status.** The `export → import → start` path was **live-validated
+> end-to-end on a production tenant (2026-06-20)** against a **v1.1.4** target — the
+> migrated tenant came up operational. Two gaps make that run **insufficient for a
+> migration onto v1.1.7**: (1) OMEMO encrypted-chat and `SECRETS_MASTER_KEY` continuity
+> were **not separately spot-checked**; and (2) it **predates the owner-scope data
+> migration** (`migrate_owner_scope`, added 2026-06-26), which now runs automatically on
+> first start and is the real cross-version step — see *Owner-scope continuity* below.
+> So the forward path onto a v1.1.7 host is **not yet validated end-to-end**
+> (GOALS_1.1.7 item #13, still open — rehearse with Starforce first). The
+> `rehearse-testbot.sh` helper itself also remains untested (see *Dry run & rehearsal*).
 
 ---
 
@@ -54,11 +58,85 @@ match the old host's.
 
 ---
 
+## Owner-scope (`user_id`) continuity — the v1.1.7 data migration
+
+**There is no new SQL/schema migration on this path.** Refinery migrations `V1..V21` are
+byte-identical from v1.1.0 through v1.1.7, and a fully-migrated source DB restores already
+at `V21`, so the daemon's refinery run on first start applies nothing and does not abort.
+
+**The migration that *does* matter is `migrate_owner_scope`** — a shell-level *data*
+migration in `lunarwing-mt-admin.sh` (added 2026-06-26, post-1.1.6; this is the "new DB
+migration" GOALS_1.1.7 #13 refers to). It rekeys the `user_id` ("owner scope") column from
+`default` to the tenant name across 13 tables (`settings`, `conversations`,
+`memory_documents`, `secrets`, `routines`, `agent_jobs`, `reflex_patterns`,
+`user_identities`, `api_tokens`, `heartbeat_state`, `tool_rate_limit_state`,
+`secret_usage_log`, `wasm_channels`). `import-tenant.sh` reaches it via `start-tenant`,
+which auto-fires it **only when** the tenant env has `LUNARWING_OWNER_ID=<tenant>` (always
+true — `add-tenant` writes it) **and** `default`-scoped rows exist **and** the PG container
+is running at that moment.
+
+**Why it is make-or-break:** `pg_restore` reloads each row's `user_id` *verbatim*, while
+the new daemon is hard-scoped to the new tenant name. If the two don't line up after start,
+the daemon **silently sees an empty dataset** — it looks like total history/memory loss,
+but the rows are intact under the old scope. Success depends on owner-scope continuity, not
+on any schema step.
+
+**Measure the source scope before you export** (read-only, on the old host — `docker`
+shown for a rootful source; use the tenant's `podman` on a rootless source):
+
+```bash
+sudo docker exec lunarwing-pg-<tenant> \
+  psql -U lunarwing -d lunarwing -c \
+  "SELECT user_id, count(*) FROM settings GROUP BY 1 ORDER BY 2 DESC;"
+```
+
+Then pick the branch:
+
+| Source `user_id` | What happens / what you do |
+|------------------|----------------------------|
+| `default` (typical pre-1.1.7 tenant) | Keep the same tenant name. `start-tenant` auto-rekeys `default → <tenant>` cleanly (no collisions — the target DB was empty before restore). **Verify it fired** (below). |
+| already `<tenant>` | Keep the same name. The target's `LUNARWING_OWNER_ID=<tenant>` already matches; `migrate_owner_scope` is a correct no-op. |
+| some other value `S` | The auto-gate only handles `default`, so it will **not** fire. **After `restore-tenant`, before `start-tenant`,** run `sudo ic/scripts/lunarwing-mt-admin.sh migrate-owner-scope <tenant> --from <S>`. (A rename via `import --name` lands here too — avoid renaming unless you do this.) |
+
+**Two foot-guns regardless of branch:**
+
+- **PG must be running when `start-tenant` runs.** If it isn't (e.g. a stage-then-reboot
+  before the Podman Quadlet/linger brings PG up), the rekey gate **silently skips** and the
+  daemon starts against still-`default` rows. Confirm `lunarwing-pg-<tenant>` is up first.
+- **`migrate_owner_scope` swallows SQL errors and only re-counts 5 of the 13 tables.**
+  Don't trust silence — verify after start (step 4): rows should be under `<tenant>` with
+  **zero `default`** remaining.
+
+**Risk if the rekey is skipped (why the steps above matter).** The import flow has **no
+automated owner-scope detection** — it relies on you measuring the scope and, when it isn't
+`default`, running the manual rekey above. Skip that on an *exposed* migration (a `--name`
+rename, a non-`default` source, or a mixed/dirty multi-scope source) and the daemon comes up
+**silently amnesiac**: empty history, no memory, routines don't load, secrets unavailable —
+**with no error logged**. The exposure is narrow — a `default`-scoped source kept at the
+**same name** (the common case) is handled automatically — but the failure is invisible until
+you interact with the agent or run the verify query.
+
+It is **recoverable, not destructive**: the rows are intact under the old scope, the fix is
+`migrate-owner-scope <tenant> --from <old>` + restart, and the old host stays up as a
+rollback. **But discover it fast.** If the amnesiac daemon runs long enough to write new
+`<tenant>`-scoped rows, a later rekey hits unique-constraint collisions and the dedup keeps
+the *new* rows while dropping the colliding *old* ones — so late discovery can cost the older
+data. That window is exactly why step 4 verifies row counts before you trust the cutover.
+(The manual `--from` path is itself guarded against the `--from <tenant>` self-wipe mistake.)
+
+> **Want this automated?** A proposed import-side change would detect the restored scope and
+> rekey (or fail closed on ambiguity) without the manual step. It is **deferred** — the
+> manual measure → rekey → verify flow above is the supported path today. See the design
+> notes on the `staging-kawarimi-migration` branch.
+
+---
+
 ## Prerequisites on the new (standalone) host
 
-A fully self-contained v1.1.4 host: PostgreSQL via rootless Podman (≥ 4.6 for Quadlet
-supervision), TensorZero proxy, reachability to the same XMPP server, Gotify (for
-self-heal escalation), and `lunarwing-mt-admin.sh` from the v1.1.4 tag. See
+A fully self-contained v1.1.4+ host (v1.1.7 here): PostgreSQL via rootless Podman (≥ 4.6
+for Quadlet supervision), TensorZero proxy, reachability to the same XMPP server, Gotify
+(for self-heal escalation), and `lunarwing-mt-admin.sh` from a v1.1.4-or-newer tag (import
+greps for the `restore-tenant` subcommand and refuses an older one). See
 `docs/ops/MULTITENANCY-PRODUCTION.md` and `docs/guides/MT-ADMIN-QUICKSTART.md`. Ensure
 `jq`, `tar`, and the container runtime are present on both hosts.
 
@@ -67,6 +145,9 @@ self-heal escalation), and `lunarwing-mt-admin.sh` from the v1.1.4 tag. See
 ## Procedure (per tenant — one maintenance window each, canary first)
 
 ### 1. Export on the OLD host (begins the cutover)
+> **First, measure the source owner scope** (read-only) — it decides whether you keep the
+> tenant name and whether a manual rekey is needed at step 3. See *Owner-scope continuity*
+> above.
 ```bash
 sudo ic/scripts/export-tenant.sh <tenant>            # --dry-run first to preview
 # stops the tenant's daemon + bridge, dumps the DB, snapshots state, writes
@@ -95,11 +176,20 @@ is down (export already stopped it); omit `--start` to **stage** without startin
 or omit `--old-stopped` to be prompted interactively. The double-login confirmation
 is **not** satisfied by `--yes` alone.
 
+> **Owner-scope branch (step 3a):** if the source `user_id` was neither `default` nor the
+> tenant name, **omit `--start`** to stage, run `sudo ic/scripts/lunarwing-mt-admin.sh
+> migrate-owner-scope <tenant> --from <S>`, then `start-tenant` — otherwise the daemon
+> comes up scoped to `<tenant>` against unmigrated rows and sees an empty dataset. See
+> *Owner-scope continuity*.
+
 ### 4. Verify
-A message round-trips; conversation history is present; routines and channels load;
-**OMEMO encrypted chat decrypts** (may take a few messages after first start — known
-behavior). Re-authenticate the gateway UI (its token was regenerated). Soak the
-canary before migrating the rest.
+**Owner scope landed:** `SELECT user_id, count(*) FROM conversations GROUP BY 1;` shows
+rows under `<tenant>` with **zero `default`** remaining (the rekey swallows errors and
+only re-counts 5 of 13 tables, so check this yourself). Then: a message round-trips;
+conversation history is present; routines and channels load; **OMEMO encrypted chat
+decrypts** (may take a few messages after first start — known behavior); a **stored secret
+still decrypts** (proves `SECRETS_MASTER_KEY` carried). Re-authenticate the gateway UI (its
+token was regenerated). Soak the canary before migrating the rest.
 
 ### 5. After all tenants are migrated
 ```bash

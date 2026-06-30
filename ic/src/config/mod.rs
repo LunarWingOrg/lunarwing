@@ -89,6 +89,10 @@ static WARNED_EXPLICIT_DEFAULT_OWNER_ID: Once = Once::new();
 #[derive(Debug, Clone)]
 pub struct Config {
     pub owner_id: String,
+    /// Per-tenant vision/OCR sidecar URL the agent's vision-analyze WASM tool should call.
+    /// Populated from the `VISION_SERVICE_URL` env var (written per-tenant by the MT admin
+    /// script). `None` on deployments without a sidecar; the tool falls back to its default.
+    pub vision_service_url: Option<String>,
     pub database: DatabaseConfig,
     pub llm: LlmConfig,
     pub embeddings: EmbeddingsConfig,
@@ -132,6 +136,7 @@ impl Config {
     ) -> Self {
         Self {
             owner_id: "default".to_string(),
+            vision_service_url: None,
             database: DatabaseConfig {
                 backend: DatabaseBackend::LibSql,
                 url: secrecy::SecretString::from("unused://test".to_string()),
@@ -320,6 +325,12 @@ impl Config {
     async fn build(settings: &Settings) -> Result<Self, ConfigError> {
         let owner_id = resolve_owner_id(settings)?;
 
+        // Per-tenant vision/OCR sidecar URL (set by the MT admin script via env).
+        // Empty/unset = None; the vision-analyze WASM tool falls back to its default.
+        let vision_service_url = self::helpers::optional_env("VISION_SERVICE_URL")?
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
         let tunnel = TunnelConfig::resolve(settings)?;
         let channels = ChannelsConfig::resolve(settings, &owner_id)?;
 
@@ -331,6 +342,7 @@ impl Config {
 
         Ok(Self {
             owner_id: owner_id.clone(),
+            vision_service_url,
             database: DatabaseConfig::resolve()?,
             llm: LlmConfig::resolve(settings)?,
             embeddings: EmbeddingsConfig::resolve(settings)?,

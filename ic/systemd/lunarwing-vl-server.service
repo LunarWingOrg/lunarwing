@@ -1,0 +1,40 @@
+# LunarWing VL Server — Qwen3-VL 30B-A3B (abliterated, Q4_K_M) on a single RTX 4090.
+#
+# Native systemd USER unit (not root, not a container). Runs the env-var-driven
+# launcher at /home/sun/llama.cpp/start-qwen3-vl-30b-a3b-4090.sh, which loads
+# the LLM + FP16 mmproj with CUDA, exposes the OpenAI-compatible API on :8080
+# with alias qwen3-vl (matches the OCR sidecar's default model name).
+#
+# Why native, not rootless podman: the VL server needs the GPU, and every other
+# LunarWing container is CPU-only (no existing GPU-passthrough pattern). A
+# native unit uses the 4090 directly via the already-tuned llama.cpp build,
+# survives reboot via loginctl enable-linger, and integrates with journalctl.
+#
+# Install (as the user who owns the llama.cpp build, e.g. `sun`):
+#   mkdir -p ~/.config/systemd/user/
+#   cp ic/systemd/lunarwing-vl-server.service ~/.config/systemd/user/
+#   loginctl enable-linger "$USER"   # survive logout/reboot
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now lunarwing-vl-server.service
+#
+# Tail logs:    journalctl --user -u lunarwing-vl-server -f
+# Health:       curl -s http://127.0.0.1:8080/v1/models | jq .
+
+[Unit]
+Description=LunarWing VL Server (Qwen3-VL 30B-A3B, RTX 4090)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/sun/llama.cpp
+ExecStart=/home/sun/llama.cpp/start-qwen3-vl-30b-a3b-4090.sh
+Restart=on-failure
+RestartSec=10
+UMask=0077
+Nice=5
+# GPU is accessed directly via CUDA — no container, no --gpus/CDI needed.
+# Launcher flags (mmproj, -ngl 99, -fa on, q8 KV cache) are baked into the script.
+
+[Install]
+WantedBy=default.target

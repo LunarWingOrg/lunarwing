@@ -278,7 +278,7 @@ ENABLE_CACHE=true  # Enable caching (default: true)
 
 **Type**: Per-service (global) rate limiter
 **Default**: 10 requests/second
-**Behavior**: Excess requests receive `400 Bad Request` with "Rate limit exceeded"
+**Behavior**: Excess requests receive `429 Too Many Requests` with "Rate limit exceeded"
 
 **Configuration**:
 ```bash
@@ -417,6 +417,7 @@ Extract text from an image using OCR.
 - `413 Payload Too Large` — Image > 10MB
 - `415 Unsupported Media Type` — Invalid image format
 - `400 Bad Request` — Malformed JSON or invalid base64
+- `429 Too Many Requests` — Rate limit exceeded
 - `500 OCR Engine Failure` — Tesseract/PaddleOCR error
 
 ---

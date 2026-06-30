@@ -253,6 +253,7 @@ impl GatewayWorkflowHarness {
             components.config.agent.clone(),
             AgentDeps {
                 owner_id: components.config.owner_id.clone(),
+                vision_service_url: components.config.vision_service_url.clone(),
                 store: components.db,
                 llm: components.llm,
                 cheap_llm: components.cheap_llm,
