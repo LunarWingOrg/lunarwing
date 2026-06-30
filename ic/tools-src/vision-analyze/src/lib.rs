@@ -93,7 +93,7 @@ struct VisionAnalyzeTool;
 
 impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
     fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
-        match execute_inner(&req.params) {
+        match execute_inner(&req.params, req.context.as_deref()) {
             Ok(output) => exports::near::agent::tool::Response {
                 output: Some(output),
                 error: None,
@@ -117,12 +117,30 @@ impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
     }
 }
 
-fn execute_inner(params_json: &str) -> Result<String, String> {
+fn execute_inner(params_json: &str, context_json: Option<&str>) -> Result<String, String> {
     let req: VisionRequest = serde_json::from_str(params_json)
         .map_err(|e| format!("Invalid parameters: {e}"))?;
 
-    // Validate service URL against allowlist
-    let service_url = validate_service_url(&req.service_url)?;
+    // Resolve the effective service URL with host-wins precedence:
+    //   1. host-injected via Request.context (JobContext.vision_service_url) — trusted,
+    //      the LLM cannot redirect vision calls when the host provides a URL.
+    //   2. LLM-provided via params (req.service_url) — used only if host didn't inject.
+    //   3. default_url() (http://127.0.0.1:8088) — single-tenant fallback.
+    let host_url: Option<String> = context_json
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+        .and_then(|v| v.get("vision_service_url").and_then(|s| s.as_str()).map(|s| s.to_string()))
+        .filter(|s| !s.is_empty());
+
+    let effective_url: String = if let Some(h) = host_url.as_deref() {
+        h.to_string()
+    } else if !req.service_url.is_empty() {
+        req.service_url.clone()
+    } else {
+        default_url()
+    };
+
+    // Validate the effective URL against the (loopback-only) allowlist
+    let service_url = validate_service_url(&effective_url)?;
 
     // Get image data — either from direct base64 or workspace file
     let image_b64 = get_image_data(&req)?;
