@@ -7,15 +7,15 @@
 2. [ ] finish kers and lunarvision improvements
 3. [x] finish improvements to routines
 4. [x] Bump crate versions to 1.1.7
-5. [ ] Update stale documentation
-6. [ ] Update ROADMAP file to reflect accuracy
+5. [ ] Update stale documentation, including repo root-level README.md
+6. [x] Update ROADMAP file to reflect accuracy
 7. [x] test routine improvements
 8. [x] test xmpp improvements
 9. [x] test ssh agent
 10. [ ] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
 11. [ ] Run all cargo tests
 12. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
-13. [ ] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6
+13. [ ] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
 14. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
 15. [ ] Run automated testing scripts if still relevant
 16. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
