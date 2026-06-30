@@ -17,7 +17,7 @@
 | File | Action | Responsibility |
 |---|---|---|
 | `ic/scripts/lunarwing-mt-admin.sh` | Modify | Add `DEFAULT_VL_URL` constant near `:31`; extend `write_tenant_vision_env()` (`:3101-3119`) to write `VL_URL`/`VL_MODEL` when a value resolves |
-| `systemd/lunarwing-vl-server.service` | Create (in repo, as a template) | Systemd user unit template for the VL server; installed to `~/.config/systemd/user/` for user `sun` |
+| `ic/systemd/lunarwing-vl-server.service` | Create (in repo, as a template) | Systemd user unit template for the VL server; installed to `~/.config/systemd/user/` for user `sun` |
 | `/home/sun/.config/systemd/user/lunarwing-vl-server.service` | Create (on host, runtime) | Installed copy of the unit for `sun` |
 
 **No test files added** — this is a config/wiring change verified by end-to-end runtime tests (curl + WASM tool invocation), not unit-testable Rust logic. The shellcheck gate (`ic/scripts/check-mt-admin.sh`) serves as the syntax check for the MT script edit.
@@ -199,11 +199,11 @@ sidecar containers on the .187 box."
 ## Task 3: Create the VL server systemd unit template in the repo
 
 **Files:**
-- Create: `systemd/lunarwing-vl-server.service`
+- Create: `ic/systemd/lunarwing-vl-server.service`
 
 - [ ] **Step 1: Create the unit file**
 
-Write to `systemd/lunarwing-vl-server.service`:
+Write to `ic/systemd/lunarwing-vl-server.service`:
 
 ```ini
 # LunarWing VL Server — Qwen3-VL 30B-A3B (abliterated, Q4_K_M) on a single RTX 4090.
@@ -220,7 +220,7 @@ Write to `systemd/lunarwing-vl-server.service`:
 #
 # Install (as the user who owns the llama.cpp build, e.g. `sun`):
 #   mkdir -p ~/.config/systemd/user/
-#   cp systemd/lunarwing-vl-server.service ~/.config/systemd/user/
+#   cp ic/systemd/lunarwing-vl-server.service ~/.config/systemd/user/
 #   loginctl enable-linger "$USER"   # survive logout/reboot
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now lunarwing-vl-server.service
@@ -252,9 +252,9 @@ WantedBy=default.target
 
 Run:
 ```bash
-ls -la systemd/lunarwing-vl-server.service
+ls -la ic/systemd/lunarwing-vl-server.service
 # systemd-analyze verify is the proper syntax check for unit files:
-systemd-analyze verify systemd/lunarwing-vl-server.service 2>&1 | head
+systemd-analyze verify ic/systemd/lunarwing-vl-server.service 2>&1 | head
 ```
 Expected: file exists; `systemd-analyze verify` outputs nothing (clean) or only minor notes about user-unit context (which are expected when verifying a user unit as root and can be ignored).
 
@@ -289,7 +289,7 @@ Expected: `port 8080 free`.
 Run:
 ```bash
 mkdir -p ~/.config/systemd/user/
-cp /home/sun/lw_new_workspace/lunarwing/systemd/lunarwing-vl-server.service ~/.config/systemd/user/
+cp /home/sun/lw_new_workspace/lunarwing/ic/systemd/lunarwing-vl-server.service ~/.config/systemd/user/
 loginctl enable-linger sun   # may already be set; harmless to re-run
 systemctl --user daemon-reload
 ```
@@ -323,7 +323,7 @@ Expected: JSON model list including `qwen3-vl`.
 
 ```bash
 cd /home/sun/lw_new_workspace/lunarwing
-git add systemd/lunarwing-vl-server.service
+git add ic/systemd/lunarwing-vl-server.service
 git commit -m "Add lunarwing-vl-server systemd user unit template
 
 Native (non-container) systemd USER unit for the Qwen3-VL server. Runs the
