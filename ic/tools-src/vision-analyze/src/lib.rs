@@ -26,11 +26,13 @@ const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB
 /// Allowed loopback hosts for the vision service URL (host portion, sans port).
 /// Any port is accepted — per-tenant sidecars bind distinct loopback ports.
 /// External/LAN hosts are rejected; the loopback-only security property is preserved.
+/// IPv6 literals are stored without brackets to match the daemon's capabilities
+/// normalization (allowlist.rs strips [] before matching).
 const ALLOWED_HOSTS: &[&str] = &[
     "127.0.0.1",
     "localhost",
     "host.containers.internal",
-    "[::1]",
+    "::1",
 ];
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -234,10 +236,11 @@ fn validate_service_url(url: &str) -> Result<String, String> {
 
     // Take the authority portion (before any path) and split host from port.
     let authority = host_port.split('/').next().unwrap_or(host_port);
-    // Strip the port: IPv6 literal `[::1]:8088` -> `[::1]`; otherwise split on the last ':'.
+    // Strip the port: IPv6 literal `[::1]:8088` -> `::1` (brackets removed to match
+    // the daemon's capabilities normalization); otherwise split on the last ':'.
     let host = if let Some(rest) = authority.strip_prefix('[') {
-        // IPv6 literal: everything up to ']'
-        rest.split(']').next().map(|h| format!("[{h}]")).unwrap_or_else(|| authority.to_string())
+        // IPv6 literal: everything up to ']', brackets removed
+        rest.split(']').next().map(|h| h.to_string()).unwrap_or_else(|| authority.to_string())
     } else {
         authority.rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_else(|| authority.to_string())
     };
