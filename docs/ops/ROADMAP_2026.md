@@ -18,7 +18,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
 | Introduce additions to add-tenants. see ADD-TENANTS-ADDITIONS.md in docs/proposals | v1.1.9 |
 | Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup | v1.1.9 |
-| In-place Upgrade Harness v3 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.1.9 |
 | Further routine engine improvements. See docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md for more detailed information | v1.1.9 |
 | XMPP OMEMO MUC fallback fix | v1.1.9 |
 | XMPP file transfer — remaining polish (further hardening) | v1.1.9 |
@@ -33,6 +32,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Feature | Target |
 |---------|--------|
 | v2 engine implementation; LunarWing UI performance overhaul | v1.2.0 |
+| In-place Upgrade Harness v3 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.2.1 |
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |

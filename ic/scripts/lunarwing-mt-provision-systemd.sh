@@ -3,10 +3,6 @@ set -euo pipefail
 
 # ── LunarWing Multi-Tenant Provisioning Orchestrator (systemd) ───────────────
 #
-# NOTE: This script is COMPLETELY UNTESTED. It was generated from a manual
-# provisioning run and has not been executed end-to-end. Verify each phase
-# output before proceeding to the next.
-#
 # Wraps the full tenant lifecycle (add → build → configure → start → verify)
 # into one script with all knobs at the top. Runs sudo -E internally so the
 # LUNARWING_MT_* env vars reach the admin script.
@@ -31,7 +27,7 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Tenant names (comma-separated, will be lowercased)
-TENANTS="thing1,thing2"
+TENANTS="tenant1,tenant2"
 
 # Infrastructure
 SERVICE_MANAGER="systemd"          # systemd | openrc
@@ -39,13 +35,13 @@ CONTAINER_RUNTIME="podman"         # podman | docker
 ROOTLESS="true"                    # true | false (true for podman, false for docker)
 
 # Features
-ENABLE_DARKIRC=true                # DarkIRC daemon + adapter
+ENABLE_DARKIRC=false                # DarkIRC daemon + adapter
 ENABLE_SSH=true                    # SSH harness (key pair, agent, config.toml)
 ENABLE_HEALTH=true                 # Host-global health/self-heal pipeline
 BUILD_WASM=true                    # Build + install WASM tools and channels
 BUILD_NANOCODE=true               # Build nanocode worker Docker image
 BUILD_PEBBLE=true                  # Build pebble worker Docker image
-BUILD_DARKIRC=true                 # Build darkirc daemon binary
+BUILD_DARKIRC=false                # Build darkirc daemon binary
 BUILD_VISION=true                  # Build vision/OCR sidecar Docker image
 INSTALL_WATCHDOG=false             # Single-tenant watchdog; MT health pipeline already covers tenants
 
