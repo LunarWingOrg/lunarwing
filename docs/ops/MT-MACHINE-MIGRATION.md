@@ -107,6 +107,28 @@ Then pick the branch:
   Don't trust silence — verify after start (step 4): rows should be under `<tenant>` with
   **zero `default`** remaining.
 
+**Risk if the rekey is skipped (why the steps above matter).** The import flow has **no
+automated owner-scope detection** — it relies on you measuring the scope and, when it isn't
+`default`, running the manual rekey above. Skip that on an *exposed* migration (a `--name`
+rename, a non-`default` source, or a mixed/dirty multi-scope source) and the daemon comes up
+**silently amnesiac**: empty history, no memory, routines don't load, secrets unavailable —
+**with no error logged**. The exposure is narrow — a `default`-scoped source kept at the
+**same name** (the common case) is handled automatically — but the failure is invisible until
+you interact with the agent or run the verify query.
+
+It is **recoverable, not destructive**: the rows are intact under the old scope, the fix is
+`migrate-owner-scope <tenant> --from <old>` + restart, and the old host stays up as a
+rollback. **But discover it fast.** If the amnesiac daemon runs long enough to write new
+`<tenant>`-scoped rows, a later rekey hits unique-constraint collisions and the dedup keeps
+the *new* rows while dropping the colliding *old* ones — so late discovery can cost the older
+data. That window is exactly why step 4 verifies row counts before you trust the cutover.
+(The manual `--from` path is itself guarded against the `--from <tenant>` self-wipe mistake.)
+
+> **Want this automated?** A proposed import-side change would detect the restored scope and
+> rekey (or fail closed on ambiguity) without the manual step. It is **deferred** — the
+> manual measure → rekey → verify flow above is the supported path today. See the design
+> notes on the `staging-kawarimi-migration` branch.
+
 ---
 
 ## Prerequisites on the new (standalone) host
