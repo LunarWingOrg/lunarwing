@@ -31,7 +31,7 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Tenant names (comma-separated, will be lowercased)
-TENANTS="ersa,pandia"
+TENANTS="thing1,thing2"
 
 # Infrastructure
 SERVICE_MANAGER="systemd"          # systemd | openrc
@@ -49,18 +49,17 @@ BUILD_DARKIRC=true                 # Build darkirc daemon binary
 BUILD_VISION=true                  # Build vision/OCR sidecar Docker image
 INSTALL_WATCHDOG=false             # Single-tenant watchdog; MT health pipeline already covers tenants
 
-# LLM
-TENSORZERO_URL="http://192.168.1.157:3000/openai/v1"
-
-# Gotify (notifications)
-GOTIFY_URL="https://gotify.darkc.sobe.world"
-GOTIFY_TOKEN=""                    # REQUIRED if ENABLE_HEALTH=true — health pipeline escalation token
-
-# Pebble worker (NanoGPT)
-NANOGPT_API_KEY=""                 # REQUIRED if BUILD_PEBBLE=true — sk-nano-...
-
+# LLM                                                                 
+TENSORZERO_URL="http://tensorzerohost.local:3000/openai/v1"                  
+                                                                      
+# Gotify (notifications)                                              
+GOTIFY_URL="https://gotify.mecha.godzilla"                          
+GOTIFY_TOKEN="supersecrettokene33"                    # REQUIRED if ENABLE_HEALTH=true — health pipeline escalation token                       
+                                                                      
+# Pebble worker (NanoGPT)                                             
+NANOGPT_API_KEY="sk-nano-apikeylol"
 # XMPP
-XMPP_DOMAIN="xmpp.sobe.world"      # JIDs become <tenant>@<domain>
+XMPP_DOMAIN="xmpp.my.domain"      # JIDs become <tenant>@<domain>
 
 # Build profile
 BUILD_PROFILE="${LUNARWING_MT_PROFILE:-release}"  # release | debug
