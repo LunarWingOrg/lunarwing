@@ -29,6 +29,13 @@ DARKIRC_REPO="${LUNARWING_MT_DARKIRC_REPO:-https://github.com/darkrenaissance/da
 DARKIRC_REV="${LUNARWING_MT_DARKIRC_REV:-a05956d412a091e8b54c1cd4f4264c33b941203d}"
 TEMPLATES_DIR="${SCRIPT_DIR}/templates"
 DEFAULT_TENSORZERO_URL="${LUNARWING_MT_TENSORZERO_URL:-http://192.168.1.157:3000/openai/v1}"
+# Fleet-wide default VL (vision-language) backend URL the OCR sidecar proxies to.
+# Empty = sidecar comes up with VL disabled (vl_available=false), preserving the
+# pre-VL behavior for deployments without a local vision server. Override with
+# LUNARWING_MT_VL_URL. The host.containers.internal hostname is the rootless
+# podman host bridge (169.254.1.2) — verified reachable from inside tenant
+# sidecar containers on this box.
+DEFAULT_VL_URL="${LUNARWING_MT_VL_URL:-http://host.containers.internal:8080/v1/chat/completions}"
 # Fleet-wide default for the daemon's LLM endpoint (LLM_BASE_URL). Empty = fall
 # back to each tenant's local TensorZero proxy. Set this (or --llm-base-url per
 # tenant) to point new tenants straight at a gateway as the proxy is phased out.
@@ -3106,14 +3113,29 @@ write_tenant_vision_env() {
   local token
   token="$(_env_existing "$env_path" LUNARWING_AUTH_TOKEN)"
   token="${token:-$(generate_token)}"
+  # Resolve VL backend URL: explicit override wins, else fleet default.
+  # Empty (LUNARWING_MT_VL_URL= and DEFAULT_VL_URL unset) = no VL line written;
+  # sidecar comes up with VL disabled. Idempotent — vision.env is fully rewritten.
+  local vl_url
+  vl_url="${LUNARWING_MT_VL_URL:-$DEFAULT_VL_URL}"
   mkdir -p "$env_dir"
   (
     umask 077
-    cat >"$env_path" <<ENVEOF
+    if [[ -n "$vl_url" ]]; then
+      cat >"$env_path" <<ENVEOF
+LUNARWING_AUTH_TOKEN=$token
+OCR_PORT=$VISION_SIDECAR_INTERNAL_PORT
+OCR_HEALTH_PORT=$VISION_SIDECAR_HEALTH_PORT
+VL_URL=$vl_url
+VL_MODEL=qwen3-vl
+ENVEOF
+    else
+      cat >"$env_path" <<ENVEOF
 LUNARWING_AUTH_TOKEN=$token
 OCR_PORT=$VISION_SIDECAR_INTERNAL_PORT
 OCR_HEALTH_PORT=$VISION_SIDECAR_HEALTH_PORT
 ENVEOF
+    fi
   )
   chown "$name:$name" "$env_path"
   printf '%s' "$token"

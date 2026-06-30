@@ -1,10 +1,13 @@
 [package]
 name = "vision-analyze-tool"
-version = "0.1.0"
-edition = "2021"
-description = "Vision analysis WASM tool for IronClaw - OCR and image understanding"
-license = "MIT OR Apache-2.0"
+version = "0.2.0"
+edition = "2024"
+description = "Vision analysis WASM tool for LunarWing - OCR and image understanding"
 publish = false
+authors = ["LunarWing Team"]                                                                                                                 
+license = "AGPL-3.0-or-later"                                                                                                                
+homepage = "https://lunarwing.org"                                                                                       
+repository = "https://github.com/LunarWingOrg/lunarwing"                                                                                     
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

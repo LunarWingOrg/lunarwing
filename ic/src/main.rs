@@ -972,6 +972,7 @@ async fn async_main() -> anyhow::Result<()> {
 
     let deps = AgentDeps {
         owner_id: config.owner_id.clone(),
+        vision_service_url: config.vision_service_url.clone(),
         store: components.db,
         llm: components.llm,
         cheap_llm: components.cheap_llm,
