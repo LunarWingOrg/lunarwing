@@ -6,7 +6,7 @@
 
 > Codename *Takamaru* (タカ丸) — the messenger hawk of Sunagakure (鷹, *Taka* = "hawk"). In shinobi folklore, hawks are the trusted long-distance couriers between hidden villages, crossing miles of hostile territory no other messenger could safely reach. With the release of 1.1.7, the **Agent SSH Harness** is introduced. **The Agent SSH Harness** makes a trusted, off-disk courier of its own: a per-tenant `ssh-agent` socket carries authentication between isolated worker containers and the host, vaults the secret material in the encrypted store, and never lets the message — the private key — rest where an enemy could read it. Furthermore, within v1.1.7 introduces the first few of many, many major improvements to come for the XMPP communication bridge within LunarWing. As one of LunarWing's greatest flagship features, it was about time that it started to get some serious developer attention. From the sand village... to your federated self-hosted prosody servers... all the way to your phone or tablet... this bird is fast...
 
-The rest of the release rides behind this ultrafast bird. Some of the other changes include port-registry polish, Tesseract OCR sidecar hardening, improvements to LunarVision, a brand new upgrade mechanism, and even some new scripts to help developers do more.
+The rest of the release rides behind this ultrafast bird. Some of the other changes include port-registry polish, Tesseract OCR sidecar hardening, improvements to LunarVision, and even some new scripts to help developers do more.
 
 ## Overview
 
