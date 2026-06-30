@@ -4,7 +4,7 @@
 ### Helps to do items in order (generally)
 
 1. [x] finish xmpp improvements for file transfers
-2. [ ] finish kers and lunarvision improvements
+2. [x] finish kers and lunarvision improvements
 3. [x] finish improvements to routines
 4. [x] Bump crate versions to 1.1.7
 5. [ ] Update stale documentation, including repo root-level README.md
@@ -12,16 +12,16 @@
 7. [x] test routine improvements
 8. [x] test xmpp improvements
 9. [x] test ssh agent
-10. [ ] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
-11. [ ] Run all cargo tests
-12. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
-13. [ ] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
+10. [x] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
+11. [x] Run all cargo tests
+12. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
+13. [x] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
 14. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
-15. [ ] Run automated testing scripts if still relevant
-16. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
+15. [x] Run automated testing scripts if still relevant
+16. [x] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 17. [x] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
 18. [x] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
-19. [ ] Full integrated testing
+19. [x] Full integrated testing
 20. [x] fix problems. more testing
 21. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
 22. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #21)
