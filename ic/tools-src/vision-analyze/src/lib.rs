@@ -277,6 +277,17 @@ const SCHEMA: &str = r#"{
       "type": "string",
       "default": "eng",
       "description": "OCR language code (e.g., 'eng', 'fra', 'deu')"
+    },
+    "detail_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "default": "medium",
+      "description": "Detail level for vision-language analysis (ignored in 'text' mode)"
+    },
+    "service_url": {
+      "type": "string",
+      "default": "http://127.0.0.1:8088",
+      "description": "Vision service base URL. Must point at a loopback sidecar on the allowlist (127.0.0.1, localhost, host.containers.internal, or [::1]). Override the port to reach a per-tenant sidecar (e.g. 'http://127.0.0.1:20015')."
     }
   }
 }"#;

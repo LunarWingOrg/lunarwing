@@ -27,7 +27,7 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Tenant names (comma-separated, will be lowercased)
-TENANTS="tenant1,tenant2"
+TENANTS="mercury,venus"
 
 # Infrastructure
 SERVICE_MANAGER="systemd"          # systemd | openrc
@@ -49,13 +49,13 @@ INSTALL_WATCHDOG=false             # Single-tenant watchdog; MT health pipeline 
 TENSORZERO_URL="http://tensorzerohost.local:3000/openai/v1"                  
                                                                       
 # Gotify (notifications)                                              
-GOTIFY_URL="https://gotify.mecha.godzilla"                          
-GOTIFY_TOKEN="supersecrettokene33"                    # REQUIRED if ENABLE_HEALTH=true — health pipeline escalation token                       
+GOTIFY_URL="https://gotify.darkc.sobe.world/"                          
+GOTIFY_TOKEN="Ah-vxENdIaUMGFR"                    # REQUIRED if ENABLE_HEALTH=true — health pipeline escalation token                       
                                                                       
 # Pebble worker (NanoGPT)                                             
-NANOGPT_API_KEY="sk-nano-apikeylol"
+NANOGPT_API_KEY="sk-nano-1b9e122d-e1ab-4ec6-8e45-fe8b42fdfa74"
 # XMPP
-XMPP_DOMAIN="xmpp.my.domain"      # JIDs become <tenant>@<domain>
+XMPP_DOMAIN="xmpp.sobe.world"      # JIDs become <tenant>@<domain>
 
 # Build profile
 BUILD_PROFILE="${LUNARWING_MT_PROFILE:-release}"  # release | debug

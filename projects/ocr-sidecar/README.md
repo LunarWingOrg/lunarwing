@@ -212,6 +212,7 @@ Common error codes:
 - `413` - Payload Too Large (>10MB)
 - `415` - Unsupported Media Type (invalid image format)
 - `400` - Bad Request (malformed JSON or base64)
+- `429` - Too Many Requests (rate limit exceeded)
 - `500` - OCR Engine Failure
 
 ## Deployment
@@ -282,7 +283,7 @@ When `ENABLE_PADDLEOCR=true`, if Tesseract confidence < 0.7, the service automat
 When `ENABLE_CACHE=true` (default), responses are cached for 5 minutes based on image hash + prompt + mode. Identical requests return cached results instantly.
 
 ### Rate Limiting
-All `/ocr` and `/vision/analyze` endpoints are rate-limited per IP (default: 10 req/s). Excess requests receive `400 Bad Request` with "Rate limit exceeded".
+All `/ocr` and `/vision/analyze` endpoints are rate-limited per IP (default: 10 req/s). Excess requests receive `429 Too Many Requests` with "Rate limit exceeded".
 
 ### Metrics
 `GET /vision/metrics` provides real-time counters for requests, cache performance, and rate limiting.
