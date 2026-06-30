@@ -130,6 +130,12 @@ pub struct JobContext {
     pub state: JobState,
     /// User ID that owns this job (for workspace scoping).
     pub user_id: String,
+    /// Per-tenant vision/OCR sidecar URL, propagated from Config for WASM tools.
+    /// The WASM wrapper serializes the whole JobContext to Request.context, so this
+    /// flows into the vision-analyze tool which reads it with host-wins precedence.
+    /// `None` = no sidecar configured; the tool falls back to its default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vision_service_url: Option<String>,
     /// Channel-specific requester/actor ID, when different from the owner scope.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requester_id: Option<String>,
@@ -214,6 +220,7 @@ impl JobContext {
             job_id: Uuid::new_v4(),
             state: JobState::Pending,
             user_id: user_id.into(),
+            vision_service_url: None,
             requester_id: None,
             conversation_id: None,
             title: title.into(),
@@ -249,6 +256,14 @@ impl JobContext {
     /// Set the channel-specific requester/actor ID.
     pub fn with_requester_id(mut self, requester_id: impl Into<String>) -> Self {
         self.requester_id = Some(requester_id.into());
+        self
+    }
+
+    /// Set the per-tenant vision/OCR sidecar URL (propagated from Config).
+    /// Flows to WASM tools via Request.context; the vision-analyze tool reads it
+    /// with host-wins precedence.
+    pub fn with_vision_service_url(mut self, url: Option<String>) -> Self {
+        self.vision_service_url = url;
         self
     }
 
@@ -501,5 +516,25 @@ mod tests {
         ctx.attempt_recovery().unwrap();
         assert_eq!(ctx.state, JobState::InProgress);
         assert_eq!(ctx.repair_attempts, 1);
+    }
+
+    #[test]
+    fn job_context_vision_service_url_builder() {
+        // Builder sets the value
+        let ctx = JobContext::with_user("venus", "chat", "test")
+            .with_vision_service_url(Some("http://127.0.0.1:20015".to_string()));
+        assert_eq!(
+            ctx.vision_service_url.as_deref(),
+            Some("http://127.0.0.1:20015")
+        );
+
+        // Default is None
+        let ctx_default = JobContext::with_user("venus", "chat", "test");
+        assert!(ctx_default.vision_service_url.is_none());
+
+        // Builder accepts None explicitly
+        let ctx_none = JobContext::with_user("venus", "chat", "test")
+            .with_vision_service_url(None);
+        assert!(ctx_none.vision_service_url.is_none());
     }
 }
