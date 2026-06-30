@@ -14,4 +14,4 @@ mod state;
 pub use fallback::FallbackDeliverable;
 pub use manager::ContextManager;
 pub use memory::{ActionRecord, ConversationMemory, Memory};
-pub use state::{JobContext, JobState, StateTransition, TokenBudgetExceeded};
+pub use state::{JobContext, JobState, StateTransition, TokenBudgetExceeded, VISION_SERVICE_URL};

@@ -227,7 +227,7 @@ impl Store {
                     job_id: row.get("id"),
                     state,
                     user_id: row.get::<_, String>("user_id"),
-                    vision_service_url: None,
+                    vision_service_url: crate::context::VISION_SERVICE_URL.clone(),
                     requester_id: None,
                     conversation_id: row.get("conversation_id"),
                     title: row.get("title"),
