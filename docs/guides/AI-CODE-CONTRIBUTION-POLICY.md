@@ -1,8 +1,8 @@
 # AI Code Contribution Policy
 
-## Effective June 24, 2026, the following policy will be enforced for all contributions to this repository:
+## Effective July 7th, 2026, the following policy will be enforced for all contributions to this repository:
 
-### Last edited on Jun 25 2026 to add one exception.
+### Last edited on Jun 30 2026 to add one exception.
 
 * Code produced by proprietary, closed-weight models — including but not limited to those accessed exclusively via vendor APIs where the model weights are not publicly available — will no longer be accepted. This includes code generated through services that do not provide downloadable, inspectable model weights.
 
