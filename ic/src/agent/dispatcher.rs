@@ -123,7 +123,8 @@ impl Agent {
             tracing::info!("Reflex fast-path: routing to compiled tool '{}'", tool_name);
             let mut job_ctx =
                 JobContext::with_user(&message.user_id, "reflex", "Reflex fast-path execution")
-                    .with_requester_id(&message.sender_id);
+                    .with_requester_id(&message.sender_id)
+                    .with_vision_service_url(self.deps.vision_service_url.clone());
             job_ctx.user_timezone = user_tz.name().to_string();
 
             let params = serde_json::json!({"input": message.content});
@@ -164,7 +165,8 @@ impl Agent {
         // Create a JobContext for tool execution (chat doesn't have a real job)
         let mut job_ctx =
             JobContext::with_user(&message.user_id, "chat", "Interactive chat session")
-                .with_requester_id(&message.sender_id);
+                .with_requester_id(&message.sender_id)
+                .with_vision_service_url(self.deps.vision_service_url.clone());
         job_ctx.http_interceptor = self.deps.http_interceptor.clone();
         job_ctx.user_timezone = user_tz.name().to_string();
         job_ctx.metadata = crate::agent::agent_loop::chat_tool_execution_metadata(message);
@@ -1235,6 +1237,7 @@ mod tests {
     fn make_test_agent() -> Agent {
         let deps = AgentDeps {
             owner_id: "default".to_string(),
+            vision_service_url: None,
             store: None,
             llm: Arc::new(StaticLlmProvider),
             cheap_llm: None,
@@ -2120,6 +2123,7 @@ mod tests {
     fn make_test_agent_with_llm(llm: Arc<dyn LlmProvider>, max_tool_iterations: usize) -> Agent {
         let deps = AgentDeps {
             owner_id: "default".to_string(),
+            vision_service_url: None,
             store: None,
             llm,
             cheap_llm: None,
@@ -2241,6 +2245,7 @@ mod tests {
         let agent = {
             let deps = AgentDeps {
                 owner_id: "default".to_string(),
+                vision_service_url: None,
                 store: None,
                 llm,
                 cheap_llm: None,
