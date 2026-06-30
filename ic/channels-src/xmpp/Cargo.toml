@@ -1,6 +1,6 @@
 [package]
 name = "xmpp-channel"
-version = "1.1.6"
+version = "1.1.7"
 edition = "2021"
 description = "XMPP bridge-backed channel for LunarWing"
 license = "AGPL-3.0-or-later"
