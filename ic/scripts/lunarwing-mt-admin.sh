@@ -2539,6 +2539,18 @@ migrate_owner_scope() {
   name="$(sanitize_name "$name")"
   tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
 
+  # Self-wipe guard: if the source scope already equals the target tenant name there
+  # is nothing to rekey — and proceeding would be CATASTROPHIC. The collision dedup
+  # DELETEs self-join the table (DELETE ... d USING ... t WHERE d.user_id=old_scope
+  # AND t.user_id=name AND <key match>); when old_scope==name every row matches
+  # itself and is deleted before the no-op UPDATE, wiping the table. The default-only
+  # auto-callers never reach this (old_scope='default'), but an explicit
+  # `--from <name>` (or a future scope-detection caller) could.
+  if [[ "$old_scope" == "$name" ]]; then
+    say "owner scope '$name' already matches the tenant; nothing to rekey"
+    return 0
+  fi
+
   local pg_port
   pg_port="$(ports_get "$name" postgres)" || die "no postgres port for $name"
 
