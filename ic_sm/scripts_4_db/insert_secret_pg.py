@@ -25,7 +25,7 @@ HKDF_INFO = b"near-agent-secrets-v1"
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://ironclaw:ironclaw@127.0.0.1:5432/ironclaw"
+    "postgresql://lunarwing:lunarwing@127.0.0.1:5432/lunarwing"
 )
 
 
@@ -118,9 +118,22 @@ def get_column_type(cursor, table_name: str, column_name: str) -> str | None:
 
 def resolve_user_id(cursor, requested_user_id: str) -> str:
     """
-    Handles both legacy TEXT user_id schemas and newer UUID user_id schemas.
+    Handles both legacy text user_id schemas and newer UUID user_id schemas.
+    For multi-tenant setups, reads LUNARWING_OWNER_ID from env to scope the
+    secret to the correct tenant instead of leaving it as 'default'.
     """
     user_id_type = get_column_type(cursor, "secrets", "user_id")
+
+    # Multi-tenant: LUNARWING_OWNER_ID scopes DB rows per tenant. If the caller
+    # didn't pass an explicit --user-id, prefer the env var so secrets land in
+    # the right scope. Fall back to IRONCLAW_OWNER_ID for legacy.
+    if requested_user_id == "default":
+        env_owner = (
+            os.environ.get("LUNARWING_OWNER_ID")
+            or os.environ.get("IRONCLAW_OWNER_ID")
+        )
+        if env_owner:
+            requested_user_id = env_owner
 
     # Legacy text schema or unknown: preserve old behavior
     if user_id_type != "uuid":

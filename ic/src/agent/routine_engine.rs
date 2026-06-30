@@ -15,7 +15,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use regex::Regex;
@@ -24,7 +24,8 @@ use uuid::Uuid;
 
 use crate::agent::Scheduler;
 use crate::agent::routine::{
-    NotifyConfig, Routine, RoutineAction, RoutineRun, RunStatus, Trigger, next_cron_fire,
+    NotifyConfig, Routine, RoutineAction, RoutineRun, RunStatus, Trigger,
+    content_hash, next_cron_fire,
 };
 use crate::channels::{IncomingMessage, OutgoingResponse};
 use crate::config::RoutineConfig;
@@ -45,6 +46,18 @@ use lunarwing_safety::SafetyLayer;
 enum EventMatcher {
     Message { routine: Routine, regex: Regex },
     System { routine: Routine },
+}
+
+/// In-memory dedup tracking entry for event-triggered routines.
+///
+/// Stores the last-seen content hash and the time it was observed.
+/// When a new message arrives, the engine compares the hash; if it matches
+/// and the elapsed time is within the routine's `dedup_window`, the event
+/// is suppressed.
+#[derive(Clone, Copy)]
+struct DedupEntry {
+    hash: u64,
+    seen_at: Instant,
 }
 
 /// Distinguishes why sandbox is unavailable so error messages are accurate.
@@ -104,6 +117,9 @@ pub struct RoutineEngine {
     running_count: Arc<AtomicUsize>,
     /// Cached matchers for all event-driven routines.
     event_cache: Arc<RwLock<Vec<EventMatcher>>>,
+    /// Per-routine dedup state: routine_id → (content hash, timestamp).
+    /// Only consulted when `guardrails.dedup_window` is `Some(_)`.
+    dedup_state: Arc<RwLock<HashMap<Uuid, DedupEntry>>>,
     /// Scheduler for dispatching jobs (FullJob mode).
     scheduler: Option<Arc<Scheduler>>,
     /// Owner-scoped extension activation state for autonomous tool resolution.
@@ -142,6 +158,7 @@ impl RoutineEngine {
             notify_tx,
             running_count: Arc::new(AtomicUsize::new(0)),
             event_cache: Arc::new(RwLock::new(Vec::new())),
+            dedup_state: Arc::new(RwLock::new(HashMap::new())),
             scheduler,
             extension_manager,
             tools,
@@ -200,6 +217,34 @@ impl RoutineEngine {
                 tracing::error!("Failed to refresh event cache: {}", e);
             }
         }
+    }
+
+    /// Check whether content is a duplicate for the given routine within its
+    /// dedup window. Returns `true` if the event should be suppressed.
+    ///
+    /// If the routine has no `dedup_window`, always returns `false`.
+    /// On a non-duplicate, updates the stored hash + timestamp so subsequent
+    /// identical messages within the window are suppressed.
+    async fn check_dedup(&self, routine: &Routine, content: &str) -> bool {
+        let Some(window) = routine.guardrails.dedup_window else {
+            return false;
+        };
+
+        let hash = content_hash(content);
+        let now = Instant::now();
+
+        let mut state = self.dedup_state.write().await;
+        let result = is_content_duplicate(&state, routine.id, hash, now, window);
+
+        if !result {
+            state.insert(routine.id, DedupEntry { hash, seen_at: now });
+        }
+
+        if state.len() > 256 {
+            state.retain(|_, entry| now.duration_since(entry.seen_at) < window);
+        }
+
+        result
     }
 
     /// Check incoming message against event triggers. Returns number of routines fired.
@@ -264,6 +309,12 @@ impl RoutineEngine {
 
             // Regex match
             if !re.is_match(content) {
+                continue;
+            }
+
+            // Content-hash dedup (in-memory, only when dedup_window is set)
+            if self.check_dedup(routine, content).await {
+                tracing::debug!(routine = %routine.name, "Skipped: duplicate content within dedup window");
                 continue;
             }
 
@@ -378,6 +429,11 @@ impl RoutineEngine {
                 }
             }
             if !matched {
+                continue;
+            }
+
+            if self.check_dedup(routine, &payload.to_string()).await {
+                tracing::debug!(routine = %routine.name, "Skipped: duplicate content within dedup window");
                 continue;
             }
 
@@ -2229,6 +2285,20 @@ fn strip_html_tags(s: &str) -> String {
     result
 }
 
+/// Pure dedup check: returns `true` if the content hash matches the last-seen
+/// entry for `routine_id` and it's still within the `window`.
+fn is_content_duplicate(
+    state: &HashMap<Uuid, DedupEntry>,
+    routine_id: Uuid,
+    hash: u64,
+    now: Instant,
+    window: Duration,
+) -> bool {
+    state.get(&routine_id).is_some_and(|entry| {
+        entry.hash == hash && now.duration_since(entry.seen_at) < window
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -2236,11 +2306,13 @@ mod tests {
 
     use crate::agent::routine::{
         NotifyConfig, RetryPolicy, Routine, RoutineAction, RoutineGuardrails, RunStatus, Trigger,
+        content_hash,
     };
     use crate::channels::IncomingMessage;
     use crate::config::RoutineConfig;
     use crate::llm::FinishReason;
-    use std::time::Duration;
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_notification_gating() {
@@ -2960,5 +3032,89 @@ mod tests {
         };
         assert!(policy.compute_delay(1).is_none());
         assert!(policy.compute_delay(5).is_none());
+    }
+
+    #[test]
+    fn test_dedup_no_window_alows_all() {
+        let routine = make_routine("user1", Trigger::Event {
+            pattern: ".*".to_string(),
+            channel: None,
+        });
+        assert!(routine.guardrails.dedup_window.is_none());
+    }
+
+    #[test]
+    fn test_dedup_first_message_not_duplicate() {
+        use super::is_content_duplicate;
+        let state = HashMap::new();
+        let id = Uuid::new_v4();
+        let hash = content_hash("hello");
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+
+        assert!(!is_content_duplicate(&state, id, hash, now, window));
+    }
+
+    #[test]
+    fn test_dedup_same_content_within_window_is_duplicate() {
+        use super::is_content_duplicate;
+        let id = Uuid::new_v4();
+        let hash = content_hash("hello");
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+
+        let mut state = HashMap::new();
+        state.insert(id, super::DedupEntry { hash, seen_at: now });
+
+        assert!(is_content_duplicate(&state, id, hash, now, window));
+    }
+
+    #[test]
+    fn test_dedup_same_content_after_window_expires_not_duplicate() {
+        use super::is_content_duplicate;
+        let id = Uuid::new_v4();
+        let hash = content_hash("hello");
+        let earlier = Instant::now();
+        let window = Duration::from_millis(50);
+
+        let mut state = HashMap::new();
+        state.insert(id, super::DedupEntry { hash, seen_at: earlier });
+
+        std::thread::sleep(Duration::from_millis(80));
+
+        let now = Instant::now();
+        assert!(!is_content_duplicate(&state, id, hash, now, window));
+    }
+
+    #[test]
+    fn test_dedup_different_content_within_window_not_duplicate() {
+        use super::is_content_duplicate;
+        let id = Uuid::new_v4();
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+
+        let mut state = HashMap::new();
+        state.insert(id, super::DedupEntry {
+            hash: content_hash("hello"),
+            seen_at: now,
+        });
+
+        let new_hash = content_hash("world");
+        assert!(!is_content_duplicate(&state, id, new_hash, now, window));
+    }
+
+    #[test]
+    fn test_dedup_different_routine_same_content_not_duplicate() {
+        use super::is_content_duplicate;
+        let routine_a = Uuid::new_v4();
+        let routine_b = Uuid::new_v4();
+        let hash = content_hash("hello");
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+
+        let mut state = HashMap::new();
+        state.insert(routine_a, super::DedupEntry { hash, seen_at: now });
+
+        assert!(!is_content_duplicate(&state, routine_b, hash, now, window));
     }
 }

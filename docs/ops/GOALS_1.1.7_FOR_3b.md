@@ -12,7 +12,6 @@
 7. [x] test routine improvements
 8. [x] test xmpp improvements
 9. [x] test ssh agent
-10. [ ] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
 11. [ ] Run all cargo tests
 12. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
 13. [x] Test migration route updates since 1.1.6
@@ -21,7 +20,6 @@
 16. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 17. [x] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
 18. [x] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
-19. [ ] full integrated test using new plan (already in progress)
 20. [x] fix problems. more testing
 21. [ ] Write up release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
 22. [ ] Update release notes (at root of repo) with any minor known issues that may not be fully resolved (only after #21)

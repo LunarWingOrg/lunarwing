@@ -2,7 +2,7 @@
 
 ## Overview
 
-Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) identified 8 improvement areas. Two have been implemented (#1, #2); the remaining six are open proposals.
+Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) identified 8 improvement areas. Three have been implemented (#1, #2, #3); the remaining five are open proposals.
 
 ## Completed
 
@@ -33,15 +33,20 @@ Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) ident
 - `EngineContext::clone_ctx()` manual helper added instead of `#[derive(Clone)]`
 - 4 unit tests for `RetryPolicy::compute_delay()`: exhaustion, exponential backoff math, max delay cap, zero-retries
 
+### #3 — Dedup Window Is Defined But Unused (DONE)
+
+**Problem:** `RoutineGuardrails.dedup_window` (type `Option<Duration>`) and `content_hash()` function exist in `routine.rs`, but `check_event_triggers` never checked them. If the same message triggered an event routine twice (edited message, cross-post), both fired. The hash function was computed nowhere.
+
+**Changes made:**
+- Added `dedup_state: Arc<RwLock<HashMap<Uuid, DedupEntry>>>` to `RoutineEngine` — per-routine in-memory tracking of last content hash + `Instant` timestamp
+- Added `DedupEntry { hash: u64, seen_at: Instant }` struct
+- Added `check_dedup()` async method: returns `true` if content hash matches last-seen entry and elapsed time is within the window. On non-duplicate, updates the stored entry. When `dedup_window` is `None`, short-circuits to `false`
+- Extracted `is_content_duplicate()` pure function for unit testability without constructing a full `RoutineEngine`
+- Integrated dedup check in both `check_event_triggers()` (message events) and `emit_system_event()` (system events, hashing the serialized JSON payload), placed before cooldown check (cheaper: in-memory vs DB)
+- Opportunistic pruning: when the dedup map exceeds 256 entries, stale entries (outside their dedup window) are removed
+- 6 unit tests: no window (disabled), first message (never duplicate), same content within window (duplicate), same content after window expires (not duplicate), different content within window (not duplicate), different routine same content (not duplicate)
+
 ## Open Proposals
-
-### #3 — Dedup Window Is Defined But Unused
-
-**Problem:** `RoutineGuardrails.dedup_window` (type `Option<Duration>`) and `content_hash()` function exist in `routine.rs`, but `check_event_triggers` never checks them. If the same message triggers an event routine twice (edited message, cross-post), both fire. The hash function is computed nowhere.
-
-**Fix direction:** Store last content hash + timestamp per routine (in-memory or DB), check against it in `check_event_triggers` before firing. Either implement or remove the dead code.
-
-**Priority:** Medium
 
 ### #4 — No Per-Routine Timeout For FullJob
 
@@ -98,7 +103,7 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 |----------|------|--------|
 | High | #1 State contamination | Done |
 | High | #2 Retry never fires | Done |
-| Medium | #3 Dedup unused | Open |
+| Medium | #3 Dedup unused | Done |
 | Medium | #4 FullJob timeout | Open |
 | Medium | #7 Sanitize in production | Open |
 | Low | #5 Cache refresh lag | Open |
@@ -107,6 +112,6 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 ## Test Coverage
 
-- 45 unit tests pass in `routine_engine` module (17 new from this work)
+- 57 unit tests pass in `routine_engine` module (23 new from this work)
 - `cargo check` clean, zero clippy regressions
 - All changes scoped to `ic/src/agent/routine_engine.rs` — no DB schema or config changes

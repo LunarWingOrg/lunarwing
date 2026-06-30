@@ -6,16 +6,23 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup | v1.1.8 |
-| In-place Upgrade Harness v3 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.1.8 |
+| Self-healing capability expansion | v1.1.8 |
+| Brand new WASM tool(s) | v1.1.8 |
 | Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.9 |
 | Remove deprecated Codex external worker from project | v1.1.9 |
+| Remove support for all the other random unsupported LLM providers | v1.1.9 |
 | Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |
+| Remove default MCP servers from default installation | v1.1.9 |
+| Remove other extensions from default installation | v1.1.9 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new) | v1.1.9 |
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
+| Introduce additions to add-tenants. see ADD-TENANTS-ADDITIONS.md in docs/proposals | v1.1.9 |
+| Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup | v1.1.9 |
+| In-place Upgrade Harness v3 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.1.9 |
+| Further routine engine improvements. See docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md for more detailed information | v1.1.9 |
 | XMPP OMEMO MUC fallback fix | v1.1.9 |
 | XMPP file transfer — remaining polish (further hardening) | v1.1.9 |
-| Further polishing of Lunarvision and XMPP file sharing integration | v1.1.9 | 
+| Further polishing of Lunarvision and XMPP file sharing integration - see XMPP_LUNARVISION_INTEGRATION.md in docs/proposals for some information | v1.1.9 | 
 | Lunartica UI reskin continuation | v1.1.9 |
 | Remove/archive stale documentation | v1.1.9 |
 | Update outdated documentation | v1.1.9 |
@@ -25,20 +32,21 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| v2 engine implementation; LunarWing UI performance overhaul; self-healing capability expansion (which was originally planned for 1.1.8) | v1.2.0 |
+| v2 engine implementation; LunarWing UI performance overhaul | v1.2.0 |
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
-| Opencode External Worker & Paseo Integration | v1.2.2 |
+| Opencode External Worker (and possibly Paseo Integration?) | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v.1.2.3 |
-| Remove support for all the other random unsupported LLM providers | v.1.2.3 |
+| Further external worker polishing | v1.2.3 |
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
 | Additional WASM Channel Polishing | v1.2.5 |
 | Reflex Compiler polishing and improvements | v1.2.5 |
-| LunarVoice (further planning required) | v1.2.6 |
-| Stabilization & polish buffer — reserved for v2 engine, LunarVoice, other new features from after 1.1.8 | v1.2.7 |
+| LunarVoice Two Way Voice Communication | v1.2.6 |
+| Stabilization & polish buffer — reserved for v2 engine, LunarVoice, polish of all new features | v1.2.7 |
 
 ---
+
 
