@@ -57,10 +57,18 @@ pub struct SshConfig {
     pub keepalive_max_misses: u32,
 }
 
-fn default_connect_timeout() -> u64 { 10 }
-fn default_operation_timeout() -> u64 { 30 }
-fn default_keepalive_interval() -> u64 { 60 }
-fn default_keepalive_max_misses() -> u32 { 3 }
+fn default_connect_timeout() -> u64 {
+    10
+}
+fn default_operation_timeout() -> u64 {
+    30
+}
+fn default_keepalive_interval() -> u64 {
+    60
+}
+fn default_keepalive_max_misses() -> u32 {
+    3
+}
 
 /// SSH host entry with optional per-host overrides.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +111,9 @@ pub struct SshHostEntry {
     pub keepalive_max_misses: Option<u32>,
 }
 
-fn default_ssh_port() -> u16 { 22 }
+fn default_ssh_port() -> u16 {
+    22
+}
 
 impl SshConfig {
     /// Convert to a HashMap of host configurations.
