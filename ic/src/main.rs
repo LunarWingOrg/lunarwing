@@ -540,8 +540,7 @@ async fn async_main() -> anyhow::Result<()> {
                 )),
                 agent: Arc::new(tokio::sync::RwLock::new(agent_server)),
             });
-            webhook_routes
-                .push(lunarwing::bridge::ssh_api::create_router(ssh_api_state));
+            webhook_routes.push(lunarwing::bridge::ssh_api::create_router(ssh_api_state));
             tracing::debug!("SSH API routes mounted");
         }
     }
