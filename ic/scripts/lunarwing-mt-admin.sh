@@ -5204,6 +5204,9 @@ add_tenant() {
   local enable_darkirc="${10:-false}"
   local nanocode_model="${11:-}"
   local nanocode_base_url="${12:-}"
+  local llm_model="${13:-}"
+  local gateway_host="${14:-}"
+  local xmpp_allow_from="${15:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -5237,8 +5240,8 @@ add_tenant() {
 
   say "--- Generating environment files ---"
   write_tenant_vision_env "$name" >/dev/null
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
-  write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
+  write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password" "$xmpp_allow_from"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   if [[ "$enable_darkirc" == "true" ]]; then
     write_tenant_darkirc_adapter_env "$name"
