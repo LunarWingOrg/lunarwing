@@ -62,8 +62,8 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 
 ### Tools & Notifications
 * **Gotify** -- WASM tool for agent-initiated push notifications
-* **Vision Service / OCR Sidecar** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, caching, rate limiting, and metrics (`projects/ocr-sidecar/`)
-* **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the Vision Service sidecar (`ic/tools-src/vision-analyze/`)
+* **LunarVision (Vision Service / OCR Sidecar)** -- Standalone Rust service for OCR (Tesseract) and vision-language analysis (Qwen3-VL), with smart routing, PaddleOCR fallback, disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, and a self-reported `/health` endpoint. Runs rootless under Podman (`projects/ocr-sidecar/`)
+* **vision-analyze WASM Tool** -- Native WASM tool for image analysis via the LunarVision sidecar; rewritten from scratch in v1.1.7 and re-registered with the WASM toolset (`ic/tools-src/vision-analyze/`)
 * **Lunartica** -- Free Open Source Self Hostable Agent Coordination Platform (separate repo)
 
 ### Worker Containers
@@ -73,11 +73,12 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Reworked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
 ### Infrastructure & Operations
+* **Agent SSH Harness** (v1.1.7) -- A centralized, per-tenant SSH bridge that lets worker containers authenticate to a host over SSH **without the private key ever touching disk** inside the container (or on the host outside the encrypted secrets store). Key material lives AES-256-GCM-encrypted in the secrets store and is served to workers over a per-tenant `ssh-agent` Unix socket; the agent signs challenges in memory. Host-key verification is fail-closed. Enabled by default for new tenants; configurable via `configure-ssh` and the `[ssh]` section of `config.toml`. Live-validated on systemd and OpenRC
 * Specialized secret management wrapper scripts for both PostgreSQL and libSQL
 * Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
-* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry, and support for systemd, macOS (launchd), and OpenRC
+* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry (v10 schema — dedicated per-tenant ports for workers, DarkIRC, and the LunarVision sidecar), and support for systemd, macOS (launchd), and OpenRC
 * TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
 * Support for embedded memory search models
 * Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
@@ -321,7 +322,7 @@ Full documentation index: [docs/README.md](docs/README.md)
 - **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
 - **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
 - **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
-- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.6
+- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.7 (in progress: see [RELEASE-v1.1.7.md](RELEASE-v1.1.7.md))
 - **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
 - **Active proposals:** [docs/proposals/](docs/proposals/)
 - **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
