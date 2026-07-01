@@ -1909,6 +1909,9 @@ write_tenant_lunarwing_env() {
   local llm_base_url="${6:-}"
   local nanocode_model="${7:-}"
   local nanocode_base_url="${8:-}"
+  local llm_model="${9:-}"
+  local gateway_host="${10:-}"
+  local xmpp_allow_from="${11:-}"
 
   local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
@@ -1955,6 +1958,31 @@ write_tenant_lunarwing_env() {
   # gateway or upstream OpenAI-compatible endpoint as the proxy is phased out.
   local llm_base_url_effective="${llm_base_url:-http://127.0.0.1:${proxy_port}/v1}"
 
+  # Idempotent overrides for the configurable flags (--llm-model,
+  # --gateway-host, --xmpp-allow-from). An explicit flag value wins; else an
+  # existing file value is preserved on re-run; else the hardcoded default
+  # (LLM_MODEL, GATEWAY_HOST) or the owner JID alone (XMPP_ALLOW_FROM).
+  local llm_model_effective gateway_host_effective xmpp_allow_from_effective
+  if [[ -n "$llm_model" ]]; then
+    llm_model_effective="$llm_model"
+  else
+    llm_model_effective="$(_env_existing "$path" LLM_MODEL)"
+    llm_model_effective="${llm_model_effective:-tensorzero::function_name::lunarwing}"
+  fi
+  if [[ -n "$gateway_host" ]]; then
+    gateway_host_effective="$gateway_host"
+  else
+    gateway_host_effective="$(_env_existing "$path" GATEWAY_HOST)"
+    gateway_host_effective="${gateway_host_effective:-127.0.0.1}"
+  fi
+  if [[ -n "$xmpp_allow_from" ]]; then
+    xmpp_allow_from_effective="$(build_xmpp_allow_from "$xmpp_jid" "$xmpp_allow_from")"
+  else
+    # Preserve an existing list; fall back to owner JID only on first write.
+    xmpp_allow_from_effective="$(_env_existing "$path" XMPP_ALLOW_FROM)"
+    xmpp_allow_from_effective="${xmpp_allow_from_effective:-$xmpp_jid}"
+  fi
+
   (
     umask 077
     cat >"$path" <<ENVEOF
@@ -1973,7 +2001,7 @@ PGSSLMODE=disable
 LLM_BACKEND=openai_compatible
 LLM_BASE_URL=${llm_base_url_effective}
 LLM_API_KEY=${llm_api_key:-token-${name}}
-LLM_MODEL=tensorzero::function_name::lunarwing
+LLM_MODEL=$llm_model_effective
 ALLOW_PRIVATE_IPS=1
 
 # Runtime identity
@@ -1987,7 +2015,7 @@ XMPP_BRIDGE_TOKEN=$bridge_token
 XMPP_JID=$xmpp_jid
 XMPP_PASSWORD=$xmpp_password
 XMPP_DM_POLICY=allowlist
-XMPP_ALLOW_FROM=$xmpp_jid
+XMPP_ALLOW_FROM=$xmpp_allow_from_effective
 XMPP_ALLOW_ROOMS=
 XMPP_ENCRYPTED_ROOMS=
 XMPP_OMEMO_DEVICE_ID=0
@@ -2003,7 +2031,7 @@ WASM_CHANNELS_DIR=$state_dir/channels
 
 # Gateway
 GATEWAY_ENABLED=true
-GATEWAY_HOST=127.0.0.1
+GATEWAY_HOST=$gateway_host_effective
 GATEWAY_PORT=$gateway_port
 GATEWAY_AUTH_TOKEN=$gateway_token
 
