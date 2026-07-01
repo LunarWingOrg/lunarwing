@@ -65,7 +65,7 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 **Priority:** Medium
 
-### #5 — Event Cache Refresh Lag (60s) <-MUST FIX
+### #5 — Event Cache Refresh Lag (60s) (IGNORE)
 
 **Problem:** When a routine is created/updated/deleted via the tool API, `refresh_event_cache()` is called explicitly — but the periodic safety-net refresh only fires every 60s. If the explicit call fails or the tool path doesn't call it, changes take up to 60s to take effect.
 
