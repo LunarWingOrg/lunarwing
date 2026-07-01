@@ -42,6 +42,8 @@ const PROTECTED_TOOL_NAMES: &[&str] = &[
     "json",
     "http",
     "shell",
+    "ssh",
+    "ssh_git",
     "read_file",
     "write_file",
     "list_dir",
@@ -491,6 +493,36 @@ impl ToolRegistry {
         self.register_sync(Arc::new(SecretListTool::new(Arc::clone(&store))));
         self.register_sync(Arc::new(SecretDeleteTool::new(store)));
         tracing::debug!("Registered 2 secret management tools (list, delete)");
+    }
+
+    /// Register the built-in SSH tool (delivery Option 2).
+    ///
+    /// Runs a command on a host configured in `[[ssh.hosts]]`, authenticating
+    /// with a key from the encrypted secrets store and verifying the server host
+    /// key via `HostKeyVerifier`. Runs in-process and requires approval on every
+    /// invocation.
+    pub fn register_ssh_tool(
+        &self,
+        ssh_bridge: Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>,
+    ) {
+        use crate::tools::builtin::SshTool;
+        self.register_sync(Arc::new(SshTool::new(ssh_bridge)));
+        tracing::debug!("Registered ssh tool");
+    }
+
+    /// Register the built-in `ssh_git` tool (delivery Option 2, phase 2).
+    ///
+    /// Runs git clone/fetch/pull/push over SSH by shelling out to `git`,
+    /// authenticating via the harness ssh-agent socket and confining local
+    /// paths under `<base_dir>/ssh-git/`. Requires approval on every invocation.
+    pub fn register_ssh_git_tool(
+        &self,
+        ssh_bridge: Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>,
+        base_dir: std::path::PathBuf,
+    ) {
+        use crate::tools::builtin::SshGitTool;
+        self.register_sync(Arc::new(SshGitTool::new(ssh_bridge, base_dir)));
+        tracing::debug!("Registered ssh_git tool");
     }
 
     /// Register extension management tools (search, install, auth, activate, list, remove).

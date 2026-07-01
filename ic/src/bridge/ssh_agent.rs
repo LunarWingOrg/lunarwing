@@ -51,7 +51,7 @@ impl SshAgent {
     }
 }
 
-fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
+pub(crate) fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
     let key_str = String::from_utf8_lossy(&creds.key_data).to_string();
     let passphrase = creds
         .passphrase

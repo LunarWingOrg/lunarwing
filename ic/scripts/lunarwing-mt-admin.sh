@@ -233,10 +233,18 @@ Commands:
                                    (written to lunarwing.env as NANOCODE_MODEL)
     --nanocode-base-url <url>      Override the nanocode worker's TensorZero baseURL
                                    (written to lunarwing.env as NANOCODE_BASE_URL)
+    --llm-model <model>            Override LLM_MODEL (default:
+                                   tensorzero::function_name::lunarwing)
+    --gateway-host <host>          Override GATEWAY_HOST bind address (default:
+                                   127.0.0.1; use 0.0.0.0 for LAN access)
+    --xmpp-allow-from <jids>       Comma-separated extra XMPP JIDs allowed to DM
+                                   the agent (added to the tenant's own JID;
+                                   written to both lunarwing.env and xmpp-bridge.env)
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
-    (same options as add-tenant apply to all, including --enable-darkirc and
-     --nanocode-model/--nanocode-base-url)
+    (same options as add-tenant apply to all, including --enable-darkirc,
+     --nanocode-model/--nanocode-base-url, --llm-model, --gateway-host,
+     and --xmpp-allow-from)
 
   remove-tenant <name>             Stop services, deallocate ports
     --purge                        Also delete OS user and home directory
@@ -1849,6 +1857,57 @@ _env_existing() {  # <env_file> <KEY>
   sed -n "s/^$2=//p" "$1" | head -1
 }
 
+# Build the XMPP_ALLOW_FROM comma-separated value: owner JID first, then any
+# extra JIDs from --xmpp-allow-from (comma-separated), deduped (owner JID and
+# duplicate extras collapse), surrounding whitespace trimmed. <owner_jid> may
+# be empty only in error paths; <extras_csv> is the raw flag value.
+build_xmpp_allow_from() {  # <owner_jid> <extras_csv>
+  local owner="$1"
+  local extras="$2"
+  local seen=""
+  local result=""
+  local jid
+  # Owner first (skip if empty, though it normally isn't). `seen` uses leading
+  # and trailing commas so substring matching on ",<jid>," is unambiguous.
+  if [[ -n "$owner" ]]; then
+    result="$owner"
+    seen=",$owner,"
+  fi
+  # Extras: split on comma, trim whitespace, dedupe
+  if [[ -n "$extras" ]]; then
+    local IFS=','
+    read -ra parts <<< "$extras"
+    for jid in "${parts[@]}"; do
+      jid="$(echo "$jid" | xargs)"   # trim leading/trailing whitespace
+      [[ -n "$jid" ]] || continue
+      [[ "$seen" == *",$jid,"* ]] && continue
+      result="${result:+$result,}$jid"
+      seen="${seen}$jid,"
+    done
+  fi
+  echo "$result"
+}
+
+# Build the XMPP_ALLOW_FROM_JSON value: same semantics as build_xmpp_allow_from
+# but emits a JSON array. Each JID is wrapped in double quotes; no escaping is
+# applied (XMPP JIDs do not contain characters that require JSON escaping under
+# the XEP-0029 node/domain rules in normal use). Output is a single line.
+build_xmpp_allow_from_json() {  # <owner_jid> <extras_csv>
+  local owner="$1"
+  local extras="$2"
+  local csv
+  csv="$(build_xmpp_allow_from "$owner" "$extras")"
+  local IFS=','
+  local parts=()
+  [[ -n "$csv" ]] && read -ra parts <<< "$csv"
+  local quoted=()
+  local jid
+  for jid in "${parts[@]}"; do
+    quoted+=("\"$jid\"")
+  done
+  echo "[${quoted[*]}]" | tr ' ' ',' | sed 's/,,*/,/g; s/^\[,/[/; s/,\]$/\]/'
+}
+
 write_tenant_lunarwing_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
@@ -1858,6 +1917,9 @@ write_tenant_lunarwing_env() {
   local llm_base_url="${6:-}"
   local nanocode_model="${7:-}"
   local nanocode_base_url="${8:-}"
+  local llm_model="${9:-}"
+  local gateway_host="${10:-}"
+  local xmpp_allow_from="${11:-}"
 
   local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
@@ -1904,6 +1966,31 @@ write_tenant_lunarwing_env() {
   # gateway or upstream OpenAI-compatible endpoint as the proxy is phased out.
   local llm_base_url_effective="${llm_base_url:-http://127.0.0.1:${proxy_port}/v1}"
 
+  # Idempotent overrides for the configurable flags (--llm-model,
+  # --gateway-host, --xmpp-allow-from). An explicit flag value wins; else an
+  # existing file value is preserved on re-run; else the hardcoded default
+  # (LLM_MODEL, GATEWAY_HOST) or the owner JID alone (XMPP_ALLOW_FROM).
+  local llm_model_effective gateway_host_effective xmpp_allow_from_effective
+  if [[ -n "$llm_model" ]]; then
+    llm_model_effective="$llm_model"
+  else
+    llm_model_effective="$(_env_existing "$path" LLM_MODEL)"
+    llm_model_effective="${llm_model_effective:-tensorzero::function_name::lunarwing}"
+  fi
+  if [[ -n "$gateway_host" ]]; then
+    gateway_host_effective="$gateway_host"
+  else
+    gateway_host_effective="$(_env_existing "$path" GATEWAY_HOST)"
+    gateway_host_effective="${gateway_host_effective:-127.0.0.1}"
+  fi
+  if [[ -n "$xmpp_allow_from" ]]; then
+    xmpp_allow_from_effective="$(build_xmpp_allow_from "$xmpp_jid" "$xmpp_allow_from")"
+  else
+    # Preserve an existing list; fall back to owner JID only on first write.
+    xmpp_allow_from_effective="$(_env_existing "$path" XMPP_ALLOW_FROM)"
+    xmpp_allow_from_effective="${xmpp_allow_from_effective:-$xmpp_jid}"
+  fi
+
   (
     umask 077
     cat >"$path" <<ENVEOF
@@ -1922,7 +2009,7 @@ PGSSLMODE=disable
 LLM_BACKEND=openai_compatible
 LLM_BASE_URL=${llm_base_url_effective}
 LLM_API_KEY=${llm_api_key:-token-${name}}
-LLM_MODEL=tensorzero::function_name::lunarwing
+LLM_MODEL=$llm_model_effective
 ALLOW_PRIVATE_IPS=1
 
 # Runtime identity
@@ -1936,7 +2023,7 @@ XMPP_BRIDGE_TOKEN=$bridge_token
 XMPP_JID=$xmpp_jid
 XMPP_PASSWORD=$xmpp_password
 XMPP_DM_POLICY=allowlist
-XMPP_ALLOW_FROM=$xmpp_jid
+XMPP_ALLOW_FROM=$xmpp_allow_from_effective
 XMPP_ALLOW_ROOMS=
 XMPP_ENCRYPTED_ROOMS=
 XMPP_OMEMO_DEVICE_ID=0
@@ -1952,7 +2039,7 @@ WASM_CHANNELS_DIR=$state_dir/channels
 
 # Gateway
 GATEWAY_ENABLED=true
-GATEWAY_HOST=127.0.0.1
+GATEWAY_HOST=$gateway_host_effective
 GATEWAY_PORT=$gateway_port
 GATEWAY_AUTH_TOKEN=$gateway_token
 
@@ -2018,6 +2105,7 @@ write_tenant_bridge_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
   local xmpp_password="${3:-}"
+  local xmpp_allow_from="${4:-}"
 
   local path bridge_port
   path="$(tenant_env_dir "$name")/xmpp-bridge.env"
@@ -2032,6 +2120,26 @@ write_tenant_bridge_env() {
   xmpp_pass_val="$(grep -s '^XMPP_PASSWORD=' "$(tenant_env_dir "$name")/lunarwing.env" | cut -d= -f2- || true)"
   [[ -n "$xmpp_pass_val" ]] || xmpp_pass_val="${xmpp_password:-$(generate_token | cut -c1-32)}"
 
+  # Idempotent XMPP allow-from JSON: an explicit flag wins; else re-derive from
+  # the daemon's XMPP_ALLOW_FROM (CSV) if present so re-runs without the flag
+  # keep the operator-set list in sync; else fall back to owner JID only.
+  local xmpp_allow_from_json_effective
+  if [[ -n "$xmpp_allow_from" ]]; then
+    xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "$xmpp_allow_from")"
+  else
+    local daemon_csv
+    daemon_csv="$(grep -s '^XMPP_ALLOW_FROM=' "$(tenant_env_dir "$name")/lunarwing.env" | cut -d= -f2- || true)"
+    if [[ -n "$daemon_csv" && "$daemon_csv" != "$xmpp_jid" ]]; then
+      # Daemon has extras: rebuild JSON from owner + the extras (everything
+      # after the leading owner entry, which build_xmpp_allow_from re-prepends).
+      local extras="${daemon_csv#$xmpp_jid}"
+      extras="${extras#,}"   # strip a single leading comma if present
+      xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "$extras")"
+    else
+      xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "")"
+    fi
+  fi
+
   (
     umask 077
     cat >"$path" <<ENVEOF
@@ -2044,7 +2152,7 @@ RUST_LOG=xmpp_bridge=info,info
 XMPP_JID=$xmpp_jid
 XMPP_PASSWORD=$xmpp_pass_val
 XMPP_DM_POLICY=allowlist
-XMPP_ALLOW_FROM_JSON=["${xmpp_jid}"]
+XMPP_ALLOW_FROM_JSON=$xmpp_allow_from_json_effective
 XMPP_ALLOW_ROOMS_JSON=[]
 XMPP_ENCRYPTED_ROOMS_JSON=[]
 XMPP_DEVICE_ID=0
@@ -5104,6 +5212,9 @@ add_tenant() {
   local enable_darkirc="${10:-false}"
   local nanocode_model="${11:-}"
   local nanocode_base_url="${12:-}"
+  local llm_model="${13:-}"
+  local gateway_host="${14:-}"
+  local xmpp_allow_from="${15:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -5137,8 +5248,8 @@ add_tenant() {
 
   say "--- Generating environment files ---"
   write_tenant_vision_env "$name" >/dev/null
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url"
-  write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
+  write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password" "$xmpp_allow_from"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   if [[ "$enable_darkirc" == "true" ]]; then
     write_tenant_darkirc_adapter_env "$name"
@@ -5619,7 +5730,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -5635,6 +5746,9 @@ main() {
           --gotify-title)    gotify_title="$2"; shift 2 ;;
           --nanocode-model)    nanocode_model="$2"; shift 2 ;;
           --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
+          --llm-model)         llm_model="$2"; shift 2 ;;
+          --gateway-host)      gateway_host="$2"; shift 2 ;;
+          --xmpp-allow-from)   xmpp_allow_from="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
@@ -5645,12 +5759,12 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url=""
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -5665,6 +5779,9 @@ main() {
           --gotify-title)    gotify_title="$2"; shift 2 ;;
           --nanocode-model)    nanocode_model="$2"; shift 2 ;;
           --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
+          --llm-model)         llm_model="$2"; shift 2 ;;
+          --gateway-host)      gateway_host="$2"; shift 2 ;;
+          --xmpp-allow-from)   xmpp_allow_from="$2"; shift 2 ;;
           -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$names_csv" ]]; then names_csv="$1"; shift
@@ -5683,7 +5800,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
       done
       ;;
 

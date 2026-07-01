@@ -9,12 +9,9 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.9 |
 | Remove deprecated Codex external worker from project | v1.1.9 |
 | Remove support for all the other random unsupported LLM providers | v1.1.9 |
-| Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |
-| Remove default MCP servers from default installation | v1.1.9 |
 | Remove other extensions from default installation | v1.1.9 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new) | v1.1.9 |
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
-| Introduce additions to add-tenants. see ADD-TENANTS-ADDITIONS.md in docs/proposals | v1.1.9 |
 | Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup | v1.1.9 |
 | Further routine engine improvements. See docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md for more detailed information | v1.1.9 |
 | Lunartica UI reskin continuation | v1.1.9 |
@@ -34,7 +31,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
-| Opencode External Worker (and possibly Paseo Integration?) | v1.2.2 |
+| Opencode External Worker (and possibly Paseo Integration?) - could possibly do 1.1.8 or 1.2.0 as well | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v1.2.3 |
 | Further external worker polishing | v1.2.3 |

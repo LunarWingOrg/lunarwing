@@ -12,7 +12,6 @@
       "display_name": "Recommended Set",
       "description": "Core tools and channels for a productive setup",
       "extensions": [
-        "tools/github",
         "channels/telegram"
       ],
       "shared_auth": null
