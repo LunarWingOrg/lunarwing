@@ -3325,12 +3325,9 @@ fn should_skip_response_leak_scan(url: &str) -> bool {
         // services; loopback is not an exfiltration vector. Inbound messages
         // are still checked by the safety layer before reaching the LLM.
         let is_loopback = matches!(parsed.scheme(), "http" | "https")
-            && parsed
-                .host_str()
-                .is_some_and(|host| {
-                    host.eq_ignore_ascii_case("127.0.0.1")
-                        || host.eq_ignore_ascii_case("localhost")
-                });
+            && parsed.host_str().is_some_and(|host| {
+                host.eq_ignore_ascii_case("127.0.0.1") || host.eq_ignore_ascii_case("localhost")
+            });
 
         is_telegram_poll || is_loopback
     })

@@ -23,7 +23,9 @@ use crate::db::Database;
 use crate::history::SandboxJobRecord;
 use crate::orchestrator::ExternalWorkerManager;
 use crate::orchestrator::auth::CredentialGrant;
-use crate::orchestrator::external_worker::{ExternalTaskStatus, build_task_context, ConversationMessage};
+use crate::orchestrator::external_worker::{
+    ConversationMessage, ExternalTaskStatus, build_task_context,
+};
 use crate::orchestrator::job_manager::{ContainerJobManager, JobMode};
 use crate::secrets::SecretsStore;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
@@ -779,9 +781,7 @@ impl CreateJobTool {
                 .as_object()
                 .map(|map| {
                     map.iter()
-                        .filter_map(|(k, v)| {
-                            v.as_str().map(|s| (k.clone(), s.to_string()))
-                        })
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
                         .collect()
                 })
                 .unwrap_or_default()
