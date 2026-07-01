@@ -48,7 +48,7 @@ Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) ident
 
 ## Open Proposals
 
-### #4 — No Per-Routine Timeout For FullJob
+### #4 — No Per-Routine Timeout For FullJob (IGNORE)
 
 **Problem:** Lightweight routines have a configurable timeout (`lightweight_timeout_secs`, default 300s). FullJob routines rely solely on `FullJobWatcher`'s hardcoded 30-minute ceiling:
 
@@ -65,7 +65,7 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 **Priority:** Medium
 
-### #5 — Event Cache Refresh Lag (60s)
+### #5 — Event Cache Refresh Lag (60s) <-MUST FIX
 
 **Problem:** When a routine is created/updated/deleted via the tool API, `refresh_event_cache()` is called explicitly — but the periodic safety-net refresh only fires every 60s. If the explicit call fails or the tool path doesn't call it, changes take up to 60s to take effect.
 
@@ -73,7 +73,7 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 **Priority:** Low
 
-### #6 — Duplicated EngineContext Construction (3x)
+### #6 — Duplicated EngineContext Construction (3x) (IGNORE)
 
 **Problem:** `fire_manual`, `fire_webhook`, and `spawn_fire` each manually construct the same `EngineContext` struct (11 fields). Any change to `EngineContext` requires updating all three. A `clone_ctx()` helper was added for #2, but the three original construction sites still duplicate the field list.
 
@@ -81,7 +81,7 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 **Priority:** Low
 
-### #7 — sanitize_summary / strip_html_tags Are Test-Only
+### #7 — sanitize_summary / strip_html_tags Are Test-Only (IGNORE)
 
 **Problem:** `sanitize_summary()` and `strip_html_tags()` are gated behind `#[cfg(test)]` (line ~2036, ~2064 in routine_engine.rs). They strip control chars and HTML from summaries — exactly what you'd want in production since summaries come from untrusted LLM/job output and get sent to notification channels (XMPP, Gotify, etc.). But they're not called in the production notification path.
 
@@ -89,26 +89,13 @@ The worker job itself (`ic/src/worker/job.rs`) has its own timeout via `WorkerDe
 
 **Priority:** Medium
 
-### #8 — No Structured Routine Status Query
+### #8 — No Structured Routine Status Query (IGNORE)
 
 **Problem:** There is no API or tool to query "what routines are currently running" or "what's the status of routine X's last 5 runs" beyond reading the conversation thread. The `routine_history` tool exists but is basic.
 
 **Fix direction:** Add a `routine_status` tool or gateway endpoint that returns current running routines, their elapsed time, and recent run history with status/summary/tokens.
 
 **Priority:** Low
-
-## Priority Summary
-
-| Priority | Item | Status |
-|----------|------|--------|
-| High | #1 State contamination | Done |
-| High | #2 Retry never fires | Done |
-| Medium | #3 Dedup unused | Done |
-| Medium | #4 FullJob timeout | Open |
-| Medium | #7 Sanitize in production | Open |
-| Low | #5 Cache refresh lag | Open |
-| Low | #6 EngineContext dedup | Open |
-| Low | #8 Status query | Open |
 
 ## Test Coverage
 
