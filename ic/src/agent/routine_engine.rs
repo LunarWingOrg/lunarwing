@@ -24,8 +24,8 @@ use uuid::Uuid;
 
 use crate::agent::Scheduler;
 use crate::agent::routine::{
-    NotifyConfig, Routine, RoutineAction, RoutineRun, RunStatus, Trigger,
-    content_hash, next_cron_fire,
+    NotifyConfig, Routine, RoutineAction, RoutineRun, RunStatus, Trigger, content_hash,
+    next_cron_fire,
 };
 use crate::channels::{IncomingMessage, OutgoingResponse};
 use crate::config::RoutineConfig;
@@ -1179,229 +1179,229 @@ fn execute_routine(
     run: RoutineRun,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
-    // Increment running count (atomic: survives panics in the execution below)
-    ctx.running_count.fetch_add(1, Ordering::Relaxed);
+        // Increment running count (atomic: survives panics in the execution below)
+        ctx.running_count.fetch_add(1, Ordering::Relaxed);
 
-    let result = match &routine.action {
-        RoutineAction::Lightweight {
-            prompt,
-            context_paths,
-            max_tokens,
-            use_tools,
-            max_tool_rounds,
-        } => {
-            let timeout_secs = ctx.config.lightweight_timeout_secs;
-            let timeout_dur = Duration::from_secs(timeout_secs);
-            match tokio::time::timeout(
-                timeout_dur,
-                execute_lightweight(
-                    &ctx,
-                    &routine,
-                    prompt,
-                    context_paths,
-                    *max_tokens,
-                    *use_tools,
-                    *max_tool_rounds,
-                ),
-            )
-            .await
-            {
-                Ok(result) => result,
-                Err(_) => {
-                    tracing::error!(
-                        routine = %routine.name,
-                        "Lightweight routine timed out after {timeout_secs}s"
-                    );
-                    Err(RoutineError::Timeout { timeout_secs })
+        let result = match &routine.action {
+            RoutineAction::Lightweight {
+                prompt,
+                context_paths,
+                max_tokens,
+                use_tools,
+                max_tool_rounds,
+            } => {
+                let timeout_secs = ctx.config.lightweight_timeout_secs;
+                let timeout_dur = Duration::from_secs(timeout_secs);
+                match tokio::time::timeout(
+                    timeout_dur,
+                    execute_lightweight(
+                        &ctx,
+                        &routine,
+                        prompt,
+                        context_paths,
+                        *max_tokens,
+                        *use_tools,
+                        *max_tool_rounds,
+                    ),
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(_) => {
+                        tracing::error!(
+                            routine = %routine.name,
+                            "Lightweight routine timed out after {timeout_secs}s"
+                        );
+                        Err(RoutineError::Timeout { timeout_secs })
+                    }
                 }
             }
-        }
-        RoutineAction::FullJob {
-            title,
-            description,
-            max_iterations,
-        } => {
-            let execution = FullJobExecutionConfig {
+            RoutineAction::FullJob {
                 title,
                 description,
-                max_iterations: *max_iterations,
-            };
-            execute_full_job(&ctx, &routine, &run, &execution).await
-        }
-    };
-
-    // Decrement running count
-    ctx.running_count.fetch_sub(1, Ordering::Relaxed);
-
-    // Capture retryability before consuming the result.
-    let is_retryable_error = matches!(&result, Err(e) if e.is_retryable());
-
-    // Process result
-    let (status, summary, tokens) = match result {
-        Ok(execution) => execution,
-        Err(e) => {
-            tracing::error!(routine = %routine.name, "Execution failed: {}", e);
-            (RunStatus::Failed, Some(e.to_string()), None)
-        }
-    };
-
-    // Complete the run record
-    if let Err(e) = ctx
-        .store
-        .complete_routine_run(run.id, status, summary.as_deref(), tokens)
-        .await
-    {
-        tracing::error!(routine = %routine.name, "Failed to complete run record: {}", e);
-    }
-
-    // Update routine runtime state
-    let now = Utc::now();
-    let new_failures = if status == RunStatus::Failed {
-        routine.consecutive_failures + 1
-    } else {
-        0
-    };
-
-    let retry_delay = if status == RunStatus::Failed && is_retryable_error {
-        routine.guardrails.retry.compute_delay(new_failures)
-    } else {
-        None
-    };
-
-    let next_fire = if let Some(delay) = retry_delay {
-        tracing::info!(
-            routine = %routine.name,
-            attempt = new_failures,
-            max = routine.guardrails.retry.max_retries,
-            delay_secs = delay.as_secs(),
-            "Scheduling deferred retry after transient failure"
-        );
-        Some(now + chrono::Duration::from_std(delay).unwrap_or_default())
-    } else {
-        compute_normal_next_fire(&routine)
-    };
-
-    if let Err(e) = ctx
-        .store
-        .update_routine_runtime(
-            routine.id,
-            now,
-            next_fire,
-            routine.run_count + 1,
-            new_failures,
-            &routine.state,
-        )
-        .await
-    {
-        tracing::error!(routine = %routine.name, "Failed to update runtime state: {}", e);
-    }
-
-    // Persist routine result to its dedicated conversation thread
-    let thread_id = match ctx
-        .store
-        .get_or_create_routine_conversation(routine.id, &routine.name, &routine.user_id)
-        .await
-    {
-        Ok(conv_id) => {
-            tracing::debug!(
-                routine = %routine.name,
-                routine_id = %routine.id,
-                conversation_id = %conv_id,
-                "Resolved routine conversation thread"
-            );
-            // Record the run result as a conversation message
-            let msg = match (&summary, status) {
-                (Some(s), _) => format!("[{}] {}: {}", run.trigger_type, status, s),
-                (None, _) => format!("[{}] {}", run.trigger_type, status),
-            };
-            if let Err(e) = ctx
-                .store
-                .add_conversation_message(conv_id, "assistant", &msg)
-                .await
-            {
-                tracing::error!(routine = %routine.name, "Failed to persist routine message: {}", e);
+                max_iterations,
+            } => {
+                let execution = FullJobExecutionConfig {
+                    title,
+                    description,
+                    max_iterations: *max_iterations,
+                };
+                execute_full_job(&ctx, &routine, &run, &execution).await
             }
-            Some(conv_id.to_string())
+        };
+
+        // Decrement running count
+        ctx.running_count.fetch_sub(1, Ordering::Relaxed);
+
+        // Capture retryability before consuming the result.
+        let is_retryable_error = matches!(&result, Err(e) if e.is_retryable());
+
+        // Process result
+        let (status, summary, tokens) = match result {
+            Ok(execution) => execution,
+            Err(e) => {
+                tracing::error!(routine = %routine.name, "Execution failed: {}", e);
+                (RunStatus::Failed, Some(e.to_string()), None)
+            }
+        };
+
+        // Complete the run record
+        if let Err(e) = ctx
+            .store
+            .complete_routine_run(run.id, status, summary.as_deref(), tokens)
+            .await
+        {
+            tracing::error!(routine = %routine.name, "Failed to complete run record: {}", e);
         }
-        Err(e) => {
-            tracing::error!(routine = %routine.name, "Failed to get routine conversation: {}", e);
+
+        // Update routine runtime state
+        let now = Utc::now();
+        let new_failures = if status == RunStatus::Failed {
+            routine.consecutive_failures + 1
+        } else {
+            0
+        };
+
+        let retry_delay = if status == RunStatus::Failed && is_retryable_error {
+            routine.guardrails.retry.compute_delay(new_failures)
+        } else {
             None
+        };
+
+        let next_fire = if let Some(delay) = retry_delay {
+            tracing::info!(
+                routine = %routine.name,
+                attempt = new_failures,
+                max = routine.guardrails.retry.max_retries,
+                delay_secs = delay.as_secs(),
+                "Scheduling deferred retry after transient failure"
+            );
+            Some(now + chrono::Duration::from_std(delay).unwrap_or_default())
+        } else {
+            compute_normal_next_fire(&routine)
+        };
+
+        if let Err(e) = ctx
+            .store
+            .update_routine_runtime(
+                routine.id,
+                now,
+                next_fire,
+                routine.run_count + 1,
+                new_failures,
+                &routine.state,
+            )
+            .await
+        {
+            tracing::error!(routine = %routine.name, "Failed to update runtime state: {}", e);
         }
-    };
 
-    // Send notifications based on config
-    send_notification(
-        &ctx.notify_tx,
-        &routine.notify,
-        &routine.user_id,
-        &routine.name,
-        status,
-        summary.as_deref(),
-        thread_id.as_deref(),
-    )
-    .await;
-
-    if let Some(delay) = retry_delay {
-        let ctx = ctx.clone_ctx();
-        let routine_id = routine.id;
-        let routine_name = routine.name.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(delay).await;
-
-            let routine = match ctx.store.get_routine(routine_id).await {
-                Ok(Some(r)) => r,
-                Ok(None) => {
-                    tracing::warn!(routine = %routine_name, "Routine deleted before retry fired");
-                    return;
+        // Persist routine result to its dedicated conversation thread
+        let thread_id = match ctx
+            .store
+            .get_or_create_routine_conversation(routine.id, &routine.name, &routine.user_id)
+            .await
+        {
+            Ok(conv_id) => {
+                tracing::debug!(
+                    routine = %routine.name,
+                    routine_id = %routine.id,
+                    conversation_id = %conv_id,
+                    "Resolved routine conversation thread"
+                );
+                // Record the run result as a conversation message
+                let msg = match (&summary, status) {
+                    (Some(s), _) => format!("[{}] {}: {}", run.trigger_type, status, s),
+                    (None, _) => format!("[{}] {}", run.trigger_type, status),
+                };
+                if let Err(e) = ctx
+                    .store
+                    .add_conversation_message(conv_id, "assistant", &msg)
+                    .await
+                {
+                    tracing::error!(routine = %routine.name, "Failed to persist routine message: {}", e);
                 }
-                Err(e) => {
-                    tracing::error!(routine = %routine_name, "Failed to reload routine for retry: {e}");
-                    return;
-                }
-            };
-
-            if !routine.enabled {
-                tracing::info!(routine = %routine_name, "Routine disabled before retry fired, skipping");
-                return;
+                Some(conv_id.to_string())
             }
+            Err(e) => {
+                tracing::error!(routine = %routine.name, "Failed to get routine conversation: {}", e);
+                None
+            }
+        };
 
-            if routine.consecutive_failures > routine.guardrails.retry.max_retries {
+        // Send notifications based on config
+        send_notification(
+            &ctx.notify_tx,
+            &routine.notify,
+            &routine.user_id,
+            &routine.name,
+            status,
+            summary.as_deref(),
+            thread_id.as_deref(),
+        )
+        .await;
+
+        if let Some(delay) = retry_delay {
+            let ctx = ctx.clone_ctx();
+            let routine_id = routine.id;
+            let routine_name = routine.name.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(delay).await;
+
+                let routine = match ctx.store.get_routine(routine_id).await {
+                    Ok(Some(r)) => r,
+                    Ok(None) => {
+                        tracing::warn!(routine = %routine_name, "Routine deleted before retry fired");
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::error!(routine = %routine_name, "Failed to reload routine for retry: {e}");
+                        return;
+                    }
+                };
+
+                if !routine.enabled {
+                    tracing::info!(routine = %routine_name, "Routine disabled before retry fired, skipping");
+                    return;
+                }
+
+                if routine.consecutive_failures > routine.guardrails.retry.max_retries {
+                    tracing::info!(
+                        routine = %routine_name,
+                        failures = routine.consecutive_failures,
+                        max = routine.guardrails.retry.max_retries,
+                        "Retry limit exceeded, not retrying"
+                    );
+                    return;
+                }
+
+                let run = RoutineRun {
+                    id: Uuid::new_v4(),
+                    routine_id: routine.id,
+                    trigger_type: "retry".to_string(),
+                    trigger_detail: Some(format!("attempt {}", routine.consecutive_failures)),
+                    started_at: Utc::now(),
+                    completed_at: None,
+                    status: RunStatus::Running,
+                    result_summary: None,
+                    tokens_used: None,
+                    job_id: None,
+                    created_at: Utc::now(),
+                };
+
+                if let Err(e) = ctx.store.create_routine_run(&run).await {
+                    tracing::error!(routine = %routine_name, "Failed to create retry run record: {e}");
+                    return;
+                }
+
                 tracing::info!(
                     routine = %routine_name,
-                    failures = routine.consecutive_failures,
-                    max = routine.guardrails.retry.max_retries,
-                    "Retry limit exceeded, not retrying"
+                    run_id = %run.id,
+                    "Executing deferred retry"
                 );
-                return;
-            }
-
-            let run = RoutineRun {
-                id: Uuid::new_v4(),
-                routine_id: routine.id,
-                trigger_type: "retry".to_string(),
-                trigger_detail: Some(format!("attempt {}", routine.consecutive_failures)),
-                started_at: Utc::now(),
-                completed_at: None,
-                status: RunStatus::Running,
-                result_summary: None,
-                tokens_used: None,
-                job_id: None,
-                created_at: Utc::now(),
-            };
-
-            if let Err(e) = ctx.store.create_routine_run(&run).await {
-                tracing::error!(routine = %routine_name, "Failed to create retry run record: {e}");
-                return;
-            }
-
-            tracing::info!(
-                routine = %routine_name,
-                run_id = %run.id,
-                "Executing deferred retry"
-            );
-            execute_routine(ctx, routine, run).await;
-        });
-    }
+                execute_routine(ctx, routine, run).await;
+            });
+        }
     })
 }
 
@@ -2294,9 +2294,9 @@ fn is_content_duplicate(
     now: Instant,
     window: Duration,
 ) -> bool {
-    state.get(&routine_id).is_some_and(|entry| {
-        entry.hash == hash && now.duration_since(entry.seen_at) < window
-    })
+    state
+        .get(&routine_id)
+        .is_some_and(|entry| entry.hash == hash && now.duration_since(entry.seen_at) < window)
 }
 
 #[cfg(test)]
@@ -2917,7 +2917,8 @@ mod tests {
 
     #[test]
     fn test_strip_hallucinated_tool_calls_keeps_clean_lines() {
-        let input = "Line one\n\u{3C}function=foo\u{3E}\nLine three\n\u{3C}/function\u{3E}\nLine five";
+        let input =
+            "Line one\n\u{3C}function=foo\u{3E}\nLine three\n\u{3C}/function\u{3E}\nLine five";
         let result = super::strip_hallucinated_tool_calls(input);
         assert_eq!(result, "Line one\nLine three\nLine five");
     }
@@ -3036,10 +3037,13 @@ mod tests {
 
     #[test]
     fn test_dedup_no_window_alows_all() {
-        let routine = make_routine("user1", Trigger::Event {
-            pattern: ".*".to_string(),
-            channel: None,
-        });
+        let routine = make_routine(
+            "user1",
+            Trigger::Event {
+                pattern: ".*".to_string(),
+                channel: None,
+            },
+        );
         assert!(routine.guardrails.dedup_window.is_none());
     }
 
@@ -3078,7 +3082,13 @@ mod tests {
         let window = Duration::from_millis(50);
 
         let mut state = HashMap::new();
-        state.insert(id, super::DedupEntry { hash, seen_at: earlier });
+        state.insert(
+            id,
+            super::DedupEntry {
+                hash,
+                seen_at: earlier,
+            },
+        );
 
         std::thread::sleep(Duration::from_millis(80));
 
@@ -3094,10 +3104,13 @@ mod tests {
         let window = Duration::from_secs(60);
 
         let mut state = HashMap::new();
-        state.insert(id, super::DedupEntry {
-            hash: content_hash("hello"),
-            seen_at: now,
-        });
+        state.insert(
+            id,
+            super::DedupEntry {
+                hash: content_hash("hello"),
+                seen_at: now,
+            },
+        );
 
         let new_hash = content_hash("world");
         assert!(!is_content_duplicate(&state, id, new_hash, now, window));

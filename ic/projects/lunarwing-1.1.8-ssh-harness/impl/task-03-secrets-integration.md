@@ -1,301 +1,91 @@
-# Implementation Task 03: Secrets Integration
+# Task 03: Secrets Integration — as built
 
-**File:** `src/secrets/store.rs` (extend) + `src/bridge/ssh.rs` (new)  
-**Effort:** 0.5 days  
-**Priority:** High (required for Phase 3)  
-**Status:** Not started  
-**Depends on:** Task 01 (Core SSHBridge Struct), Task 02 (Config Storage)
+**File:** `ic/src/bridge/ssh_secrets.rs`
+**Status:** ✅ Done (shipped 1.1.8; verified 2026-07-01)
 
----
+> The original spec put `get_credentials()` on `SSHBridge` and validated key
+> format by checking for a `-----BEGIN` header. The shipped design instead has a
+> dedicated `SshSecretsManager`, and the load path used by the agent lives in
+> `SSHBridge::start_agent_server`. This file documents what exists.
 
-## Objective
+## Naming convention
 
-Integrate SSH key storage with the existing secrets system. This task defines the naming convention for SSH keys in the secrets store and ensures they're retrieved securely without disk writes.
+Secret name for a host: `ssh_key_<sanitized-host>`, where every non-alphanumeric
+character becomes `_` (`secret_name_for_host`, `ssh_secrets.rs:50`).
 
----
+| Host | Secret name |
+|------|-------------|
+| `production` | `ssh_key_production` |
+| `git.example.com` | `ssh_key_git_example_com` |
+| `192.168.1.100` | `ssh_key_192_168_1_100` |
 
-## Background
+A passphrase, when present, is stored under a **separate** secret
+`ssh_key_<sanitized-host>_passphrase`.
 
-The existing secrets module (`src/secrets/`) already handles:
-- Encrypted storage of sensitive data
-- Key-value lookups
-- Tenant-scoped secrets
+> The same sanitization is implemented in three places (`ssh_secrets.rs:50`,
+> inline in `ssh.rs::start_agent_server`, and the dead `ssh.rs::sanitize_secret_name`).
+> Worth consolidating.
 
-We're extending this to support SSH keys as a specific secret type.
-
----
-
-## Deliverables
-
-### 1. Secrets Naming Convention
-
-Establish a consistent naming pattern for SSH keys:
-
-```
-ssh_key_<host_name>
-```
-
-Where `<host_name>` matches the key used in `config.toml`:
-
-```toml
-[ssh.hosts.production]
-# Host name: "production"
-# Secret key: "ssh_key_production"
-```
-
-#### Examples
-
-| Config Host | Secret Key | Description |
-|-------------|------------|-------------|
-| `production` | `ssh_key_production` | Production SSH private key |
-| `staging` | `ssh_key_staging` | Staging SSH private key |
-| `dev` | `ssh_key_dev` | Development SSH private key |
-| `192.168.1.100` | `ssh_key_192_168_1_100` | IP-based host (sanitize dots) |
-
----
-
-### 2. Secret Validation
-
-Add validation in `src/secrets/store.rs` or create a helper:
+## `SshSecretsManager` (`ssh_secrets.rs:35`)
 
 ```rust
-/// Validate that an SSH key secret exists for the given host
-pub fn validate_ssh_key_secret(store: &SecretsStore, host: &str) -> Result<(), SecretError> {
-    let secret_key = format!("ssh_key_{}", sanitize_host_name(host));
-    
-    if store.get(&secret_key)?.is_none() {
-        return Err(SecretError::NotFound(secret_key));
-    }
-    
-    Ok(())
-}
+pub fn new(secrets_store: Arc<dyn SecretsStore + Send + Sync>, tenant_id: &str) -> Self  // :42
 
-/// Sanitize host name for use as secret key (replace invalid chars)
-fn sanitize_host_name(host: &str) -> String {
-    host.replace('.', "_").replace('-', "_")
-}
+pub async fn store_key(&self, hostname: &str, key_data: &[u8], passphrase: Option<&str>) -> Result<()>  // :67
+pub async fn load_key(&self, hostname: &str) -> Result<Option<SSHCredentials>>            // :121
+pub async fn delete_key(&self, hostname: &str) -> Result<()>                              // :175  (key + passphrase)
+pub async fn key_exists(&self, hostname: &str) -> Result<bool>                            // :202
+pub fn validate_key_format(key_data: &[u8]) -> Result<SSHKeyType>                         // :221
+pub async fn load_and_validate_key(&self, hostname, expected_type) -> Result<Option<SSHCredentials>>  // :259
 ```
 
----
+- **Storage** delegates to the secrets subsystem:
+  `secrets_store.create(tenant_id, CreateSecretParams::new(name, value))`. All
+  encryption (AES-256-GCM, per-secret HKDF-derived key, master key from
+  `SECRETS_MASTER_KEY` or the OS keychain) happens in `crate::secrets` — this
+  module never touches crypto directly.
+- **Load** uses `get_decrypted`, wrapping bytes in `Zeroizing`; `NotFound`
+  becomes `Ok(None)`.
+- **`validate_key_format`** is a heuristic on PEM/OpenSSH headers
+  (`-----BEGIN OPENSSH/EC/RSA PRIVATE KEY-----`, `ssh-ed25519`, `ssh-rsa`, …).
+  Real cryptographic parsing happens later in `ssh_agent::parse_key` via
+  `russh_keys::decode_secret_key`.
 
-### 3. SSHBridge Integration
+## The load path the agent actually uses
 
-Update `SSHBridge::get_credentials()` (from Task 01) to use the secrets store:
+The running agent does **not** call `SshSecretsManager::load_key`. At startup,
+`SSHBridge::start_agent_server` (`ssh.rs:464`) inlines the same lookup
+(`get_decrypted` for `ssh_key_<host>` and `..._passphrase`), builds
+`SSHCredentials`, and hands them to `SshAgentServer::start`.
+`SshSecretsManager` is used by the HTTP API layer (`ssh_api.rs`) for
+`store_key`/`delete_key`/`key_exists`.
 
-```rust
-// In src/bridge/ssh.rs (or wherever SSHBridge is defined)
+## How keys get into the store
 
-use crate::secrets::store::SecretsStore;
+- **Operator/API:** `POST /hosts/{host}/key` → `store_key`.
+- **mt-admin:** `upload_tenant_ssh_key` POSTs the staged private key to that
+  same endpoint after the daemon starts, then deletes the on-disk staged copy.
 
-impl SSHBridge {
-    pub fn get_credentials(
-        &self,
-        host: &str,
-        secrets: &SecretsStore,
-    ) -> Result<SSHCredentials, BridgeError> {
-        let secret_key = format!("ssh_key_{}", sanitize_host_name(host));
-        
-        let key_data = secrets
-            .get(&secret_key)?
-            .ok_or_else(|| BridgeError::SecretNotFound(secret_key))?;
-        
-        // Validate key format (optional but recommended)
-        Self::validate_ssh_key_format(&key_data)?;
-        
-        Ok(SSHCredentials { key: key_data })
-    }
-    
-    fn validate_ssh_key_format(key: &str) -> Result<(), BridgeError> {
-        // Check for valid OpenSSH/PKCS8 header
-        if !key.starts_with("-----BEGIN") {
-            return Err(BridgeError::InvalidKeyFormat);
-        }
-        
-        Ok(())
-    }
-}
+## Tests (`#[cfg(test)]`, 6)
 
-// Add new error variant
-pub enum BridgeError {
-    // ... existing variants
-    InvalidKeyFormat,
-}
-```
+`test_store_and_load_key`, `test_store_with_passphrase`,
+`test_key_does_not_exist`, `test_delete_key`, `test_validate_key_format_ed25519`,
+`test_validate_key_format_rsa`.
 
----
+## Security notes / limitations
 
-### 4. Secrets Store Extension (Optional)
+- Keys are ciphertext at rest; decrypted only into `Zeroizing`/`SecretString`
+  in daemon memory; never written to disk in plaintext.
+- Tenant isolation: secrets scoped by `tenant_id`.
+- **`from_utf8_lossy` on key bytes** (`store_key`, and `parse_key` in
+  `ssh_agent.rs`) assumes UTF-8 — fine for PEM/OpenSSH text, but binary key
+  material would be corrupted.
+- Planned negative tests from the original spec (`test_no_disk_write_for_keys`,
+  invalid-format, ECDSA validate) are not present.
 
-If the secrets store doesn't already support binary data, add support for SSH keys:
+## Deltas from the original spec
 
-```rust
-// In src/secrets/types.rs or src/secrets/store.rs
-
-pub enum SecretValue {
-    String(String),
-    Binary(Vec<u8>),  // For SSH keys, certificates, etc.
-}
-
-// Or if using base64 encoding:
-pub struct Secret {
-    pub value: String,  // Base64-encoded for binary data
-    pub encoding: SecretEncoding,
-}
-
-pub enum SecretEncoding {
-    Utf8,
-    Base64,
-}
-```
-
----
-
-### 5. Unit Tests
-
-Create tests in `src/secrets/tests.rs` or `src/bridge/ssh_tests.rs`:
-
-#### Test: `test_ssh_key_secret_naming()`
-- Input: host = "production"
-- Expected secret key: "ssh_key_production"
-- Verify naming convention
-
-#### Test: `test_ssh_key_secret_sanitization()`
-- Input: host = "192.168.1.100"
-- Expected secret key: "ssh_key_192_168_1_100"
-- Verify dots are replaced
-
-#### Test: `test_get_credentials_found()`
-- Mock secrets store with `ssh_key_production`
-- Call `get_credentials("production", &secrets)`
-- Verify `SSHCredentials` returned
-
-#### Test: `test_get_credentials_not_found()`
-- Mock secrets store without key
-- Call `get_credentials("missing", &secrets)`
-- Verify `BridgeError::SecretNotFound`
-
-#### Test: `test_validate_ssh_key_format_valid()`
-- Input: Valid OpenSSH key header
-- Verify: `Ok(())`
-
-#### Test: `test_validate_ssh_key_format_invalid()`
-- Input: Random string without header
-- Verify: `BridgeError::InvalidKeyFormat`
-
-#### Test: `test_no_disk_write_for_keys()`
-- Integration test: Verify keys are never written to disk
-- Check temp dir, logs, and any file handles
-
----
-
-### 6. Documentation Updates
-
-#### `docs/secrets.md` (or equivalent)
-
-Add SSH key section:
-
-```markdown
-## SSH Keys
-
-SSH private keys are stored as secrets with the naming convention `ssh_key_<host>`.
-
-### Example
-
-```toml
-# config.toml
-[ssh.hosts.production]
-hostname = "prod.example.com"
-username = "deploy"
-```
-
-```bash
-# Store the key
-lunarwing secrets set ssh_key_production < private_key.pem
-```
-
-### Security Notes
-
-- SSH keys are **never** written to disk in plaintext
-- Keys are loaded into memory only during use
-- Keys are scoped per-tenant (no cross-tenant access)
-```
-
----
-
-### 7. Migration / Setup Guide
-
-#### For Existing Tenants
-
-```bash
-# 1. List current hosts
-lunarwing config get ssh.hosts
-
-# 2. For each host, store the SSH key
-for host in production staging dev; do
-    echo "Storing key for $host..."
-    lunarwing secrets set "ssh_key_$host" < ~/.ssh/id_rsa
-done
-
-# 3. Verify
-lunarwing secrets list | grep ssh_key
-```
-
-#### For New Tenants
-
-Document in onboarding guide:
-- SSH keys must be stored before first use
-- Use the `ssh_key_<host>` naming convention
-- Keys can be rotated by updating the secret
-
----
-
-## Dependencies
-
-| Module | Dependency Type | Notes |
-|--------|-----------------|-------|
-| `SecretsStore` (existing) | Required | For key retrieval |
-| `SSHBridge` (Task 01) | Required | For `get_credentials()` |
-| `SSHHostConfig` (Task 02) | Required | Host name source |
-
----
-
-## Acceptance Criteria
-
-- [ ] Naming convention documented and enforced
-- [ ] `get_credentials()` retrieves keys from secrets store
-- [ ] Key format validation implemented
-- [ ] No disk writes for SSH keys (verified via tests)
-- [ ] All unit tests passing
-- [ ] Documentation updated
-- [ ] Migration guide created
-
----
-
-## Security Considerations
-
-1. **Memory Safety:** SSH keys should be zeroed out after use
-2. **Logging:** Never log SSH key contents (redact in logs)
-3. **Tenant Isolation:** Keys are scoped to the tenant that stored them
-4. **Key Rotation:** Support updating keys without changing host config
-
----
-
-## Notes
-
-- This task assumes the secrets store already exists and works
-- If the secrets store needs extension (e.g., binary support), that's a separate pre-requisite
-- Consider adding a `SecretError::InvalidEncoding` if base64 decoding fails
-
----
-
-## Related Documents
-
-- `../harness-architecture.md` — Full architecture overview
-- `task-01-core-struct.md` — Previous task (SSHBridge types)
-- `task-02-config-storage.md` — Previous task (config parsing)
-- `task-04-gateway-wiring.md` — Next task (AppBuilder integration)
-
----
-
-*Last updated: 2026-06-XX*  
-*Author: Kageho + Christopher*
+- Dedicated `SshSecretsManager` instead of `SSHBridge::get_credentials`.
+- Format validation returns an `SSHKeyType` (not a bool), and the authoritative
+  parse is russh's, not a header check.
+- Passphrases are first-class (separate secret), which the spec didn't cover.

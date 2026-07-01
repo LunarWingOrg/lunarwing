@@ -104,9 +104,14 @@ pub fn build_task_context(
 }
 
 fn extract_host(url: &str) -> Option<String> {
-    let stripped = url.strip_prefix("ws://").or_else(|| url.strip_prefix("wss://"))?;
+    let stripped = url
+        .strip_prefix("ws://")
+        .or_else(|| url.strip_prefix("wss://"))?;
     let host_port = stripped.split('/').next()?;
-    let host = host_port.rsplit_once(':').map(|(h, _)| h).unwrap_or(host_port);
+    let host = host_port
+        .rsplit_once(':')
+        .map(|(h, _)| h)
+        .unwrap_or(host_port);
     Some(host.to_string())
 }
 
@@ -697,15 +702,12 @@ impl WorkerConnectionPool {
         let mut conns = self.connections.lock().await;
         for pool in conns.values_mut() {
             for conn in pool.drain(..) {
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(2),
-                    async {
-                        let (mut sink, _read) = conn.stream.split();
-                        let _ = sink
-                            .send(tokio_tungstenite::tungstenite::Message::Close(None))
-                            .await;
-                    },
-                )
+                let _ = tokio::time::timeout(Duration::from_secs(2), async {
+                    let (mut sink, _read) = conn.stream.split();
+                    let _ = sink
+                        .send(tokio_tungstenite::tungstenite::Message::Close(None))
+                        .await;
+                })
                 .await;
             }
         }
@@ -1609,7 +1611,10 @@ mod tests {
             extract_host("wss://worker.example.com:443/ws"),
             Some("worker.example.com".to_string())
         );
-        assert_eq!(extract_host("ws://localhost/path"), Some("localhost".to_string()));
+        assert_eq!(
+            extract_host("ws://localhost/path"),
+            Some("localhost".to_string())
+        );
         assert!(extract_host("not-a-url").is_none());
     }
 
@@ -1623,4 +1628,3 @@ mod tests {
         assert!(!is_loopback("192.168.1.100"));
     }
 }
-

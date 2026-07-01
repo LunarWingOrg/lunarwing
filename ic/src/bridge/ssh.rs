@@ -62,7 +62,7 @@ use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument, warn};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -179,11 +179,21 @@ pub struct SSHHostConfig {
     pub keepalive_max_misses: u32,
 }
 
-fn default_ssh_port() -> u16 { 22 }
-fn default_connect_timeout() -> u64 { 10 }
-fn default_operation_timeout() -> u64 { 30 }
-fn default_keepalive_interval() -> u64 { 60 }
-fn default_keepalive_max_misses() -> u32 { 3 }
+fn default_ssh_port() -> u16 {
+    22
+}
+fn default_connect_timeout() -> u64 {
+    10
+}
+fn default_operation_timeout() -> u64 {
+    30
+}
+fn default_keepalive_interval() -> u64 {
+    60
+}
+fn default_keepalive_max_misses() -> u32 {
+    3
+}
 
 /// SSH key type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -467,12 +477,17 @@ impl SSHBridge {
                     .map(|c| if c.is_alphanumeric() { c } else { '_' })
                     .collect::<String>()
             );
-            match self.secrets_store.get_decrypted(&self.tenant_name, &secret_name).await {
+            match self
+                .secrets_store
+                .get_decrypted(&self.tenant_name, &secret_name)
+                .await
+            {
                 Ok(decrypted) => {
                     let key_data = decrypted.expose().as_bytes().to_vec();
                     // Try to load passphrase if present.
                     let passphrase_secret = format!("{}_passphrase", secret_name);
-                    let passphrase = match self.secrets_store
+                    let passphrase = match self
+                        .secrets_store
                         .get_decrypted(&self.tenant_name, &passphrase_secret)
                         .await
                     {
@@ -481,7 +496,10 @@ impl SSHBridge {
                     };
                     keys.insert(
                         hostname.clone(),
-                        SSHCredentials { key_data: Zeroizing::new(key_data), passphrase },
+                        SSHCredentials {
+                            key_data: Zeroizing::new(key_data),
+                            passphrase,
+                        },
                     );
                     info!(tenant_name = %self.tenant_name, host = %hostname, "Loaded SSH key for agent");
                 }
@@ -603,13 +621,22 @@ mod tests {
         let tenant_id = Uuid::new_v4();
         let hosts = HashMap::new();
         let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
-            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from(
+                "test-master-key-that-is-at-least-32-bytes-long!",
+            ))
+            .unwrap(),
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 
-        let bridge = SSHBridge::new(tenant_id, "test-tenant".to_string(), hosts, secrets_store, audit_logger)
-            .await
-            .unwrap();
+        let bridge = SSHBridge::new(
+            tenant_id,
+            "test-tenant".to_string(),
+            hosts,
+            secrets_store,
+            audit_logger,
+        )
+        .await
+        .unwrap();
 
         assert!(bridge.validate().await.is_ok());
     }
@@ -619,13 +646,22 @@ mod tests {
         let tenant_id = Uuid::new_v4();
         let hosts = HashMap::new();
         let secrets_store = Arc::new(crate::secrets::InMemorySecretsStore::new(Arc::new(
-            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
+            crate::secrets::SecretsCrypto::new(secrecy::SecretString::from(
+                "test-master-key-that-is-at-least-32-bytes-long!",
+            ))
+            .unwrap(),
         )));
         let audit_logger = Arc::new(NullAuditLogger);
 
-        let bridge = SSHBridge::new(tenant_id, "test-tenant".to_string(), hosts, secrets_store, audit_logger)
-            .await
-            .unwrap();
+        let bridge = SSHBridge::new(
+            tenant_id,
+            "test-tenant".to_string(),
+            hosts,
+            secrets_store,
+            audit_logger,
+        )
+        .await
+        .unwrap();
 
         let config = SSHHostConfig {
             host: "example.com".to_string(),

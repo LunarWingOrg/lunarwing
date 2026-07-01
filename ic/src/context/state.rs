@@ -552,8 +552,7 @@ mod tests {
         );
 
         // Builder accepts None explicitly (overrides global even if set)
-        let ctx_none = JobContext::with_user("venus", "chat", "test")
-            .with_vision_service_url(None);
+        let ctx_none = JobContext::with_user("venus", "chat", "test").with_vision_service_url(None);
         assert!(ctx_none.vision_service_url.is_none());
     }
 

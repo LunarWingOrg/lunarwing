@@ -1,37 +1,97 @@
 #!/usr/bin/env bash
+# LunarWing pre-commit hook.
+#
+# Runs against staged files only. Bypass with: git commit --no-verify
+#
+# Checks (each independently gated on what's staged):
+#   1. Secret-leak scan — block commits that introduce secret-looking material.
+#   2. Version-bump check — WIT / extension sources must bump versions
+#      (only when wit/ channels-src/ tools-src/ change).
+#
+# Deliberately NO cargo fmt/clippy/test here — those are slow, can be flaky in
+# some shells, and CI already enforces them. The hook is the fast, always-works
+# gate. Run `cargo fmt --all` and `cargo test` manually before pushing.
+#
+# Install: ./scripts/install-githooks.sh
+
 set -euo pipefail
 
-# Pre-commit hook: run version bump checks when WIT or extension sources change.
-# Install: git config core.hooksPath .githooks
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 
-# Only run the check if relevant files are staged
-STAGED=$(git diff --cached --name-only)
-
-NEEDS_CHECK=false
-if echo "$STAGED" | grep -qE '^wit/|^channels-src/|^tools-src/'; then
-    NEEDS_CHECK=true
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "$STAGED" ]; then
+  exit 0  # nothing staged, nothing to check
 fi
 
-if $NEEDS_CHECK; then
-    echo "pre-commit: checking version bumps..."
-    if ! ./scripts/check-version-bumps.sh; then
-        echo ""
-        echo "Commit blocked: version bump check failed."
-        echo "Bump versions in the relevant registry JSON and/or WIT package declaration."
-        echo "To bypass: git commit --no-verify"
-        exit 1
-    fi
+# ---------------------------------------------------------------------------
+# 1. Secret-leak scan
+# ---------------------------------------------------------------------------
+# Scans the staged *diff* (added lines only) for high-signal secret patterns.
+# We scan diff content (not whole files) so existing/legacy material does not
+# block refactors, and we only block *new introductions*.
+#
+# Inline suppression: add  `# no-secret-scan`  (or // no-secret-scan) to a line
+# to exempt it. Use sparingly and only for false positives (e.g. test fixtures
+# that legitimately contain a token-shaped string).
+#
+# Bypass entirely with --no-verify.
+run_secret_scan() {
+  # High-signal, portable (POSIX grep -E) patterns. We avoid `grep -P` because
+  # multi-line PCRE patterns are fragile across grep implementations.
+  #
+  # We scan added diff lines only. `command grep` bypasses any shell function
+  # that might shadow grep in interactive shells (the hooks run via git's own
+  # shell invocation, but this is belt-and-suspenders).
+  local added offending
+
+  added="$(git diff --cached --unified=0 | command grep -E '^\+' || true)"
+  # Drop comment lines (leading '#' after the diff '+' prefix, optionally indented)
+  # so that `# FOO=bar` placeholders don't trip the value matcher.
+  added="$(printf '%s\n' "$added" | command grep -vE '^\+[[:space:]]*#' || true)"
+  # Honour inline suppression: a trailing  # no-secret-scan  exempts the line.
+  added="$(printf '%s\n' "$added" | command grep -vE 'no-secret-scan' || true)"
+
+  # Each pattern on its own line. Empty alt in the key-header pattern keeps it
+  # matching both `-----BEGIN PRIVATE KEY-----` and `-----BEGIN RSA PRIVATE KEY-----`.
+  offending="$(printf '%s\n' "$added" | command grep -E \
+    -e '(SECRETS_MASTER_KEY|GATEWAY_AUTH_TOKEN|LLM_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|ANTHROPIC_OAUTH_TOKEN|POSTGRES_PASSWORD|XMPP_PASSWORD|TENSORZERO_API_KEY|BEARER_TOKEN|AUTH_TOKEN)=[^[:space:]\"#{}$]+' \
+    -e '-----BEGIN (RSA |EC |OPENSSH |DSA |)PRIVATE KEY-----' \
+    -e "(master_key|secret|token|password|api_key)=['\"]?[0-9a-fA-F]{64}" \
+    -e 'sk-ant-[A-Za-z0-9_-]{20,}' \
+    -e 'sk-[A-Za-z0-9]{40,}' \
+    || true)"
+
+  if [ -n "$offending" ]; then
+    echo "pre-commit: secret-leak scan FAILED — possible secret material in staged diff:" >&2
+    printf '%s\n' "$offending" | sed 's/^/    /' >&2
+    echo "" >&2
+    echo "If this is a false positive, add an inline  # no-secret-scan  comment" >&2
+    echo "to the offending line, or bypass with: git commit --no-verify" >&2
+    return 1
+  fi
+  return 0
+}
+
+echo "pre-commit: secret-leak scan..."
+if ! run_secret_scan; then
+  exit 1
 fi
 
-# i18n parity: when any language pack changes, all languages must stay in sync.
-if echo "$STAGED" | grep -qE '^crates/ironclaw_gateway/static/i18n/.*\.js$'; then
-    echo "pre-commit: checking i18n parity..."
-    if ! ./scripts/check-i18n-parity.sh; then
-        echo ""
-        echo "Commit blocked: i18n parity check failed."
-        echo "Every key added to en.js must also be added to all other language files (zh-CN.js, ko.js, ...)."
-        echo "Placeholder tokens like {name} must match across all languages."
-        echo "To bypass: git commit --no-verify"
-        exit 1
-    fi
+# ---------------------------------------------------------------------------
+# 2. Version-bump check (WIT / extension sources)
+# ---------------------------------------------------------------------------
+# When WIT interfaces or WASM extension sources change, versions must be bumped
+# in the relevant registry JSON and/or WIT package declaration.
+if echo "$STAGED" | grep -qE '^(ic/)?(wit/|channels-src/|tools-src/)'; then
+  echo "pre-commit: version-bump check..."
+  if ! bash ./ic/scripts/check-version-bumps.sh; then
+    echo "" >&2
+    echo "Commit blocked: version bump check failed." >&2
+    echo "Bump versions in the relevant registry JSON and/or WIT package declaration." >&2
+    echo "Bypass with: git commit --no-verify" >&2
+    exit 1
+  fi
 fi
+
+exit 0

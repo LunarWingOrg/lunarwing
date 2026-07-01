@@ -1,201 +1,102 @@
-# Implementation Task 01: Core SSHBridge Struct
+# Task 01: Core SSHBridge Struct — as built
 
-**File:** `src/bridge/ssh.rs`  
-**Effort:** 1-2 days  
-**Priority:** Critical (foundation for all other phases)  
-**Status:** Not started
+**File:** `ic/src/bridge/ssh.rs`
+**Status:** ✅ Done (shipped 1.1.8; verified 2026-07-01)
 
----
+> The original spec sketched a minimal `SSHBridge { hosts }` with a
+> `get_config()`/`get_credentials()` API and a 4-variant `BridgeError`. The
+> shipped struct is substantially richer, and credential delivery was
+> re-architected to the agent-socket model (there is no `get_credentials()`).
+> This file documents what exists.
 
-## Objective
+## Types (`ssh.rs`)
 
-Create the `SSHBridge` struct and associated types that form the foundation of the SSH harness. This is the core data structure that will hold host configurations and provide methods for retrieving configs and credentials.
+### `SSHBridge` (`:313`)
 
----
-
-## Deliverables
-
-### 1. Type Definitions
-
-Create the following types in `src/bridge/ssh.rs`:
-
-#### `SSHBridge` (main struct)
 ```rust
 pub struct SSHBridge {
-    hosts: HashMap<String, SSHHostConfig>,
+    tenant_id: Uuid,                                       // UUIDv5(NAMESPACE_DNS, owner_id)
+    tenant_name: String,                                   // owner_id; used for the socket path
+    hosts: Arc<RwLock<HashMap<String, SSHHostConfig>>>,
+    secrets_store: Arc<dyn SecretsStore + Send + Sync>,
+    audit_logger: Arc<dyn AuditLogger + Send + Sync>,
+    agent_server: Option<Arc<SshAgentServer>>,             // None until start_agent_server()
 }
 ```
 
-#### `SSHHostConfig` (host configuration)
-```rust
-pub struct SSHHostConfig {
-    pub hostname: String,
-    pub username: String,
-    pub port: u16,
-}
-```
+### `SSHHostConfig` (`:153`)
 
-#### `SSHCredentials` (sensitive key data)
+`host`, `port` (default 22), `user`, `key_type: SSHKeyType`,
+`host_key_mode: HostKeyMode` (default `Strict`), `known_host_key: Option<String>`,
+`connect_timeout_secs` (10), `operation_timeout_secs` (30),
+`keepalive_interval_secs` (60), `keepalive_max_misses` (3). Serde defaults let
+`config.toml` omit everything but `host`/`user`/`key_type`.
+
+### `SSHKeyType` (`:199`) / `HostKeyMode` (`:218`)
+
+- `SSHKeyType` = `Ed25519 | Ecdsa | Rsa` (serde lowercase; `Display`).
+- `HostKeyMode` = `Strict` (default) | `AcceptFirst` (serde PascalCase). No
+  `AcceptAny` — deliberately omitted as insecure.
+
+### `SSHCredentials` (`:240`)
+
 ```rust
 pub struct SSHCredentials {
-    pub key: String, // Or Vec<u8> for binary key data
+    pub key_data: Zeroizing<Vec<u8>>,   // raw PEM/OpenSSH bytes, zeroized on drop
+    pub passphrase: Option<SecretString>,
 }
 ```
 
-#### `BridgeError` (error handling)
-```rust
-pub enum BridgeError {
-    HostNotFound(String),
-    SecretNotFound(String),
-    ValidationFailed(String),
-    ConfigParseError(String),
-}
+### `SshBridgeError` (`:78`) + `Result<T>` (`:145`)
 
-impl std::fmt::Display for BridgeError { ... }
-impl std::error::Error for BridgeError { ... }
+`thiserror` enum spanning config / secret / key / host-key / connection / agent
+/ internal errors. Only `Io` has `#[from]`. Far larger than the sketched
+`BridgeError`.
+
+### Audit: `SshEvent` (`:253`) + `AuditLogger` trait (`:293`)
+
+Event enum (`HostAdded`, `HostRemoved`, `ConnectionAttempt`, `CommandExecuted`,
+`KeyRotated`, `HostKeyChanged`, `AgentStarted`, `AgentStopped`) and an
+async-trait logger. `NullAuditLogger` (`:299`) is the only production impl today.
+
+## Methods (`impl SSHBridge`)
+
+```rust
+pub async fn new(tenant_id, tenant_name, hosts, secrets_store, audit_logger) -> Result<Self>  // :338
+pub async fn validate(&self) -> Result<()>                       // :363  (empty -> Ok; hostname/port!=0/user checks)
+pub async fn get_host_config(&self, hostname: &str) -> Result<SSHHostConfig>  // :404
+pub async fn list_hosts(&self) -> Vec<SSHHostConfig>             // :413
+pub async fn add_host(&self, config: SSHHostConfig) -> Result<()>            // :419  (+ audit HostAdded)
+pub async fn remove_host(&self, hostname: &str) -> Result<()>   // :438  (+ audit HostRemoved)
+pub async fn start_agent_server(&mut self) -> Result<()>        // :464  (loads keys, starts SshAgentServer)
+pub async fn stop_agent_server(&mut self) -> Result<()>         // :546  (drops the Arc)
+pub fn get_agent_socket_path(&self) -> Option<String>           // :554
+pub fn agent_server(&self) -> Option<Arc<SshAgentServer>>       // :561  (for the API state)
 ```
 
----
+Helpers: `is_valid_hostname` (`:571`); `sanitize_secret_name` (`:587`,
+`#[allow(dead_code)]` — the same logic is inlined in `start_agent_server` and in
+`ssh_secrets::secret_name_for_host`, a small duplication worth consolidating).
 
-### 2. Public API Methods
+Notable behavior:
+- **`validate()` returns `Ok` on an empty host map** and does **not** check that
+  key secrets exist (keys may be uploaded later; there's a TODO at `:397`). This
+  differs from the spec, which wanted `ValidationFailed` on empty hosts.
+- **`start_agent_server` is the load-bearing method.** It computes the run-dir
+  socket path, decrypts each host's key from the store into `Zeroizing`, and
+  hands the map to `SshAgentServer::start`. Missing/unreadable keys are skipped
+  fail-soft. See [task-03](task-03-secrets-integration.md) and
+  [`ssh_agent.rs`](../../../src/bridge/ssh_agent.rs).
 
-Implement the following methods on `SSHBridge`:
+## Tests (`#[cfg(test)]`, 4)
 
-#### `new()`
-```rust
-pub fn new(hosts: HashMap<String, SSHHostConfig>) -> Self
-```
-- **Input:** HashMap of host name → config
-- **Output:** New `SSHBridge` instance
-- **Notes:** No validation here — that's done in `validate()`
+`test_valid_hostname`, `test_sanitize_secret_name`, `test_create_bridge`,
+`test_add_host`.
 
-#### `get_config()`
-```rust
-pub fn get_config(&self, host: &str) -> Result<SSHHostConfig, BridgeError>
-```
-- **Input:** Host name (e.g., "production", "staging")
-- **Output:** `SSHHostConfig` or `BridgeError::HostNotFound`
-- **Notes:** Clones the config — no references to internal state
+## Deltas from the original spec
 
-#### `get_credentials()`
-```rust
-pub fn get_credentials(
-    &self,
-    host: &str,
-    secrets: &SecretsStore
-) -> Result<SSHCredentials, BridgeError>
-```
-- **Input:** Host name + reference to secrets store
-- **Output:** `SSHCredentials` or error
-- **Notes:** 
-  - Key naming convention: `ssh_key_<host>`
-  - Does NOT write key to disk — returns in-memory only
-
-#### `validate()`
-```rust
-pub fn validate(&self) -> Result<(), BridgeError>
-```
-- **Input:** None (uses `&self`)
-- **Output:** `Ok(())` or `BridgeError::ValidationFailed`
-- **Checks:**
-  - At least one host configured
-  - All hostnames are valid format (FQDN or IP)
-  - All usernames are non-empty
-  - All ports are in valid range (1-65535)
-  - Optional: connectivity test (ping/SSH handshake)
-
-#### `list_hosts()`
-```rust
-pub fn list_hosts(&self) -> Vec<&str>
-```
-- **Input:** None
-- **Output:** List of configured host names
-- **Notes:** Useful for debugging, admin commands
-
----
-
-### 3. Module Exports
-
-Update `src/bridge/mod.rs`:
-```rust
-pub mod ssh;
-pub use ssh::{SSHBridge, SSHHostConfig, SSHCredentials, BridgeError};
-```
-
----
-
-### 4. Unit Tests
-
-Create tests in `src/bridge/ssh.rs` (or `src/bridge/ssh_tests.rs`):
-
-#### Test: `test_new_bridge()`
-- Empty hosts map → valid bridge
-- Single host → valid bridge
-- Multiple hosts → valid bridge
-
-#### Test: `test_get_config_found()`
-- Request existing host → returns config
-
-#### Test: `test_get_config_not_found()`
-- Request non-existent host → `BridgeError::HostNotFound`
-
-#### Test: `test_get_credentials_found()`
-- Mock secrets store with key → returns credentials
-
-#### Test: `test_get_credentials_missing()`
-- Mock secrets store without key → `BridgeError::SecretNotFound`
-
-#### Test: `test_validate_empty()`
-- Empty hosts → `ValidationFailed`
-
-#### Test: `test_validate_valid()`
-- Valid hosts → `Ok(())`
-
-#### Test: `test_validate_bad_hostname()`
-- Invalid hostname format → `ValidationFailed`
-
-#### Test: `test_validate_bad_port()`
-- Port 0 or >65535 → `ValidationFailed`
-
----
-
-## Dependencies
-
-| Module | Dependency Type | Notes |
-|--------|-----------------|-------|
-| `SecretsStore` | Required | For `get_credentials()` |
-| `BridgeError` | Internal | Defined in this task |
-| `HashMap` | std | Rust standard library |
-
----
-
-## Acceptance Criteria
-
-- [ ] All types defined and compile
-- [ ] All methods implemented
-- [ ] All unit tests passing
-- [ ] Module exports wired
-- [ ] No disk writes for keys (in-memory only)
-- [ ] Error messages are actionable
-
----
-
-## Notes
-
-- This is the **foundation** — all other phases depend on this
-- Don't skip tests — the error handling here matters
-- Keep the API surface minimal — only what's needed for Phase 2+
-- `Vec<u8>` vs `String` for key data: decide based on how secrets are stored
-
----
-
-## Related Documents
-
-- `../harness-architecture.md` — Full architecture overview
-- `task-02-config-storage.md` — Next task (config parsing)
-- `task-03-secrets-integration.md` — Secrets store wiring
-
----
-
-*Last updated: 2026-06-XX*  
-*Author: Kageho + Christopher*
+- No `SSHBridge::get_credentials(host, secrets)` — replaced by the agent socket.
+- Field names are `host`/`user` (spec said `hostname`/`username`).
+- `SSHBridge` holds `secrets_store`, `audit_logger`, and a live `agent_server`
+  (spec had only `hosts`).
+- `SshBridgeError` is a large taxonomy, not the sketched 4 variants.

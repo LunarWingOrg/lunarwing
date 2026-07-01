@@ -1,296 +1,100 @@
-# Implementation Task 02: Config Storage
+# Task 02: Config Storage — as built
 
-**File:** `src/config.rs` (extend existing)  
-**Effort:** 0.5 days  
-**Priority:** High (required for Phase 2)  
-**Status:** Not started  
-**Depends on:** Task 01 (Core SSHBridge Struct)
+**File:** `ic/src/config/ssh.rs` (+ `ic/src/settings.rs`, `ic/src/app.rs`)
+**Status:** ✅ Done (shipped 1.1.8; verified 2026-07-01)
 
----
+> The original spec used named tables (`[ssh.hosts.production]`, a `HashMap`)
+> with `hostname`/`username` fields and an `enabled` bool. The shipped schema is
+> an **array of tables** (`[[ssh.hosts]]`) with `host`/`user` fields, per-host
+> timeout overrides, and **no `enabled` flag**. This file documents what exists.
 
-## Objective
-
-Extend the existing configuration system to support SSH host definitions in `config.toml`. This task handles parsing the `[ssh.hosts.*]` sections and converting them into the `HashMap<String, SSHHostConfig>` format that `SSHBridge::new()` expects.
-
----
-
-## Deliverables
-
-### 1. Config Schema Definition
-
-Add the following schema to `config.toml`:
+## TOML schema (real)
 
 ```toml
 [ssh]
-enabled = true
+# Global defaults (all optional; these are the built-in values)
+connect_timeout_secs = 10
+operation_timeout_secs = 30
+keepalive_interval_secs = 60
+keepalive_max_misses = 3
 
-[ssh.hosts.production]
-hostname = "prod.lunarwing.org"
-username = "deploy"
-port = 22
+[[ssh.hosts]]
+host = "prod-server.example.com"    # required
+port = 22                            # default 22
+user = "deploy"                     # required
+key_type = "ed25519"                # required: ed25519 | ecdsa | rsa (lowercase)
+host_key_mode = "Strict"            # Strict | AcceptFirst (PascalCase)
+known_host_key = "ssh-ed25519 AAAA..."   # optional pin
+# optional per-host overrides: connect_timeout_secs / operation_timeout_secs /
+# keepalive_interval_secs / keepalive_max_misses
 
-[ssh.hosts.staging]
-hostname = "staging.lunarwing.org"
-username = "deploy"
-port = 22
-
-[ssh.hosts.dev]
-hostname = "192.168.1.100"
-username = "root"
+[[ssh.hosts]]
+host = "192.168.1.100"
 port = 2222
+user = "admin"
+key_type = "ecdsa"
+host_key_mode = "AcceptFirst"
 ```
 
-#### Schema Rules
+There is **no `enabled` key** — a non-empty `[[ssh.hosts]]` list is the enable
+switch (`app.rs:1055` guards on `!config.ssh.hosts.is_empty()`).
 
-| Field | Type | Required | Default | Notes |
-|-------|------|----------|---------|-------|
-| `enabled` | bool | No | `false` | Master switch for SSH harness |
-| `hosts.*.hostname` | string | Yes | — | FQDN or IP address |
-| `hosts.*.username` | string | Yes | — | SSH username |
-| `hosts.*.port` | integer | No | `22` | SSH port (1-65535) |
+## Types (`config/ssh.rs`)
 
----
+### `SshConfig` (`:38`, derives `Default`)
 
-### 2. Config Struct Definitions
-
-Add to `src/config.rs`:
-
-#### `SshConfig` (top-level SSH section)
 ```rust
-#[derive(Debug, Clone, Deserialize)]
 pub struct SshConfig {
-    #[serde(default = "default_ssh_enabled")]
-    pub enabled: bool,
-    
-    #[serde(default)]
-    pub hosts: HashMap<String, SshHostEntry>,
-}
-
-fn default_ssh_enabled() -> bool {
-    false
+    #[serde(default)] pub hosts: Vec<SshHostEntry>,
+    #[serde(default = "..")] pub connect_timeout_secs: u64,   // 10
+    #[serde(default = "..")] pub operation_timeout_secs: u64,  // 30
+    #[serde(default = "..")] pub keepalive_interval_secs: u64, // 60
+    #[serde(default = "..")] pub keepalive_max_misses: u32,    // 3
 }
 ```
 
-#### `SshHostEntry` (per-host config from TOML)
-```rust
-#[derive(Debug, Clone, Deserialize)]
-pub struct SshHostEntry {
-    pub hostname: String,
-    pub username: String,
-    
-    #[serde(default = "default_ssh_port")]
-    pub port: u16,
-}
+### `SshHostEntry` (`:74`, does **not** derive `Default`)
 
-fn default_ssh_port() -> u16 {
-    22
-}
-```
+Mandatory `host` / `user` / `key_type`; `port` defaults to 22; per-host timeout
+fields are `Option<..>` overrides (fall back to the `SshConfig` global).
 
-#### Conversion Method
+### Conversion — `to_host_map()` (`:122`) and `get_host()` (`:152`)
 
-Add impl block to convert `SshHostEntry` → `SSHHostConfig`:
+`to_host_map()` returns `HashMap<String, SSHHostConfig>`, resolving each entry's
+`Option` overrides against the global defaults. `get_host(name)` does the same
+for a single host.
 
-```rust
-impl From<SshHostEntry> for crate::bridge::ssh::SSHHostConfig {
-    fn from(entry: SshHostEntry) -> Self {
-        Self {
-            hostname: entry.hostname,
-            username: entry.username,
-            port: entry.port,
-        }
-    }
-}
-```
+## Wiring
 
----
+- **Settings** (`settings.rs:196`): `pub ssh: crate::config::SshConfig`, with
+  `#[serde(default)]`. Loaded from `config.toml` / `settings.json`.
+- **App build** (`app.rs:1054-1105`): if `hosts` non-empty **and** a secrets
+  store exists, `config.ssh.to_host_map()` feeds `SSHBridge::new`; the bridge is
+  then validated and its agent started (all fail-soft). Result stored on
+  `AppComponents.ssh_bridge`.
 
-### 3. Config Parsing Logic
+## mt-admin
 
-Extend `AppBuilder::load_config()` or equivalent:
+`ic/scripts/lunarwing-mt-admin.sh` writes the `[[ssh.hosts]]` block into the
+tenant's `config.toml` (append-only, idempotent) via `ensure_ssh_config` /
+`configure-ssh`, defaulting to a self-referential host `127.0.0.1` / user
+`<tenant>`.
 
-```rust
-// After loading main config:
-let ssh_enabled = config.ssh.enabled;
-let ssh_hosts: HashMap<String, SSHHostConfig> = if ssh_enabled {
-    config
-        .ssh
-        .hosts
-        .into_iter()
-        .map(|(name, entry)| (name, entry.into()))
-        .collect()
-} else {
-    HashMap::new()
-};
+## Tests (`#[cfg(test)]`, 2)
 
-// Pass to SSHBridge builder (Phase 4)
-```
+`test_parse_ssh_config`, `test_to_host_map`.
 
----
+> ⚠️ Both tests parse a **bare** `SshConfig`, so their TOML uses top-level
+> `[[hosts]]` (no `ssh.` prefix). That is **not** the real `config.toml` shape —
+> real config nests under `[[ssh.hosts]]`. Don't copy the test TOML.
 
-### 4. Validation (Config-Level)
+## Deltas from the original spec
 
-Add validation in `AppBuilder::validate_config()`:
-
-```rust
-fn validate_ssh_config(config: &SshConfig) -> Result<(), ConfigError> {
-    if !config.enabled {
-        return Ok(()); // Skip validation if disabled
-    }
-
-    if config.hosts.is_empty() {
-        return Err(ConfigError::SshNoHostsConfigured);
-    }
-
-    for (name, entry) in &config.hosts {
-        // Validate hostname format
-        if entry.hostname.is_empty() {
-            return Err(ConfigError::SshEmptyHostname(name.clone()));
-        }
-
-        // Validate username
-        if entry.username.is_empty() {
-            return Err(ConfigError::SshEmptyUsername(name.clone()));
-        }
-
-        // Validate port range
-        if entry.port == 0 {
-            return Err(ConfigError::SshInvalidPort(name.clone(), entry.port));
-        }
-    }
-
-    Ok(())
-}
-```
-
-#### New Error Variants
-
-Add to `ConfigError` enum:
-```rust
-SshNoHostsConfigured,
-SshEmptyHostname(String),  // host name
-SshEmptyUsername(String),  // host name
-SshInvalidPort(String, u16),  // host name, port
-```
-
----
-
-### 5. Unit Tests
-
-Create tests in `src/config_tests.rs` or inline:
-
-#### Test: `test_ssh_config_parse_enabled()`
-- Parse config with `enabled = true` and hosts
-- Verify hosts are loaded correctly
-
-#### Test: `test_ssh_config_parse_disabled()`
-- Parse config with `enabled = false`
-- Verify hosts are ignored (empty map)
-
-#### Test: `test_ssh_config_parse_default_port()`
-- Host without explicit port
-- Verify port defaults to 22
-
-#### Test: `test_ssh_config_parse_custom_port()`
-- Host with `port = 2222`
-- Verify custom port is used
-
-#### Test: `test_ssh_config_validation_empty_hosts()`
-- `enabled = true` but no hosts
-- Verify `ConfigError::SshNoHostsConfigured`
-
-#### Test: `test_ssh_config_validation_empty_hostname()`
-- Host with empty `hostname = ""`
-- Verify `ConfigError::SshEmptyHostname`
-
-#### Test: `test_ssh_config_validation_empty_username()`
-- Host with empty `username = ""`
-- Verify `ConfigError::SshEmptyUsername`
-
-#### Test: `test_ssh_config_validation_invalid_port()`
-- Host with `port = 0` or `port = 70000`
-- Verify `ConfigError::SshInvalidPort`
-
----
-
-### 6. Documentation Updates
-
-#### `docs/config-schema.md` (or equivalent)
-
-Add SSH section:
-```markdown
-## SSH Configuration
-
-The `[ssh]` section configures the SSH harness for remote host access.
-
-### `[ssh]` Options
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `enabled` | bool | `false` | Enable SSH harness |
-
-### `[ssh.hosts.*]` Options
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `hostname` | string | — | FQDN or IP address |
-| `username` | string | — | SSH username |
-| `port` | integer | `22` | SSH port |
-
-### Example
-
-```toml
-[ssh]
-enabled = true
-
-[ssh.hosts.production]
-hostname = "prod.lunarwing.org"
-username = "deploy"
-port = 22
-```
-```
-
----
-
-## Dependencies
-
-| Module | Dependency Type | Notes |
-|--------|-----------------|-------|
-| `SSHBridge` (Task 01) | Required | For type conversion |
-| `toml` / `serde` | Existing | Config parsing |
-| `ConfigError` | Existing | Error handling |
-
----
-
-## Acceptance Criteria
-
-- [ ] `SshConfig` and `SshHostEntry` structs defined
-- [ ] TOML parsing works for all valid inputs
-- [ ] Default values applied correctly (port=22, enabled=false)
-- [ ] Validation catches all error cases
-- [ ] All unit tests passing
-- [ ] Documentation updated
-- [ ] No breaking changes to existing config
-
----
-
-## Notes
-
-- This task is **purely config parsing** — no SSH connections yet
-- Keep the schema simple — can add more fields later (e.g., `identity_file`, `proxy_jump`)
-- `HashMap` iteration order is non-deterministic — don't rely on ordering
-- Consider adding `#[serde(rename_all = "kebab-case")]` if TOML uses `ssh-host` style
-
----
-
-## Related Documents
-
-- `../harness-architecture.md` — Full architecture overview
-- `task-01-core-struct.md` — Previous task (SSHBridge types)
-- `task-03-secrets-integration.md` — Next task (secrets store wiring)
-- `task-04-gateway-wiring.md` — Phase 4 (AppBuilder integration)
-
----
-
-*Last updated: 2026-06-XX*  
-*Author: Kageho + Christopher*
+- `[[ssh.hosts]]` array of tables, not `[ssh.hosts.<name>]` named tables.
+- Fields `host`/`user`, not `hostname`/`username`.
+- No `enabled` flag; enablement = non-empty list.
+- Extra fields shipped: `key_type`, `host_key_mode`, `known_host_key`, timeouts,
+  keepalive.
+- The planned `ConfigError` variants (`SshNoHostsConfigured`, `SshEmptyHostname`,
+  …) were **not** added; validation lives in `SSHBridge::validate` and is
+  warn-only.

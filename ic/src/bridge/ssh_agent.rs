@@ -12,9 +12,9 @@ use secrecy::ExposeSecret;
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::UnixListenerStream;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
-use crate::bridge::ssh::{SSHCredentials, SshBridgeError, Result};
+use crate::bridge::ssh::{Result, SSHCredentials, SshBridgeError};
 
 #[derive(Clone)]
 pub struct SshAgent {
@@ -53,8 +53,11 @@ impl SshAgent {
 
 fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
     let key_str = String::from_utf8_lossy(&creds.key_data).to_string();
-    let passphrase = creds.passphrase.as_ref().map(|s| s.expose_secret().as_ref());
-    
+    let passphrase = creds
+        .passphrase
+        .as_ref()
+        .map(|s| s.expose_secret().as_ref());
+
     // Use the internal format decoder - it's public in the crate root
     russh_keys::decode_secret_key(&key_str, passphrase)
         .map_err(|e| SshBridgeError::InvalidKeyFormat(format!("Key parse error: {}", e)))
@@ -65,7 +68,9 @@ impl Agent for SshAgent {
     fn confirm(self, _pk: Arc<KeyPair>) -> Box<dyn Future<Output = (Self, bool)> + Unpin + Send> {
         Box::new(futures::future::ready((self, true)))
     }
-    async fn confirm_request(&self, _msg: MessageType) -> bool { true }
+    async fn confirm_request(&self, _msg: MessageType) -> bool {
+        true
+    }
 }
 
 pub struct SshAgentServer {
@@ -89,9 +94,15 @@ impl Drop for SshAgentServer {
 }
 
 impl SshAgentServer {
-    pub async fn start(socket_path: PathBuf, keys: HashMap<String, SSHCredentials>) -> Result<Arc<Self>> {
+    pub async fn start(
+        socket_path: PathBuf,
+        keys: HashMap<String, SSHCredentials>,
+    ) -> Result<Arc<Self>> {
         if socket_path.exists() {
-            warn!("SSH agent socket exists, removing: {}", socket_path.display());
+            warn!(
+                "SSH agent socket exists, removing: {}",
+                socket_path.display()
+            );
             let _ = std::fs::remove_file(&socket_path);
         }
 
@@ -129,7 +140,8 @@ impl SshAgentServer {
             }
         }
 
-        let keys_map: Arc<Mutex<HashMap<String, Arc<KeyPair>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let keys_map: Arc<Mutex<HashMap<String, Arc<KeyPair>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let keys_clone = Arc::clone(&keys_map);
         let socket_path_for_log = socket_path.clone();
         let socket_path_for_client = socket_path.clone();
@@ -138,7 +150,11 @@ impl SshAgentServer {
             let stream = UnixListenerStream::new(listener);
             let agent = SshAgent { keys: keys_clone };
             if let Err(e) = russh_keys::agent::server::serve(stream, agent).await {
-                error!("SSH agent server error on {}: {}", socket_path_for_log.display(), e);
+                error!(
+                    "SSH agent server error on {}: {}",
+                    socket_path_for_log.display(),
+                    e
+                );
             }
         });
 
@@ -155,10 +171,14 @@ impl SshAgentServer {
                 let mut guard = keys_map.lock().await;
                 guard.insert(hostname.clone(), key_arc);
             }
-            match russh_keys::agent::client::AgentClient::connect_uds(&socket_path_for_client).await {
+            match russh_keys::agent::client::AgentClient::connect_uds(&socket_path_for_client).await
+            {
                 Ok(mut client) => {
                     if let Err(e) = client.add_identity(&key_pair, &[]).await {
-                        warn!("Failed to add key for {} via agent protocol: {}", hostname, e);
+                        warn!(
+                            "Failed to add key for {} via agent protocol: {}",
+                            hostname, e
+                        );
                     } else {
                         info!("Added key for {} to SSH agent via protocol", hostname);
                     }
@@ -176,7 +196,9 @@ impl SshAgentServer {
         }))
     }
 
-    pub fn socket_path(&self) -> &PathBuf { &self.socket_path }
+    pub fn socket_path(&self) -> &PathBuf {
+        &self.socket_path
+    }
 
     pub async fn add_key(&self, hostname: String, creds: SSHCredentials) -> Result<()> {
         let key_pair = parse_key(&creds)?;
@@ -189,7 +211,9 @@ impl SshAgentServer {
     pub async fn remove_key(&self, hostname: &str) -> Result<bool> {
         let mut keys = self.keys.lock().await;
         let removed = keys.remove(hostname).is_some();
-        if removed { info!("Removed key from SSH agent for host {}", hostname); }
+        if removed {
+            info!("Removed key from SSH agent for host {}", hostname);
+        }
         Ok(removed)
     }
 
