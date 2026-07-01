@@ -163,6 +163,26 @@ assert_eq "bridge json owner-only" "$(bridgeval XMPP_ALLOW_FROM_JSON)" '["fixtur
 out="$(run_bridge_writer "admin@xmpp.org,bob@xmpp.org")"
 assert_eq "bridge json owner+two" "$(bridgeval XMPP_ALLOW_FROM_JSON)" '["fixture-tenant@xmpp.localhost","admin@xmpp.org","bob@xmpp.org"]'
 
+echo "=== CLI dispatch parsing smoke check ==="
+
+# Verify the dispatch block recognizes the new flags by invoking the script
+# directly with a deliberately-bad tenant name AFTER the flags; if the flags
+# parsed, the script reaches require_root (not "unknown flag"). As non-root,
+# require_root exits with a permission message; we assert it does NOT mention
+# "unknown flag".
+err="$(bash "$ADMIN_SCRIPT" add-tenant \
+  --llm-model glm-5-air \
+  --gateway-host 0.0.0.0 \
+  --xmpp-allow-from admin@xmpp.org \
+  2>&1 || true)"
+if echo "$err" | grep -q 'unknown flag'; then
+  echo "  FAIL: a new flag was rejected as unknown"
+  echo "        $err"
+  failures=$((failures + 1))
+else
+  echo "  PASS: all three new flags parsed without 'unknown flag' error"
+fi
+
 echo ""
 if [[ "$failures" -eq 0 ]]; then
   echo "ALL TESTS PASSED"
