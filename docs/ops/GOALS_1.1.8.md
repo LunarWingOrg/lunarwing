@@ -3,9 +3,12 @@
 
 ### Helps to do items in order (generally)
 
+1. [ ] rm gh
+rm default mcps
+ssh agent adjustments
 1. [ ] Agent SSH Rust Tool
 2. [ ] Agent SSH WASM TOOL
-3. [ ] Self-Healing capability expansion
+3. [ ] Self-Healing capability expansion? 
 4. [ ] see what else we can do from roadmap planned for 1.1.9 a little earlier
 3. [ ] finish improvements to routines
 4. [ ] Bump crate versions to 1.1.8
