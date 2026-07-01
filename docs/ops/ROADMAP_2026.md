@@ -34,7 +34,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
-| Opencode External Worker (and possibly Paseo Integration?) | v1.2.2 |
+| Opencode External Worker (and possibly Paseo Integration?) - could possibly do 1.1.8 or 1.2.0 as well | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v1.2.3 |
 | Further external worker polishing | v1.2.3 |
