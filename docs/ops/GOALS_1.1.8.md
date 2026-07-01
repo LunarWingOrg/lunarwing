@@ -4,7 +4,7 @@
 ### Helps to do items in order (generally)
 
 1. [ ] Finalize goals
-2. [ ] rm gh extension
+2. [ ] rm gh extension and verify it does not show up
 3. [ ] rm default mcps
 4. [ ] ssh agent adjustments
 5. [ ] Agent SSH Rust Tool
