@@ -14,8 +14,8 @@
 9. [x] test xmpp improvements
 10. [x] test ssh agent
 11. [x] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
-12. [ ] Run all cargo tests
-13. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
+12. [x] Run all cargo tests
+13. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
 14. [ ] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
 15. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
 16. [x] Run automated testing scripts if still relevant
