@@ -5,7 +5,7 @@
 
 1. [ ] Finalize goals
 2. [ ] rm gh extension and verify it does not show up
-3. [ ] rm default mcps
+3. [ ] rm default mcps and verify they do not show up on fresh installation
 4. [ ] ssh agent adjustments
 5. [ ] Agent SSH Rust Tool
 6. [ ] Agent SSH WASM TOOL
