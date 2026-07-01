@@ -540,18 +540,18 @@ mod tests {
         .unwrap();
 
         fs::write(
-            tools_dir.join("github.json"),
+            tools_dir.join("web-search.json"),
             r#"{
-                "name": "github",
-                "display_name": "GitHub",
+                "name": "web-search",
+                "display_name": "Web Search",
                 "kind": "tool",
                 "version": "0.1.0",
-                "description": "GitHub integration for issues and PRs",
-                "keywords": ["code", "git"],
+                "description": "Search the web for information",
+                "keywords": ["search", "web"],
                 "source": {
-                    "dir": "tools-src/github",
-                    "capabilities": "github-tool.capabilities.json",
-                    "crate_name": "github-tool"
+                    "dir": "tools-src/web-search",
+                    "capabilities": "web-search-tool.capabilities.json",
+                    "crate_name": "web-search-tool"
                 },
                 "tags": ["default", "development"]
             }"#,
@@ -596,7 +596,7 @@ mod tests {
                 "bundles": {
                     "default": {
                         "display_name": "Recommended",
-                        "extensions": ["tools/gotify", "tools/github", "channels/telegram"]
+                        "extensions": ["tools/gotify", "tools/web-search", "channels/telegram"]
                     },
                     "messaging": {
                         "display_name": "Messaging",
@@ -662,6 +662,7 @@ mod tests {
         assert!(catalog.get("gotify").is_some());
         assert!(catalog.get("telegram").is_some());
         assert!(catalog.get("notion").is_some());
+        assert!(catalog.get("web-search").is_some());
 
         // Missing
         assert!(catalog.get("nonexistent").is_none());
