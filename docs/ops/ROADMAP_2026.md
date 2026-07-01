@@ -6,8 +6,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Self-healing capability expansion | v1.1.8 |
-| Brand new Rust/WASM tool(s) | v1.1.8 |
 | Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.9 |
 | Remove deprecated Codex external worker from project | v1.1.9 |
 | Remove support for all the other random unsupported LLM providers | v1.1.9 |
