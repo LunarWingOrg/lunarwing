@@ -287,8 +287,8 @@ impl RegistryCatalog {
     /// then searches by bare name ("github").
     ///
     /// If a bare name matches more than one prefix, returns `None`.
-    /// Use a qualified key ("tools/github", "channels/telegram", or
-    /// "mcp-servers/notion") to disambiguate.
+    /// Use a qualified key ("tools/github", "channels/telegram") to
+    /// disambiguate.
     pub fn get(&self, name: &str) -> Option<&ExtensionManifest> {
         // Try exact key first
         if let Some(m) = self.manifests.get(name) {
@@ -350,8 +350,7 @@ impl RegistryCatalog {
         }
     }
 
-    /// Get the full key ("tools/github", "channels/telegram", or
-    /// "mcp-servers/notion") for a manifest.
+    /// Get the full key ("tools/github", "channels/telegram") for a manifest.
     pub fn key_for(&self, name: &str) -> Option<String> {
         if self.manifests.contains_key(name) {
             return Some(name.to_string());
