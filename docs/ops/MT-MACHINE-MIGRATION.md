@@ -103,9 +103,12 @@ Then pick the branch:
 - **PG must be running when `start-tenant` runs.** If it isn't (e.g. a stage-then-reboot
   before the Podman Quadlet/linger brings PG up), the rekey gate **silently skips** and the
   daemon starts against still-`default` rows. Confirm `lunarwing-pg-<tenant>` is up first.
-- **`migrate_owner_scope` swallows SQL errors and only re-counts 5 of the 13 tables.**
-  Don't trust silence — verify after start (step 4): rows should be under `<tenant>` with
-  **zero `default`** remaining.
+- **Still verify the rekey yourself after start (step 4).** `migrate_owner_scope` now
+  surfaces SQL errors and re-checks all 13 tables (hardened in 1.1.7), and it connects over
+  the pg container's local socket (a host-port connection is unreachable from inside the
+  container under rootless podman — that bug silently no-op'd the whole rekey pre-1.1.7).
+  Even so, confirm rows are under `<tenant>` with **zero `default`** remaining — a skipped or
+  partial rekey is otherwise invisible until you use the agent.
 
 **Risk if the rekey is skipped (why the steps above matter).** The import flow has **no
 automated owner-scope detection** — it relies on you measuring the scope and, when it isn't
@@ -139,6 +142,17 @@ for Quadlet supervision), TensorZero proxy, reachability to the same XMPP server
 greps for the `restore-tenant` subcommand and refuses an older one). See
 `docs/ops/MULTITENANCY-PRODUCTION.md` and `docs/guides/MT-ADMIN-QUICKSTART.md`. Ensure
 `jq`, `tar`, and the container runtime are present on both hosts.
+
+> **Rootless-podman + docker-CLI gotcha.** `mt-admin` selects the container runtime by which
+> binary is present: if the `docker` CLI is installed — **even with no running docker
+> daemon** — it picks **docker**, and every per-tenant container op (PG provisioning, restore,
+> rekey, worker build) fails against a dead socket. On a rootless-podman host that also has the
+> docker CLI, force podman explicitly: `LUNARWING_CONTAINER_RUNTIME=podman` (with
+> `LUNARWING_MT_ROOTLESS=true`). It **must survive `sudo`**, which strips your shell env — pass
+> it inline on every mt-admin call:
+> `sudo env LUNARWING_CONTAINER_RUNTIME=podman LUNARWING_MT_ROOTLESS=true ic/scripts/lunarwing-mt-admin.sh …`
+> Cleaner long-term: remove the unused docker CLI (detection then lands on podman on its own),
+> or add the var to the admin's `sudoers` `env_keep`.
 
 ---
 
@@ -181,6 +195,16 @@ is **not** satisfied by `--yes` alone.
 > migrate-owner-scope <tenant> --from <S>`, then `start-tenant` — otherwise the daemon
 > comes up scoped to `<tenant>` against unmigrated rows and sees an empty dataset. See
 > *Owner-scope continuity*.
+
+> **Migrating into a host with self-heal already armed?** If the target runs the fleet health
+> pipeline (`lunarwing-mt-health.timer`), it will **restart the tenant daemon** as soon as
+> `add-tenant` renders its unit — reviving it mid-import and re-contaminating the DB between
+> `restore-tenant` and the rekey (the revived daemon bootstraps fresh `<tenant>`-scoped rows
+> that then collide with the restored `default` rows). Pause it for the whole migration window:
+> `sudo systemctl stop lunarwing-mt-health.timer lunarwing-mt-health.service` (system-level, not
+> `--user`), do restore → rekey → start with the daemon staying down, verify, then re-arm:
+> `sudo systemctl start lunarwing-mt-health.timer`. It's host-global, so nothing else is
+> self-healed while paused — re-arm promptly. (Same pipeline step 5 arms fleet-wide.)
 
 ### 4. Verify
 **Owner scope landed:** `SELECT user_id, count(*) FROM conversations GROUP BY 1;` shows

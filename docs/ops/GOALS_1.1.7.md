@@ -7,26 +7,29 @@
 2. [x] finish kers and lunarvision improvements
 3. [x] finish improvements to routines
 4. [x] Bump crate versions to 1.1.7
-5. [ ] Update stale documentation, including repo root-level README.md
-6. [x] Update ROADMAP file to reflect accuracy
-7. [x] test routine improvements
-8. [x] test xmpp improvements
-9. [x] test ssh agent
-10. [x] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
-11. [x] Run all cargo tests
-12. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
-13. [x] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
-14. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
-15. [x] Run automated testing scripts if still relevant
-16. [x] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-17. [x] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
-18. [x] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
-19. [x] Full integrated testing
-20. [x] fix problems. more testing
-21. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
-22. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #21)
-23. [ ] Create new branch to correspond with releases
-24. [ ] Create GH release tag and add release notes to it like other releases already have
+5. [x] Ensure all relevant crates are bumped to 1.1.7
+6. [x] Update stale documentation, including repo root-level README.md
+7. [x] Update ROADMAP file to reflect accuracy
+8. [x] test routine improvements
+9. [x] test xmpp improvements
+10. [x] test ssh agent
+11. [x] test kers/lunarvision improvements (on diff machine with 4090 or 5090)
+12. [x] Run all cargo tests
+13. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary
+14. [x] Fix the now broken kawarimi technique
+15. [x] Retest kawarimi tenant migration since NEW database migration is needed now since 1.1.6 (Use Starforce to test) 
+16. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
+17. [x] Run automated testing scripts if still relevant
+18. [x] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
+19. [x] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
+20. [x] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
+21. [x] Full integrated testing
+22. [x] fix problems. more testing
+23. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
+24. [x] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #23)
+25. [x] Update release date in release notes
+26. [ ] Create new branch to correspond with releases
+27. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
 

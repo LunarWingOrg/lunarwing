@@ -2519,15 +2519,18 @@ patch_tenant_env() {
 _owner_scope_needs_migration() {
   local name="$1"
   local old_scope="${2:-default}"
-  local pg_port
-  pg_port="$(ports_get "$name" postgres)" 2>/dev/null || return 1
+  # Confirm a postgres port is allocated (tenant is provisioned); we do NOT connect
+  # over it — psql runs INSIDE the pg container via the local socket (see the note in
+  # migrate_owner_scope). A host-published port isn't reachable from inside the
+  # container under rootless podman.
+  ports_get "$name" postgres >/dev/null 2>&1 || return 1
 
   # If the PG container isn't running, can't check — assume clean.
   _ctr "$name" inspect -f '{{.State.Running}}' "lunarwing-pg-$name" 2>/dev/null | grep -q true || return 1
 
   local count
   count="$(cd / && _ctr "$name" exec lunarwing-pg-$name \
-    psql -U lunarwing -d lunarwing -h 127.0.0.1 -p "$pg_port" -tAc "
+    psql -U lunarwing -d lunarwing -tAc "
     SELECT count(*) FROM (
       SELECT user_id FROM settings WHERE user_id='$old_scope'
       UNION ALL SELECT user_id FROM conversations WHERE user_id='$old_scope'
@@ -2582,8 +2585,14 @@ migrate_owner_scope() {
     rc-service "lunarwing-${name}" stop >/dev/null 2>&1 || true
   fi
 
+  # Connect over the container's LOCAL SOCKET — psql runs INSIDE the pg container via
+  # `_ctr exec`, so NOT `-h 127.0.0.1 -p $pg_port`: that host-published port is not
+  # reachable from inside the container under rootless podman, which silently broke
+  # the rekey (the needs-check saw 0 rows -> "already clean" no-op, so a real
+  # migration never ran). Mirrors restore_tenant_postgres (pg_restore -U lunarwing
+  # -d lunarwing, no -h/-p). Do not add -h/-p back.
   local psql_cmd
-  psql_cmd="psql -U lunarwing -d lunarwing -h 127.0.0.1 -p $pg_port"
+  psql_cmd="psql -U lunarwing -d lunarwing"
 
   # Run the migration via the tenant's PG container. Each table's statements run
   # in ONE transaction (-1) with ON_ERROR_STOP, so a unique-constraint collision

@@ -1,12 +1,10 @@
-# DRAFT Release Notes for LunarWing v1.1.7 — Codename `Takamaru (タカ丸)`
+# Release Notes for LunarWing v1.1.7 — Codename `Takamaru (タカ丸)`
 
-**Information in this is very out of date now**
+**Release Date:** 2026-07-01
 
-**Release Date:** To Be Determined
+> Codename *Takamaru* (タカ丸) — the messenger hawk of Sunagakure (鷹, *Taka* = "hawk"). In shinobi folklore, hawks are the trusted long-distance couriers between hidden villages, crossing miles of hostile territory no other messenger could safely reach. With the release of 1.1.7, the **Agent SSH Harness** is introduced. **The Agent SSH Harness** makes a trusted, off-disk courier of its own: a per-tenant `ssh-agent` socket carries authentication between isolated worker containers and the host, vaults the secret material in the encrypted store, and never lets the message — the private key — rest where an enemy could read it. Furthermore, v1.1.7 introduces the first few of many, many major improvements to come for the XMPP communication bridge within LunarWing. As one of LunarWing's greatest flagship features, it was about time that it started to get some serious developer attention. From the sand village... to your federated self-hosted prosody servers... all the way to your phone or tablet... this bird is fast...
 
-> Codename *Takamaru* (タカ丸) — the messenger hawk of Sunagakure (鷹, *Taka* = "hawk"). In shinobi folklore, hawks are the trusted long-distance couriers between hidden villages, crossing miles of hostile territory no other messenger could safely reach. With the release of 1.1.7, the **Agent SSH Harness** is introduced. **The Agent SSH Harness** makes a trusted, off-disk courier of its own: a per-tenant `ssh-agent` socket carries authentication between isolated worker containers and the host, vaults the secret material in the encrypted store, and never lets the message — the private key — rest where an enemy could read it. Furthermore, within v1.1.7 introduces the first few of many, many major improvements to come for the XMPP communication bridge within LunarWing. As one of LunarWing's greatest flagship features, it was about time that it started to get some serious developer attention. From the sand village... to your federated self-hosted prosody servers... all the way to your phone or tablet... this bird is fast...
-
-The rest of the release rides behind this ultrafast bird. Some of the other changes include port-registry polish, Tesseract OCR sidecar hardening, improvements to LunarVision, and even some new scripts to help developers do more.
+The rest of the release rides behind this ultrafast bird. Some of the other changes include port-registry polish, LunarVision (OCR / vision-language) sidecar hardening, improvements to the routine system, and new operator helper scripts to help developers do more.
 
 ## Overview
 
@@ -16,9 +14,9 @@ The single new feature introduced, deliberately breaking the otherwise pure-poli
 
 A second focus is **port-registry schema housekeeping**: the v8 schema left an unnamed extended slot unused, and v9 dedicates it as the per-tenant **LunarVision / OCR sidecar API port** (`vision_service`) so the vision service can be registry-allocated and reached by WASM tools. Furthermore, **v10 adds a second dedicated port** (`vision_health`) for the host self-heal pipeline to probe `/health` independently of OCR traffic.
 
-A third focus is the **LunarVision (OCR / vision-language) sidecar**: migrated to rootless Podman with a real `HEALTHCHECK`, gained disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, a wired-in health endpoint, and a Prometheus metrics endpoint scaffold. The companion `vision-analyze` WASM tool was rewritten from scratch and re-added to the tool registry.
+A third focus is the **LunarVision (OCR / vision-language) sidecar**: migrated to rootless Podman, gained disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, a wired-in health endpoint, and redesigned wasm tool to accompany it. The companion `vision-analyze` WASM tool was rewritten from scratch and re-added to the tool registry.
 
-A fourth focus on the routine system.
+A fourth focus is the **routine system**: a state-contamination bug across routine runs was fixed, a silent retry-correctness bug for webhook- and event-triggered routines was corrected (retries now run in a background task that respects backoff, working across all trigger types), and the previously-defined-but-unused `dedup_window` guardrail is now actually enforced for both message and system events. A dedicated test suite (`ic/scripts/test-routine-improvements.sh`) covers retry backoff, the dedup window, the stuck-run sweeper, system events, and cron smoke. See *Routine changes* below.
 
 Additional work includes **dev-mode operator helper scripts** (sandbox config + tool permissions tuners, with prominent "not for end users" warnings), a **`configure-ssh` subcommand** wired into `lunarwing-mt-admin.sh` (and SSH provisioning folded into `add-tenant`), and several other minor improvements across the board.
 
@@ -30,11 +28,23 @@ This release **does not** add database schema changes, but a small non-destructi
 
 ### XMPP Security Improvements
 
-The XMPP channel with OMEMO-aware inbound handling remains stable.
+The XMPP channel's OMEMO-aware inbound handling received two security-relevant fixes this cycle:
+
+- **OMEMO `aesgcm://` URL leak into LLM context** (commit `1fdcf362`). When a user sent an OMEMO-encrypted file share, the bridge correctly downloaded and decrypted the `aesgcm://` attachment, but the **raw `aesgcm://` URL survived into the agent's LLM context** alongside the decrypted bytes. The agent's HTTP tool then refused the URL (HTTPS-only scheme allowlist), and the LLM narrated the failure as "SSRF protection" — misleading the user about what actually happened. Root cause: the body-clearing check in `ic/src/channels/xmpp/mod.rs` only fired when the *entire* message body equaled the attachment URL, so real messages like *"check this out aesgcm://host/file.jpg#key thanks"* leaked. Fixed with a `strip_attachment_urls()` helper that strips each attachment's `source_url` as a substring from the body (clearing it if only whitespace remains). Two regression tests added (`strip_attachment_urls_removes_embedded_aesgcm_urls`, `strip_attachment_urls_clears_url_only_body`). Full write-up: `docs/proposals/XMPP_OMEMO_AESGCM_URL_LEAK_FIX.md`.
+- **Response-leak scan no longer exempts IPv6 loopback** (commit `9c5a029d`). `should_skip_response_leak_scan()` in `ic/src/channels/wasm/wrapper.rs` previously skipped the leak scan for `127.0.0.1`, `localhost`, **and** `::1`; the IPv6-loopback (`::1`) exemption was removed so those endpoints are now scanned too, closing a minor gap in the response-leak scanner.
 
 ### XMPP File Transfers
 
-Changes to XMPP File Transfers
+Inbound XMPP file transfers were blocked by a **WASM attachment trap** that surfaced in v1.1.6-era testing: inbound attachments were delivered from the bridge to the daemon, but the XMPP WASM channel trapped during `on_poll()` before the message reached the agent, and the cursor never advanced past the failing message (so it was re-polled on every tick).
+
+Root cause was **WASM linear-memory exhaustion during attachment decoding** — the channel held several overlapping copies of each attachment (raw HTTP response body, parsed JSON, base64 string, decoded `Vec<u8>`) simultaneously inside the 50 MB linear-memory ceiling, and when Wasmtime denied a growth request it surfaced as a trap.
+
+The fix (commit `d2d31111`) combines two of the approaches in `docs/proposals/XMPP_WASM_ATTACHMENT_TRAP.md`:
+
+- **Reduced peak concurrent memory** in the WASM channel (`ic/channels-src/xmpp/src/lib.rs`): `on_poll()` and `decode_inbound_attachments()` now take ownership of the attachments `Vec` (by-value `into_iter()` + destructuring) instead of borrowing (`&`), so each attachment's base64 string is consumed and freed immediately after decoding rather than kept alive alongside the decoded bytes. The poll cursor is also captured before the message loop so it is written even if emission fails.
+- **Raised the default WASM channel memory limit from 50 MB → 128 MB** (`ic/src/channels/wasm/runtime.rs`), with an updated comment noting base64 + decoded bytes coexist briefly during attachment decode. Defense-in-depth for attachment-heavy poll responses.
+
+The XMPP WASM channel was rebuilt (`xmpp.wasm`, validated with `wasm-tools validate`); all 70 XMPP tests pass, including OMEMO roundtrips, WASM-wrapper integration, and the `aesgcm://` URL-leak regression. **Live e2e validation against a real XMPP server is still pending** (send a real PNG over XMPP, confirm the cursor advances) — see *Known Issues*.
 
 ### Agent SSH Harness — Centralized Per-Tenant SSH for Workers
 
@@ -79,7 +89,7 @@ The agent socket lives at `<tenant_home>/lunarwing/run/ssh-agent.sock`, **not** 
 
 #### OpenRC + systemd
 
-SSH provisioning was implemented and **live-validated on two seperate testing environments** — systemd (`tiggie`) and OpenRC (`ninejane`). The end-to-end path `secrets store → agent socket → worker container → SSH → host` is confirmed working (commit `0961ef25`).
+SSH provisioning was implemented and **live-validated on two separate testing environments** — systemd (`tiggie`) and OpenRC (`ninejane`). The end-to-end path `secrets store → agent socket → worker container → SSH → host` is confirmed working (commit `0961ef25`).
 
 #### Regression Fixes Encountered While Wiring
 
@@ -116,23 +126,41 @@ Substantial work on `projects/ocr-sidecar/`:
 - **API versioning + OpenAPI spec** — the HTTP surface is now versioned and exposes an OpenAPI document. Healthcheck wiring was completed alongside.
 - **Fail-fast design** — the `vision-analyze` WASM tool makes a single HTTP request with no retry; retries belong in the host/agent layer, not in the WASM sandbox (which has no threading or sleep primitives).
 - **Self-heal alignment** — the host-side init-template names were reconciled to `ocr-sidecar` so the self-heal pipeline discovers the right unit names (commit `eff1f541`).
-- **Dockerfile / `.dockerignore` adjustments** + `libssl` added to the image (commits `20cdad97`, `ad0e394f`).
+- **Dockerfile / `.dockerignore` adjustments** + `libssl-dev` added to the build stage (commits `20cdad97`, `ad0e394f`).
 
 ### `vision-analyze` WASM Tool — Rewrite + Re-registration
 
-The `vision-analyze` WASM tool (`ic/tools-src/vision-analyze/`) was **rewritten from scratch** (commit `3fa0d629`) and a `vision-analyze.tools` manifest added so it registers with the rest of the WASM toolset. The earlier in-registry copy was removed mid-cycle as unviable and is now replaced by the rewrite. The tool-registry path and the mt-admin WASM setup were re-added in lockstep.
+The `vision-analyze` WASM tool (`ic/tools-src/vision-analyze/`) was **rewritten from scratch** (commit `3fa0d629`). The previous tool was fundamentally broken inside a WASM sandbox — it called `std::env::var()` and `std::thread::sleep()` (neither of which exist in WASM), ran auth logic inside the sandbox (violating the WIT security model), and used a `host: '*'` capability that was effectively SSRF-by-design. The rewrite is ~230 lines, makes a single HTTP call, and fails fast (retries belong in the host layer, not the sandbox). It registers via a `vision-analyze-tool.capabilities.json` manifest with a loopback-only HTTP allowlist. The earlier in-registry copy was removed mid-cycle as unviable and is now replaced by the rewrite; the tool-registry path and the mt-admin WASM setup were re-added in lockstep.
 
 ### Routine changes
 
-Summarize routine changes here.
+Three routine-engine improvements shipped this cycle (`ic/src/agent/routine_engine.rs`, +325 lines), all documented in `docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md`. Five further improvements are proposed but not yet implemented.
+
+#### #1 — State-Contamination Prevention
+
+If the LLM ever emitted a malformed response (e.g., text-formatted tool calls like `<function=gotify_send_message>`), that output was persisted to `state.md` and the conversation thread. Subsequent runs loaded the contaminated state as "Previous State", causing the LLM to mimic the broken format — a self-reinforcing loop that persisted until manual intervention. **This caused a real production incident**: a crypto-price routine stopped sending Gotify notifications because the LLM began emitting text-formatted tool calls instead of using the tool-calling API, and the hallucinated output was persisted and reinforced on every run.
+
+The fix adds hallucinated-tool-call detection (`HALLUCINATED_TOOL_CALL_MARKERS`: `<function=`, `<parameter=`, `<function_call>`, etc.), a `strip_hallucinated_tool_calls()` helper, and `sanitize_state_content()` which sanitizes `state.md` content before prompt injection (strips tool-call patterns, control chars, truncates to 4096 chars). `handle_text_response()` now strips such output, returning an `EmptyResponse` error if the output is *entirely* hallucinated rather than passing garbage through as a notification summary. `execute_lightweight()` wraps state content through the sanitizer before building the lightweight prompt. 13 unit tests added. (commit `3f23ed7a`)
+
+#### #2 — Retry Policy Now Fires For All Trigger Types
+
+`RetryPolicy` existed in `RoutineGuardrails` with a `compute_delay()`, and `execute_routine` called it — but the "retry" only set `next_fire_at = now + delay` in the DB. That worked for cron-triggered routines (picked up by the next cron tick) but **event-triggered and webhook-triggered routines never retried** because there was no cron tick to pick them up. After a retryable failure, the engine now `tokio::spawn`s a task that `tokio::time::sleep(delay)`s and then re-fires the routine independent of trigger type, with three guardrails (routine still exists, still enabled, `consecutive_failures` < `max_retries`). Retry runs are recorded with `trigger_type: "retry"`. 4 unit tests for `RetryPolicy::compute_delay()` (exhaustion, exponential math, max-delay cap, zero-retries). (commit `3f23ed7a`)
+
+#### #3 — `dedup_window` Guardrail Now Enforced
+
+`RoutineGuardrails.dedup_window` (`Option<Duration>`) and a `content_hash()` function existed but were never consulted — if the same message triggered an event routine twice (edited message, cross-post), both fired. The engine now keeps per-routine in-memory dedup state (`dedup_state: Arc<RwLock<HashMap<Uuid, DedupEntry>>>`) and consults it in both `check_event_triggers()` (message events) and `emit_system_event()` (system events, hashing the serialized JSON payload), placed before the cooldown check (cheaper: in-memory vs DB). Opportunistic pruning runs when the map exceeds 256 entries. 6 unit tests. (commit `b24fda6a`)
+
+#### Test Suite
+
+`ic/scripts/test-routine-improvements.sh` exercises the post-v1.1.6 routine features against a live tenant: retry backoff, the dedup window, the stuck-run sweeper + lightweight timeout, system-event triggers, a cron smoke test, and state decontamination under concurrent fires. **Note:** this script self-declares "COMPLETELY UNTESTED" — it was written from API source inspection and has not been executed end-to-end; verify output carefully before relying on it.
 
 ### Dev-Mode Operator Helper Scripts — Sandbox Config + Tool Permissions
 
 Two operator tuning scripts were added under `ic/scripts/`:
 - **`set-sandbox-config.sh`** — upserts agent sandbox settings (`sandbox_enabled`, `sandbox_policy`, `sandbox_timeout_secs`, `sandbox_image`) into the tenant's `settings` table inside `lunarwing-pg-<tenant>` via `sudo` → `podman exec … psql`. Honors `--dry-run`. SQL values are server-side `to_jsonb()`-encoded; bash-side escaping is kept minimal.
-- **`set-tool-permissions.sh`** — tunes per-tool permission tiers.
+- **`set-tool-permissions.sh`** — grants `always_allow` permission to specific tools (default set: `read_file`, `write_file`, `list_dir`, `apply_patch`, `shell`; override via `PERMISSIONS=`) by upserting into the tenant's `settings` table via the same `sudo` → `podman exec … psql` path. Also honors `--dry-run`.
 
-Both carry a **prominent header warning: "THIS IS A DEV TOOL SCRIPT. NORMAL USERS HAVE NO REASON TO EVER RUN THIS SCRIPT."** They are operator/dev conveniences for shaking out configurations against a running tenant, not part of the supported onboarding path. For users looking for something similar to what these dev tool scripts do, please check out the nanocode worker, as you can likely get something that can most likely satisfy your desires... safely...
+Both carry a **prominent dev-tool-only header warning** (e.g. *"THIS IS A DEV TOOL SCRIPT. NORMAL USERS HAVE NO REASON TO EVER RUN THIS SCRIPT."*) They are operator/dev conveniences for shaking out configurations against a running tenant, not part of the supported onboarding path. For users looking for something similar to what these dev tool scripts do, please check out the nanocode worker, as you can likely get something that can most likely satisfy your desires... safely...
 
 ### `lunarwing-mt-admin.sh` — SSH Provisioning Folded Into `add-tenant`
 
@@ -148,8 +176,8 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 
 ### Documentation Housekeeping & IronClaw → LunarWing Rename Sweep
 
-- **Reconciled and archived stale documentation** — three stale ops tracking files archived to `docs/ops/history/`; the `docs/DOCS_AUDIT.md`, `docs/DOCS_AUDIT_GLM.md`, `docs/DOCS_REORG_CHECKLIST.md`, `docs/KUMOGAKURE-DOC-REVIEW.md`, `docs/KUMOGAKURE-POST-1.1.6-REVIEW`, and `docs/OUTSIDE-DOCS-DOC-AUDIT.md` leftovers were deleted after their action items were folded into the living tree.
-- **Bug-tracker renames** — `BUG-WEECHAT-WARNINGS.md` → `BUG-FIXED-WEECHAT-WARNINGS.md`, `BUG-LAPSE.md` → `BUG-FIXED-LAPSE.md`, `BUG-workspace-concurrency-fixes-v1.1.0.md` → `BUG-FIXED-workspace-concurrency-fixes-v1.1.0.md` (closed-bug naming convention).
+- **Reconciled and archived stale documentation** — stale ops tracking files (prior-release GOALS, etc.) archived to `docs/ops/history/`; the `docs/DOCS_AUDIT.md`, `docs/DOCS_AUDIT_GLM.md`, `docs/DOCS_REORG_CHECKLIST.md`, `docs/KUMOGAKURE-DOC-REVIEW.md`, `docs/KUMOGAKURE-POST-1.1.6-REVIEW`, and `docs/OUTSIDE-DOCS-DOC-AUDIT.md` leftovers were deleted after their action items were folded into the living tree.
+- **Bug-tracker renames** — `BUG-WEECHAT-WARNINGS.md` → `BUG-FIXED-WEECHAT-WARNINGS.md`, `BUG-LAPSE.md` → `BUG-FIXED-LAPSE.md`, `BUG-workspace-concurrency-fixes-v1.1.0.md` → `BUG-FIXED-workspace-concurrency-fixes-v1.1.0.md` (closed-bug naming convention). These closed-bug files were subsequently archived under `docs/bugs/history/`.
 - **IronClaw → LunarWing renames** in `FEATURE_PARITY.md`, the GitHub tool docs, the XMPP channel docs, XMPP test docs, the e2e tests, and the OCR sidecar docs. The WeeChat channel/adapter and Gotify tool renames remain deliberately deferred to a later polish cycle.
 - **`docs/ops/ROADMAP_2026.MD`** updated to reflect current accuracy (commit `03e17258`).
 - **`docs/ops/GOALS_1.1.7.md`** — the v1.1.7 pre-release checklist, created and iterated.
@@ -166,9 +194,10 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 - **`Arc`-copy issue in `ssh_agent.rs`.** Key-pair `Arc` sharing across the listener task and the outer server was corrected.
 - **`SSHBridge::blocking_lock()` `Drop` impl could panic.** The `Drop` impl for `SshAgentServer` originally used `blocking_lock()`, which panics if called while the mutex is held (e.g., if `Drop` runs inside an async context that already holds the lock). Replaced with a best-effort `try_lock` clear. This was the third or so attempt at the fix; the `try_lock`-based version is the keeper.
 - **Port migration v8 → v9 logic had a bug.** The standalone `migrate-ports-v9.sh` and the in-`mt-admin` path were corrected (commit `39e6732b`).
-- **WASM build broken mid-cycle.** Fixed after the tool-registry re-add and the `vision-analyze` rewrite (commit `eaf2fdc6`).
-- **Routing bug in the sidecar / general path.** Fixed (commit `258a674f`).
+- **`vision-analyze` WASM tool failed to build mid-cycle** after the tool-registry re-add. Fixed (commit `eaf2fdc6`).
+- **Routing bug in the OCR sidecar.** Fixed (commit `258a674f`).
 - **mt-admin was mis-provisioning on upgrades for nanocode, pebble, vision.** A helper function was added to fix in-place upgrades for those three worker types (commit `ff4fadec`).
+- **Fixed bug in Kawarimi for issue with owner-scope socket related to changes made in this release** - caught this issue immediately and fixed promptly by including a patch for the mt admin setup.
 
 ---
 
@@ -176,8 +205,8 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 
 - `docs/proposals/AGENT_SSH_DEV_HARNESS.md` — the Agent SSH Harness proposal (design note; can be expanded post-release).
 - `projects/ocr-sidecar/DOCUMENTATION.md`, `projects/ocr-sidecar/PODMAN_DEPLOYMENT.md`, `projects/ocr-sidecar/README.md` — updated to reflect the Podman rootless migration and `compose.yaml` rename.
-- `BUG-*.md` → `BUG-FIXED-*.md` renames in `docs/bugs/` to mark resolved bugs in the tracker's naming convention.
-- Archived/stale ops tracking files moved to `docs/ops/history/`.
+- **New proposals tied to shipped changes:** `docs/proposals/XMPP_OMEMO_AESGCM_URL_LEAK_FIX.md` (OMEMO URL leak), `XMPP_WASM_ATTACHMENT_TRAP.md` (attachment trap), `XMPP_INCOMING_ATTACHMENT.md` + `XMPP_LUNARVISION_INTEGRATION.md` (XMPP follow-ups), `HTTP_TOOL_SSRF_PROTECTIONS.md` (SSRF investigation, no code change), `JINGLE_IBB_FEASIBILITY.md` (forward-looking XMPP transfer method), and `ROUTINE_ENGINE_IMPROVEMENTS.md` + `ROUTINE_FALLBACK_RETRY_IMPROVEMENTS.md` (routine improvements #1–#3).
+- Additional internal planning proposals were also added this cycle (e.g. `rootless-podman-babysitter.md`, `qwen3vl-ocr-podman.md`, `KAWARIMI-OWNER-SCOPE-CONTINUITY.md`); see `docs/proposals/` for the full set.
 
 ---
 
@@ -196,7 +225,7 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 - **SSH bridge is constructed only when `[ssh] hosts` is non-empty.** An empty `[ssh]` section silently skips the bridge (no agent socket is created). This is intentional but worth knowing: workers that expect `SSH_AUTH_SOCK` will find it unset on tenants with no SSH host configured.
 - **ssh_agent server `Drop` is best-effort, not lock-guaranteed.** If `Drop` runs while another task holds the key mutex, the in-memory keys are not synchronously cleared. The keys' `Zeroizing` wrappers still clear them when the mutex is released, so this is a timing nuance rather than a leak.
 - **SSH harness data migration is one-way.** The secrets-store migration driven by the SSH schema changes is forward-only; there is no automatic rollback to the pre-SSH secrets layout. Take a secrets-store backup before adopting the harness on an existing tenant.
-- **XMPP File transfer note** - Although agents can recieve media files over XMPP, there is no way currently for the media file to immediately be viewed via LunarVision. This will be remedied in a future release.
+- **XMPP File Transfer note** — Although agents can receive media files over XMPP, there is no way currently for the media file to immediately be viewed via LunarVision. This will be remedied in a future release.
 
 ### Carried forward (unchanged in v1.1.7)
 
@@ -217,7 +246,7 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 
 ## Upgrade Notes
 
-1. **No new database migrations.** v1.1.7 adds no schema changes; the existing migrations still run automatically on first startup. **Back up your database before upgrading** as a matter of course. PostgreSQL 15+ remains required.
+1. **No new database *schema* migrations.** v1.1.7 adds no SQL schema changes; the existing migrations still run automatically on first startup. **Note:** adopting the Agent SSH Harness on an existing tenant does trigger an automatic, non-destructive, **one-way data migration in the secrets store** (see *Known Issues* — back up the secrets store first). PostgreSQL 15+ remains required, and **back up your database before upgrading** as a matter of course.
 2. **Ports registry auto-migrates v8 → v9 → v10.** Any `lunarwing-mt-admin.sh` invocation runs `ports_migrate_v9()` and `ports_migrate_v10()` automatically. The standalone `ic/scripts/migrate-ports-v9.sh` and `ic/scripts/migrate-ports-v10.sh` can also be run explicitly (both back up + validate + are idempotent + refuse to run on a registry below their prerequisite). Existing tenants' port numbers are unchanged (rename-only: `reserved_5 → vision_service`, `reserved_6 → vision_health`).
 3. **To gain the dedicated OCR/vision sidecar ports, re-render + restart sidecar units.** After the v9/v10 migration, run `render-units <tenant>` (or restart the sidecar) so both the `vision_service` (main API) and `vision_health` (health probe) slots are applied to the bind.
 4. **Existing tenants: opt into the SSH harness with `configure-ssh`.** `configure-ssh <name> [--host <host>] [--user <user>]` writes the `[[ssh.hosts]]` block, generates the ed25519 key pair, and stages the private key for upload after the next daemon start. New `add-tenant` runs run the full SSH provisioning automatically. The `[ssh]` section is inert until at least one host entry exists, so tenants that don't need SSH are unaffected.
@@ -239,6 +268,4 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 ##### Once evaluation begins in earnest, no new changes besides urgent fixes will be accepted into staging during the evaluation period.
 
 ---
-
-_This is a **working draft**. The two XMPP placeholders near the top of *Changes* (XMPP Security Improvements and XMPP File Transfers) are intentional and to be filled in separately._
 
