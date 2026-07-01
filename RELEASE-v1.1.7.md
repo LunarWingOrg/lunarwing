@@ -1,6 +1,4 @@
-# DRAFT Release Notes for LunarWing v1.1.7 — Codename `Takamaru (タカ丸)`
-
-**Information in this is very out of date now**
+# Release Notes for LunarWing v1.1.7 — Codename `Takamaru (タカ丸)`
 
 **Release Date:** To Be Determined
 
@@ -16,9 +14,9 @@ The single new feature introduced, deliberately breaking the otherwise pure-poli
 
 A second focus is **port-registry schema housekeeping**: the v8 schema left an unnamed extended slot unused, and v9 dedicates it as the per-tenant **LunarVision / OCR sidecar API port** (`vision_service`) so the vision service can be registry-allocated and reached by WASM tools. Furthermore, **v10 adds a second dedicated port** (`vision_health`) for the host self-heal pipeline to probe `/health` independently of OCR traffic.
 
-A third focus is the **LunarVision (OCR / vision-language) sidecar**: migrated to rootless Podman with a real `HEALTHCHECK`, gained disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, a wired-in health endpoint, and a Prometheus metrics endpoint scaffold. The companion `vision-analyze` WASM tool was rewritten from scratch and re-added to the tool registry.
+A third focus is the **LunarVision (OCR / vision-language) sidecar**: migrated to rootless Podman, gained disk-backed cache persistence, an API-versioned HTTP surface with an OpenAPI spec, a wired-in health endpoint, and redesigned wasm tool to accompany it. The companion `vision-analyze` WASM tool was rewritten from scratch and re-added to the tool registry.
 
-A fourth focus on the routine system.
+A fourth focus on the routine system. Details
 
 Additional work includes **dev-mode operator helper scripts** (sandbox config + tool permissions tuners, with prominent "not for end users" warnings), a **`configure-ssh` subcommand** wired into `lunarwing-mt-admin.sh` (and SSH provisioning folded into `add-tenant`), and several other minor improvements across the board.
 
@@ -239,6 +237,4 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 ##### Once evaluation begins in earnest, no new changes besides urgent fixes will be accepted into staging during the evaluation period.
 
 ---
-
-_This is a **working draft**. The two XMPP placeholders near the top of *Changes* (XMPP Security Improvements and XMPP File Transfers) are intentional and to be filled in separately._
 
