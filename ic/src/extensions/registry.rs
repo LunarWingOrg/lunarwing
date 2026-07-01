@@ -353,10 +353,10 @@ mod tests {
     #[tokio::test]
     async fn test_search_returns_sorted() {
         let registry = registry_with_catalog();
-        let results = registry.search("notion").await;
+        let results = registry.search("gotify").await;
 
-        assert!(!results.is_empty(), "Should find notion in registry");
-        assert_eq!(results[0].entry.name, "notion");
+        assert!(!results.is_empty(), "Should find gotify in registry");
+        assert_eq!(results[0].entry.name, "gotify");
     }
 
     #[tokio::test]
@@ -370,24 +370,23 @@ mod tests {
     #[tokio::test]
     async fn test_search_by_keyword() {
         let registry = registry_with_catalog();
-        let results = registry.search("issues tickets").await;
+        let results = registry.search("notifications messaging").await;
 
         assert!(
             !results.is_empty(),
-            "Should find entries matching 'issues tickets'"
+            "Should find entries matching 'notifications messaging'"
         );
-        // Linear should be near the top since it has both keywords
-        let linear_pos = results.iter().position(|r| r.entry.name == "linear");
-        assert!(linear_pos.is_some(), "Linear should appear in results");
+        let gotify_pos = results.iter().position(|r| r.entry.name == "gotify");
+        assert!(gotify_pos.is_some(), "Gotify should appear in results");
     }
 
     #[tokio::test]
     async fn test_get_exact_name() {
         let registry = registry_with_catalog();
 
-        let entry = registry.get("notion").await;
+        let entry = registry.get("gotify").await;
         assert!(entry.is_some());
-        assert_eq!(entry.unwrap().display_name, "Notion");
+        assert_eq!(entry.unwrap().display_name, "Gotify");
 
         let missing = registry.get("nonexistent").await;
         assert!(missing.is_none());

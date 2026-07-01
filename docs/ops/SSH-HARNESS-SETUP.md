@@ -124,6 +124,29 @@ Notes:
   those parse a bare `SshConfig` and use top-level `[[hosts]]` (no `ssh.`
   prefix). Real config uses `[[ssh.hosts]]` as shown above.
 
+### Host-key verification: pin your servers (recommended)
+
+When you connect, the remote server presents an identity ("host key") that
+proves it's really that server and not an impostor. Two modes control how that's
+checked:
+
+- **`host_key_mode = "Strict"` + `known_host_key = "..."` (recommended).** You
+  record the server's identity in the config up front, and every connection is
+  checked against it. No first-time guessing. Use this for anything important.
+- **`host_key_mode = "AcceptFirst"` (convenience).** Trusts whatever identity
+  the server shows on the first connection. Note: for the **`ssh_git` tool** this
+  is **best-effort** — it re-trusts on each run rather than remembering, so it
+  will **not** catch a changed server key between runs. Prefer Strict for
+  repeated or sensitive use.
+
+To get a server's `known_host_key`, run this from a machine you trust and copy
+the `ssh-ed25519 AAAA...` part into the config:
+
+```bash
+ssh-keyscan git.example.com
+# git.example.com ssh-ed25519 AAAA...   <- copy the "ssh-ed25519 AAAA..." part
+```
+
 ### 2. Start the daemon and store the key
 
 With the host declared and a master key present, the daemon exposes the SSH API

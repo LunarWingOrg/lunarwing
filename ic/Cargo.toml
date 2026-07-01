@@ -5,7 +5,6 @@ exclude = [
     "channels-src/telegram",
     "channels-src/xmpp",
     "bridges/xmpp-bridge",
-    "tools-src/github",
     "tools-src/telegram",
     "fuzz",
     "crates/lunarwing_safety/fuzz",

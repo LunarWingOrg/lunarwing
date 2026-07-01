@@ -1074,7 +1074,10 @@ impl AppBuilder {
                         }
                         // Start the SSH agent server so workers can use it via
                         // SSH_AUTH_SOCK. The socket path is predictable:
-                        // /tmp/ssh-agent-<owner_id>.sock
+                        // /home/<owner_id>/lunarwing/run/ssh-agent.sock
+                        // (not /tmp — the daemon runs PrivateTmp=true, so the
+                        // socket lives in the tenant run dir to be bind-mountable
+                        // into worker containers).
                         if let Err(e) = bridge.start_agent_server().await {
                             tracing::warn!(error = %e, "SSH agent server failed to start");
                         } else {
@@ -1103,6 +1106,15 @@ impl AppBuilder {
         } else {
             None
         };
+
+        // Register the built-in SSH tool now that the bridge exists (Option 2).
+        // The SSH bridge is built late (above), so registration happens here
+        // rather than alongside the other builtins; `tools` is still owned (it is
+        // moved into AppComponents below), and `register_ssh_tool` borrows it.
+        if let Some(ref bridge) = ssh_bridge {
+            tools.register_ssh_tool(Arc::clone(bridge));
+            tools.register_ssh_git_tool(Arc::clone(bridge), crate::bootstrap::lunarwing_base_dir());
+        }
 
         Ok(AppComponents {
             config: self.config,
