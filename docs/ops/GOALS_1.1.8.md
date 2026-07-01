@@ -3,13 +3,16 @@
 
 ### Helps to do items in order (generally)
 
-1. [ ] rm gh
-rm default mcps
-ssh agent adjustments
-1. [ ] Agent SSH Rust Tool
+1. [ ] Finalize goals
+2. [ ] rm gh extension
+2. [ ] rm default mcps
+3. [ ] ssh agent adjustments
+4. [ ] Agent SSH Rust Tool
 2. [ ] Agent SSH WASM TOOL
-3. [ ] Self-Healing capability expansion? 
-4. [ ] see what else we can do from roadmap planned for 1.1.9 a little earlier
+3. [ ] Self-Healing capability expansion?
+4. [ ] add new external worker
+5. [ ] add-tenant and add-tenants enhancements. also interactive onboarding
+6. [ ] see what else we can do from roadmap planned for 1.1.9 a little earlier
 3. [ ] finish improvements to routines
 4. [ ] Bump crate versions to 1.1.8
 5. [ ] Ensure all relevant crates are bumped to 1.1.8
@@ -21,11 +24,8 @@ ssh agent adjustments
 16. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
 17. [ ] Run automated testing scripts if still relevant
 18. [ ] Need a full extensive test using testing_guide and other testing scripts. See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-19. [ ] Finish testing external worker enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
-20. [ ] Finish testing darkirc enhancements for systemd/openrc hosts. see docs/proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md
 21. [ ] Full integrated testing
-22. [ ] fix problems. more testing
-23. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
+23. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
 24. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #23)
 25. [ ] Update release date in release notes
 26. [ ] Create new branch to correspond with releases
