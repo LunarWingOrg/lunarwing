@@ -10,7 +10,7 @@
 5. [ ] Agent SSH Rust Tool
 6. [ ] Agent SSH WASM TOOL
 7. [ ] Self-Healing capability expansion (find doc)
-8. [ ] add new external worker, opencode
+8. [ ] add new external worker, opencode. trim nc
 9. [ ] test add-tenant and add-tenants enhancements. xmpp_jid_from, llm_model, gateway-host. also interactive onboarding in 1.1.8 or 1.1.9 - make note of decision later
 10. [ ] see what else we can do from roadmap planned for 1.1.9 a little earlier
 11. [ ] darkirc multi-tenant fix to make actually disabled and NOT BUILT unless enabled and build-darkirc flag also enabled
