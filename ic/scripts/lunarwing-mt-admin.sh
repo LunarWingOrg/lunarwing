@@ -233,10 +233,18 @@ Commands:
                                    (written to lunarwing.env as NANOCODE_MODEL)
     --nanocode-base-url <url>      Override the nanocode worker's TensorZero baseURL
                                    (written to lunarwing.env as NANOCODE_BASE_URL)
+    --llm-model <model>            Override LLM_MODEL (default:
+                                   tensorzero::function_name::lunarwing)
+    --gateway-host <host>          Override GATEWAY_HOST bind address (default:
+                                   127.0.0.1; use 0.0.0.0 for LAN access)
+    --xmpp-allow-from <jids>       Comma-separated extra XMPP JIDs allowed to DM
+                                   the agent (added to the tenant's own JID;
+                                   written to both lunarwing.env and xmpp-bridge.env)
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
-    (same options as add-tenant apply to all, including --enable-darkirc and
-     --nanocode-model/--nanocode-base-url)
+    (same options as add-tenant apply to all, including --enable-darkirc,
+     --nanocode-model/--nanocode-base-url, --llm-model, --gateway-host,
+     and --xmpp-allow-from)
 
   remove-tenant <name>             Stop services, deallocate ports
     --purge                        Also delete OS user and home directory
