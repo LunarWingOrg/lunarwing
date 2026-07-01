@@ -197,7 +197,7 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 - **`vision-analyze` WASM tool failed to build mid-cycle** after the tool-registry re-add. Fixed (commit `eaf2fdc6`).
 - **Routing bug in the OCR sidecar.** Fixed (commit `258a674f`).
 - **mt-admin was mis-provisioning on upgrades for nanocode, pebble, vision.** A helper function was added to fix in-place upgrades for those three worker types (commit `ff4fadec`).
-- **Fixed bug in Kawarimi for issue with owner-scope socket related to changes made in this release** - caught this issue immediately and fixed promptly by including a patch for the mt admin setup.
+- **Fixed bug in Kawarimi for issue with owner-scope socket related to changes made in this release** - caught this issue immediately and fixed promptly by including a patch for the mt admin setup (Thank you Admiral Starforce Nebula).
 
 ---
 
