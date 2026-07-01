@@ -7,7 +7,7 @@
 2. [x] finish kers and lunarvision improvements
 3. [x] finish improvements to routines
 4. [x] Bump crate versions to 1.1.7
-5. [ ] Ensure all relevant crates are bumped to 1.1.7
+5. [x] Ensure all relevant crates are bumped to 1.1.7
 6. [x] Update stale documentation, including repo root-level README.md
 7. [x] Update ROADMAP file to reflect accuracy
 8. [x] test routine improvements
