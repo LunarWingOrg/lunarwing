@@ -171,7 +171,8 @@ async fn run_command(
                 append_capped(&mut stderr, &data, &mut truncated)
             }
             Some(ChannelMsg::ExitStatus { exit_status }) => exit_code = Some(exit_status as i32),
-            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+            Some(ChannelMsg::Eof) => {}
+            Some(ChannelMsg::Close) | None => break,
             Some(_) => {}
         }
     }
