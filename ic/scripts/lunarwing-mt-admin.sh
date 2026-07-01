@@ -2097,6 +2097,7 @@ write_tenant_bridge_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
   local xmpp_password="${3:-}"
+  local xmpp_allow_from="${4:-}"
 
   local path bridge_port
   path="$(tenant_env_dir "$name")/xmpp-bridge.env"
@@ -2111,6 +2112,26 @@ write_tenant_bridge_env() {
   xmpp_pass_val="$(grep -s '^XMPP_PASSWORD=' "$(tenant_env_dir "$name")/lunarwing.env" | cut -d= -f2- || true)"
   [[ -n "$xmpp_pass_val" ]] || xmpp_pass_val="${xmpp_password:-$(generate_token | cut -c1-32)}"
 
+  # Idempotent XMPP allow-from JSON: an explicit flag wins; else re-derive from
+  # the daemon's XMPP_ALLOW_FROM (CSV) if present so re-runs without the flag
+  # keep the operator-set list in sync; else fall back to owner JID only.
+  local xmpp_allow_from_json_effective
+  if [[ -n "$xmpp_allow_from" ]]; then
+    xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "$xmpp_allow_from")"
+  else
+    local daemon_csv
+    daemon_csv="$(grep -s '^XMPP_ALLOW_FROM=' "$(tenant_env_dir "$name")/lunarwing.env" | cut -d= -f2- || true)"
+    if [[ -n "$daemon_csv" && "$daemon_csv" != "$xmpp_jid" ]]; then
+      # Daemon has extras: rebuild JSON from owner + the extras (everything
+      # after the leading owner entry, which build_xmpp_allow_from re-prepends).
+      local extras="${daemon_csv#$xmpp_jid}"
+      extras="${extras#,}"   # strip a single leading comma if present
+      xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "$extras")"
+    else
+      xmpp_allow_from_json_effective="$(build_xmpp_allow_from_json "$xmpp_jid" "")"
+    fi
+  fi
+
   (
     umask 077
     cat >"$path" <<ENVEOF
@@ -2123,7 +2144,7 @@ RUST_LOG=xmpp_bridge=info,info
 XMPP_JID=$xmpp_jid
 XMPP_PASSWORD=$xmpp_pass_val
 XMPP_DM_POLICY=allowlist
-XMPP_ALLOW_FROM_JSON=["${xmpp_jid}"]
+XMPP_ALLOW_FROM_JSON=$xmpp_allow_from_json_effective
 XMPP_ALLOW_ROOMS_JSON=[]
 XMPP_ENCRYPTED_ROOMS_JSON=[]
 XMPP_DEVICE_ID=0

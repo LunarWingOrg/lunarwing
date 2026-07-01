@@ -135,6 +135,34 @@ assert_eq "rerun preserves LLM_MODEL" "$(envval LLM_MODEL)" "glm-5-air"
 assert_eq "rerun preserves GATEWAY_HOST" "$(envval GATEWAY_HOST)" "0.0.0.0"
 assert_eq "rerun preserves XMPP_ALLOW_FROM" "$(envval XMPP_ALLOW_FROM)" "fixture-tenant@xmpp.localhost,admin@xmpp.org"
 
+echo "=== write_tenant_bridge_env fixture tests ==="
+
+# The bridge writer reads XMPP_BRIDGE_TOKEN / XMPP_PASSWORD from the daemon env.
+# Ensure a daemon env exists with those keys for the fixture tenant.
+cat > "$MT_FIXTURE/env/lunarwing.env" <<E
+XMPP_BRIDGE_TOKEN=bridge-tok-fixture
+XMPP_PASSWORD=xmpp-pass-fixture
+E
+
+run_bridge_writer() {  # <xmpp_allow_from_extras>
+  rm -f "$MT_FIXTURE/env/xmpp-bridge.env"
+  write_tenant_bridge_env fixture-tenant \
+    "fixture-tenant@xmpp.localhost" "" "$1"
+  cat "$MT_FIXTURE/env/xmpp-bridge.env"
+}
+
+bridgeval() {  # <key>
+  grep -m1 "^$1=" "$MT_FIXTURE/env/xmpp-bridge.env" | cut -d= -f2-
+}
+
+# Case 1: no extras → owner JID only
+out="$(run_bridge_writer "")"
+assert_eq "bridge json owner-only" "$(bridgeval XMPP_ALLOW_FROM_JSON)" '["fixture-tenant@xmpp.localhost"]'
+
+# Case 2: extras → owner + extras
+out="$(run_bridge_writer "admin@xmpp.org,bob@xmpp.org")"
+assert_eq "bridge json owner+two" "$(bridgeval XMPP_ALLOW_FROM_JSON)" '["fixture-tenant@xmpp.localhost","admin@xmpp.org","bob@xmpp.org"]'
+
 echo ""
 if [[ "$failures" -eq 0 ]]; then
   echo "ALL TESTS PASSED"
