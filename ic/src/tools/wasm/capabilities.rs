@@ -34,6 +34,24 @@ pub struct Capabilities {
     pub secrets: Option<SecretsCapability>,
     /// Webhook authentication and signature verification.
     pub webhook: Option<WebhookCapability>,
+    /// Run commands on preconfigured SSH hosts (Option 3).
+    pub ssh: Option<SshCapability>,
+}
+
+/// SSH capability — the allowlist of host aliases this tool may target with
+/// `ssh-exec`. The daemon's `[[ssh.hosts]]` map is the hard egress allowlist;
+/// this narrows it further per tool (defense-in-depth).
+#[derive(Debug, Clone, Default)]
+pub struct SshCapability {
+    /// Host aliases this tool is allowed to run commands on.
+    pub allowed_hosts: Vec<String>,
+}
+
+impl SshCapability {
+    /// Whether this tool may target the given host alias.
+    pub fn is_allowed(&self, host: &str) -> bool {
+        self.allowed_hosts.iter().any(|h| h == host)
+    }
 }
 
 impl Capabilities {
@@ -54,6 +72,12 @@ impl Capabilities {
     /// Enable HTTP requests with the given configuration.
     pub fn with_http(mut self, http: HttpCapability) -> Self {
         self.http = Some(http);
+        self
+    }
+
+    /// Enable SSH command execution with the given allowed host aliases.
+    pub fn with_ssh(mut self, allowed_hosts: Vec<String>) -> Self {
+        self.ssh = Some(SshCapability { allowed_hosts });
         self
     }
 
@@ -336,7 +360,9 @@ pub struct WebhookCapability {
 
 #[cfg(test)]
 mod tests {
-    use crate::tools::wasm::capabilities::{Capabilities, EndpointPattern, SecretsCapability};
+    use crate::tools::wasm::capabilities::{
+        Capabilities, EndpointPattern, SecretsCapability, SshCapability,
+    };
 
     #[test]
     fn test_capabilities_default_is_none() {
@@ -427,5 +453,24 @@ mod tests {
         assert!(caps.workspace_read.is_some());
         assert!(caps.secrets.is_some());
         assert!(caps.http.is_none());
+    }
+
+    #[test]
+    fn test_ssh_capability_is_allowed() {
+        let cap = SshCapability {
+            allowed_hosts: vec!["prod".to_string(), "staging".to_string()],
+        };
+        assert!(cap.is_allowed("prod"));
+        assert!(cap.is_allowed("staging"));
+        assert!(!cap.is_allowed("dev"));
+        assert!(!SshCapability::default().is_allowed("prod"));
+    }
+
+    #[test]
+    fn test_with_ssh_builder() {
+        let caps = Capabilities::none().with_ssh(vec!["h1".to_string()]);
+        let ssh = caps.ssh.expect("ssh capability set");
+        assert!(ssh.is_allowed("h1"));
+        assert!(!ssh.is_allowed("h2"));
     }
 }

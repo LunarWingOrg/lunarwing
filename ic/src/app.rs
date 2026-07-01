@@ -496,6 +496,9 @@ impl AppBuilder {
         tools: &Arc<ToolRegistry>,
         hooks: &Arc<HookRegistry>,
         workspace: &Option<Arc<Workspace>>,
+        ssh_bridge_slot: Arc<
+            std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>,
+        >,
     ) -> Result<
         (
             Arc<McpSessionManager>,
@@ -532,6 +535,7 @@ impl AppBuilder {
             let tools = Arc::clone(tools);
             let wasm_config = self.config.wasm.clone();
             let workspace = workspace.clone();
+            let ssh_bridge_slot = ssh_bridge_slot.clone();
             async move {
                 let mut dev_loaded_tool_names: Vec<String> = Vec::new();
 
@@ -543,6 +547,7 @@ impl AppBuilder {
                     if let Some(ref ws) = workspace {
                         loader = loader.with_workspace(Arc::clone(ws));
                     }
+                    loader = loader.with_ssh_bridge(ssh_bridge_slot.clone());
 
                     match loader.load_from_dir(&wasm_config.tools_dir).await {
                         Ok(results) => {
@@ -915,6 +920,13 @@ impl AppBuilder {
         let agent_session_manager =
             Arc::new(AgentSessionManager::new().with_hooks(Arc::clone(&hooks)));
 
+        // Shared slot for the SSH bridge, populated after the bridge is built
+        // (below) so WASM ssh tools (Option 3) registered during init_extensions
+        // can reach it at run time.
+        let ssh_bridge_slot: Arc<
+            std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>,
+        > = Arc::new(std::sync::OnceLock::new());
+
         let (
             mcp_session_manager,
             mcp_process_manager,
@@ -922,7 +934,9 @@ impl AppBuilder {
             extension_manager,
             catalog_entries,
             dev_loaded_tool_names,
-        ) = self.init_extensions(&tools, &hooks, &workspace).await?;
+        ) = self
+            .init_extensions(&tools, &hooks, &workspace, ssh_bridge_slot.clone())
+            .await?;
 
         // Load bootstrap-completed flag from settings so that existing users
         // who already completed onboarding don't re-get bootstrap injection.
@@ -1114,6 +1128,9 @@ impl AppBuilder {
         if let Some(ref bridge) = ssh_bridge {
             tools.register_ssh_tool(Arc::clone(bridge));
             tools.register_ssh_git_tool(Arc::clone(bridge), crate::bootstrap::lunarwing_base_dir());
+            // Populate the shared slot so WASM ssh tools (Option 3) registered
+            // earlier during init_extensions can reach the bridge at run time.
+            let _ = ssh_bridge_slot.set(Arc::clone(bridge));
         }
 
         Ok(AppComponents {

@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use crate::secrets::{CredentialLocation, CredentialMapping};
 use crate::tools::wasm::{
     Capabilities, EndpointPattern, HttpCapability, RateLimitConfig, SecretsCapability,
-    ToolInvokeCapability, WebhookCapability, WorkspaceCapability,
+    SshCapability, ToolInvokeCapability, WebhookCapability, WorkspaceCapability,
 };
 
 /// Root schema for a capabilities JSON file.
@@ -74,6 +74,10 @@ pub struct CapabilitiesFile {
     /// Tool webhook authentication/signature configuration.
     #[serde(default)]
     pub webhook: Option<WebhookCapabilitySchema>,
+
+    /// SSH command execution capability (Option 3).
+    #[serde(default)]
+    pub ssh: Option<SshCapabilitySchema>,
 
     /// Authentication setup instructions.
     /// Used by `lunarwing config` to guide users through auth setup.
@@ -155,6 +159,7 @@ impl CapabilitiesFile {
             self.tool_invoke = self.tool_invoke.or(inner.tool_invoke);
             self.workspace = self.workspace.or(inner.workspace);
             self.webhook = self.webhook.or(inner.webhook);
+            self.ssh = self.ssh.or(inner.ssh);
             self.auth = self.auth.or(inner.auth);
             self.setup = self.setup.or(inner.setup);
         }
@@ -250,8 +255,22 @@ impl CapabilitiesFile {
             caps.webhook = Some(webhook.to_webhook_capability());
         }
 
+        if let Some(ssh) = &self.ssh {
+            caps.ssh = Some(SshCapability {
+                allowed_hosts: ssh.allowed_hosts.clone(),
+            });
+        }
+
         caps
     }
+}
+
+/// SSH capability schema (Option 3).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SshCapabilitySchema {
+    /// Host aliases this tool may run commands on.
+    #[serde(default)]
+    pub allowed_hosts: Vec<String>,
 }
 
 /// HTTP capability schema.
@@ -766,6 +785,24 @@ mod tests {
         let caps = CapabilitiesFile::from_json(json).unwrap();
         assert!(caps.http.is_none());
         assert!(caps.secrets.is_none());
+    }
+
+    #[test]
+    fn test_parse_ssh_capability() {
+        // Nested under `capabilities` (the sidecar shape), so this also
+        // exercises resolve_nested_inner for the ssh field.
+        let json = r#"{
+            "capabilities": { "ssh": { "allowed_hosts": ["prod", "staging"] } }
+        }"#;
+        let file = CapabilitiesFile::from_json(json).unwrap();
+        let caps = file.to_capabilities();
+        let ssh = caps.ssh.expect("ssh capability present");
+        assert_eq!(
+            ssh.allowed_hosts,
+            vec!["prod".to_string(), "staging".to_string()]
+        );
+        assert!(ssh.is_allowed("prod"));
+        assert!(!ssh.is_allowed("dev"));
     }
 
     #[test]
