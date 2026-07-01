@@ -1849,6 +1849,57 @@ _env_existing() {  # <env_file> <KEY>
   sed -n "s/^$2=//p" "$1" | head -1
 }
 
+# Build the XMPP_ALLOW_FROM comma-separated value: owner JID first, then any
+# extra JIDs from --xmpp-allow-from (comma-separated), deduped (owner JID and
+# duplicate extras collapse), surrounding whitespace trimmed. <owner_jid> may
+# be empty only in error paths; <extras_csv> is the raw flag value.
+build_xmpp_allow_from() {  # <owner_jid> <extras_csv>
+  local owner="$1"
+  local extras="$2"
+  local seen=""
+  local result=""
+  local jid
+  # Owner first (skip if empty, though it normally isn't). `seen` uses leading
+  # and trailing commas so substring matching on ",<jid>," is unambiguous.
+  if [[ -n "$owner" ]]; then
+    result="$owner"
+    seen=",$owner,"
+  fi
+  # Extras: split on comma, trim whitespace, dedupe
+  if [[ -n "$extras" ]]; then
+    local IFS=','
+    read -ra parts <<< "$extras"
+    for jid in "${parts[@]}"; do
+      jid="$(echo "$jid" | xargs)"   # trim leading/trailing whitespace
+      [[ -n "$jid" ]] || continue
+      [[ "$seen" == *",$jid,"* ]] && continue
+      result="${result:+$result,}$jid"
+      seen="${seen}$jid,"
+    done
+  fi
+  echo "$result"
+}
+
+# Build the XMPP_ALLOW_FROM_JSON value: same semantics as build_xmpp_allow_from
+# but emits a JSON array. Each JID is wrapped in double quotes; no escaping is
+# applied (XMPP JIDs do not contain characters that require JSON escaping under
+# the XEP-0029 node/domain rules in normal use). Output is a single line.
+build_xmpp_allow_from_json() {  # <owner_jid> <extras_csv>
+  local owner="$1"
+  local extras="$2"
+  local csv
+  csv="$(build_xmpp_allow_from "$owner" "$extras")"
+  local IFS=','
+  local parts=()
+  [[ -n "$csv" ]] && read -ra parts <<< "$csv"
+  local quoted=()
+  local jid
+  for jid in "${parts[@]}"; do
+    quoted+=("\"$jid\"")
+  done
+  echo "[${quoted[*]}]" | tr ' ' ',' | sed 's/,,*/,/g; s/^\[,/[/; s/,\]$/\]/'
+}
+
 write_tenant_lunarwing_env() {
   local name="$1"
   local xmpp_jid="${2:-$name@xmpp.localhost}"
