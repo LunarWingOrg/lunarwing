@@ -28,9 +28,10 @@
 23. [ ] Full integrated testing
 24. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
 25. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #24)
-26. [ ] Update release date in release notes
-27. [ ] Create new branch to correspond with releases
-28. [ ] Create GH release tag and add release notes to it like other releases already have
+26. [ ] make cool button for readme
+27. [ ] Update release date in release notes
+28. [ ] Create new branch to correspond with releases
+29. [ ] Create GH release tag and add release notes to it like other releases already have
 
 
 ---
