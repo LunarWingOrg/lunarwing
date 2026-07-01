@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.7 — Codename `Takamaru (タカ丸)`
 
-**Release Date:** To Be Determined
+**Release Date:** 2026-07-01
 
 > Codename *Takamaru* (タカ丸) — the messenger hawk of Sunagakure (鷹, *Taka* = "hawk"). In shinobi folklore, hawks are the trusted long-distance couriers between hidden villages, crossing miles of hostile territory no other messenger could safely reach. With the release of 1.1.7, the **Agent SSH Harness** is introduced. **The Agent SSH Harness** makes a trusted, off-disk courier of its own: a per-tenant `ssh-agent` socket carries authentication between isolated worker containers and the host, vaults the secret material in the encrypted store, and never lets the message — the private key — rest where an enemy could read it. Furthermore, v1.1.7 introduces the first few of many, many major improvements to come for the XMPP communication bridge within LunarWing. As one of LunarWing's greatest flagship features, it was about time that it started to get some serious developer attention. From the sand village... to your federated self-hosted prosody servers... all the way to your phone or tablet... this bird is fast...
 
@@ -197,6 +197,7 @@ Several LLM-related timeout knobs in the agent and config layers were adjusted f
 - **`vision-analyze` WASM tool failed to build mid-cycle** after the tool-registry re-add. Fixed (commit `eaf2fdc6`).
 - **Routing bug in the OCR sidecar.** Fixed (commit `258a674f`).
 - **mt-admin was mis-provisioning on upgrades for nanocode, pebble, vision.** A helper function was added to fix in-place upgrades for those three worker types (commit `ff4fadec`).
+- **Fixed bug in Kawarimi for issue with owner-scope socket related to changes made in this release** - caught this issue immediately and fixed promptly by including a patch for the mt admin setup.
 
 ---
 
