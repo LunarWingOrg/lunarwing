@@ -74,7 +74,7 @@ silently skipped. No units are created by these paths.
 that wraps `mt-admin.sh` across multiple phases (provision, build, configure,
 start, verify). Its CONFIG block hardcodes:
 
-```
+```bash
 ENABLE_DARKIRC=true
 BUILD_DARKIRC=true
 ```
