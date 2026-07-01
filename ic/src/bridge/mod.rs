@@ -11,6 +11,7 @@ pub mod router;
 pub mod skill_migration;
 pub mod ssh;
 pub mod ssh_agent;
+pub mod ssh_client;
 pub mod ssh_api;
 pub mod ssh_hostkeys;
 pub mod ssh_secrets;

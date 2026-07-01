@@ -119,6 +119,8 @@ the reorg.
 | [`COOL_THINGS_THAT_HERMES_AGENT_HAS.md`](proposals/COOL_THINGS_THAT_HERMES_AGENT_HAS.md) | Roadmap/wishlist of agent capabilities to add |
 | [`FUTURE_OF_ICHC.md`](proposals/FUTURE_OF_ICHC.md) | Infra health-check roadmap (v1.1.6+) |
 | [`GITWASM/README.md`](proposals/GITWASM/README.md) | Git WASM tool proposal |
+| [`SSH_HARNESS_DELIVERY_OPTIONS.md`](proposals/SSH_HARNESS_DELIVERY_OPTIONS.md) | SSH harness delivery options: worker socket (shipped) / built-in Rust / WASM |
+| [`SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md`](proposals/SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md) | Implementation plans for SSH harness Option 2 (built-in Rust tool) & Option 3 (WASM tool) |
 | [`IC_REPAIR_FOLLOWUPS.md`](proposals/IC_REPAIR_FOLLOWUPS.md) | Self-repair / infra-repair follow-up items |
 | [`MT-1.1.0-TO-1.1.4-UPGRADE.md`](proposals/MT-1.1.0-TO-1.1.4-UPGRADE.md) | Multi-tenant v1.1.0 → v1.1.4 upgrade plan + tooling |
 | [`MT-LEGACY-UPGRADE-VERIFICATION.md`](proposals/MT-LEGACY-UPGRADE-VERIFICATION.md) | Live validation plan for the v1.0.3-era same-host upgrade harness |
