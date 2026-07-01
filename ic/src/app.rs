@@ -1074,7 +1074,10 @@ impl AppBuilder {
                         }
                         // Start the SSH agent server so workers can use it via
                         // SSH_AUTH_SOCK. The socket path is predictable:
-                        // /tmp/ssh-agent-<owner_id>.sock
+                        // /home/<owner_id>/lunarwing/run/ssh-agent.sock
+                        // (not /tmp — the daemon runs PrivateTmp=true, so the
+                        // socket lives in the tenant run dir to be bind-mountable
+                        // into worker containers).
                         if let Err(e) = bridge.start_agent_server().await {
                             tracing::warn!(error = %e, "SSH agent server failed to start");
                         } else {

@@ -314,7 +314,7 @@ pub struct SSHBridge {
     /// Tenant ID (UUID, derived from owner_id)
     tenant_id: Uuid,
     /// Tenant name (owner_id) — used for the agent socket path so the
-    /// mt-admin script can predict the path: /tmp/ssh-agent-<tenant_name>.sock
+    /// mt-admin script can predict it: /home/<tenant_name>/lunarwing/run/ssh-agent.sock
     tenant_name: String,
     /// Host configurations (non-sensitive)
     hosts: Arc<RwLock<HashMap<String, SSHHostConfig>>>,
