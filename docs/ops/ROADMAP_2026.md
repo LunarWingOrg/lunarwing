@@ -38,7 +38,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
 | Opencode External Worker (and possibly Paseo Integration?) | v1.2.2 |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
-| Upgrade old testing harness | v.1.2.3 |
+| Upgrade old testing harness | v1.2.3 |
 | Further external worker polishing | v1.2.3 |
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
