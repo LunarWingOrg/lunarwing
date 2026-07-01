@@ -397,7 +397,13 @@ impl near::agent::host::Host for StoreData {
             .unwrap_or(10 * 1024 * 1024);
 
         // Resolve hostname and reject private/internal IPs to prevent DNS rebinding.
-        reject_private_ip(&url)?;
+        // ALLOW_PRIVATE_IPS=1 opts out for local-dev / multi-tenant setups where WASM tools
+        // legitimately reach loopback services (e.g. the per-tenant OCR sidecar at 127.0.0.1:<port>).
+        // The MT admin script sets ALLOW_PRIVATE_IPS=1 in each tenant's lunarwing.env; this guard
+        // honors it. Without this, vision-analyze (and any loopback-bound WASM tool) is blocked.
+        if std::env::var("ALLOW_PRIVATE_IPS").ok().as_deref() != Some("1") {
+            reject_private_ip(&url)?;
+        }
 
         // Make HTTP request using a dedicated single-threaded runtime.
         // We're inside spawn_blocking, so we can't rely on the main runtime's
