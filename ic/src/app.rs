@@ -1107,6 +1107,14 @@ impl AppBuilder {
             None
         };
 
+        // Register the built-in SSH tool now that the bridge exists (Option 2).
+        // The SSH bridge is built late (above), so registration happens here
+        // rather than alongside the other builtins; `tools` is still owned (it is
+        // moved into AppComponents below), and `register_ssh_tool` borrows it.
+        if let Some(ref bridge) = ssh_bridge {
+            tools.register_ssh_tool(Arc::clone(bridge));
+        }
+
         Ok(AppComponents {
             config: self.config,
             db: self.db,

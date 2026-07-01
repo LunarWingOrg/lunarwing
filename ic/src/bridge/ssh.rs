@@ -67,6 +67,8 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::bridge::ssh_agent::SshAgentServer;
+use crate::bridge::ssh_hostkeys::HostKeyVerifier;
+use crate::bridge::ssh_secrets::SshSecretsManager;
 use crate::secrets::SecretsStore;
 
 // ============================================================================
@@ -324,6 +326,9 @@ pub struct SSHBridge {
     audit_logger: Arc<dyn AuditLogger + Send + Sync>,
     /// SSH agent server (if running)
     agent_server: Option<Arc<SshAgentServer>>,
+    /// Host-key verifier (shared, long-lived so AcceptFirst pins persist across
+    /// tool calls). Consumed by the in-process SSH client (`ssh_client.rs`).
+    host_key_verifier: Arc<HostKeyVerifier>,
 }
 
 impl SSHBridge {
@@ -351,6 +356,7 @@ impl SSHBridge {
             secrets_store,
             audit_logger,
             agent_server: None,
+            host_key_verifier: Arc::new(HostKeyVerifier::new()),
         })
     }
 
@@ -560,6 +566,22 @@ impl SSHBridge {
     /// Get a reference to the running agent server (for wiring into the API state)
     pub fn agent_server(&self) -> Option<Arc<SshAgentServer>> {
         self.agent_server.clone()
+    }
+
+    /// Load the decrypted SSH credentials for a host from the secrets store.
+    ///
+    /// Returns `Ok(None)` if no key is stored for the host. Reuses the tested
+    /// [`SshSecretsManager`] (secret name derivation + passphrase handling). The
+    /// returned key bytes are wrapped in `Zeroizing`. Used by the in-process SSH
+    /// client tool (Option 2).
+    pub async fn load_key(&self, hostname: &str) -> Result<Option<SSHCredentials>> {
+        let manager = SshSecretsManager::new(Arc::clone(&self.secrets_store), &self.tenant_name);
+        manager.load_key(hostname).await
+    }
+
+    /// Get the shared host-key verifier (for the in-process SSH client).
+    pub fn host_key_verifier(&self) -> Arc<HostKeyVerifier> {
+        Arc::clone(&self.host_key_verifier)
     }
 }
 
