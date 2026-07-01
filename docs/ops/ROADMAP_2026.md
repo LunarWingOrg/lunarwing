@@ -9,8 +9,6 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.9 |
 | Remove deprecated Codex external worker from project | v1.1.9 |
 | Remove support for all the other random unsupported LLM providers | v1.1.9 |
-| Remove GitHub extension from the official project repo (not very useful anyway) | v1.1.9 |
-| Remove default MCP servers from default installation | v1.1.9 |
 | Remove other extensions from default installation | v1.1.9 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new) | v1.1.9 |
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
