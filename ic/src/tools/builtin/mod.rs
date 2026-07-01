@@ -15,6 +15,7 @@ pub mod secrets_tools;
 pub(crate) mod shell;
 pub mod skill_tools;
 mod ssh;
+mod ssh_git;
 mod time;
 mod tool_info;
 
@@ -41,6 +42,7 @@ pub use secrets_tools::{SecretDeleteTool, SecretListTool};
 pub use shell::ShellTool;
 pub use skill_tools::{SkillInstallTool, SkillListTool, SkillRemoveTool, SkillSearchTool};
 pub use ssh::SshTool;
+pub use ssh_git::SshGitTool;
 pub use time::TimeTool;
 pub use tool_info::ToolInfoTool;
 mod html_converter;

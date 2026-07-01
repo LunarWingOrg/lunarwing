@@ -1113,6 +1113,7 @@ impl AppBuilder {
         // moved into AppComponents below), and `register_ssh_tool` borrows it.
         if let Some(ref bridge) = ssh_bridge {
             tools.register_ssh_tool(Arc::clone(bridge));
+            tools.register_ssh_git_tool(Arc::clone(bridge), crate::bootstrap::lunarwing_base_dir());
         }
 
         Ok(AppComponents {
