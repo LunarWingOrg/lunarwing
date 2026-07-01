@@ -1,18 +1,57 @@
 #!/usr/bin/env bash
+# LunarWing pre-push hook.
+#
+# Deliberately NON-BLOCKING. Cargo-based checks (fmt / clippy / test) are slow,
+# can be flaky across shells/toolchains, and are already enforced by CI. This
+# hook is just a friendly reminder of what to run before a push reaches CI — it
+# never blocks, so it can't get in your way.
+#
+# To make it block (opt-in, power users only), set:
+#   IRONCLAW_STRICT_PREPUSH=1
+# which runs the CI quality gate (fmt + clippy correctness + lib tests) and
+# blocks on failure. Requires a working `cargo` on PATH.
+#
+# Bypass the strict variant with: git push --no-verify
+#
+# Install: ./scripts/install-githooks.sh
+
 set -euo pipefail
-# Pre-push hook: runs quality gate before pushing
-# Skip with: git push --no-verify
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-SCRIPT_DIR="$REPO_ROOT/scripts/ci"
+cd "$REPO_ROOT"
 
-# Default: baseline quality gate
-"$SCRIPT_DIR/quality_gate.sh"
+# git pre-push feeds refs on stdin; consume them so git doesn't warn.
+cat >/dev/null 2>&1 || true
 
-# Optional strict delta lint (env-gated)
-if [ "${IRONCLAW_STRICT_DELTA_LINT:-0}" = "1" ]; then
-    "$SCRIPT_DIR/delta_lint.sh" "$1"
-elif [ "${IRONCLAW_STRICT_LINT:-0}" = "1" ]; then
-    echo "==> clippy (strict: all warnings)"
-    cargo clippy --locked --all-targets -- -D warnings
+if [ "${IRONCLAW_STRICT_PREPUSH:-0}" != "1" ]; then
+  # Non-blocking reminder only.
+  cat <<'REMINDER' >&2
+pre-push: reminder (non-blocking) — before this push hits CI, make sure you've run:
+    cd ic && cargo fmt --all -- --check && cargo clippy --all -- -D warnings && cargo test --lib
+  (or set IRONCLAW_STRICT_PREPUSH=1 to enforce the quality gate locally)
+REMINDER
+  exit 0
 fi
+
+# --- Strict mode (opt-in) ---------------------------------------------------
+QUALITY_GATE="./ic/scripts/ci/quality_gate.sh"
+
+if [ ! -f "$QUALITY_GATE" ]; then
+  echo "pre-push: WARNING — $QUALITY_GATE not found; skipping strict quality gate" >&2
+  exit 0
+fi
+
+# quality_gate.sh invokes cargo (fmt/clippy/test), which must run from the
+# workspace root (ic/), not the repo root. Invoke via bash so the referenced
+# script doesn't need its own +x bit.
+echo "pre-push (strict): running quality gate (fmt + clippy correctness + lib tests)..."
+echo "          (bypass with --no-verify)"
+
+if ! (cd ic && bash "$REPO_ROOT/$QUALITY_GATE"); then
+  echo "" >&2
+  echo "Push blocked: quality gate failed." >&2
+  echo "Fix the issues above, or bypass with: git push --no-verify" >&2
+  exit 1
+fi
+
+exit 0

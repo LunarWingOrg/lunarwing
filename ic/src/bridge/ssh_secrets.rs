@@ -25,11 +25,11 @@
 use std::sync::Arc;
 
 use secrecy::SecretString;
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument, warn};
 use zeroize::Zeroizing;
 
-use crate::bridge::ssh::{SSHCredentials, SSHKeyType, SshBridgeError, Result};
-use crate::secrets::{SecretsStore, SecretError, CreateSecretParams};
+use crate::bridge::ssh::{Result, SSHCredentials, SSHKeyType, SshBridgeError};
+use crate::secrets::{CreateSecretParams, SecretError, SecretsStore};
 
 /// SSH secrets manager — handles loading and managing SSH keys.
 pub struct SshSecretsManager {
@@ -39,10 +39,7 @@ pub struct SshSecretsManager {
 
 impl SshSecretsManager {
     /// Create a new SSH secrets manager for a tenant.
-    pub fn new(
-        secrets_store: Arc<dyn SecretsStore + Send + Sync>,
-        tenant_id: &str,
-    ) -> Self {
+    pub fn new(secrets_store: Arc<dyn SecretsStore + Send + Sync>, tenant_id: &str) -> Self {
         Self {
             secrets_store,
             tenant_id: tenant_id.to_string(),
@@ -74,7 +71,7 @@ impl SshSecretsManager {
         passphrase: Option<&str>,
     ) -> Result<()> {
         let secret_name = self.secret_name_for_host(hostname);
-        
+
         info!(
             tenant_id = %self.tenant_id,
             host = %hostname,
@@ -90,7 +87,9 @@ impl SshSecretsManager {
                 CreateSecretParams::new(&secret_name, &key_str),
             )
             .await
-            .map_err(|e| SshBridgeError::SecretDecryptionFailed(format!("Failed to store key: {}", e)))?;
+            .map_err(|e| {
+                SshBridgeError::SecretDecryptionFailed(format!("Failed to store key: {}", e))
+            })?;
 
         // Store passphrase separately if provided
         if let Some(pass) = passphrase {
@@ -101,7 +100,12 @@ impl SshSecretsManager {
                     CreateSecretParams::new(&passphrase_secret_name, pass),
                 )
                 .await
-                .map_err(|e| SshBridgeError::SecretDecryptionFailed(format!("Failed to store passphrase: {}", e)))?;
+                .map_err(|e| {
+                    SshBridgeError::SecretDecryptionFailed(format!(
+                        "Failed to store passphrase: {}",
+                        e
+                    ))
+                })?;
         }
 
         Ok(())
@@ -118,15 +122,28 @@ impl SshSecretsManager {
         let secret_name = self.secret_name_for_host(hostname);
 
         // Try to load the key
-        let key_data = match self.secrets_store.get_decrypted(&self.tenant_id, &secret_name).await {
+        let key_data = match self
+            .secrets_store
+            .get_decrypted(&self.tenant_id, &secret_name)
+            .await
+        {
             Ok(decrypted) => Zeroizing::new(decrypted.expose().as_bytes().to_vec()),
             Err(SecretError::NotFound(_)) => return Ok(None),
-            Err(e) => return Err(SshBridgeError::SecretDecryptionFailed(format!("Failed to load key: {}", e))),
+            Err(e) => {
+                return Err(SshBridgeError::SecretDecryptionFailed(format!(
+                    "Failed to load key: {}",
+                    e
+                )));
+            }
         };
 
         // Try to load passphrase
         let passphrase_secret_name = format!("{}_passphrase", secret_name);
-        let passphrase = match self.secrets_store.get_decrypted(&self.tenant_id, &passphrase_secret_name).await {
+        let passphrase = match self
+            .secrets_store
+            .get_decrypted(&self.tenant_id, &passphrase_secret_name)
+            .await
+        {
             Ok(decrypted) => Some(SecretString::from(decrypted.expose().to_string())),
             Err(SecretError::NotFound(_)) => None,
             Err(e) => {
@@ -162,10 +179,13 @@ impl SshSecretsManager {
         self.secrets_store
             .delete(&self.tenant_id, &secret_name)
             .await
-            .map_err(|e| SshBridgeError::SecretDecryptionFailed(format!("Failed to delete key: {}", e)))?;
+            .map_err(|e| {
+                SshBridgeError::SecretDecryptionFailed(format!("Failed to delete key: {}", e))
+            })?;
 
         // Also delete passphrase if it exists
-        let _ = self.secrets_store
+        let _ = self
+            .secrets_store
             .delete(&self.tenant_id, &passphrase_secret_name)
             .await;
 
@@ -181,10 +201,17 @@ impl SshSecretsManager {
     /// Check if a key exists for a host.
     pub async fn key_exists(&self, hostname: &str) -> Result<bool> {
         let secret_name = self.secret_name_for_host(hostname);
-        
-        match self.secrets_store.exists(&self.tenant_id, &secret_name).await {
+
+        match self
+            .secrets_store
+            .exists(&self.tenant_id, &secret_name)
+            .await
+        {
             Ok(exists) => Ok(exists),
-            Err(e) => Err(SshBridgeError::SecretDecryptionFailed(format!("Failed to check key existence: {}", e))),
+            Err(e) => Err(SshBridgeError::SecretDecryptionFailed(format!(
+                "Failed to check key existence: {}",
+                e
+            ))),
         }
     }
 
@@ -229,12 +256,16 @@ impl SshSecretsManager {
 
     /// Load and validate a key, returning credentials with validated key type.
     #[instrument(skip(self))]
-    pub async fn load_and_validate_key(&self, hostname: &str, expected_type: &SSHKeyType) -> Result<Option<SSHCredentials>> {
+    pub async fn load_and_validate_key(
+        &self,
+        hostname: &str,
+        expected_type: &SSHKeyType,
+    ) -> Result<Option<SSHCredentials>> {
         let credentials = self.load_key(hostname).await?;
-        
+
         if let Some(ref creds) = credentials {
             let actual_type = Self::validate_key_format(&creds.key_data)?;
-            
+
             if actual_type != *expected_type {
                 warn!(
                     tenant_id = %self.tenant_id,
@@ -258,18 +289,25 @@ mod tests {
     use secrecy::ExposeSecret;
 
     fn make_test_manager() -> SshSecretsManager {
-        let store: Arc<dyn SecretsStore + Send + Sync> = Arc::new(InMemorySecretsStore::new(Arc::new(
-            SecretsCrypto::new(secrecy::SecretString::from("test-master-key-that-is-at-least-32-bytes-long!")).unwrap(),
-        )));
+        let store: Arc<dyn SecretsStore + Send + Sync> =
+            Arc::new(InMemorySecretsStore::new(Arc::new(
+                SecretsCrypto::new(secrecy::SecretString::from(
+                    "test-master-key-that-is-at-least-32-bytes-long!",
+                ))
+                .unwrap(),
+            )));
         SshSecretsManager::new(store, "test-tenant")
     }
 
     #[tokio::test]
     async fn test_store_and_load_key() {
         let manager = make_test_manager();
-        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\ntest-key-data\n-----END OPENSSH PRIVATE KEY-----";
+        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\ntest-key-data\n-----END OPENSSH PRIVATE KEY-----"; // no-secret-scan: test fixture, not a real key
 
-        manager.store_key("example.com", key_data, None).await.unwrap();
+        manager
+            .store_key("example.com", key_data, None)
+            .await
+            .unwrap();
 
         let creds = manager.load_key("example.com").await.unwrap().unwrap();
         assert_eq!(creds.key_data.as_slice(), key_data);
@@ -279,14 +317,24 @@ mod tests {
     #[tokio::test]
     async fn test_store_with_passphrase() {
         let manager = make_test_manager();
-        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\nencrypted-key-data\n-----END OPENSSH PRIVATE KEY-----";
+        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\nencrypted-key-data\n-----END OPENSSH PRIVATE KEY-----"; // no-secret-scan: test fixture, not a real key
 
-        manager.store_key("secure.example.com", key_data, Some("mypassword")).await.unwrap();
+        manager
+            .store_key("secure.example.com", key_data, Some("mypassword"))
+            .await
+            .unwrap();
 
-        let creds = manager.load_key("secure.example.com").await.unwrap().unwrap();
+        let creds = manager
+            .load_key("secure.example.com")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(creds.key_data.as_slice(), key_data);
         assert!(creds.passphrase.is_some());
-        assert_eq!(creds.passphrase.as_ref().unwrap().expose_secret(), "mypassword");
+        assert_eq!(
+            creds.passphrase.as_ref().unwrap().expose_secret(),
+            "mypassword"
+        );
     }
 
     #[tokio::test]
@@ -299,9 +347,13 @@ mod tests {
     #[tokio::test]
     async fn test_delete_key() {
         let manager = make_test_manager();
-        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----";
+        let key_data =
+            b"-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----"; // no-secret-scan: test fixture, not a real key
 
-        manager.store_key("delete-me.example.com", key_data, None).await.unwrap();
+        manager
+            .store_key("delete-me.example.com", key_data, None)
+            .await
+            .unwrap();
         assert!(manager.key_exists("delete-me.example.com").await.unwrap());
 
         manager.delete_key("delete-me.example.com").await.unwrap();
@@ -310,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_key_format_ed25519() {
-        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\nkeytype ssh-ed25519\ndata\n-----END OPENSSH PRIVATE KEY-----";
+        let key_data = b"-----BEGIN OPENSSH PRIVATE KEY-----\nkeytype ssh-ed25519\ndata\n-----END OPENSSH PRIVATE KEY-----"; // no-secret-scan: test fixture, not a real key
         let result = SshSecretsManager::validate_key_format(key_data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), SSHKeyType::Ed25519);

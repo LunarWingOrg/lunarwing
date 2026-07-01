@@ -1059,7 +1059,15 @@ impl AppBuilder {
                     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, self.config.owner_id.as_bytes());
                 let tenant_name = self.config.owner_id.clone();
                 let audit_logger = Arc::new(crate::bridge::ssh::NullAuditLogger);
-                match SSHBridge::new(tenant_id, tenant_name, host_map, Arc::clone(secrets), audit_logger).await {
+                match SSHBridge::new(
+                    tenant_id,
+                    tenant_name,
+                    host_map,
+                    Arc::clone(secrets),
+                    audit_logger,
+                )
+                .await
+                {
                     Ok(mut bridge) => {
                         if let Err(e) = bridge.validate().await {
                             tracing::warn!(error = %e, "SSH bridge validation failed");
@@ -1087,7 +1095,9 @@ impl AppBuilder {
                     }
                 }
             } else {
-                tracing::debug!("SSH hosts configured but no secrets store available, skipping SSH bridge");
+                tracing::debug!(
+                    "SSH hosts configured but no secrets store available, skipping SSH bridge"
+                );
                 None
             }
         } else {

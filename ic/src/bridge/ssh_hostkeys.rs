@@ -40,11 +40,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use sha2::{Sha256, Digest};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use tracing::{info, warn, instrument};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use sha2::{Digest, Sha256};
+use tracing::{info, instrument, warn};
 
-use crate::bridge::ssh::{HostKeyMode, SSHHostConfig, SshBridgeError, Result};
+use crate::bridge::ssh::{HostKeyMode, Result, SSHHostConfig, SshBridgeError};
 
 /// SSH host key verifier — manages known_hosts per tenant.
 pub struct HostKeyVerifier {
@@ -217,9 +217,16 @@ impl HostKeyVerifier {
     ///
     /// Format: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
     #[instrument(skip(self))]
-    pub async fn add_host_from_openssh(&self, hostname: &str, port: u16, key_str: &str) -> Result<()> {
-        let (key_type, key_data, _comment) = Self::parse_openssh_public_key(key_str)
-            .ok_or_else(|| SshBridgeError::InvalidKeyFormat("Invalid OpenSSH public key format".to_string()))?;
+    pub async fn add_host_from_openssh(
+        &self,
+        hostname: &str,
+        port: u16,
+        key_str: &str,
+    ) -> Result<()> {
+        let (key_type, key_data, _comment) =
+            Self::parse_openssh_public_key(key_str).ok_or_else(|| {
+                SshBridgeError::InvalidKeyFormat("Invalid OpenSSH public key format".to_string())
+            })?;
 
         self.add_host_key(hostname, port, key_data, key_type).await
     }
@@ -266,8 +273,10 @@ impl HostKeyVerifier {
 
         // If config has a known_host_key, verify against it directly
         if let Some(known_key_str) = &config.known_host_key {
-            let (_, known_key_data, _) = Self::parse_openssh_public_key(known_key_str)
-                .ok_or_else(|| SshBridgeError::InvalidKeyFormat("Invalid known_host_key format".to_string()))?;
+            let (_, known_key_data, _) =
+                Self::parse_openssh_public_key(known_key_str).ok_or_else(|| {
+                    SshBridgeError::InvalidKeyFormat("Invalid known_host_key format".to_string())
+                })?;
 
             if remote_key_data == &known_key_data[..] {
                 let fingerprint = Self::compute_fingerprint(remote_key_data);
@@ -293,7 +302,8 @@ impl HostKeyVerifier {
                 "unknown", // We don't know the key type until we verify
                 remote_key_data,
                 config.host_key_mode.clone(),
-            ).await
+            )
+            .await
         }
     }
 }
@@ -328,7 +338,8 @@ mod tests {
     #[test]
     fn test_parse_openssh_public_key() {
         let key_str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl user@host";
-        let (key_type, key_data, comment) = HostKeyVerifier::parse_openssh_public_key(key_str).unwrap();
+        let (key_type, key_data, comment) =
+            HostKeyVerifier::parse_openssh_public_key(key_str).unwrap();
 
         assert_eq!(key_type, "ssh-ed25519");
         assert!(!key_data.is_empty());
@@ -337,8 +348,10 @@ mod tests {
 
     #[test]
     fn test_parse_openssh_without_comment() {
-        let key_str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
-        let (key_type, key_data, comment) = HostKeyVerifier::parse_openssh_public_key(key_str).unwrap();
+        let key_str =
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+        let (key_type, key_data, comment) =
+            HostKeyVerifier::parse_openssh_public_key(key_str).unwrap();
 
         assert_eq!(key_type, "ssh-ed25519");
         assert!(!key_data.is_empty());
@@ -351,10 +364,19 @@ mod tests {
         let key_data = b"test public key data";
         let key_type = "ssh-ed25519".to_string();
 
-        verifier.add_host_key("example.com", 22, key_data.to_vec(), key_type).await.unwrap();
+        verifier
+            .add_host_key("example.com", 22, key_data.to_vec(), key_type)
+            .await
+            .unwrap();
 
         let result = verifier
-            .verify_host_key("example.com", 22, "ssh-ed25519", key_data, HostKeyMode::Strict)
+            .verify_host_key(
+                "example.com",
+                22,
+                "ssh-ed25519",
+                key_data,
+                HostKeyMode::Strict,
+            )
             .await
             .unwrap();
 
@@ -367,7 +389,13 @@ mod tests {
         let key_data = b"test public key data";
 
         let result = verifier
-            .verify_host_key("unknown.example.com", 22, "ssh-ed25519", key_data, HostKeyMode::Strict)
+            .verify_host_key(
+                "unknown.example.com",
+                22,
+                "ssh-ed25519",
+                key_data,
+                HostKeyMode::Strict,
+            )
             .await;
 
         assert!(matches!(result, Err(SshBridgeError::UnknownHostKey { .. })));
@@ -379,7 +407,13 @@ mod tests {
         let key_data = b"test public key data";
 
         let result = verifier
-            .verify_host_key("new.example.com", 22, "ssh-ed25519", key_data, HostKeyMode::AcceptFirst)
+            .verify_host_key(
+                "new.example.com",
+                22,
+                "ssh-ed25519",
+                key_data,
+                HostKeyMode::AcceptFirst,
+            )
             .await
             .unwrap();
 
@@ -387,7 +421,13 @@ mod tests {
 
         // Second connection should verify
         let result = verifier
-            .verify_host_key("new.example.com", 22, "ssh-ed25519", key_data, HostKeyMode::AcceptFirst)
+            .verify_host_key(
+                "new.example.com",
+                22,
+                "ssh-ed25519",
+                key_data,
+                HostKeyMode::AcceptFirst,
+            )
             .await
             .unwrap();
 
@@ -400,13 +440,30 @@ mod tests {
         let original_key = b"original public key";
         let different_key = b"different public key";
 
-        verifier.add_host_key("example.com", 22, original_key.to_vec(), "ssh-ed25519".to_string()).await.unwrap();
+        verifier
+            .add_host_key(
+                "example.com",
+                22,
+                original_key.to_vec(),
+                "ssh-ed25519".to_string(),
+            )
+            .await
+            .unwrap();
 
         let result = verifier
-            .verify_host_key("example.com", 22, "ssh-ed25519", different_key, HostKeyMode::Strict)
+            .verify_host_key(
+                "example.com",
+                22,
+                "ssh-ed25519",
+                different_key,
+                HostKeyMode::Strict,
+            )
             .await;
 
-        assert!(matches!(result, Err(SshBridgeError::HostKeyMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(SshBridgeError::HostKeyMismatch { .. })
+        ));
     }
 
     #[tokio::test]
@@ -414,7 +471,15 @@ mod tests {
         let verifier = HostKeyVerifier::new();
         let key_data = b"test public key data";
 
-        verifier.add_host_key("example.com", 22, key_data.to_vec(), "ssh-ed25519".to_string()).await.unwrap();
+        verifier
+            .add_host_key(
+                "example.com",
+                22,
+                key_data.to_vec(),
+                "ssh-ed25519".to_string(),
+            )
+            .await
+            .unwrap();
         assert!(verifier.list_hosts().await.len() == 1);
 
         let removed = verifier.remove_host("example.com", 22).await.unwrap();
@@ -427,8 +492,24 @@ mod tests {
         let verifier = HostKeyVerifier::new();
         let key_data = b"test public key data";
 
-        verifier.add_host_key("example.com", 22, key_data.to_vec(), "ssh-ed25519".to_string()).await.unwrap();
-        verifier.add_host_key("example.com", 2222, key_data.to_vec(), "ssh-ed25519".to_string()).await.unwrap();
+        verifier
+            .add_host_key(
+                "example.com",
+                22,
+                key_data.to_vec(),
+                "ssh-ed25519".to_string(),
+            )
+            .await
+            .unwrap();
+        verifier
+            .add_host_key(
+                "example.com",
+                2222,
+                key_data.to_vec(),
+                "ssh-ed25519".to_string(),
+            )
+            .await
+            .unwrap();
 
         let hosts = verifier.list_hosts().await;
         assert_eq!(hosts.len(), 2);

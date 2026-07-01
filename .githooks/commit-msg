@@ -1,1 +1,28 @@
-../scripts/commit-msg-regression.sh
+#!/usr/bin/env bash
+# LunarWing commit-msg hook.
+#
+# Requires regression-test evidence in the commit body for `fix:`/`hotfix:`/
+# `bugfix:` commits. Enforces the project convention that fixes carry a test
+# that would have caught the bug.
+#
+# Delegates to ic/scripts/commit-msg-regression.sh (the canonical implementation).
+#
+# Bypass with [skip-regression-check] in the commit message, or --no-verify.
+# Docs-only and web-static-only changes are exempt (see the delegated script).
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+MSG_FILE="$1"
+REGRESSION_SCRIPT="./ic/scripts/commit-msg-regression.sh"
+
+if [ ! -f "$REGRESSION_SCRIPT" ]; then
+  # Missing — don't block the commit, but warn loudly.
+  echo "commit-msg: WARNING — $REGRESSION_SCRIPT not found; skipping regression check" >&2
+  exit 0
+fi
+
+# Invoke via bash so the referenced script doesn't need its own +x bit.
+exec bash "$REGRESSION_SCRIPT" "$MSG_FILE"

@@ -89,11 +89,13 @@ pub use error::{Error, Result};
 
 // Re-export SSH bridge types
 pub use bridge::ssh::{
-    SSHBridge, SSHHostConfig, SSHKeyType, HostKeyMode, SSHCredentials, SshBridgeError, SshEvent,
-    AuditLogger, NullAuditLogger,
+    AuditLogger, HostKeyMode, NullAuditLogger, SSHBridge, SSHCredentials, SSHHostConfig,
+    SSHKeyType, SshBridgeError, SshEvent,
 };
 pub use bridge::ssh_agent::SshAgentServer;
-pub use bridge::ssh_api::{create_router, SshApiState, HostRequest, HostResponse, KeyUploadRequest};
+pub use bridge::ssh_api::{
+    HostRequest, HostResponse, KeyUploadRequest, SshApiState, create_router,
+};
 pub use bridge::ssh_hostkeys::{HostKeyVerifier, StoredHostKey, VerifyResult};
 pub use bridge::ssh_secrets::SshSecretsManager;
 
