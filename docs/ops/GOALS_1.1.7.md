@@ -7,7 +7,7 @@
 2. [x] finish kers and lunarvision improvements
 3. [x] finish improvements to routines
 4. [x] Bump crate versions to 1.1.7
-5. [ ] Update stale documentation, including repo root-level README.md
+5. [x] Update stale documentation, including repo root-level README.md
 6. [x] Update ROADMAP file to reflect accuracy
 7. [x] test routine improvements
 8. [x] test xmpp improvements
@@ -25,8 +25,9 @@
 20. [x] fix problems. more testing
 21. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.7 explaining all changes since v1.1.6 as well as revising and including an ACCURATE VERSION OF `known issues list`
 22. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #21)
-23. [ ] Create new branch to correspond with releases
-24. [ ] Create GH release tag and add release notes to it like other releases already have
+23. [ ] Update release date in release notes
+24. [ ] Create new branch to correspond with releases
+25. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
 
