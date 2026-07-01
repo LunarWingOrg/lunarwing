@@ -242,7 +242,10 @@ mod tests {
         let tool = SshTool::new(bridge);
         let ctx = JobContext::new("test", "ssh test");
         let err = tool
-            .execute(serde_json::json!({"host": "h1", "command": "echo hi"}), &ctx)
+            .execute(
+                serde_json::json!({"host": "h1", "command": "echo hi"}),
+                &ctx,
+            )
             .await
             .unwrap_err();
         match err {

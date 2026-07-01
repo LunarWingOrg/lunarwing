@@ -152,9 +152,10 @@ impl Tool for SshGitTool {
         // --- resolve host config + agent socket + verifier (brief read lock) ---
         let (host_cfg, auth_sock, verifier) = {
             let bridge = self.ssh_bridge.read().await;
-            let host_cfg = bridge.get_host_config(host).await.map_err(|e| {
-                ToolError::NotAuthorized(format!("unknown SSH host '{host}': {e}"))
-            })?;
+            let host_cfg = bridge
+                .get_host_config(host)
+                .await
+                .map_err(|e| ToolError::NotAuthorized(format!("unknown SSH host '{host}': {e}")))?;
             let auth_sock = bridge.get_agent_socket_path().ok_or_else(|| {
                 ToolError::ExecutionFailed(
                     "SSH agent socket unavailable (agent not running); cannot authenticate git over SSH".into(),
@@ -187,10 +188,10 @@ impl Tool for SshGitTool {
                         "no git repository at '{path_str}'"
                     )));
                 }
-                if operation == "push" {
-                    if let Some(r) = git_ref {
-                        validate_push_ref(r)?;
-                    }
+                if operation == "push"
+                    && let Some(r) = git_ref
+                {
+                    validate_push_ref(r)?;
                 }
             }
         }
@@ -524,14 +525,13 @@ mod tests {
     }
 
     async fn bridge(hosts: Vec<SSHHostConfig>) -> Arc<RwLock<SSHBridge>> {
-        let store: Arc<dyn SecretsStore + Send + Sync> = Arc::new(InMemorySecretsStore::new(
-            Arc::new(
+        let store: Arc<dyn SecretsStore + Send + Sync> =
+            Arc::new(InMemorySecretsStore::new(Arc::new(
                 SecretsCrypto::new(secrecy::SecretString::from(
                     "test-master-key-that-is-at-least-32-bytes-long!",
                 ))
                 .unwrap(),
-            ),
-        ));
+            )));
         let mut map = HashMap::new();
         for h in hosts {
             map.insert(h.host.clone(), h);
@@ -587,8 +587,10 @@ mod tests {
         assert!(accept.contains("ConnectTimeout=10"));
         assert!(accept.contains("-p 2222"));
         assert!(accept.contains("UserKnownHostsFile=\"/root/kh\""));
-        let strict =
-            build_git_ssh_command(&cfg("h", 22, HostKeyMode::Strict, None), Path::new("/root/kh"));
+        let strict = build_git_ssh_command(
+            &cfg("h", 22, HostKeyMode::Strict, None),
+            Path::new("/root/kh"),
+        );
         assert!(strict.contains("StrictHostKeyChecking=yes"));
     }
 
@@ -612,14 +614,19 @@ mod tests {
             known_hosts_line(&bracketed, None),
             Some("[h]:2222 ssh-ed25519 K\n".to_string())
         );
-        assert_eq!(known_hosts_line(&cfg("h", 22, HostKeyMode::Strict, None), None), None);
+        assert_eq!(
+            known_hosts_line(&cfg("h", 22, HostKeyMode::Strict, None), None),
+            None
+        );
     }
 
     #[test]
     fn test_build_argv() {
         assert_eq!(
             build_argv("clone", "url", "/dest", Some("main"), Some(1)).unwrap(),
-            vec!["clone", "--depth", "1", "--branch", "main", "--", "url", "/dest"]
+            vec![
+                "clone", "--depth", "1", "--branch", "main", "--", "url", "/dest"
+            ]
         );
         assert_eq!(
             build_argv("fetch", "", "", None, None).unwrap(),
@@ -700,7 +707,13 @@ mod tests {
         // Bridge has the host but the agent server was never started.
         let tmp = TempDir::new().unwrap();
         let tool = SshGitTool::new(
-            bridge(vec![cfg("h", 22, HostKeyMode::Strict, Some("ssh-ed25519 AAAA"))]).await,
+            bridge(vec![cfg(
+                "h",
+                22,
+                HostKeyMode::Strict,
+                Some("ssh-ed25519 AAAA"),
+            )])
+            .await,
             tmp.path().to_path_buf(),
         );
         let err = tool

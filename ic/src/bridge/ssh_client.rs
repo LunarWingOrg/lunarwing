@@ -50,12 +50,19 @@ struct ClientHandler {
 impl Handler for ClientHandler {
     type Error = russh::Error;
 
-    async fn check_server_key(&mut self, server_public_key: &PublicKey) -> Result<bool, Self::Error> {
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
         // `public_key_bytes()` yields the raw SSH wire blob — the same
         // representation `HostKeyVerifier` compares against (it byte-compares,
         // not fingerprint strings, so no base64-padding mismatch).
         let key_bytes = server_public_key.public_key_bytes();
-        match self.verifier.verify_from_config(&self.host, &key_bytes).await {
+        match self
+            .verifier
+            .verify_from_config(&self.host, &key_bytes)
+            .await
+        {
             Ok(_) => Ok(true),
             Err(e) => {
                 if let Ok(mut slot) = self.reject_reason.lock() {
@@ -160,7 +167,7 @@ async fn run_command(
         match channel.wait().await {
             Some(ChannelMsg::Data { data }) => append_capped(&mut stdout, &data, &mut truncated),
             // ext == 1 is SSH_EXTENDED_DATA_STDERR.
-            Some(ChannelMsg::ExtendedData { data, ext }) if ext == 1 => {
+            Some(ChannelMsg::ExtendedData { data, ext: 1 }) => {
                 append_capped(&mut stderr, &data, &mut truncated)
             }
             Some(ChannelMsg::ExitStatus { exit_status }) => exit_code = Some(exit_status as i32),
