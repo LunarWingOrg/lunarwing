@@ -85,6 +85,23 @@ sudo ic/scripts/lunarwing-mt-admin.sh build-tenant <name> --with-opencode
 
 Modes: `--mode websocket` (default, persistent) or `--mode cli` (one-shot; prompt via `TASK_PROMPT`). Requires `AGENT_AUTH_TOKEN` for WebSocket auth. Supports per-tenant model/base-URL overrides via `configure-opencode <name> [--model <m>] [--base-url <url>]`, optional Paseo MCP integration (`PASEO_URL`/`PASEO_TOKEN`), and SSH agent socket bind-mounting. The opencode upstream is cloned at build time and pinned to a release tag via the `OPENCODE_REF` build arg (default `v1.17.13`); override with `docker build --build-arg OPENCODE_REF=<tag>`. See `opencode4lunarwing/CLAUDE.md` for the full env var reference.
 
+## OpenCode Worker (old section)
+
+Bun-based upstream opencode agent (sst/opencode). Runs opencode headless server internally (port 4096) with a TypeScript bridge to the WebSocket protocol. Health on 8443, WebSocket on 9090.
+
+**Dockerfile:** `opencode4lunarwing/Dockerfile`
+
+```bash
+cd opencode4lunarwing
+docker build -t lunarwing-worker-opencode:latest .
+
+# Or via docker-compose
+docker compose up --build
+```
+
+Modes: `--mode websocket` (default, persistent), `--mode cli` (one-shot), `--mode acp`. Requires `AGENT_AUTH_TOKEN` for WebSocket auth. Supports optional Paseo MCP integration via `PASEO_URL`/`PASEO_TOKEN` env vars. See `opencode4lunarwing/CLAUDE.md` for full env var reference.
+
+
 ## Shared Protocol
 
 All worker images use the `ironclaw-agent-v1` WebSocket subprotocol. Messages are JSON envelopes with `id`, `type`, `timestamp`, `payload`. The worker sends `ready` on connect, receives `task_request`, streams `task_progress`, and sends a final `task_result`.
