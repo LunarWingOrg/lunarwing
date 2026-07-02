@@ -2514,6 +2514,9 @@ warn_if_sshd_unreachable() {
       say "         Enable it with: systemctl enable --now sshd   (or 'ssh' on Debian/Ubuntu)" >&2
     fi
   done < <(_ssh_hosts_from_config "$name")
+  # Explicit: this probe is warn-only and must never fail its (bare-statement)
+  # callers under set -e, regardless of future edits above.
+  return 0
 }
 
 # ── SSH key provisioning ──────────────────────────────────────────────────────
