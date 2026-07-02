@@ -181,8 +181,7 @@ restart**, when the agent reloads keys from the secrets store into its live
 keystore.
 
 So the reliable sequence for a brand-new key is: **upload → restart daemon**.
-(The `mt-admin` flow uploads after startup and relies on the following restart
-cycle for the same reason.)
+(The `mt-admin` flow uploads after startup and immediately bounces the daemon itself — see the note above.)
 
 ---
 
@@ -263,6 +262,7 @@ On mt-admin tenants the installed sidecar's `capabilities.ssh.allowed_hosts`
 is patched automatically from the tenant's `[[ssh.hosts]]` (by `install-wasm`
 / `build-tenant --with-wasm` / `configure-ssh`). For manual installs, edit
 `tools-src/ssh/ssh-tool.capabilities.json` before installing.
+In dev mode the tool is auto-discovered from `tools-src/ssh/`; the registry entry is `registry/tools/ssh.json`.
 
 ## Full HTTP API reference
 
