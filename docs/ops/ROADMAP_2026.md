@@ -2,6 +2,11 @@
 
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
+## Notes about the roadmap
+
+* The roadmap does not normally track items and goals related to the upcoming release. The roadmap contains a list which begins with the release after the next one.
+* i.e. If the current stable release is 1.1.7 and the upcoming release is 1.1.8, the roadmap would begin with 1.1.9
+
 ### Near-term (prior to next significant release)
 
 | Feature | Target |
