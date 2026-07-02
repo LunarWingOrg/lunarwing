@@ -394,22 +394,70 @@ ensure_init_system() {
   [[ -n "$INIT_SYSTEM" ]] || INIT_SYSTEM="$(detect_init_system)"
 }
 
+# Machine-wide persisted runtime choice (see _save_container_runtime). One
+# line: "podman" or "docker". World-readable so unprivileged doctor runs can
+# still resolve the saved choice.
+RUNTIME_STATE_FILE="/etc/lunarwing/container-runtime"
+
+# Print the persisted runtime choice, or nothing. Invalid/unreadable content
+# warns (stderr) and prints nothing so callers fall through to auto-detect.
+_load_saved_container_runtime() {
+  [[ -f "$RUNTIME_STATE_FILE" ]] || return 0
+  local saved=""
+  saved="$(tr -d '[:space:]' <"$RUNTIME_STATE_FILE" 2>/dev/null)" || return 0
+  saved="${saved,,}"
+  case "$saved" in
+    docker|podman) printf '%s' "$saved" ;;
+    *) say "WARNING: ignoring invalid $RUNTIME_STATE_FILE: '$saved' (expected docker or podman)" >&2 ;;
+  esac
+  return 0
+}
+
+# Persist an explicitly-chosen runtime machine-wide. Warn-and-continue: a
+# read-only /etc or non-root caller must never break the invoking command.
+_save_container_runtime() {
+  local rt="$1" tmp
+  mkdir -p /etc/lunarwing 2>/dev/null || { say "WARNING: cannot create /etc/lunarwing; runtime choice not persisted" >&2; return 0; }
+  tmp="$(mktemp "${RUNTIME_STATE_FILE}.tmp.XXXXXX" 2>/dev/null)" \
+    || { say "WARNING: cannot write $RUNTIME_STATE_FILE; runtime choice not persisted" >&2; return 0; }
+  if printf '%s\n' "$rt" >"$tmp" && chmod 0644 "$tmp" && mv "$tmp" "$RUNTIME_STATE_FILE"; then
+    say "container runtime '$rt' saved to $RUNTIME_STATE_FILE (env var no longer needed)" >&2
+  else
+    rm -f "$tmp"
+    say "WARNING: cannot write $RUNTIME_STATE_FILE; runtime choice not persisted" >&2
+  fi
+  return 0
+}
+
 # ── Container runtime detection ──────────────────────────────────────────────
 
+CONTAINER_RT_SOURCE=""
 detect_container_runtime() {
-  local override="${LUNARWING_CONTAINER_RUNTIME:-}"
+  local override="${LUNARWING_CONTAINER_RUNTIME:-}" saved=""
   if [[ -n "$override" ]]; then
     case "${override,,}" in
-      docker|podman) printf '%s' "${override,,}"; return 0 ;;
+      docker|podman)
+        override="${override,,}"
+        # Persist the explicit choice (idempotent: skip when unchanged).
+        saved="$(_load_saved_container_runtime)"
+        [[ "$saved" == "$override" ]] || _save_container_runtime "$override"
+        CONTAINER_RT_SOURCE="env"
+        printf '%s' "$override"; return 0 ;;
       *) die "unsupported container runtime '$override'; use docker or podman" ;;
     esac
   fi
 
-  if command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
-    printf 'podman'; return 0
+  saved="$(_load_saved_container_runtime)"
+  if [[ -n "$saved" ]]; then
+    CONTAINER_RT_SOURCE="saved"
+    printf '%s' "$saved"; return 0
   fi
-  if command -v docker >/dev/null 2>&1; then printf 'docker'; return 0; fi
-  if command -v podman >/dev/null 2>&1; then printf 'podman'; return 0; fi
+
+  if command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
+    CONTAINER_RT_SOURCE="auto-detected"; printf 'podman'; return 0
+  fi
+  if command -v docker >/dev/null 2>&1; then CONTAINER_RT_SOURCE="auto-detected"; printf 'docker'; return 0; fi
+  if command -v podman >/dev/null 2>&1; then CONTAINER_RT_SOURCE="auto-detected"; printf 'podman'; return 0; fi
 
   die "neither docker nor podman found; install one or set LUNARWING_CONTAINER_RUNTIME"
 }
