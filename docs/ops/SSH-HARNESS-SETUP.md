@@ -222,6 +222,42 @@ in the store, the daemon almost certainly needs a restart (see step 3).
 
 ---
 
+## Agent-facing SSH tools
+
+Beyond worker mode, the agent has built-in tools that run SSH **in the gateway
+process** (no container). All take a configured `host` alias and require
+approval on every call. Full details + when-to-use each:
+[`../architecture/SSH_DELIVERY_MECHANISMS.md`](../architecture/SSH_DELIVERY_MECHANISMS.md).
+
+- **`ssh`** — run one command on a configured host: `{host, command}` →
+  `{output, stderr, exit_code, success}`. Ed25519/ECDSA keys only.
+- **`ssh_git`** — git `clone`/`fetch`/`pull`/`push` over SSH:
+  `{operation, host, repo, path, ref?, depth?}`. Local paths are confined under
+  `<base_dir>/ssh-git/`; `pull` is fast-forward-only; force-push is blocked.
+- **`ssh` (WASM)** — the same one-command exec, but a sandboxed WASM tool with a
+  per-tool host allowlist. Needs its guest wasm built (below).
+
+The two built-in tools are available automatically once `[[ssh.hosts]]` is
+configured and a secrets store exists (same prerequisites as the harness).
+
+### Building / enabling the WASM `ssh` tool
+
+The WASM tool needs its guest component built (requires `rustup` +
+`wasm32-wasip2` + `cargo-component`):
+
+```bash
+cd ic
+rustup target add wasm32-wasip2
+cargo install cargo-component --locked        # once
+cargo component build --release --target wasm32-wasip2 \
+  --manifest-path tools-src/ssh/Cargo.toml
+# -> tools-src/ssh/target/wasm32-wasip2/release/ssh_tool.wasm
+```
+
+Grant it a host allowlist in `tools-src/ssh/ssh-tool.capabilities.json`
+(`capabilities.ssh.allowed_hosts`). In dev mode it's auto-discovered from
+`tools-src/ssh/`; the registry entry is `registry/tools/ssh.json`.
+
 ## Full HTTP API reference
 
 Base URL is the daemon's HTTP port (no prefix). All responses are
@@ -278,7 +314,7 @@ doc §7.)
 | Worker: "agent has no identities" | Same as above — restart the daemon after uploading. |
 | Worker: `SSH_AUTH_SOCK` unset / socket missing | Worker container was created before the socket existed, or the bind-mount is a stale touch-file. Recreate the worker container **after** the daemon is up (mt-admin orders this for you; a plain `restart` may reuse a stale container). |
 | Socket exists but worker can't use it | Permissions: the socket is `0o666`, but the run dir must be tenant-owned and readable by the worker's UID. |
-| `git`/`ssh` prompts about host authenticity | Host-key verification here is the worker's own `ssh` client (the harness's `HostKeyVerifier` is not yet wired into the connection path). Manage `known_hosts` in the worker as usual, or pin `known_host_key` per host. |
+| `git`/`ssh` prompts about host authenticity (worker mode) | In **worker mode** host-key verification is the worker's own `ssh` client — manage its `known_hosts`, or pin `known_host_key` per host. (The in-process `ssh`/`ssh_git` tools instead use the harness's `HostKeyVerifier`; a Strict host with no known key is *refused*, not prompted.) |
 
 ### Where things live
 
