@@ -21,6 +21,10 @@ Register your nick so nobody else can use it:
 /msg NickServ REGISTER <password> <email>
 You'll get a confirmation email — follow the link to verify, then you can identify on connect going forward.
 
+New to IRC? Check out the starting guide from Libera here:
+
+https://libera.chat/guides/basics
+
 #### A few notes:
 
 Always use port 6697 with TLS if your client supports it.
