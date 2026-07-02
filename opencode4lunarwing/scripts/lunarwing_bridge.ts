@@ -18,6 +18,12 @@ import {
   type TaskRequest,
   type WsState,
 } from "./lunarwing_runtime"
+
+// A single malformed frame or a stray async error must not take the whole
+// worker process down (which would drop every in-flight task). Log and survive.
+process.on("unhandledRejection", (reason) => {
+  console.error("[bridge] unhandledRejection (surviving):", reason)
+})
 import { executeTask } from "./opencode_task_executor"
 
 // ── Configuration ─────────────────────────────────────────────────────────────
@@ -53,21 +59,27 @@ async function handleMessage(data: string, ws: { send(data: string): void }): Pr
     return
   }
 
-  switch (envelope.type) {
-    case "task_request":
-      await handleTaskRequest(envelope.payload as unknown as TaskRequest, ws)
-      break
+  // A handler throwing (e.g. dereferencing a null/malformed payload) must not
+  // crash the process or drop other in-flight tasks — log and keep serving.
+  try {
+    switch (envelope.type) {
+      case "task_request":
+        await handleTaskRequest(envelope.payload as unknown as TaskRequest, ws)
+        break
 
-    case "cancel":
-      handleCancel(envelope.payload as { task_id: string })
-      break
+      case "cancel":
+        handleCancel(envelope.payload as { task_id: string })
+        break
 
-    case "ping":
-      ws.send(JSON.stringify(createEnvelope("pong", {})))
-      break
+      case "ping":
+        ws.send(JSON.stringify(createEnvelope("pong", {})))
+        break
 
-    default:
-      console.warn("[bridge] unknown message type:", envelope.type)
+      default:
+        console.warn("[bridge] unknown message type:", envelope.type)
+    }
+  } catch (err) {
+    console.error(`[bridge] handler error for "${envelope.type}":`, err)
   }
 }
 
@@ -88,6 +100,16 @@ async function handleTaskRequest(
   }
 
   console.log(`[bridge] task ${request.task_id}: starting`)
+
+  if (activeTasks.has(request.task_id)) {
+    // A task with this id is already in flight (e.g. an orchestrator resend
+    // after a reconnect). Ignore the duplicate instead of overwriting the first
+    // task's AbortController — otherwise a later cancel targets the wrong task
+    // and the shared map entry gets deleted out from under the running one. The
+    // in-flight task's task_result will satisfy the resend.
+    console.warn(`[bridge] task ${request.task_id}: already in flight, ignoring duplicate request`)
+    return
+  }
 
   const controller = new AbortController()
   activeTasks.set(request.task_id, controller)

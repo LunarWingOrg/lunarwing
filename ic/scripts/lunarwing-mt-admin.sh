@@ -1308,6 +1308,18 @@ ports_get() {
     port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_5 // empty" "$PORTS_REGISTRY")"
     [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
   fi
+  # Back-compat: pre-v11 registries had `reserved_7`/`reserved_8` where
+  # `opencode_wss`/`opencode_health` now live (renamed by ports_migrate_v11).
+  # Read either name so an unmigrated tenant's opencode worker still resolves
+  # its port instead of being skipped — mirrors the vision_service case above.
+  if [[ "$port_name" == "opencode_wss" ]]; then
+    port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_7 // empty" "$PORTS_REGISTRY")"
+    [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
+  fi
+  if [[ "$port_name" == "opencode_health" ]]; then
+    port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_8 // empty" "$PORTS_REGISTRY")"
+    [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
+  fi
   return 1
 }
 
@@ -2819,6 +2831,17 @@ patch_tenant_env() {
     fi
   fi
 
+  local opencode_wss_port
+  opencode_wss_port="$(ports_get "$name" opencode_wss)" || true
+  if [[ -n "$opencode_wss_port" ]]; then
+    if grep -q '^OPENCODE_WSS_PORT=' "$env_path"; then
+      say "OPENCODE_WSS_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# Opencode worker (WebSocket port for agent communication)\nOPENCODE_WSS_PORT=%s\n' "$opencode_wss_port" >>"$env_path"
+      say "added OPENCODE_WSS_PORT=$opencode_wss_port to $env_path"
+    fi
+  fi
+
   local weechat_adapter_port
   weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
   if [[ -n "$weechat_adapter_port" ]]; then
@@ -2875,10 +2898,12 @@ patch_tenant_env() {
     fi
   fi
 
-  # Wire the nanocode external worker into config.toml so existing tenants get
-  # create_job(mode: "nanocode") routing without a hand-edited config file.
+  # Wire the nanocode/pebble/opencode external workers into config.toml so
+  # existing tenants get create_job(mode: ...) routing without a hand-edited
+  # config file.
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+  ensure_external_worker_config "$name" "opencode" "opencode_wss"
 }
 
 # ── Owner-scope DB migration ──────────────────────────────────────────────────
@@ -3432,7 +3457,10 @@ start_tenant_opencode() {
   ensure_container_runtime
 
   local wss_port container_name opencode_dir
-  wss_port="$(ports_get "$name" opencode_wss)"
+  # `|| true`: ports_get returns nonzero for a genuinely unallocated key; under
+  # `set -euo pipefail` a bare assignment would abort the whole start-tenant run
+  # before the `[[ -z "$wss_port" ]]` skip below (mirrors start_tenant_vision).
+  wss_port="$(ports_get "$name" opencode_wss)" || true
   container_name="lunarwing-opencode-$name"
   opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
 

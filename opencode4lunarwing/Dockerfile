@@ -20,7 +20,11 @@ WORKDIR /build/opencode
 RUN bun install --frozen-lockfile || bun install
 
 WORKDIR /build/opencode/packages/sdk/js
-RUN bun run build 2>/dev/null || true
+# The bridge imports @opencode-ai/sdk/v2 from THIS build's output. Do not hide
+# its errors (no `2>/dev/null`); a build-time import assertion in the runtime
+# stage below turns a broken build into a failed image instead of a worker that
+# only dies on first boot.
+RUN bun run build || echo "WARNING: @opencode-ai/sdk build reported errors (import-verified in runtime stage)"
 
 WORKDIR /build/opencode/packages/app
 RUN bun run build 2>/dev/null || true
@@ -119,6 +123,13 @@ COPY --chown=opencode:opencode config/ ./config/
 RUN chmod +x /app/entrypoint.sh /app/health_server.py
 
 RUN ln -s /app/opencode/node_modules /app/node_modules
+
+# Fail the BUILD (not container startup) if the bridge's SDK import can't
+# resolve — the `bun run build` steps above are best-effort, so verify the exact
+# import the worker depends on. Without this a broken/renamed SDK passes
+# `docker build` and only surfaces as a module-resolution error when the bridge
+# starts inside the running container.
+RUN cd /app && bun -e 'import("@opencode-ai/sdk/v2").then(m => { if (typeof m.createOpencodeClient !== "function") { console.error("FATAL: @opencode-ai/sdk/v2 resolved but is missing createOpencodeClient"); process.exit(1) } }).catch(e => { console.error("FATAL: cannot import @opencode-ai/sdk/v2 —", e.message); process.exit(1) })'
 
 # ── XDG directories for opencode state ────────────────────────────────────────
 RUN mkdir -p /home/opencode/.local/share/opencode \

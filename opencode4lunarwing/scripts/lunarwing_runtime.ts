@@ -29,7 +29,7 @@ export function createEnvelope(type: string, payload: Record<string, unknown>): 
 export function parseEnvelope(data: string): Envelope | null {
   try {
     const msg = JSON.parse(data)
-    if (msg && typeof msg.type === "string" && typeof msg.payload === "object") {
+    if (msg && typeof msg.type === "string" && msg.payload !== null && typeof msg.payload === "object") {
       return msg as Envelope
     }
     return null
