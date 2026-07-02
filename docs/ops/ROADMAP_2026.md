@@ -25,7 +25,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Feature | Target |
 |---------|--------|
 | LunarWing UI performance overhaul | v1.2.0 |
-| Whatever proposals are deemed worthy | v1.2.0 |
+| Whatever further unimplemented proposals are deemed worthy | v1.2.0 |
 | XMPP file transfer — remaining polish (further hardening) | v1.2.1 |
 | Further polishing of Lunarvision AND XMPP file sharing integration - see XMPP_LUNARVISION_INTEGRATION.md in docs/proposals for some information | v1.2.1 |
 | In-place Upgrade Harness v3 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v1.2.1 |
@@ -35,7 +35,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Opencode External Worker (shipped in v1.1.8 — port registry v11, `opencode4lunarwing/`, full mt-admin lifecycle). Paseo MCP integration present behind `PASEO_URL`/`PASEO_TOKEN`. Further hardening/polish tracked under v1.2.3 | v1.2.2 ✅ shipped-early (v1.1.8) |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v1.2.3 |
-| Further external worker polishing | v1.2.3 |
+| Further external worker polishing (see opencode external worker note above) | v1.2.3 |
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
 | Additional WASM Channel Polishing | v1.2.5 |
