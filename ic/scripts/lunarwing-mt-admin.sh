@@ -2496,6 +2496,26 @@ patch_ssh_tool_allowlist() {
   fi
 }
 
+# True if a TCP connect to host:port succeeds within 2s (pure bash /dev/tcp).
+_probe_tcp() {
+  local host="$1" port="$2"
+  timeout 2 bash -c "exec 3<>/dev/tcp/${host}/${port}" 2>/dev/null
+}
+
+# Warn (never fail) if the tenant's configured loopback SSH host has no sshd
+# listening. Only 127.0.0.1 entries are probed: remote hosts may legitimately
+# be unreachable from this box (firewalls, jump hosts).
+warn_if_sshd_unreachable() {
+  local name="$1" host
+  while IFS= read -r host; do
+    [[ "$host" == "127.0.0.1" ]] || continue
+    if ! _probe_tcp "$host" 22; then
+      say "WARNING: no sshd listening on ${host}:22 — the tenant's SSH tools target this host." >&2
+      say "         Enable it with: systemctl enable --now sshd   (or 'ssh' on Debian/Ubuntu)" >&2
+    fi
+  done < <(_ssh_hosts_from_config "$name")
+}
+
 # ── SSH key provisioning ──────────────────────────────────────────────────────
 #
 # Generates an ed25519 key pair for the tenant and adds the public key to the
@@ -5357,6 +5377,7 @@ add_tenant() {
     say "--- Provisioning SSH harness ---"
     ensure_ssh_config "$name"
     provision_tenant_ssh_key "$name"
+    warn_if_sshd_unreachable "$name"
   else
     say "SSH harness: disabled (enabled=$DEFAULT_SSH_ENABLED, opt-out=$SSH_OPT_OUT)"
   fi
@@ -5562,6 +5583,7 @@ start_tenant() {
   # the post-bounce socket inode, so they are never left on a stale socket.
   local staged_key
   staged_key="$(tenant_env_dir "$name")/ssh_key_staged"
+  warn_if_sshd_unreachable "$name"
   if [[ -f "$staged_key" ]]; then
     upload_tenant_ssh_key "$name" || true
     if [[ ! -f "$staged_key" ]]; then
@@ -5785,6 +5807,8 @@ doctor() {
   if command -v podman >/dev/null 2>&1; then
     _check "podman available" podman info
   fi
+  _check "sshd listening on 127.0.0.1:22 (needed for loopback SSH tenants)" \
+    bash -c 'timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/22"'
 
   ensure_container_runtime
   if [[ "$MT_ROOTLESS" == "true" ]]; then
