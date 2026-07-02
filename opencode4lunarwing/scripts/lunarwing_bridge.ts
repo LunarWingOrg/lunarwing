@@ -101,6 +101,16 @@ async function handleTaskRequest(
 
   console.log(`[bridge] task ${request.task_id}: starting`)
 
+  if (activeTasks.has(request.task_id)) {
+    // A task with this id is already in flight (e.g. an orchestrator resend
+    // after a reconnect). Ignore the duplicate instead of overwriting the first
+    // task's AbortController — otherwise a later cancel targets the wrong task
+    // and the shared map entry gets deleted out from under the running one. The
+    // in-flight task's task_result will satisfy the resend.
+    console.warn(`[bridge] task ${request.task_id}: already in flight, ignoring duplicate request`)
+    return
+  }
+
   const controller = new AbortController()
   activeTasks.set(request.task_id, controller)
 
