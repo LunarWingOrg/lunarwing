@@ -48,7 +48,7 @@ sudo podman pull pgvector/pgvector:pg16
   `add-tenant` installs a per-tenant rustup toolchain into each tenant's `~/.cargo`/`~/.rustup`,
   and tenant builds use that, not the host toolchain.
 - `[FAIL] port registry exists` — created on the first `add-tenant`.
-- `[FAIL] nanocode/pebble worker image exists` — not using the worker containers.
+- `[FAIL] nanocode/pebble/opencode worker image exists` — not using the worker containers.
 
 ---
 
