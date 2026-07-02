@@ -128,6 +128,13 @@ key). Keys never leave the agent.
   `GIT_SSH_COMMAND` with `StrictHostKeyChecking` keyed to the host's
   `host_key_mode` (`yes` for Strict, `accept-new` for AcceptFirst). A Strict
   host with no known key is refused.
+- **Hermetic SSH config:** invokes `ssh -F /dev/null`, so it ignores the host's
+  `/etc/ssh/ssh_config` (and its `ssh_config.d/*` includes) and the user's
+  `~/.ssh/config` — everything it needs comes from `[[ssh.hosts]]` + the agent
+  socket. This makes `ssh_git` immune to host-side ssh_config breakage (e.g. a
+  drop-in with bad owner/permissions, which OpenSSH treats as fatal). The `ssh`
+  and WASM tools don't read `/etc/ssh` at all (russh), so this class of failure
+  only ever reached `ssh_git`.
 - **Filesystem sandbox:** the local `path` is confined under
   `<base_dir>/ssh-git/` via the `validate_path` helper (absolute paths, `..`
   traversal, and symlink escape are rejected).
