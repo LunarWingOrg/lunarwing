@@ -162,7 +162,12 @@ case "$MODE" in
     log "Waiting for opencode server on port $OPENCODE_SERVE_PORT..."
     RETRIES=0
     MAX_RETRIES=30
-    until curl -sf "http://$OPENCODE_SERVE_HOST:$OPENCODE_SERVE_PORT/" >/dev/null 2>&1; do
+    # Ready = the server speaks HTTP on this port. Use `curl -s` (NOT `-sf`):
+    # opencode `serve` returns 404 on bare `/` (it only serves the built SPA
+    # there, which this image does not build), so `-sf`/`--fail` would loop until
+    # timeout even though the API is healthy. Any HTTP response (incl. 404) means
+    # ready; only a refused/no-connection keeps the loop waiting.
+    until curl -s --max-time 2 -o /dev/null "http://$OPENCODE_SERVE_HOST:$OPENCODE_SERVE_PORT/" 2>/dev/null; do
       RETRIES=$((RETRIES + 1))
       if [ $RETRIES -ge $MAX_RETRIES ]; then
         die "opencode server failed to start after ${MAX_RETRIES}s"

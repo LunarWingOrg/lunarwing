@@ -66,6 +66,9 @@ export async function executeTask(
   let sessionID: string | undefined
   let output = ""
   let timedOut = false
+  let sawSessionError = false
+  let sessionErrorMsg = ""
+  let deniedPermissions = 0
 
   const timeout = setTimeout(() => {
     timedOut = true
@@ -134,10 +137,19 @@ export async function executeTask(
         const err = event.properties.error
         const errMsg = err?.data?.message || err?.name || "Unknown error"
         output += `ERROR: ${errMsg}\n`
+        sawSessionError = true
+        if (!sessionErrorMsg) sessionErrorMsg = errMsg
       }
 
       if (event.type === "permission.asked") {
         if (event.properties.sessionID !== sessionID) continue
+        // This rejects every runtime permission prompt — a safety net for
+        // anything NOT already granted by the session.create allow-policy above.
+        // If that policy's shape is wrong (unverified vs the real opencode SDK —
+        // see DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md), every action
+        // falls through to here and is denied, so the task does nothing. Count
+        // denials so we fail loudly below instead of reporting a false success.
+        deniedPermissions++
         await sdk.permission.reply({
           requestID: event.properties.id,
           reply: "reject",
@@ -174,6 +186,34 @@ export async function executeTask(
         status: "cancelled",
         output: output.trim(),
         error: null,
+        duration_ms: durationMs,
+      })
+      return
+    }
+
+    // Honest result: a session error must not be reported as success.
+    if (sawSessionError) {
+      onResult({
+        task_id: request.task_id,
+        status: "error",
+        output: output.trim(),
+        error: sessionErrorMsg || "opencode session reported an error",
+        duration_ms: durationMs,
+      })
+      return
+    }
+
+    // If every permission was denied and the task produced no output, it did
+    // nothing — report that instead of a silent "success".
+    if (deniedPermissions > 0 && !output.trim()) {
+      onResult({
+        task_id: request.task_id,
+        status: "error",
+        output: output.trim(),
+        error:
+          `Task performed no actions: ${deniedPermissions} permission request(s) ` +
+          `were denied by the worker permission policy (the session permission ` +
+          `configuration likely needs to match the opencode SDK — smoke-verify).`,
         duration_ms: durationMs,
       })
       return

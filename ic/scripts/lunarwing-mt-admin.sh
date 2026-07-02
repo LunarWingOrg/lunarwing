@@ -2831,6 +2831,17 @@ patch_tenant_env() {
     fi
   fi
 
+  local opencode_wss_port
+  opencode_wss_port="$(ports_get "$name" opencode_wss)" || true
+  if [[ -n "$opencode_wss_port" ]]; then
+    if grep -q '^OPENCODE_WSS_PORT=' "$env_path"; then
+      say "OPENCODE_WSS_PORT already set in $env_path (skipping)"
+    else
+      printf '\n# Opencode worker (WebSocket port for agent communication)\nOPENCODE_WSS_PORT=%s\n' "$opencode_wss_port" >>"$env_path"
+      say "added OPENCODE_WSS_PORT=$opencode_wss_port to $env_path"
+    fi
+  fi
+
   local weechat_adapter_port
   weechat_adapter_port="$(ports_get "$name" weechat_adapter)"
   if [[ -n "$weechat_adapter_port" ]]; then
@@ -2887,10 +2898,12 @@ patch_tenant_env() {
     fi
   fi
 
-  # Wire the nanocode external worker into config.toml so existing tenants get
-  # create_job(mode: "nanocode") routing without a hand-edited config file.
+  # Wire the nanocode/pebble/opencode external workers into config.toml so
+  # existing tenants get create_job(mode: ...) routing without a hand-edited
+  # config file.
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+  ensure_external_worker_config "$name" "opencode" "opencode_wss"
 }
 
 # ── Owner-scope DB migration ──────────────────────────────────────────────────
