@@ -3,7 +3,7 @@
 
 ### Helps to do items in order (generally)
 
-1. [ ] Finalize goals
+1. [x] Finalize goals
 2. [x] rm gh extension and verify it does not show up
 3. [x] rm default mcps and verify they do not show up on fresh installation
 4. [x] ssh agent adjustments (option #2 and #3 and hardening)
@@ -18,21 +18,22 @@
 13. [x] finish improvements to routines - See docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md
 14. [x] Bump crate versions to 1.1.8
 15. [x] Ensure all relevant crates are bumped to 1.1.8
-16. [x] Update any stale documentation, including repo root-level README.md
-17. [x] Update ROADMAP file to reflect accuracy
-18. [ ] Run all cargo tests
-19. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure
-20. [ ] Retest kawarimi tenant migration
-21. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
-22. [ ] Run automated testing scripts if still relevant
-23. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-24. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
-25. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
-26. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #25)
-27. [ ] make cool community button for readme. I have some unique idea about this  (see #16)
-28. [ ] Update release date in release notes prior to last two steps below
-29. [ ] Create new branch to correspond with releases
-30. [ ] Create GH release tag and add release notes to it like other releases already have
+16. [x] Update any stale documentation
+17. [ ] Update repo root-level README.md
+18. [x] Update ROADMAP file to reflect accuracy
+19. [ ] Run all cargo tests
+20. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure
+21. [ ] Retest kawarimi tenant migration
+22. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
+23. [ ] Run automated testing scripts if still relevant
+24. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
+25. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
+26. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
+27. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #26)
+28. [ ] make cool community button for readme. I have some unique idea about this (see #17)
+29. [ ] Update release date in release notes prior to last two steps below
+30. [ ] Create new branch to correspond with releases
+31. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
 
