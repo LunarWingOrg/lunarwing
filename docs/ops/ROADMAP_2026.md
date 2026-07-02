@@ -44,9 +44,12 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
 | Additional WASM Channel Polishing | v1.2.5 |
+| Additional Opencode/Paseo External Worker Polishing | v1.2.5 |
 | Reflex Compiler polishing and improvements | v1.2.5 |
 | LunarVoice Two Way Voice Communication | v1.2.6 |
-| Stabilization & polish buffer — reserved for v2 engine, LunarVoice, polish of all new features | v1.2.7 |
+| Deprecate Nanocode external Worker | v1.2.7 |
+| Additional LunarVoice polishing | v1.2.7 |
+| Surprise | v1.2.8 |
 
 ---
 
