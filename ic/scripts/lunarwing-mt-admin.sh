@@ -1298,6 +1298,56 @@ ensure_rootless_prereqs() {
   say "rootless prerequisites ready for $name (subuid/subgid, /run/user/$uid, storage)"
 }
 
+# Idempotent: install/verify the tenant user's WASM build toolchain (rustup,
+# stable default, wasm32-wasip1/wasip2 targets, cargo-component, wasm-tools).
+# Called from create_tenant_user (add-tenant) and as a build-tenant --with-wasm
+# preflight, so a partial install (network hiccup, killed add-tenant) is
+# repaired instead of silently disabling WASM builds forever.
+# Returns 0 when the toolchain is usable, 1 (after a loud warning) when not.
+ensure_tenant_wasm_toolchain() {
+  local name="$1"
+  local cargo_src='if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; else export PATH="$HOME/.cargo/bin:$PATH"; fi;'
+
+  # Install rustup for tenant user if not already present
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
+    say "installing rustup for $name ..."
+    sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
+      || { say "WARNING: rustup installation failed for $name" >&2; }
+  fi
+
+  # Ensure a default toolchain is set (rustup install may leave none configured)
+  if ! sudo -u "$name" bash -c "${cargo_src} rustup show active-toolchain" &>/dev/null; then
+    say "setting default toolchain to stable for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} rustup default stable" \
+      || say "WARNING: failed to set default toolchain for $name" >&2
+  fi
+
+  # Ensure WASM targets and cargo-component are installed
+  say "ensuring WASM toolchain for $name ..."
+  sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null; then
+    say "installing cargo-component and wasm-tools for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} cargo install cargo-component wasm-tools --locked 2>&1" || true
+  fi
+
+  # Final verification — loud, actionable, never fatal.
+  local missing=()
+  sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null || missing+=("cargo-component")
+  sudo -u "$name" bash -c "${cargo_src} rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2" \
+    || missing+=("wasm32-wasip2 target")
+  if ((${#missing[@]} > 0)); then
+    say "" >&2
+    say "WARNING: WASM toolchain incomplete for $name — missing: ${missing[*]}" >&2
+    say "         WASM extensions will NOT build. To fix, run:" >&2
+    say "           sudo -u $name bash -lc 'rustup target add wasm32-wasip1 wasm32-wasip2'" >&2
+    say "           sudo -u $name bash -lc 'cargo install cargo-component wasm-tools --locked'" >&2
+    say "         then re-run: $0 build-tenant $name --with-wasm" >&2
+    say "" >&2
+    return 1
+  fi
+  return 0
+}
+
 create_tenant_user() {
   local name="$1"
   local add_docker_group="${2:-false}"
@@ -1350,31 +1400,7 @@ create_tenant_user() {
   chmod 0700 "$lw_root/env"
   say "created directories under $lw_root"
 
-  # Install rustup for tenant user if not already present
-  local cargo_src='if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; else export PATH="$HOME/.cargo/bin:$PATH"; fi;'
-  if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
-    say "installing rustup for $name ..."
-    sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
-      || die "rustup installation failed for $name"
-    say "rustup installed for $name"
-  else
-    say "rustup already available for $name"
-  fi
-
-  # Ensure a default toolchain is set (rustup install may leave none configured)
-  if ! sudo -u "$name" bash -c "${cargo_src} rustup show active-toolchain" &>/dev/null; then
-    say "setting default toolchain to stable for $name ..."
-    sudo -u "$name" bash -c "${cargo_src} rustup default stable" \
-      || die "failed to set default toolchain for $name"
-  fi
-
-  # Ensure WASM targets and cargo-component are installed
-  say "ensuring WASM toolchain for $name ..."
-  sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
-  if ! sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null; then
-    say "installing cargo-component and wasm-tools for $name ..."
-    sudo -u "$name" bash -c "${cargo_src} cargo install cargo-component wasm-tools --locked 2>&1" || true
-  fi
+  ensure_tenant_wasm_toolchain "$name" || true
 }
 
 remove_tenant_user() {
@@ -1502,11 +1528,16 @@ build_tenant() {
       || die "xmpp-bridge build failed for $name"
 
     if [[ "$with_wasm" == "true" ]]; then
-      say "building WASM extensions for $name ..."
-      sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" || true
+      if ensure_tenant_wasm_toolchain "$name"; then
+        say "building WASM extensions for $name ..."
+        sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" \
+          || say "WARNING: WASM extension build reported errors for $name (some extensions may be missing; re-run '$0 build-tenant $name --with-wasm' after fixing)" >&2
 
-      say "installing WASM extensions for $name ..."
-      install_wasm_tenant "$name"
+        say "installing WASM extensions for $name ..."
+        install_wasm_tenant "$name"
+      else
+        say "WARNING: skipping WASM build for $name (toolchain incomplete — see above)" >&2
+      fi
     fi
 
     say "build complete for $name"
@@ -1819,6 +1850,7 @@ install_wasm_tenant() {
   done
 
   chown -R "$name:$name" "$channels_dir" "$tools_dir"
+  patch_ssh_tool_allowlist "$name"
 
   local gotify_config="$state_dir/workspace/config/gotify.json"
   if [[ -f "$gotify_config" ]] && [[ -f "$tools_dir/gotify-tool.capabilities.json" ]]; then
@@ -2402,6 +2434,89 @@ ensure_ssh_config() {
   chown "$name:$name" "$config_path"
   chmod 600 "$config_path"
   say "wrote SSH host config to $config_path (host=$ssh_host user=$ssh_user)"
+}
+
+# Print the host values of every [[ssh.hosts]] block in the tenant's
+# config.toml, one per line. mt-admin writes this file itself (ensure_ssh_config),
+# so the shape is known: a `host = "..."` line inside each [[ssh.hosts]] block.
+_ssh_hosts_from_config() {
+  local name="$1" config_path
+  config_path="$(tenant_state_dir "$name")/config.toml"
+  [[ -f "$config_path" ]] || return 0
+  awk '
+    /^\[\[ssh\.hosts\]\]/ { inblk = 1; next }
+    /^\[/                 { inblk = 0 }
+    inblk && /^host[ ]*=[ ]*"/ {
+      line = $0
+      sub(/^host[ ]*=[ ]*"/, "", line)
+      sub(/".*$/, "", line)
+      print line
+    }
+  ' "$config_path"
+}
+
+# Point the installed WASM ssh tool's capability allowlist at the tenant's
+# configured [[ssh.hosts]] hosts (the sidecar ships with a "myhost" placeholder).
+# Idempotent: always derived from config.toml. Warn-and-continue on any failure.
+# Point the installed WASM ssh tool's capability allowlist at the tenant's
+# configured [[ssh.hosts]] hosts (the sidecar ships with a "myhost" placeholder).
+# Idempotent: always derived from config.toml. Warn-and-continue on any failure:
+# every internal step is guarded so a failure can never errexit the script.
+patch_ssh_tool_allowlist() {
+  local name="$1" caps_path hosts_json tmp
+  caps_path="$(tenant_state_dir "$name")/tools/ssh-tool.capabilities.json"
+
+  if [[ ! -f "$caps_path" ]]; then
+    say "  ssh-tool allowlist: ssh-tool not installed — nothing to patch"
+    return 0
+  fi
+
+  command -v jq >/dev/null 2>&1 \
+    || { say "WARNING: jq not installed; ssh-tool allowlist left unchanged" >&2; return 0; }
+
+  hosts_json="$(_ssh_hosts_from_config "$name" | jq -R . | jq -s . 2>/dev/null)" \
+    || { say "WARNING: could not derive ssh hosts for $name; ssh-tool allowlist left unchanged" >&2; return 0; }
+  if [[ -z "$hosts_json" || "$hosts_json" == "[]" ]]; then
+    say "  ssh-tool allowlist: no [[ssh.hosts]] in config.toml — leaving sidecar as shipped"
+    return 0
+  fi
+
+  # Same-directory temp file so mv is atomic (same pattern as
+  # configure_gotify_capabilities).
+  tmp="$(mktemp "${caps_path}.tmp.XXXXXX")" \
+    || { say "WARNING: mktemp failed; ssh-tool allowlist left unchanged" >&2; return 0; }
+  if jq --argjson hosts "$hosts_json" '.capabilities.ssh.allowed_hosts = $hosts' \
+       "$caps_path" >"$tmp" 2>/dev/null \
+    && mv "$tmp" "$caps_path" \
+    && chown "$name:$name" "$caps_path"; then
+    say "  ssh-tool allowlist set to: $(jq -c . <<<"$hosts_json" 2>/dev/null || printf '%s' "$hosts_json")"
+  else
+    rm -f "$tmp"
+    say "WARNING: failed to patch ssh-tool allowlist at $caps_path (edit .capabilities.ssh.allowed_hosts manually)" >&2
+  fi
+}
+
+# True if a TCP connect to host:port succeeds within 2s (pure bash /dev/tcp).
+_probe_tcp() {
+  local host="$1" port="$2"
+  timeout 2 bash -c "exec 3<>/dev/tcp/${host}/${port}" 2>/dev/null
+}
+
+# Warn (never fail) if the tenant's configured loopback SSH host has no sshd
+# listening. Only 127.0.0.1 entries are probed: remote hosts may legitimately
+# be unreachable from this box (firewalls, jump hosts).
+warn_if_sshd_unreachable() {
+  local name="$1" host
+  while IFS= read -r host; do
+    [[ "$host" == "127.0.0.1" ]] || continue
+    if ! _probe_tcp "$host" 22; then
+      say "WARNING: no sshd listening on ${host}:22 — the tenant's SSH tools target this host." >&2
+      say "         Enable it with: systemctl enable --now sshd   (or 'ssh' on Debian/Ubuntu)" >&2
+    fi
+  done < <(_ssh_hosts_from_config "$name")
+  # Explicit: this probe is warn-only and must never fail its (bare-statement)
+  # callers under set -e, regardless of future edits above.
+  return 0
 }
 
 # ── SSH key provisioning ──────────────────────────────────────────────────────
@@ -5265,6 +5380,7 @@ add_tenant() {
     say "--- Provisioning SSH harness ---"
     ensure_ssh_config "$name"
     provision_tenant_ssh_key "$name"
+    warn_if_sshd_unreachable "$name"
   else
     say "SSH harness: disabled (enabled=$DEFAULT_SSH_ENABLED, opt-out=$SSH_OPT_OUT)"
   fi
@@ -5309,7 +5425,7 @@ add_tenant() {
   say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say "  darkirc:          $( [[ "$enable_darkirc" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-darkirc to enable)" )"
-  say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key will be uploaded on start-tenant)" || echo "disabled (pass --no-ssh)" )"
+  say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key upload + activation handled by start-tenant)" || echo "disabled (pass --no-ssh)" )"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -5393,6 +5509,57 @@ render_tenant_units() {
   say "run-command changes need a restart to apply: $0 restart-tenant $name"
 }
 
+# Print a post-start SSH readiness block sourced from the live API. Warn-only:
+# a missing/failed API must never fail start-tenant.
+_ssh_ready_summary() {
+  local name="$1" http_port status keys hosts
+  hosts="$(_ssh_hosts_from_config "$name" | paste -sd, -)"
+  [[ -n "$hosts" ]] || return 0  # SSH not configured for this tenant
+
+  http_port="$(ports_get "$name" http)"
+  status="$(curl -sf --max-time 3 "http://127.0.0.1:${http_port}/agent/status" 2>/dev/null)" || status=""
+  keys="$(jq -r '.data.keys_loaded // "?"' <<<"$status" 2>/dev/null)" || keys="?"
+
+  say ""
+  say "--- SSH readiness ---"
+  say "  hosts:        $hosts"
+  if [[ "$keys" =~ ^[0-9]+$ ]] && ((keys >= 1)); then
+    say "  agent:        running, $keys key(s) loaded — ssh/ssh_git tools ready"
+  else
+    say "  agent:        keys_loaded=$keys — if a key upload just failed, re-run '$0 start-tenant $name'"
+  fi
+  if [[ -f "$(tenant_state_dir "$name")/tools/ssh-tool.wasm" ]]; then
+    say "  wasm ssh:     installed (activate it in the web panel: Settings → Extensions → ssh)"
+  fi
+  say "  verify:       curl -s http://127.0.0.1:${http_port}/agent/status | jq"
+}
+
+# Poll the tenant gateway's /agent/status until reachable (up to ~30s).
+_wait_tenant_gateway() {
+  local name="$1" http_port i=0
+  http_port="$(ports_get "$name" http)"
+  while ! curl -sf --max-time 2 "http://127.0.0.1:${http_port}/agent/status" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [[ $i -lt 15 ]] || return 1
+    sleep 2
+  done
+  return 0
+}
+
+# Restart ONLY the lunarwing daemon unit for a tenant (not the full stack).
+# Used by start_tenant to make a freshly-uploaded SSH key signable: the agent
+# loads keys from the secrets store at startup only ("runtime key add is
+# status-only" — see docs/architecture/SSH_AGENT_HARNESS.md §7).
+_restart_tenant_daemon() {
+  local name="$1"
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    _systemctl_user "$name" restart "lunarwing-${name}.service"
+  else
+    rc-service "lunarwing-${name}" restart
+  fi
+}
+
 start_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -5437,15 +5604,36 @@ start_tenant() {
     start_tenant_openrc "$name"
   fi
 
-  # Workers start AFTER the daemon so the SSH agent socket is already a real
-  # Unix socket (not a touch-file) when podman bind-mounts it.
+  # Upload the staged SSH key to the secrets store (if one was provisioned by
+  # add-tenant but not yet uploaded), BEFORE the workers start. If a key was
+  # actually ingested, bounce the daemon once so the agent loads it (keys are
+  # only read from the secrets store at startup); the workers then bind-mount
+  # the post-bounce socket inode, so they are never left on a stale socket.
+  local staged_key
+  staged_key="$(tenant_env_dir "$name")/ssh_key_staged"
+  warn_if_sshd_unreachable "$name"
+  if [[ -f "$staged_key" ]]; then
+    upload_tenant_ssh_key "$name" || true
+    if [[ ! -f "$staged_key" ]]; then
+      # Upload succeeded (upload_tenant_ssh_key deletes the staged file).
+      say "restarting lunarwing-${name} so the SSH agent loads the new key ..."
+      if _restart_tenant_daemon "$name"; then
+        if _wait_tenant_gateway "$name"; then
+          say "lunarwing-${name} restarted; SSH key active"
+        else
+          say "WARNING: gateway not reachable after SSH-key restart (check 'status $name')" >&2
+        fi
+      else
+        say "WARNING: daemon restart failed after SSH key upload; run '$0 restart-tenant $name' manually" >&2
+      fi
+    fi
+  fi
+
+  # Workers start AFTER the daemon (and after any SSH-key bounce) so the SSH
+  # agent socket is already a real, current Unix socket when podman bind-mounts it.
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
-
-  # Upload the staged SSH key to the secrets store (if one was provisioned
-  # by add-tenant but not yet uploaded). Init-system-agnostic — uses the
-  # gateway's HTTP API, which both systemd and OpenRC serve.
-  upload_tenant_ssh_key "$name" || true
+  _ssh_ready_summary "$name" || true
 }
 
 stop_tenant() {
@@ -5648,6 +5836,8 @@ doctor() {
   if command -v podman >/dev/null 2>&1; then
     _check "podman available" podman info
   fi
+  _check "sshd listening on 127.0.0.1:22 (needed for loopback SSH tenants)" \
+    bash -c 'timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/22"'
 
   ensure_container_runtime
   if [[ "$MT_ROOTLESS" == "true" ]]; then
@@ -6031,6 +6221,7 @@ main() {
       [[ -n "$ssh_user" ]] || ssh_user="$name"
       ensure_ssh_config "$name" "$ssh_host" "$ssh_user"
       provision_tenant_ssh_key "$name" "$ssh_host" "$ssh_user"
+      patch_ssh_tool_allowlist "$name"
       say ""
       say "SSH harness configured for tenant '$name' (host=$ssh_host user=$ssh_user)"
       say "Run '$0 restart-tenant $name' to start the daemon and upload the key to the secrets store"

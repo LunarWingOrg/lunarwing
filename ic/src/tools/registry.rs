@@ -756,6 +756,7 @@ impl ToolRegistry {
         if let Some(ws) = reg.workspace {
             wrapper = wrapper.with_workspace(ws);
         }
+        wrapper = wrapper.with_ssh_bridge(reg.ssh_bridge);
 
         // Register the tool
         self.register(Arc::new(wrapper)).await;
@@ -827,6 +828,7 @@ impl ToolRegistry {
             secrets_store: self.secrets_store.clone(),
             oauth_refresh: None,
             workspace: None,
+            ssh_bridge: Arc::new(std::sync::OnceLock::new()),
         })
         .await
         .map_err(WasmRegistrationError::Wasm)?;
@@ -874,6 +876,9 @@ pub struct WasmToolRegistration<'a> {
     pub oauth_refresh: Option<OAuthRefreshConfig>,
     /// Workspace for pre-loading data accessible via `workspace_read`.
     pub workspace: Option<Arc<Workspace>>,
+    /// Shared SSH bridge slot for the `ssh_exec` host function (Option 3).
+    pub ssh_bridge:
+        Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
 }
 
 impl Default for ToolRegistry {

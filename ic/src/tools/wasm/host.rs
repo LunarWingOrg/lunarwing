@@ -281,6 +281,23 @@ impl HostState {
         }
     }
 
+    /// Check whether this tool may run an SSH command on the given host alias.
+    ///
+    /// Returns an error message if the ssh capability was not granted or the
+    /// host is not in the tool's allowlist (Option 3).
+    pub fn check_ssh_allowed(&self, host: &str) -> Result<(), String> {
+        let capability = self
+            .capabilities
+            .ssh
+            .as_ref()
+            .ok_or_else(|| "SSH capability not granted".to_string())?;
+        if capability.is_allowed(host) {
+            Ok(())
+        } else {
+            Err(format!("SSH host '{host}' not in tool allowlist"))
+        }
+    }
+
     /// Check if tool invocation is allowed for an alias.
     ///
     /// Returns the real tool name if allowed, error otherwise.
@@ -405,6 +422,18 @@ mod tests {
         fn read(&self, _path: &str) -> Option<String> {
             Some(self.content.clone())
         }
+    }
+
+    #[test]
+    fn test_check_ssh_allowed() {
+        // No ssh capability granted -> denied.
+        let state = HostState::new(Capabilities::none());
+        assert!(state.check_ssh_allowed("prod").is_err());
+
+        // Granted with an allowlist -> only listed hosts pass.
+        let state = HostState::new(Capabilities::none().with_ssh(vec!["prod".to_string()]));
+        assert!(state.check_ssh_allowed("prod").is_ok());
+        assert!(state.check_ssh_allowed("dev").is_err());
     }
 
     #[test]

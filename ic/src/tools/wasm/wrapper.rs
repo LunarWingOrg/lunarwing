@@ -167,6 +167,10 @@ struct StoreData {
     /// Optional HTTP interceptor for testing — returns canned responses
     /// instead of making real requests when set.
     http_interceptor: Option<Arc<dyn HttpInterceptor>>,
+    /// Shared SSH bridge slot for the `ssh_exec` host function (Option 3).
+    /// Empty until the daemon populates it at startup (after the bridge is built),
+    /// so tools created before the bridge still see it at run time.
+    ssh_bridge: Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
 }
 
 impl StoreData {
@@ -188,6 +192,7 @@ impl StoreData {
             host_credentials,
             http_runtime: None,
             http_interceptor: None,
+            ssh_bridge: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -624,6 +629,92 @@ impl near::agent::host::Host for StoreData {
     fn secret_exists(&mut self, name: String) -> bool {
         self.host_state.secret_exists(&name)
     }
+
+    /// Run a command on a preconfigured SSH host (Option 3). The heavy lifting
+    /// (russh client, key decode, host-key verification) is done host-side by
+    /// reusing the built-in SSH client; the guest never sees key material.
+    fn ssh_exec(
+        &mut self,
+        host: String,
+        command: String,
+    ) -> Result<near::agent::host::SshResponse, String> {
+        // Capability gate: the tool must have been granted the ssh capability
+        // with this host in its allowlist (defense-in-depth on top of the
+        // [[ssh.hosts]] map, which is itself the hard egress allowlist).
+        self.host_state.check_ssh_allowed(&host)?;
+
+        // The bridge slot is populated by the daemon at startup. Empty => SSH
+        // is not configured / the bridge was never built.
+        let bridge = self
+            .ssh_bridge
+            .get()
+            .cloned()
+            .ok_or_else(|| "SSH is not available (no SSH bridge configured)".to_string())?;
+
+        // We're inside spawn_blocking; build a dedicated current-thread runtime
+        // to drive the async russh client (identical pattern to http_request).
+        if self.http_runtime.is_none() {
+            self.http_runtime = Some(
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| format!("Failed to create SSH runtime: {e}"))?,
+            );
+        }
+        let rt = self.http_runtime.as_ref().expect("just initialized");
+
+        let cmd_result = rt.block_on(async {
+            // Resolve host cfg + creds + verifier under a brief read guard, then
+            // drop it before the session (mirrors the built-in ssh tool).
+            let (host_cfg, creds, verifier) = {
+                let guard = bridge.read().await;
+                let host_cfg = guard
+                    .get_host_config(&host)
+                    .await
+                    .map_err(|e| format!("unknown SSH host '{host}': {e}"))?;
+                let creds = guard
+                    .load_key(&host)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .ok_or_else(|| format!("no SSH key stored for host '{host}'"))?;
+                let verifier = guard.host_key_verifier();
+                (host_cfg, creds, verifier)
+            };
+
+            // russh 0.45 signs RSA with ssh-rsa (SHA-1), rejected by modern
+            // servers — fail fast (mirrors the built-in ssh tool).
+            if host_cfg.key_type == crate::bridge::ssh::SSHKeyType::Rsa {
+                return Err("RSA keys are not supported (use Ed25519 or ECDSA)".to_string());
+            }
+
+            crate::bridge::ssh_client::connect_and_exec(&host_cfg, &creds, verifier, &command)
+                .await
+                .map_err(|e| e.to_string())
+        });
+
+        // Redact any injected credentials from an error before it reaches WASM.
+        let cmd_result = cmd_result.map_err(|e| self.redact_credentials(&e))?;
+
+        // Leak-scan untrusted remote output before it crosses back into WASM.
+        let leak_detector = LeakDetector::new();
+        if let Ok(s) = std::str::from_utf8(&cmd_result.stdout) {
+            leak_detector
+                .scan_and_clean(s)
+                .map_err(|e| format!("Potential secret leak in ssh stdout blocked: {e}"))?;
+        }
+        if let Ok(s) = std::str::from_utf8(&cmd_result.stderr) {
+            leak_detector
+                .scan_and_clean(s)
+                .map_err(|e| format!("Potential secret leak in ssh stderr blocked: {e}"))?;
+        }
+
+        Ok(near::agent::host::SshResponse {
+            exit_code: cmd_result.exit_code,
+            stdout: cmd_result.stdout,
+            stderr: cmd_result.stderr,
+            truncated: cmd_result.truncated,
+        })
+    }
 }
 
 /// A Tool implementation backed by a WASM component.
@@ -654,6 +745,10 @@ pub struct WasmToolWrapper {
     http_interceptor: Option<Arc<dyn HttpInterceptor>>,
     /// Workspace for pre-loading workspace data before WASM execution.
     workspace: Option<Arc<crate::workspace::Workspace>>,
+    /// Shared SSH bridge slot for the `ssh_exec` host function (Option 3).
+    /// Shared with the daemon, which populates it at startup once the bridge
+    /// exists; cloned into the blocking task so `ssh_exec` sees it at run time.
+    ssh_bridge: Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -885,6 +980,7 @@ impl WasmToolWrapper {
             oauth_refresh: None,
             http_interceptor: None,
             workspace: None,
+            ssh_bridge: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -895,6 +991,19 @@ impl WasmToolWrapper {
     /// exact HTTP requests a WASM tool constructs.
     pub fn with_http_interceptor(mut self, interceptor: Arc<dyn HttpInterceptor>) -> Self {
         self.http_interceptor = Some(interceptor);
+        self
+    }
+
+    /// Set the shared SSH bridge slot (Option 3 `ssh_exec` host function).
+    ///
+    /// The slot is shared with the daemon, which populates it at startup after
+    /// the SSH bridge is built. Passing an empty slot is fine — `ssh_exec` reads
+    /// it lazily at call time, by which point startup has populated it.
+    pub fn with_ssh_bridge(
+        mut self,
+        slot: Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
+    ) -> Self {
+        self.ssh_bridge = slot;
         self
     }
 
@@ -999,6 +1108,7 @@ impl WasmToolWrapper {
             host_credentials,
         );
         store_data.http_interceptor = self.http_interceptor.clone();
+        store_data.ssh_bridge = Arc::clone(&self.ssh_bridge);
         let mut store = Store::new(engine, store_data);
 
         // Configure fuel if enabled
@@ -1223,6 +1333,9 @@ impl Tool for WasmToolWrapper {
         let description = self.description.clone();
         let schemas = self.schemas.clone();
         let credentials = self.credentials.clone();
+        // Arc<OnceLock> — clone into the blocking task (do NOT null it like
+        // secrets_store); by run time the daemon has populated the slot.
+        let ssh_bridge = Arc::clone(&self.ssh_bridge);
 
         // Execute in blocking task with timeout
         let result = tokio::time::timeout(timeout, async move {
@@ -1237,6 +1350,7 @@ impl Tool for WasmToolWrapper {
                 oauth_refresh: None, // Already used above for pre-refresh
                 http_interceptor: self.http_interceptor.clone(),
                 workspace: None, // Not needed in blocking task
+                ssh_bridge,
             };
 
             tokio::task::spawn_blocking(move || {
@@ -1270,6 +1384,20 @@ impl Tool for WasmToolWrapper {
             }
             Ok(Err(wasm_err)) => Err(wasm_err.into()),
             Err(_) => Err(WasmError::Timeout(timeout).into()),
+        }
+    }
+
+    fn requires_approval(
+        &self,
+        _params: &serde_json::Value,
+    ) -> crate::tools::tool::ApprovalRequirement {
+        // A WASM tool granted the SSH capability can run remote commands — always
+        // require explicit approval, matching the built-in ssh tool. Other WASM
+        // tools keep the default (Never).
+        if self.capabilities.ssh.is_some() {
+            crate::tools::tool::ApprovalRequirement::Always
+        } else {
+            crate::tools::tool::ApprovalRequirement::Never
         }
     }
 
@@ -1881,6 +2009,66 @@ mod tests {
     use crate::tools::tool::Tool;
     use crate::tools::wasm::capabilities::Capabilities;
     use crate::tools::wasm::runtime::{WasmRuntimeConfig, WasmToolRuntime};
+
+    /// Instantiation smoke test for the Option-3 `ssh` WASM guest.
+    ///
+    /// Loads the built `ssh_tool.wasm` and prepares it, which compiles the
+    /// component AND briefly instantiates it to extract its `description()` /
+    /// `schema()` exports. Instantiation requires the host linker to satisfy
+    /// every import the component declares — including the new `ssh-exec` — so a
+    /// real (non-fallback) description proves the host<->guest ABI matches.
+    ///
+    /// Ignored by default: it needs the guest artifact, built with
+    /// `cargo component build --release --target wasm32-wasip2
+    ///  --manifest-path tools-src/ssh/Cargo.toml`. Run with `--ignored`.
+    #[tokio::test]
+    #[ignore = "requires the ssh guest wasm; build it with cargo component (see doc comment)"]
+    async fn test_ssh_guest_component_instantiates() {
+        let path = "tools-src/ssh/target/wasm32-wasip2/release/ssh_tool.wasm";
+        let wasm = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("skipping: {path} not built ({e})");
+                return;
+            }
+        };
+
+        let runtime =
+            WasmToolRuntime::new(WasmRuntimeConfig::for_testing()).expect("build wasm runtime");
+        // Use the production default limits (config/wasm.rs: 10 MB / 500M fuel /
+        // 60s), not the tiny for_testing budget (1 MB / 100k fuel) which is too
+        // small to initialize a std + serde_json wasip2 component on its first
+        // export call. This proves the tool works under the real runtime budget.
+        let limits = crate::tools::wasm::ResourceLimits::default()
+            .with_memory(10 * 1024 * 1024)
+            .with_fuel(500_000_000)
+            .with_timeout(std::time::Duration::from_secs(60));
+        let prepared = runtime
+            .prepare("ssh", &wasm, Some(limits))
+            .await
+            .expect("compile + instantiate ssh_tool.wasm");
+
+        // Real description (not the "WASM sandboxed tool" fallback) => the
+        // component instantiated and its description() export ran, which in turn
+        // means the host linker satisfied every import including ssh-exec.
+        assert!(
+            prepared.description.contains("SSH host"),
+            "expected the guest's real description, got: {}",
+            prepared.description
+        );
+        // schema() export ran and returned the guest's parameter schema.
+        let props = &prepared.schema["properties"];
+        assert!(
+            props.get("host").is_some(),
+            "schema missing host: {}",
+            prepared.schema
+        );
+        assert!(
+            props.get("command").is_some(),
+            "schema missing command: {}",
+            prepared.schema
+        );
+    }
 
     struct RecordingSecretsStore {
         inner: InMemorySecretsStore,

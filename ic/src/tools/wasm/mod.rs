@@ -108,7 +108,7 @@ pub use wrapper::{OAuthRefreshConfig, WasmToolWrapper};
 // Capabilities (V2)
 pub use capabilities::{
     Capabilities, EndpointPattern, HttpCapability, RateLimitConfig, SecretsCapability,
-    ToolInvokeCapability, WebhookCapability, WorkspaceCapability, WorkspaceReader,
+    SshCapability, ToolInvokeCapability, WebhookCapability, WorkspaceCapability, WorkspaceReader,
 };
 
 // Security components (V2)

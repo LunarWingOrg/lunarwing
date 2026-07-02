@@ -79,6 +79,35 @@ interface host {
         timeout-ms: option<u32>,
     ) -> result<http-response, string>;
 
+    // ==================== SSH Capability ====================
+
+    /// Result of a remote SSH command execution.
+    record ssh-response {
+        /// Process exit code (or -1 if the remote side reported none).
+        exit-code: s32,
+        /// Captured stdout bytes.
+        stdout: list<u8>,
+        /// Captured stderr bytes.
+        stderr: list<u8>,
+        /// True if stdout or stderr hit the host capture cap and was truncated.
+        truncated: bool,
+    }
+
+    /// Run a command on a preconfigured SSH host (if capability granted).
+    ///
+    /// Security:
+    /// - `host` must be a known alias resolvable by the host's SSHBridge and
+    ///   present in this tool's ssh allowlist; unlisted hosts are rejected.
+    /// - Keys, the ssh-agent, and host-key verification stay host-side; the
+    ///   guest only sends {host, command} and never sees key material.
+    /// - stdout/stderr are scanned for leaked secrets before returning.
+    /// - Bounded by the host's per-host connect/operation timeouts.
+    ///
+    /// Returns Err with a message if the host is not allowed, no key is stored,
+    /// authentication or host-key verification fails, or a secret leak is
+    /// detected in the output.
+    ssh-exec: func(host: string, command: string) -> result<ssh-response, string>;
+
     // ==================== Tool Invocation Capability ====================
 
     /// Invoke another tool by alias (if capability granted).

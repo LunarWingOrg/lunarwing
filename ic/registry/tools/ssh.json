@@ -1,0 +1,18 @@
+{
+  "name": "ssh",
+  "display_name": "SSH",
+  "kind": "tool",
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Run a command on a preconfigured SSH host (delivery Option 3: WASM guest + host-side russh client)",
+  "keywords": ["ssh", "remote", "shell", "exec"],
+  "source": {
+    "dir": "tools-src/ssh",
+    "capabilities": "ssh-tool.capabilities.json",
+    "crate_name": "ssh-tool"
+  },
+  "artifacts": {
+    "wasm32-wasip2": { "url": null, "sha256": null }
+  },
+  "tags": ["default"]
+}
