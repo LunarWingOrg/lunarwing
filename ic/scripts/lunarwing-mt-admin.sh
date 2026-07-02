@@ -5425,7 +5425,7 @@ add_tenant() {
   say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say "  darkirc:          $( [[ "$enable_darkirc" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-darkirc to enable)" )"
-  say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key will be uploaded on start-tenant)" || echo "disabled (pass --no-ssh)" )"
+  say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key upload + activation handled by start-tenant)" || echo "disabled (pass --no-ssh)" )"
   say ""
   say "Next steps:"
   say "  sudo $0 build-tenant $name --with-wasm --with-nanocode"
@@ -5507,6 +5507,31 @@ render_tenant_units() {
   fi
   say "units re-rendered for '$name' (services NOT restarted)."
   say "run-command changes need a restart to apply: $0 restart-tenant $name"
+}
+
+# Print a post-start SSH readiness block sourced from the live API. Warn-only:
+# a missing/failed API must never fail start-tenant.
+_ssh_ready_summary() {
+  local name="$1" http_port status keys hosts
+  hosts="$(_ssh_hosts_from_config "$name" | paste -sd, -)"
+  [[ -n "$hosts" ]] || return 0  # SSH not configured for this tenant
+
+  http_port="$(ports_get "$name" http)"
+  status="$(curl -sf --max-time 3 "http://127.0.0.1:${http_port}/agent/status" 2>/dev/null)" || status=""
+  keys="$(jq -r '.data.keys_loaded // "?"' <<<"$status" 2>/dev/null)" || keys="?"
+
+  say ""
+  say "--- SSH readiness ---"
+  say "  hosts:        $hosts"
+  if [[ "$keys" =~ ^[0-9]+$ ]] && ((keys >= 1)); then
+    say "  agent:        running, $keys key(s) loaded — ssh/ssh_git tools ready"
+  else
+    say "  agent:        keys_loaded=$keys — if a key upload just failed, re-run '$0 start-tenant $name'"
+  fi
+  if [[ -f "$(tenant_state_dir "$name")/tools/ssh-tool.wasm" ]]; then
+    say "  wasm ssh:     installed (activate it in the web panel: Settings → Extensions → ssh)"
+  fi
+  say "  verify:       curl -s http://127.0.0.1:${http_port}/agent/status | jq"
 }
 
 # Poll the tenant gateway's /agent/status until reachable (up to ~30s).
@@ -5608,6 +5633,7 @@ start_tenant() {
   # agent socket is already a real, current Unix socket when podman bind-mounts it.
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
+  _ssh_ready_summary "$name" || true
 }
 
 stop_tenant() {
