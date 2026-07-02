@@ -431,7 +431,6 @@ _save_container_runtime() {
 
 # ── Container runtime detection ──────────────────────────────────────────────
 
-CONTAINER_RT_SOURCE=""
 detect_container_runtime() {
   local override="${LUNARWING_CONTAINER_RUNTIME:-}" saved=""
   if [[ -n "$override" ]]; then
@@ -441,7 +440,6 @@ detect_container_runtime() {
         # Persist the explicit choice (idempotent: skip when unchanged).
         saved="$(_load_saved_container_runtime)"
         [[ "$saved" == "$override" ]] || _save_container_runtime "$override"
-        CONTAINER_RT_SOURCE="env"
         printf '%s' "$override"; return 0 ;;
       *) die "unsupported container runtime '$override'; use docker or podman" ;;
     esac
@@ -449,15 +447,14 @@ detect_container_runtime() {
 
   saved="$(_load_saved_container_runtime)"
   if [[ -n "$saved" ]]; then
-    CONTAINER_RT_SOURCE="saved"
     printf '%s' "$saved"; return 0
   fi
 
   if command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1; then
-    CONTAINER_RT_SOURCE="auto-detected"; printf 'podman'; return 0
+    printf 'podman'; return 0
   fi
-  if command -v docker >/dev/null 2>&1; then CONTAINER_RT_SOURCE="auto-detected"; printf 'docker'; return 0; fi
-  if command -v podman >/dev/null 2>&1; then CONTAINER_RT_SOURCE="auto-detected"; printf 'podman'; return 0; fi
+  if command -v docker >/dev/null 2>&1; then printf 'docker'; return 0; fi
+  if command -v podman >/dev/null 2>&1; then printf 'podman'; return 0; fi
 
   die "neither docker nor podman found; install one or set LUNARWING_CONTAINER_RUNTIME"
 }
@@ -5885,12 +5882,24 @@ doctor() {
     _check "podman available" podman info
   fi
 
-  # Informational: which runtime commands will use, and why.
-  local _rt_resolved
-  _rt_resolved="$(detect_container_runtime)" || _rt_resolved="unresolved"
-  detect_container_runtime >/dev/null 2>&1 || true   # set CONTAINER_RT_SOURCE in this shell
-  printf '[info] container runtime: %s (%s%s)\n' "$_rt_resolved" "${CONTAINER_RT_SOURCE:-unknown}" \
-    "$([[ "${CONTAINER_RT_SOURCE:-}" == "saved" ]] && printf ' — %s' "$RUNTIME_STATE_FILE")"
+  # Informational: which runtime commands will use, and why. Single call,
+  # protected by the if: detect_container_runtime dies (exits) on a box with
+  # neither runtime, and only a $( ) subshell can contain that exit. The
+  # source label is re-derived here with the same precedence the function
+  # uses (env > saved file > auto-detect).
+  local _rt_resolved _rt_source
+  if _rt_resolved="$(detect_container_runtime)"; then
+    if [[ -n "${LUNARWING_CONTAINER_RUNTIME:-}" ]]; then
+      _rt_source="env"
+    elif [[ "$(_load_saved_container_runtime 2>/dev/null)" == "$_rt_resolved" ]]; then
+      _rt_source="saved — $RUNTIME_STATE_FILE"
+    else
+      _rt_source="auto-detected"
+    fi
+    printf '[info] container runtime: %s (%s)\n' "$_rt_resolved" "$_rt_source"
+  else
+    printf '[info] container runtime: unresolved (install docker or podman, or set LUNARWING_CONTAINER_RUNTIME)\n'
+  fi
 
   _check "sshd listening on 127.0.0.1:22 (needed for loopback SSH tenants)" \
     bash -c 'timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/22"'
