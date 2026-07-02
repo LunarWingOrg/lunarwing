@@ -14,6 +14,8 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
 | Enhance Onboarding Process for fresh tenants with interactive version of multi admin setup | v1.1.9 |
 | Lunartica UI reskin continuation | v1.1.9 |
+| Self-Healing Capabilities analysis of any missing pieces from all the new components. Implementation of missing pieces to follow | v1.1.9 |
+| Self-Healing Capability Expansion - deferred from 1.1.8 | v1.1.9 |
 | Remove/archive stale documentation | v1.1.9 |
 | Update outdated documentation | v1.1.9 |
 | Further re-organization of repository documentation | v1.1.9 |
