@@ -5982,6 +5982,13 @@ main() {
   fi
   shift || true
 
+  # An explicitly-chosen runtime persists no matter which command runs.
+  # Without this, commands that never touch containers (list-tenants, tokens,
+  # ...) silently ignore LUNARWING_CONTAINER_RUNTIME and nothing is saved,
+  # breaking the "set it once" promise. ensure_container_runtime validates,
+  # persists idempotently, and memoizes; unprivileged runs warn-and-continue.
+  [[ -z "${LUNARWING_CONTAINER_RUNTIME:-}" ]] || ensure_container_runtime
+
   case "$command_name" in
     add-tenant)
       require_root
