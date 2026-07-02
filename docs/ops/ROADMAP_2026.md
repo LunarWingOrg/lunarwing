@@ -37,7 +37,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
-| Opencode External Worker (shipped in v1.1.8 — port registry v11, `opencode4lunarwing/`, full mt-admin lifecycle). Paseo MCP integration present behind `PASEO_URL`/`PASEO_TOKEN`. Further hardening/polish tracked under v1.2.3 | v1.2.2 ✅ shipped-early (v1.1.8) |
+| Opencode External Worker (shipped in v1.1.8 — port registry v11, `opencode4lunarwing/`, full mt-admin lifecycle). Paseo MCP integration present behind `PASEO_URL`/`PASEO_TOKEN`. Further hardening/polish tracked under v1.2.3 | v1.2.2 ✅ shipping early (v1.1.8) |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v1.2.3 |
 | Further external worker polishing (see opencode external worker note above) | v1.2.3 |
