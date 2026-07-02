@@ -11,15 +11,15 @@
 6. [x] Agent SSH WASM TOOL
 7. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
 8. [x] Add new external worker, opencode. Landed: `opencode4lunarwing/` (Bun/TypeScript bridge + `@opencode-ai/sdk`, `ironclaw-agent-v1` protocol), port registry v10→v11 migration (`opencode_wss`/`opencode_health`), full mt-admin lifecycle (build/configure/start/stop/doctor/status/list), `--with-opencode`, `--opencode-model`/`--opencode-base-url`. Optional Paseo MCP integration wired behind `PASEO_URL`/`PASEO_TOKEN`. Polish follow-ups and repo-doc updates tracked in DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md
-9. [ ] Test Opencode external worker properly (might help to update some of the old test scripts too) 
-10. [ ] test add-tenant and add-tenants enhancements. xmpp_jid_from, llm_model, gateway-host. also interactive onboarding in 1.1.8 or 1.1.9 - make note of decision later
+9. [x] Test Opencode external worker properly (might help to update some of the old test scripts too) 
+10. [x] test add-tenant and add-tenants enhancements. xmpp_jid_from, llm_model, gateway-host. also interactive onboarding in 1.1.8 or 1.1.9 - make note of decision later
 11. [x] see what else we can do from roadmap planned for 1.1.9 a little earlier
 12. [x] darkirc multi-tenant fix to make actually disabled and NOT BUILT unless enabled and build-darkirc flag also enabled
 13. [x] finish improvements to routines - See docs/proposals/ROUTINE_ENGINE_IMPROVEMENTS.md
 14. [x] Bump crate versions to 1.1.8
 15. [x] Ensure all relevant crates are bumped to 1.1.8
-16. [ ] Update any stale documentation, including repo root-level README.md
-17. [ ] Update ROADMAP file to reflect accuracy
+16. [x] Update any stale documentation, including repo root-level README.md
+17. [x] Update ROADMAP file to reflect accuracy
 18. [ ] Run all cargo tests
 19. [ ] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure
 20. [ ] Retest kawarimi tenant migration
