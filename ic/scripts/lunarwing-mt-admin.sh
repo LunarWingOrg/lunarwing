@@ -319,7 +319,7 @@ Commands:
 
 Environment:
   LUNARWING_SERVICE_MANAGER        Override: systemd or openrc
-  LUNARWING_CONTAINER_RUNTIME      Override: docker or podman
+  LUNARWING_CONTAINER_RUNTIME      Override: docker or podman (persisted to /etc/lunarwing/container-runtime on first explicit use; later runs need no env var)
   LUNARWING_MT_PROFILE             Build profile: release (default) or debug
   LUNARWING_MT_SOURCE_REPO         Path to source repo to clone from
   LUNARWING_MT_TENSORZERO_URL      Default upstream TensorZero URL
@@ -5884,6 +5884,14 @@ doctor() {
   if command -v podman >/dev/null 2>&1; then
     _check "podman available" podman info
   fi
+
+  # Informational: which runtime commands will use, and why.
+  local _rt_resolved
+  _rt_resolved="$(detect_container_runtime)" || _rt_resolved="unresolved"
+  detect_container_runtime >/dev/null 2>&1 || true   # set CONTAINER_RT_SOURCE in this shell
+  printf '[info] container runtime: %s (%s%s)\n' "$_rt_resolved" "${CONTAINER_RT_SOURCE:-unknown}" \
+    "$([[ "${CONTAINER_RT_SOURCE:-}" == "saved" ]] && printf ' — %s' "$RUNTIME_STATE_FILE")"
+
   _check "sshd listening on 127.0.0.1:22 (needed for loopback SSH tenants)" \
     bash -c 'timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/22"'
 

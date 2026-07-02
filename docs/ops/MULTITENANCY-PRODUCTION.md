@@ -364,9 +364,10 @@ The container is created with `--restart unless-stopped` so it survives host reb
 
 The script supports both Docker and Podman. Detection priority:
 
-1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`)
-2. If only Podman is installed, use Podman
-3. Otherwise default to Docker
+1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`) — persisted machine-wide on use
+2. Saved choice in `/etc/lunarwing/container-runtime`
+3. If only Podman is installed, use Podman
+4. Otherwise default to Docker
 
 All container operations use the detected runtime — no Docker-specific commands are hardcoded.
 
@@ -407,7 +408,7 @@ sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUNARWING_SERVICE_MANAGER` | auto-detect | Force `systemd` or `openrc` |
-| `LUNARWING_CONTAINER_RUNTIME` | auto-detect | Force `docker` or `podman` |
+| `LUNARWING_CONTAINER_RUNTIME` | saved choice, else auto-detect | Force `docker` or `podman` — persisted to /etc/lunarwing/container-runtime on first explicit use (set once) |
 | `LUNARWING_MT_PROFILE` | `release` | Build profile (`release` or `debug`) |
 | `LUNARWING_MT_SOURCE_REPO` | parent of script | Path to source repo to clone from |
 | `LUNARWING_MT_TENSORZERO_URL` | `http://192.168.1.157:3000` | Default upstream TensorZero URL |
