@@ -8,7 +8,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 |---------|--------|
 | Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool) | v1.1.9 |
 | Remove deprecated Codex external worker from project | v1.1.9 |
-| Remove support for all the other random unsupported LLM providers | v1.1.9 |
+| Remove support for all (or at least, some of) the other random unsupported LLM providers | v1.1.9 |
 | Remove rest of non-lunarpunk extensions/tools/skills from default installation | v1.1.9 |
 | Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new) | v1.1.9 |
 | Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
