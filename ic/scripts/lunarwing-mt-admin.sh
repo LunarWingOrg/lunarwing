@@ -5888,7 +5888,7 @@ doctor() {
   # source label is re-derived here with the same precedence the function
   # uses (env > saved file > auto-detect).
   local _rt_resolved _rt_source
-  if _rt_resolved="$(detect_container_runtime)"; then
+  if _rt_resolved="$(detect_container_runtime 2>/dev/null)"; then
     if [[ -n "${LUNARWING_CONTAINER_RUNTIME:-}" ]]; then
       _rt_source="env"
     elif [[ "$(_load_saved_container_runtime 2>/dev/null)" == "$_rt_resolved" ]]; then
