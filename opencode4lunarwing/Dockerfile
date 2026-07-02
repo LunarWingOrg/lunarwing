@@ -30,7 +30,14 @@ WORKDIR /build/opencode/packages/app
 RUN bun run build 2>/dev/null || true
 
 WORKDIR /build/opencode/packages/opencode
-RUN bun run build 2>/dev/null || true
+# Build only the native platform target. opencode's build.ts (script/build.ts)
+# otherwise cross-compiles 12 targets (linux/darwin/win32 × arm64/x64 ×
+# musl/baseline variants), each a separate Rust compile pulling fresh toolchains.
+# `--single` filters allTargets to the current host's os/arch (and skips the
+# baseline + musl variants), which is the only binary the worker ever loads —
+# the image is distributed same-host via podman save|load, never cross-arch.
+# See docs/proposals/OPENCODE-WORKER-SINGLE-TARGET-BUILD.md for full rationale.
+RUN bun run build -- --single 2>/dev/null || true
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 2: runtime image
