@@ -2458,24 +2458,38 @@ _ssh_hosts_from_config() {
 # Point the installed WASM ssh tool's capability allowlist at the tenant's
 # configured [[ssh.hosts]] hosts (the sidecar ships with a "myhost" placeholder).
 # Idempotent: always derived from config.toml. Warn-and-continue on any failure.
+# Point the installed WASM ssh tool's capability allowlist at the tenant's
+# configured [[ssh.hosts]] hosts (the sidecar ships with a "myhost" placeholder).
+# Idempotent: always derived from config.toml. Warn-and-continue on any failure:
+# every internal step is guarded so a failure can never errexit the script.
 patch_ssh_tool_allowlist() {
   local name="$1" caps_path hosts_json tmp
   caps_path="$(tenant_state_dir "$name")/tools/ssh-tool.capabilities.json"
 
-  [[ -f "$caps_path" ]] || return 0  # WASM ssh tool not installed — nothing to patch
+  if [[ ! -f "$caps_path" ]]; then
+    say "  ssh-tool allowlist: ssh-tool not installed — nothing to patch"
+    return 0
+  fi
 
-  hosts_json="$(_ssh_hosts_from_config "$name" | jq -R . | jq -s .)"
-  if [[ "$hosts_json" == "[]" ]]; then
+  command -v jq >/dev/null 2>&1 \
+    || { say "WARNING: jq not installed; ssh-tool allowlist left unchanged" >&2; return 0; }
+
+  hosts_json="$(_ssh_hosts_from_config "$name" | jq -R . | jq -s . 2>/dev/null)" \
+    || { say "WARNING: could not derive ssh hosts for $name; ssh-tool allowlist left unchanged" >&2; return 0; }
+  if [[ -z "$hosts_json" || "$hosts_json" == "[]" ]]; then
     say "  ssh-tool allowlist: no [[ssh.hosts]] in config.toml — leaving sidecar as shipped"
     return 0
   fi
 
-  tmp="$(mktemp)"
+  # Same-directory temp file so mv is atomic (same pattern as
+  # configure_gotify_capabilities).
+  tmp="$(mktemp "${caps_path}.tmp.XXXXXX")" \
+    || { say "WARNING: mktemp failed; ssh-tool allowlist left unchanged" >&2; return 0; }
   if jq --argjson hosts "$hosts_json" '.capabilities.ssh.allowed_hosts = $hosts' \
-       "$caps_path" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$caps_path"
-    chown "$name:$name" "$caps_path"
-    say "  ssh-tool allowlist set to: $(jq -c . <<<"$hosts_json")"
+       "$caps_path" >"$tmp" 2>/dev/null \
+    && mv "$tmp" "$caps_path" \
+    && chown "$name:$name" "$caps_path"; then
+    say "  ssh-tool allowlist set to: $(jq -c . <<<"$hosts_json" 2>/dev/null || printf '%s' "$hosts_json")"
   else
     rm -f "$tmp"
     say "WARNING: failed to patch ssh-tool allowlist at $caps_path (edit .capabilities.ssh.allowed_hosts manually)" >&2
