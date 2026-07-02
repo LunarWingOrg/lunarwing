@@ -1605,6 +1605,7 @@ build_tenant() {
   local with_wasm="${2:-false}"
   local with_nanocode="${3:-false}"
   local with_pebble="${4:-false}"
+  local with_opencode="${5:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -1644,11 +1645,21 @@ build_tenant() {
   ) 200>"$BUILD_LOCK"
 
   if [[ "$with_nanocode" == "true" ]]; then
+    say ""
+    say "=== Building nanocode worker image ==="
     build_nanocode_worker "false"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
+    say ""
+    say "=== Building pebble worker image ==="
     build_pebble_worker "false"
+  fi
+
+  if [[ "$with_opencode" == "true" ]]; then
+    say ""
+    say "=== Building opencode worker image ==="
+    build_opencode_worker "false"
   fi
 
   # After a rebuild, the tenant will be restarted with the new binary. If the
@@ -1852,6 +1863,13 @@ build_opencode_worker() {
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
+    # --network=host (F8): see build_nanocode_worker — podman build's default network
+    # can't reach the internet for RUN steps (apt/bun) on hosts where the bridge/pasta
+    # path is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
+    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
+    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
+    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct if
+    # the image is ever run directly / under a healthcheck-honouring runtime).
     podman build $cache_flag --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   else
@@ -3331,8 +3349,10 @@ start_tenant_nanocode() {
     host_health_port="$(ports_get "$name" nanocode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     # SSH agent socket (always included — daemon creates it at startup).
+    # :z label so SELinux (Enforcing on Fedora) permits container_t to access the
+    # tenant-home-labeled socket; without it SSH_AUTH_SOCK reads fail despite 0666 mode.
     local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
-    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -3510,7 +3530,7 @@ start_tenant_opencode() {
     host_health_port="$(ports_get "$name" opencode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
-    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-opencode-${name}" \
@@ -3650,9 +3670,10 @@ start_tenant_pebble() {
     host_health_port="$(ports_get "$name" pebble_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     # SSH agent socket (always included — daemon creates it at startup).
+    # :z label for SELinux (Enforcing on Fedora) — see start_tenant_nanocode.
     local -a ssh_mount=()
     local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
-    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -4422,7 +4443,9 @@ EOF
     # SSH agent socket mount + env (always included — the daemon creates the
     # socket at startup; if SSH isn't configured, the socket won't exist and
     # SSH commands from the worker will fail with a clear "no agent" error).
-    printf 'Volume=%s:/tmp/ssh-agent.sock\n' "$ssh_agent_socket"
+    # :z label so SELinux (Enforcing on Fedora) permits container_t access to
+    # the tenant-home-labeled socket.
+    printf 'Volume=%s:/tmp/ssh-agent.sock:z\n' "$ssh_agent_socket"
     printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
     # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
     # the host self-heal pipeline can probe /health directly. The container still
@@ -6406,8 +6429,7 @@ main() {
         esac
       done
       [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble"
-      [[ "$with_opencode" == "true" ]] && build_opencode_worker "false"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
       ;;
 
     build-all)

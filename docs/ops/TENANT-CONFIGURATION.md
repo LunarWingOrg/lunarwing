@@ -286,6 +286,7 @@ lunarwing-weechat-adapter-<tenant>.service  # weechat WS adapter
 lunarwing-pg-<tenant>.service               # Postgres (rootless Quadlet)
 lunarwing-nanocode-<tenant>.service         # nanocode worker (rootless Quadlet)
 lunarwing-pebble-<tenant>.service           # pebble worker (rootless Quadlet)
+lunarwing-opencode-<tenant>.service         # opencode worker (rootless Quadlet)
 ```
 
 There is no per-tenant `.target`; restart units individually, or use
@@ -302,7 +303,7 @@ sudo rc-service lunarwing-proxy-<tenant> restart            # TensorZero proxy
 sudo rc-service lunarwing-pg-<tenant> restart               # Postgres container
 sudo rc-service lunarwing-weechat-<tenant> restart          # weechat backend
 sudo rc-service lunarwing-weechat-adapter-<tenant> restart  # weechat WS adapter
-# workers (if provisioned): lunarwing-nanocode-<tenant>, lunarwing-pebble-<tenant>
+# workers (if provisioned): lunarwing-nanocode-<tenant>, lunarwing-pebble-<tenant>, lunarwing-opencode-<tenant>
 ```
 
 ### Verifying
@@ -344,7 +345,9 @@ These environment variables change the defaults used by `lunarwing-mt-admin.sh` 
 
 ### Port allocation
 
-Each tenant gets a 10-port block from `/etc/lunarwing/ports.json` (range 10000-19999):
+Each tenant gets a 10-port block from `/etc/lunarwing/ports.json` (range 10000-19999), plus a mirrored extended block in 20000-29999 (`extended_base = base_port + 10000`) holding worker health, DarkIRC, and vision sidecar ports:
+
+Primary block:
 
 | Offset | Service |
 |--------|---------|
@@ -358,3 +361,12 @@ Each tenant gets a 10-port block from `/etc/lunarwing/ports.json` (range 10000-1
 | +7 | Nanocode WSS |
 | +8 | Pebble WSS |
 | +9 | WeeChat adapter |
+
+Extended block (registry v6+; opencode_wss/health added in v11):
+
+| Offset | Service |
+|--------|---------|
+| ebase+3 | nanocode_health |
+| ebase+4 | pebble_health |
+| ebase+7 | opencode_wss |
+| ebase+8 | opencode_health |

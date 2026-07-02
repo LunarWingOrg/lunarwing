@@ -10,7 +10,7 @@
 5. [x] Agent SSH Rust Tool
 6. [x] Agent SSH WASM TOOL
 7. [x] Self-Healing capability expansion (find the missing mysterious 1.1.8 self healing expansion doc first)
-8. [ ] Add new external worker, opencode. Plan it out first and investigate if Paseo integration is also viable. My OC Paseo Ansible Playbook would be worth inspecting for something like this (need to finish my changes and sync my local copy of this to origin first before examination)
+8. [x] Add new external worker, opencode. Landed: `opencode4lunarwing/` (Bun/TypeScript bridge + `@opencode-ai/sdk`, `ironclaw-agent-v1` protocol), port registry v10→v11 migration (`opencode_wss`/`opencode_health`), full mt-admin lifecycle (build/configure/start/stop/doctor/status/list), `--with-opencode`, `--opencode-model`/`--opencode-base-url`. Optional Paseo MCP integration wired behind `PASEO_URL`/`PASEO_TOKEN`. Polish follow-ups and repo-doc updates tracked in DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md
 9. [ ] test add-tenant and add-tenants enhancements. xmpp_jid_from, llm_model, gateway-host. also interactive onboarding in 1.1.8 or 1.1.9 - make note of decision later
 10. [x] see what else we can do from roadmap planned for 1.1.9 a little earlier
 11. [x] darkirc multi-tenant fix to make actually disabled and NOT BUILT unless enabled and build-darkirc flag also enabled

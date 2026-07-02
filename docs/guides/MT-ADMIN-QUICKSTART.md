@@ -68,7 +68,7 @@ These `[FAIL]`s are benign and can be ignored:
 - `rustup installed` — a per-tenant toolchain is installed by `add-tenant`
   (see Prerequisites).
 - `port registry exists` — created automatically on your first `add-tenant`.
-- `nanocode/pebble worker image exists` — only relevant if you use the worker
+- `nanocode/pebble/opencode worker image exists` — only relevant if you use the worker
   containers.
 
 ---
@@ -448,7 +448,11 @@ Supported formats:
 ### 17. Port Map
 
 Each tenant gets a contiguous block of 10 ports. The base port is allocated
-from the range `10000`-`19999`.
+from the range `10000`-`19999`. A mirrored extended block in `20000`-`29999`
+(`extended_base = base_port + 10000`) holds worker health, DarkIRC, and
+LunarVision sidecar ports (registry v6+).
+
+Primary block:
 
 | Offset | Name | Service |
 |--------|------|---------|
@@ -463,8 +467,17 @@ from the range `10000`-`19999`.
 | +8 | pebble_wss | Pebble worker WebSocket |
 | +9 | weechat_adapter | WeeChat WS adapter HTTP API |
 
+Extended block (e.g. tenant `ruffles` base `10000` → extended base `20000`):
+
+| Offset | Name | Service |
+|--------|------|---------|
+| ebase+3 | nanocode_health | Nanocode worker `/health` |
+| ebase+4 | pebble_health | Pebble worker `/health` |
+| ebase+7 | opencode_wss | Opencode worker WebSocket |
+| ebase+8 | opencode_health | Opencode worker `/health` |
+
 Example: tenant `ruffles` with base port `10000` gets gateway on `10000`,
-WeeChat relay on `10005`, adapter on `10009`.
+WeeChat relay on `10005`, adapter on `10009`, and opencode WSS on `20007`.
 
 ---
 

@@ -13,9 +13,13 @@ docker compose up -d lunarwing-worker
 
 ### CLI mode (one-shot)
 
+The prompt is passed via the `TASK_PROMPT` environment variable:
+
 ```bash
-docker compose --profile cli run opencode-cli prompt "hello world"
+TASK_PROMPT="hello world" docker compose --profile cli run opencode-cli
 ```
+
+If `TASK_PROMPT` is unset, a default prompt is used.
 
 ## LunarWing Configuration
 

@@ -41,6 +41,11 @@ if [[ "$current_version" -ge 11 ]]; then
   exit 0
 fi
 
+if [[ "$current_version" -lt 10 ]]; then
+  echo "error: registry at v${current_version}; run migrate-ports-v10.sh first" >&2
+  exit 1
+fi
+
 echo "current registry version: v${current_version}"
 echo "migrating → v11 (add opencode_wss + opencode_health)"
 
@@ -59,9 +64,9 @@ if [[ "$DRY_RUN" == "true" ]]; then
 fi
 
 # ── Backup ─────────────────────────────────────────────────────────────────────
-BACKUP="${PORTS_REGISTRY}.bak.v10"
-cp "$PORTS_REGISTRY" "$BACKUP"
-echo "backup: $BACKUP"
+backup="${PORTS_REGISTRY}.bak.$(date -u +%Y%m%d%H%M%S)"
+cp -p "$PORTS_REGISTRY" "$backup"
+echo "backed up registry to $backup"
 
 # ── Migrate ────────────────────────────────────────────────────────────────────
 tmp="$(mktemp "${PORTS_REGISTRY}.tmp.XXXXXX")"
@@ -82,6 +87,22 @@ jq '
     )
 ' "$PORTS_REGISTRY" >"$tmp"
 
+# Validate port uniqueness before committing — abort without touching the
+# live registry if the migration would create any colliding ports.
+collisions="$(jq -r '
+  [ .tenants[]
+    | ((.ports // {}) | to_entries[] | .value),
+      ((.extended_ports // {}) | to_entries[] | .value)
+  ]
+  | group_by(.) | map(select(length > 1)) | length
+' "$tmp")"
+
+if [[ "$collisions" -ne 0 ]]; then
+  echo "error: migration would create $collisions colliding port(s); aborting (registry unchanged)" >&2
+  echo "       inspect the candidate output at: $tmp" >&2
+  exit 1
+fi
+
 chmod 0644 "$tmp"
 mv "$tmp" "$PORTS_REGISTRY"
 
@@ -95,3 +116,4 @@ jq -r '.tenants | to_entries[] |
 new_version="$(jq -r '.version' "$PORTS_REGISTRY")"
 echo ""
 echo "registry version is now v${new_version}"
+echo "rollback if needed: cp $backup $PORTS_REGISTRY"
