@@ -1850,6 +1850,7 @@ install_wasm_tenant() {
   done
 
   chown -R "$name:$name" "$channels_dir" "$tools_dir"
+  patch_ssh_tool_allowlist "$name"
 
   local gotify_config="$state_dir/workspace/config/gotify.json"
   if [[ -f "$gotify_config" ]] && [[ -f "$tools_dir/gotify-tool.capabilities.json" ]]; then
@@ -2433,6 +2434,52 @@ ensure_ssh_config() {
   chown "$name:$name" "$config_path"
   chmod 600 "$config_path"
   say "wrote SSH host config to $config_path (host=$ssh_host user=$ssh_user)"
+}
+
+# Print the host values of every [[ssh.hosts]] block in the tenant's
+# config.toml, one per line. mt-admin writes this file itself (ensure_ssh_config),
+# so the shape is known: a `host = "..."` line inside each [[ssh.hosts]] block.
+_ssh_hosts_from_config() {
+  local name="$1" config_path
+  config_path="$(tenant_state_dir "$name")/config.toml"
+  [[ -f "$config_path" ]] || return 0
+  awk '
+    /^\[\[ssh\.hosts\]\]/ { inblk = 1; next }
+    /^\[/                 { inblk = 0 }
+    inblk && /^host[ ]*=[ ]*"/ {
+      line = $0
+      sub(/^host[ ]*=[ ]*"/, "", line)
+      sub(/".*$/, "", line)
+      print line
+    }
+  ' "$config_path"
+}
+
+# Point the installed WASM ssh tool's capability allowlist at the tenant's
+# configured [[ssh.hosts]] hosts (the sidecar ships with a "myhost" placeholder).
+# Idempotent: always derived from config.toml. Warn-and-continue on any failure.
+patch_ssh_tool_allowlist() {
+  local name="$1" caps_path hosts_json tmp
+  caps_path="$(tenant_state_dir "$name")/tools/ssh-tool.capabilities.json"
+
+  [[ -f "$caps_path" ]] || return 0  # WASM ssh tool not installed — nothing to patch
+
+  hosts_json="$(_ssh_hosts_from_config "$name" | jq -R . | jq -s .)"
+  if [[ "$hosts_json" == "[]" ]]; then
+    say "  ssh-tool allowlist: no [[ssh.hosts]] in config.toml — leaving sidecar as shipped"
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  if jq --argjson hosts "$hosts_json" '.capabilities.ssh.allowed_hosts = $hosts' \
+       "$caps_path" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$caps_path"
+    chown "$name:$name" "$caps_path"
+    say "  ssh-tool allowlist set to: $(jq -c . <<<"$hosts_json")"
+  else
+    rm -f "$tmp"
+    say "WARNING: failed to patch ssh-tool allowlist at $caps_path (edit .capabilities.ssh.allowed_hosts manually)" >&2
+  fi
 }
 
 # ── SSH key provisioning ──────────────────────────────────────────────────────
@@ -6062,6 +6109,7 @@ main() {
       [[ -n "$ssh_user" ]] || ssh_user="$name"
       ensure_ssh_config "$name" "$ssh_host" "$ssh_user"
       provision_tenant_ssh_key "$name" "$ssh_host" "$ssh_user"
+      patch_ssh_tool_allowlist "$name"
       say ""
       say "SSH harness configured for tenant '$name' (host=$ssh_host user=$ssh_user)"
       say "Run '$0 restart-tenant $name' to start the daemon and upload the key to the secrets store"
