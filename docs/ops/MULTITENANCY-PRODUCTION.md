@@ -18,13 +18,27 @@ The admin script runs as root and handles:
 
 Step-by-step commands to set up a fresh multi-tenant deployment from scratch. Run all commands from the repo root (`/home/sun/lunarwing`).
 
-### Step 1: Verify dependencies
+### Step 1: Verify dependencies — and pick the container runtime
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh doctor
 ```
 
 Fix any `[FAIL]` items before proceeding.
+
+> **Boxes with both docker and podman installed:** auto-detection prefers
+> docker, so pick your runtime explicitly ONCE before adding tenants — it is
+> persisted machine-wide and no later command needs the env var:
+>
+> ```bash
+> sudo env LUNARWING_CONTAINER_RUNTIME=podman ic/scripts/lunarwing-mt-admin.sh doctor
+> ```
+>
+> Doctor's `[info] container runtime: podman (saved — /etc/lunarwing/container-runtime)`
+> line confirms it stuck. A podman-only (or docker-only) box needs nothing —
+> auto-detect resolves correctly. To change later, run any command with the
+> env var again (it overwrites), or `sudo rm /etc/lunarwing/container-runtime`
+> to return to auto-detect.
 
 ### Step 2: Add tenants
 
