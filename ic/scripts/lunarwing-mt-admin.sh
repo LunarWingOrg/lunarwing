@@ -1298,6 +1298,56 @@ ensure_rootless_prereqs() {
   say "rootless prerequisites ready for $name (subuid/subgid, /run/user/$uid, storage)"
 }
 
+# Idempotent: install/verify the tenant user's WASM build toolchain (rustup,
+# stable default, wasm32-wasip1/wasip2 targets, cargo-component, wasm-tools).
+# Called from create_tenant_user (add-tenant) and as a build-tenant --with-wasm
+# preflight, so a partial install (network hiccup, killed add-tenant) is
+# repaired instead of silently disabling WASM builds forever.
+# Returns 0 when the toolchain is usable, 1 (after a loud warning) when not.
+ensure_tenant_wasm_toolchain() {
+  local name="$1"
+  local cargo_src='if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; else export PATH="$HOME/.cargo/bin:$PATH"; fi;'
+
+  # Install rustup for tenant user if not already present
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
+    say "installing rustup for $name ..."
+    sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
+      || { say "WARNING: rustup installation failed for $name" >&2; }
+  fi
+
+  # Ensure a default toolchain is set (rustup install may leave none configured)
+  if ! sudo -u "$name" bash -c "${cargo_src} rustup show active-toolchain" &>/dev/null; then
+    say "setting default toolchain to stable for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} rustup default stable" \
+      || say "WARNING: failed to set default toolchain for $name" >&2
+  fi
+
+  # Ensure WASM targets and cargo-component are installed
+  say "ensuring WASM toolchain for $name ..."
+  sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
+  if ! sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null; then
+    say "installing cargo-component and wasm-tools for $name ..."
+    sudo -u "$name" bash -c "${cargo_src} cargo install cargo-component wasm-tools --locked 2>&1" || true
+  fi
+
+  # Final verification — loud, actionable, never fatal.
+  local missing=()
+  sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null || missing+=("cargo-component")
+  sudo -u "$name" bash -c "${cargo_src} rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2" \
+    || missing+=("wasm32-wasip2 target")
+  if ((${#missing[@]} > 0)); then
+    say "" >&2
+    say "WARNING: WASM toolchain incomplete for $name — missing: ${missing[*]}" >&2
+    say "         WASM extensions will NOT build. To fix, run:" >&2
+    say "           sudo -u $name bash -lc 'rustup target add wasm32-wasip1 wasm32-wasip2'" >&2
+    say "           sudo -u $name bash -lc 'cargo install cargo-component wasm-tools --locked'" >&2
+    say "         then re-run: $0 build-tenant $name --with-wasm" >&2
+    say "" >&2
+    return 1
+  fi
+  return 0
+}
+
 create_tenant_user() {
   local name="$1"
   local add_docker_group="${2:-false}"
@@ -1350,31 +1400,7 @@ create_tenant_user() {
   chmod 0700 "$lw_root/env"
   say "created directories under $lw_root"
 
-  # Install rustup for tenant user if not already present
-  local cargo_src='if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; else export PATH="$HOME/.cargo/bin:$PATH"; fi;'
-  if ! sudo -u "$name" bash -c "${cargo_src} command -v rustup" &>/dev/null; then
-    say "installing rustup for $name ..."
-    sudo -u "$name" bash -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y' \
-      || die "rustup installation failed for $name"
-    say "rustup installed for $name"
-  else
-    say "rustup already available for $name"
-  fi
-
-  # Ensure a default toolchain is set (rustup install may leave none configured)
-  if ! sudo -u "$name" bash -c "${cargo_src} rustup show active-toolchain" &>/dev/null; then
-    say "setting default toolchain to stable for $name ..."
-    sudo -u "$name" bash -c "${cargo_src} rustup default stable" \
-      || die "failed to set default toolchain for $name"
-  fi
-
-  # Ensure WASM targets and cargo-component are installed
-  say "ensuring WASM toolchain for $name ..."
-  sudo -u "$name" bash -c "${cargo_src} rustup target add wasm32-wasip1 wasm32-wasip2 2>&1" || true
-  if ! sudo -u "$name" bash -c "${cargo_src} command -v cargo-component" &>/dev/null; then
-    say "installing cargo-component and wasm-tools for $name ..."
-    sudo -u "$name" bash -c "${cargo_src} cargo install cargo-component wasm-tools --locked 2>&1" || true
-  fi
+  ensure_tenant_wasm_toolchain "$name" || true
 }
 
 remove_tenant_user() {
@@ -1502,11 +1528,16 @@ build_tenant() {
       || die "xmpp-bridge build failed for $name"
 
     if [[ "$with_wasm" == "true" ]]; then
-      say "building WASM extensions for $name ..."
-      sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" || true
+      if ensure_tenant_wasm_toolchain "$name"; then
+        say "building WASM extensions for $name ..."
+        sudo -u "$name" bash -c "$cargo_env cd '$repo' && bash scripts/build-wasm-extensions.sh" \
+          || say "WARNING: WASM extension build reported errors for $name (some extensions may be missing; re-run '$0 build-tenant $name --with-wasm' after fixing)" >&2
 
-      say "installing WASM extensions for $name ..."
-      install_wasm_tenant "$name"
+        say "installing WASM extensions for $name ..."
+        install_wasm_tenant "$name"
+      else
+        say "WARNING: skipping WASM build for $name (toolchain incomplete — see above)" >&2
+      fi
     fi
 
     say "build complete for $name"
