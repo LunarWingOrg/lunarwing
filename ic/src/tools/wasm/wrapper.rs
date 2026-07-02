@@ -2010,6 +2010,66 @@ mod tests {
     use crate::tools::wasm::capabilities::Capabilities;
     use crate::tools::wasm::runtime::{WasmRuntimeConfig, WasmToolRuntime};
 
+    /// Instantiation smoke test for the Option-3 `ssh` WASM guest.
+    ///
+    /// Loads the built `ssh_tool.wasm` and prepares it, which compiles the
+    /// component AND briefly instantiates it to extract its `description()` /
+    /// `schema()` exports. Instantiation requires the host linker to satisfy
+    /// every import the component declares — including the new `ssh-exec` — so a
+    /// real (non-fallback) description proves the host<->guest ABI matches.
+    ///
+    /// Ignored by default: it needs the guest artifact, built with
+    /// `cargo component build --release --target wasm32-wasip2
+    ///  --manifest-path tools-src/ssh/Cargo.toml`. Run with `--ignored`.
+    #[tokio::test]
+    #[ignore = "requires the ssh guest wasm; build it with cargo component (see doc comment)"]
+    async fn test_ssh_guest_component_instantiates() {
+        let path = "tools-src/ssh/target/wasm32-wasip2/release/ssh_tool.wasm";
+        let wasm = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("skipping: {path} not built ({e})");
+                return;
+            }
+        };
+
+        let runtime =
+            WasmToolRuntime::new(WasmRuntimeConfig::for_testing()).expect("build wasm runtime");
+        // Use the production default limits (config/wasm.rs: 10 MB / 500M fuel /
+        // 60s), not the tiny for_testing budget (1 MB / 100k fuel) which is too
+        // small to initialize a std + serde_json wasip2 component on its first
+        // export call. This proves the tool works under the real runtime budget.
+        let limits = crate::tools::wasm::ResourceLimits::default()
+            .with_memory(10 * 1024 * 1024)
+            .with_fuel(500_000_000)
+            .with_timeout(std::time::Duration::from_secs(60));
+        let prepared = runtime
+            .prepare("ssh", &wasm, Some(limits))
+            .await
+            .expect("compile + instantiate ssh_tool.wasm");
+
+        // Real description (not the "WASM sandboxed tool" fallback) => the
+        // component instantiated and its description() export ran, which in turn
+        // means the host linker satisfied every import including ssh-exec.
+        assert!(
+            prepared.description.contains("SSH host"),
+            "expected the guest's real description, got: {}",
+            prepared.description
+        );
+        // schema() export ran and returned the guest's parameter schema.
+        let props = &prepared.schema["properties"];
+        assert!(
+            props.get("host").is_some(),
+            "schema missing host: {}",
+            prepared.schema
+        );
+        assert!(
+            props.get("command").is_some(),
+            "schema missing command: {}",
+            prepared.schema
+        );
+    }
+
     struct RecordingSecretsStore {
         inner: InMemorySecretsStore,
         get_decrypted_lookups: Mutex<Vec<(String, String)>>,
