@@ -325,8 +325,13 @@ fn build_git_ssh_command(cfg: &SSHHostConfig, known_hosts_path: &Path) -> String
         HostKeyMode::Strict => "yes",
         HostKeyMode::AcceptFirst => "accept-new",
     };
+    // `-F /dev/null` makes ssh ignore the system-wide /etc/ssh/ssh_config (and its
+    // Include of ssh_config.d/*) as well as the user's ~/.ssh/config, so this tool is
+    // hermetic: it uses only the options set here plus the agent via SSH_AUTH_SOCK, and
+    // is immune to host-side ssh_config breakage (e.g. a drop-in with bad owner/perms,
+    // which ssh treats as fatal). Everything ssh_git needs comes from [[ssh.hosts]].
     format!(
-        "ssh -o StrictHostKeyChecking={strict} -o UserKnownHostsFile=\"{ukhf}\" \
+        "ssh -F /dev/null -o StrictHostKeyChecking={strict} -o UserKnownHostsFile=\"{ukhf}\" \
          -o GlobalKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout={ct} -p {port}",
         strict = strict,
         ukhf = known_hosts_path.display(),
@@ -583,6 +588,9 @@ mod tests {
             Path::new("/root/kh"),
         );
         assert!(accept.contains("StrictHostKeyChecking=accept-new"));
+        // Hermetic: ignore host/user ssh_config so a broken /etc/ssh drop-in can't
+        // fail the connection (the ssh/WASM tools use russh and never read /etc/ssh).
+        assert!(accept.contains("-F /dev/null"));
         assert!(accept.contains("BatchMode=yes"));
         assert!(accept.contains("ConnectTimeout=10"));
         assert!(accept.contains("-p 2222"));

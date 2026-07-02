@@ -83,6 +83,7 @@ pub struct WasmToolLoader {
     registry: Arc<ToolRegistry>,
     secrets_store: Option<Arc<dyn SecretsStore + Send + Sync>>,
     workspace: Option<Arc<crate::workspace::Workspace>>,
+    ssh_bridge: Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
 }
 
 impl WasmToolLoader {
@@ -93,6 +94,7 @@ impl WasmToolLoader {
             registry,
             secrets_store: None,
             workspace: None,
+            ssh_bridge: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -105,6 +107,15 @@ impl WasmToolLoader {
     /// Set the workspace for WASM tool workspace reads.
     pub fn with_workspace(mut self, workspace: Arc<crate::workspace::Workspace>) -> Self {
         self.workspace = Some(workspace);
+        self
+    }
+
+    /// Set the shared SSH bridge slot for the `ssh_exec` host function (Option 3).
+    pub fn with_ssh_bridge(
+        mut self,
+        slot: Arc<std::sync::OnceLock<Arc<tokio::sync::RwLock<crate::bridge::ssh::SSHBridge>>>>,
+    ) -> Self {
+        self.ssh_bridge = slot;
         self
     }
 
@@ -190,6 +201,7 @@ impl WasmToolLoader {
                 secrets_store: self.secrets_store.clone(),
                 oauth_refresh,
                 workspace: self.workspace.clone(),
+                ssh_bridge: self.ssh_bridge.clone(),
             })
             .await?;
 

@@ -1,8 +1,10 @@
 # SSH Operations for the LunarWing Agent — Options 2 & 3 Implementation Plans
 
-**Date:** 2026-07-01
-**Status:** Proposal — implementation plans for Options 2 & 3 (Option 1 is shipped)
-**Companion docs:** [`SSH_HARNESS_DELIVERY_OPTIONS.md`](SSH_HARNESS_DELIVERY_OPTIONS.md) · [`../architecture/SSH_AGENT_HARNESS.md`](../architecture/SSH_AGENT_HARNESS.md) · [`../ops/SSH-HARNESS-SETUP.md`](../ops/SSH-HARNESS-SETUP.md)
+**Date:** 2026-07-01 (implemented)
+**Status:** ✅ **Implemented.** Kept as the design record (written before
+implementation). The authoritative as-built overview is
+[`../architecture/SSH_DELIVERY_MECHANISMS.md`](../architecture/SSH_DELIVERY_MECHANISMS.md).
+**Companion docs:** [`SSH_HARNESS_DELIVERY_OPTIONS.md`](SSH_HARNESS_DELIVERY_OPTIONS.md) · [`../architecture/SSH_AGENT_HARNESS.md`](../architecture/SSH_AGENT_HARNESS.md) · [`../architecture/SSH_DELIVERY_MECHANISMS.md`](../architecture/SSH_DELIVERY_MECHANISMS.md) · [`../ops/SSH-HARNESS-SETUP.md`](../ops/SSH-HARNESS-SETUP.md)
 
 > Grounded in the current implementation of the Agent SSH Harness (verified
 > against source 2026-07-01). The `russh` 0.45 client signatures were checked

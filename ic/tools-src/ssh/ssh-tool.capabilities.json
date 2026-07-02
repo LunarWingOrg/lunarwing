@@ -1,0 +1,10 @@
+{
+  "version": "0.1.0",
+  "wit_version": "0.3.0",
+  "description": "Run a command on a preconfigured SSH host. Authentication and host-key verification happen host-side; keys never enter WASM.",
+  "capabilities": {
+    "ssh": {
+      "allowed_hosts": ["myhost"]
+    }
+  }
+}

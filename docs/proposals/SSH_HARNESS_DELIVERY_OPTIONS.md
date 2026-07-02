@@ -1,8 +1,12 @@
 
 # SSH Harness — Delivery Options
 
-**Date:** 2026-06-25  
-**Status:** Option 1 implemented and working
+**Date:** 2026-06-25 (updated 2026-07-01)  
+**Status:** ✅ **All three options implemented.** This is the original options
+overview; the authoritative as-built doc is
+[`../architecture/SSH_DELIVERY_MECHANISMS.md`](../architecture/SSH_DELIVERY_MECHANISMS.md)
+(design detail in
+[`SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md`](SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md)).
 
 ## Overview
 
@@ -54,7 +58,9 @@ Agent → SSH tool (compiled into lunarwing binary)
 - Harder to sandbox/limit resources
 - SSH credentials loaded into gateway memory space
 
-**Status:** Not started
+**Status:** ✅ Implemented — the `ssh` and `ssh_git` built-in tools
+(`ic/src/tools/builtin/ssh.rs`, `ssh_git.rs`; russh client in
+`ic/src/bridge/ssh_client.rs`).
 
 **Use Cases:**
 - Quick one-off SSH commands
@@ -83,7 +89,9 @@ Agent → WASM tool (sandboxed via WASI)
 - Most complex to implement
 - Performance overhead from WASM boundary
 
-**Status:** Not started
+**Status:** ✅ Implemented — the WASM `ssh` tool: a guest shim
+(`ic/tools-src/ssh/`) that calls an `ssh-exec` host function reusing the
+in-process russh client (`ic/src/tools/wasm/wrapper.rs`, `wit/tool.wit`).
 
 **Requirements:**
 - WASI socket extensions or custom host functions

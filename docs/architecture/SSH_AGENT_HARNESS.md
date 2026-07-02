@@ -3,6 +3,7 @@
 **Status:** As-built for 1.1.8 (verified against source 2026-07-01)
 **Code:** `ic/src/bridge/ssh*.rs`, `ic/src/config/ssh.rs`
 **Operator guide:** [`docs/ops/SSH-HARNESS-SETUP.md`](../ops/SSH-HARNESS-SETUP.md)
+**Delivery mechanisms** (how the agent actually runs SSH work — worker mode, the `ssh`/`ssh_git` built-in tools, the WASM `ssh` tool): [`SSH_DELIVERY_MECHANISMS.md`](SSH_DELIVERY_MECHANISMS.md)
 
 This document describes the design of the SSH Agent harness as it is actually
 built. It is design-focused; for step-by-step setup, key provisioning, and
@@ -315,12 +316,18 @@ Built and working:
 - `mt-admin` provisioning + bind-mount wiring (verified working inside a
   nanocode worker).
 
-Built but **not yet wired into a live path**:
+Now wired into live paths (via the delivery mechanisms — see
+[`SSH_DELIVERY_MECHANISMS.md`](SSH_DELIVERY_MECHANISMS.md)):
 
-- **`HostKeyVerifier` (`ssh_hostkeys.rs`)** is complete and has 9 unit tests,
-  but no production code calls it — there is no SSH transport layer in-tree that
-  feeds live server keys into it. Host-key pinning is therefore **not enforced
-  by the harness** at runtime today.
+- **`HostKeyVerifier` (`ssh_hostkeys.rs`)** is a live consumer as of the
+  delivery tools: the built-in `ssh` tool feeds live server keys into
+  `verify_from_config` through russh's `check_server_key`
+  (`ic/src/bridge/ssh_client.rs`), and the `ssh_git` tool materializes a
+  `known_hosts` from its pins. The in-process **russh 0.45 client**
+  (`ssh_client.rs`) is likewise now live (the harness previously used only the
+  `russh_keys` agent server). Host-key pinning **is** enforced for the in-process
+  tools; the worker-mode path (Option 1) still relies on the worker's own `ssh`
+  client + `known_hosts`.
 
 Known limitations / follow-ups:
 
@@ -332,10 +339,6 @@ Known limitations / follow-ups:
   implementation to realize the "auditable access" goal.
 - **`DELETE /hosts/{host}` orphans the key secret** — it removes config but not
   `ssh_key_<host>`.
-- **Stale code comments:** `ssh.rs:316-318` and `app.rs:1076-1077` still
-  describe the old `/tmp/ssh-agent-<owner>.sock` path. The real path is
-  `/home/<tenant>/lunarwing/run/ssh-agent.sock` (as used by the code and
-  `mt-admin`).
 - **`from_utf8_lossy` on key bytes** (`ssh_secrets.rs:83`, `ssh_agent.rs:55`)
   assumes UTF-8 key material — fine for PEM/OpenSSH text, but binary key blobs
   would be corrupted.

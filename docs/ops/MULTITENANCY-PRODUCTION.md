@@ -84,6 +84,11 @@ sudo ic/scripts/lunarwing-mt-admin.sh start-tenant sparkie
 sudo ic/scripts/lunarwing-mt-admin.sh start-tenant starforce
 ```
 
+> `start-tenant` also uploads the tenant's staged SSH key and bounces the
+> daemon once so the SSH agent can sign immediately — no manual
+> `restart-tenant` needed. It ends with an "SSH readiness" summary; if
+> `keys_loaded` is 0 there, re-run `start-tenant`.
+
 ### Step 5: Verify
 
 ```bash
