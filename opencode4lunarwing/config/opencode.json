@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "tensorzero::function_name::lunarwing",
+  "model": "tensorzero/tensorzero::function_name::lunarwing",
   "plugin": [
     "opencode-agent-identity",
     "opencode-agent-memory",

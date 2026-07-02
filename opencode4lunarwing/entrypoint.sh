@@ -81,7 +81,24 @@ with open("/app/config/opencode.json") as f:
 model = os.environ.get("OPENCODE_MODEL", "").strip()
 base = os.environ.get("OPENCODE_BASE_URL", "").strip()
 if model:
-    cfg["model"] = model
+    # opencode resolves a model reference as "<provider>/<model-id>", splitting on
+    # the first "/" (packages/core/src/model.ts:parse). A bare function name like
+    # "tensorzero::function_name::FrontierCODE" has no slash, so opencode treats the
+    # whole string as the provider and the model id as empty, producing a malformed
+    # request ("tensorzero::function_name::FrontierCODE/") that the backend rejects.
+    # Accept the bare function name and build the provider/model reference against
+    # the first provider in the config (the TensorZero provider). Also register the
+    # model in that provider's models map so opencode can resolve it.
+    if "/" not in model:
+        providers = cfg.get("provider", {})
+        if providers:
+            provider_id = next(iter(providers))
+            cfg["model"] = f"{provider_id}/{model}"
+            providers[provider_id].setdefault("models", {})[model] = {"name": model}
+        else:
+            cfg["model"] = model
+    else:
+        cfg["model"] = model
 if base:
     for prov in cfg.get("provider", {}).values():
         prov.setdefault("options", {})["baseURL"] = base

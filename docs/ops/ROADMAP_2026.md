@@ -37,16 +37,18 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v1.2.1 |
 | Better githooks for repo | v1.2.1 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v1.2.2 |
-| Opencode External Worker (shipped in v1.1.8 — port registry v11, `opencode4lunarwing/`, full mt-admin lifecycle). Paseo MCP integration present behind `PASEO_URL`/`PASEO_TOKEN`. Further hardening/polish tracked under v1.2.3 | v1.2.2 ✅ shipping early (v1.1.8) |
 | Proprietary channel and code removal for Telegram | v1.2.3 |
 | Upgrade old testing harness | v1.2.3 |
-| Further external worker polishing (see opencode external worker note above) | v1.2.3 |
+| Further external worker polishing | v1.2.3 |
 | Feature set of concepts adopted from Hermes Agent (Human Delay mode already landed in a prior release); comprehensive documentation to accompany each | v1.2.4 |
 | Input-validation security improvements | v1.2.4 |
 | Additional WASM Channel Polishing | v1.2.5 |
+| Additional Opencode/Paseo External Worker Polishing | v1.2.5 |
 | Reflex Compiler polishing and improvements | v1.2.5 |
 | LunarVoice Two Way Voice Communication | v1.2.6 |
-| Stabilization & polish buffer — reserved for v2 engine, LunarVoice, polish of all new features | v1.2.7 |
+| Deprecate Nanocode external Worker | v1.2.7 |
+| Additional LunarVoice polishing | v1.2.7 |
+| Surprise | v1.2.8 |
 
 ---
 
