@@ -18,13 +18,27 @@ The admin script runs as root and handles:
 
 Step-by-step commands to set up a fresh multi-tenant deployment from scratch. Run all commands from the repo root (`/home/sun/lunarwing`).
 
-### Step 1: Verify dependencies
+### Step 1: Verify dependencies — and pick the container runtime
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh doctor
 ```
 
 Fix any `[FAIL]` items before proceeding.
+
+> **Boxes with both docker and podman installed:** auto-detection prefers
+> docker, so pick your runtime explicitly ONCE before adding tenants — it is
+> persisted machine-wide and no later command needs the env var:
+>
+> ```bash
+> sudo env LUNARWING_CONTAINER_RUNTIME=podman ic/scripts/lunarwing-mt-admin.sh doctor
+> ```
+>
+> Doctor's `[info] container runtime: podman (saved — /etc/lunarwing/container-runtime)`
+> line confirms it stuck. A podman-only (or docker-only) box needs nothing —
+> auto-detect resolves correctly. To change later, run any command with the
+> env var again (it overwrites), or `sudo rm /etc/lunarwing/container-runtime`
+> to return to auto-detect.
 
 ### Step 2: Add tenants
 
@@ -364,9 +378,10 @@ The container is created with `--restart unless-stopped` so it survives host reb
 
 The script supports both Docker and Podman. Detection priority:
 
-1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`)
-2. If only Podman is installed, use Podman
-3. Otherwise default to Docker
+1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`) — persisted machine-wide on use
+2. Saved choice in `/etc/lunarwing/container-runtime`
+3. If only Podman is installed, use Podman
+4. Otherwise default to Docker
 
 All container operations use the detected runtime — no Docker-specific commands are hardcoded.
 
@@ -407,7 +422,7 @@ sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUNARWING_SERVICE_MANAGER` | auto-detect | Force `systemd` or `openrc` |
-| `LUNARWING_CONTAINER_RUNTIME` | auto-detect | Force `docker` or `podman` |
+| `LUNARWING_CONTAINER_RUNTIME` | saved choice, else auto-detect | Force `docker` or `podman` — persisted to /etc/lunarwing/container-runtime on first explicit use (set once) |
 | `LUNARWING_MT_PROFILE` | `release` | Build profile (`release` or `debug`) |
 | `LUNARWING_MT_SOURCE_REPO` | parent of script | Path to source repo to clone from |
 | `LUNARWING_MT_TENSORZERO_URL` | `http://192.168.1.157:3000` | Default upstream TensorZero URL |
