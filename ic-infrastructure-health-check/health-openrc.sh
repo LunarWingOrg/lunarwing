@@ -31,8 +31,9 @@ discover_services() {
 
   # Multi-tenant. The `lunarwing-*` glob already covers lunarwing-<t> AND every
   # per-service unit (lunarwing-proxy-<t>, lunarwing-pg-<t>, lunarwing-nanocode-<t>,
-  # lunarwing-pebble-<t>, lunarwing-weechat-<t>, lunarwing-weechat-adapter-<t>), so
-  # a separate lunarwing-proxy-* glob would only double-list it. Dedup via `seen`.
+  # lunarwing-pebble-<t>, lunarwing-opencode-<t>, lunarwing-weechat-<t>,
+  # lunarwing-weechat-adapter-<t>), so a separate lunarwing-proxy-* glob would only
+  # double-list it. Dedup via `seen`.
   for initscript in "$INITD_DIR"/lunarwing-* "$INITD_DIR"/xmpp-bridge-*; do
     [ -x "$initscript" ] || continue
     name=$(basename "$initscript")
@@ -105,6 +106,7 @@ unit_tenant() {
         proxy-*)             rest="${rest#proxy-}" ;;
         pg-*)                rest="${rest#pg-}" ;;
         nanocode-*)          rest="${rest#nanocode-}" ;;
+        opencode-*)          rest="${rest#opencode-}" ;;
         pebble-*)            rest="${rest#pebble-}" ;;
         weechat-adapter-*)   rest="${rest#weechat-adapter-}" ;;
         weechat-*)           rest="${rest#weechat-}" ;;

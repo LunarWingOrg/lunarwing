@@ -18,13 +18,27 @@ The admin script runs as root and handles:
 
 Step-by-step commands to set up a fresh multi-tenant deployment from scratch. Run all commands from the repo root (`/home/sun/lunarwing`).
 
-### Step 1: Verify dependencies
+### Step 1: Verify dependencies — and pick the container runtime
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh doctor
 ```
 
 Fix any `[FAIL]` items before proceeding.
+
+> **Boxes with both docker and podman installed:** auto-detection prefers
+> docker, so pick your runtime explicitly ONCE before adding tenants — it is
+> persisted machine-wide and no later command needs the env var:
+>
+> ```bash
+> sudo env LUNARWING_CONTAINER_RUNTIME=podman ic/scripts/lunarwing-mt-admin.sh doctor
+> ```
+>
+> Doctor's `[info] container runtime: podman (saved — /etc/lunarwing/container-runtime)`
+> line confirms it stuck. A podman-only (or docker-only) box needs nothing —
+> auto-detect resolves correctly. To change later, run any command with the
+> env var again (it overwrites), or `sudo rm /etc/lunarwing/container-runtime`
+> to return to auto-detect.
 
 ### Step 2: Add tenants
 
@@ -56,7 +70,7 @@ Include WASM extensions and/or worker images:
 
 ```bash
 sudo ic/scripts/lunarwing-mt-admin.sh build-all --with-wasm
-sudo ic/scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble
+sudo ic/scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble --with-opencode
 ```
 
 ### Step 3b: Configure external workers (optional)
@@ -74,6 +88,15 @@ sudo ic/scripts/lunarwing-mt-admin.sh configure-pebble ruffles --nanogpt-api-key
 ```
 
 This creates `pebble.env` (mode 600) in the tenant's env directory. The worker container reads it on next start.
+
+If using the opencode worker, optionally override the model and/or upstream base URL per tenant:
+
+```bash
+sudo ic/scripts/lunarwing-mt-admin.sh configure-opencode ruffles --model openai/gpt-5.2
+sudo ic/scripts/lunarwing-mt-admin.sh configure-opencode ruffles --base-url http://127.0.0.1:<proxyport>/v1
+```
+
+This upserts `OPENCODE_MODEL`/`OPENCODE_BASE_URL` into the tenant's `lunarwing.env`. Optional Paseo MCP integration is available via `PASEO_URL`/`PASEO_TOKEN` in the env.
 
 ### Step 4: Start services
 
@@ -234,7 +257,9 @@ The port registry lives at `/etc/lunarwing/ports.json` (root-owned, world-readab
 
 ### Port blocks
 
-Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, supporting up to 1000 tenants.
+Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, supporting up to 1000 tenants, plus a mirrored **extended block** of 10 ports in the range `20000-29999` (`extended_base = base_port + 10000`) holding worker health/darkirc/vision-sidecar services.
+
+Primary block (10000-19999):
 
 | Offset | Service | Description |
 |--------|---------|-------------|
@@ -249,6 +274,20 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 | +8 | pebble_wss | Pebble worker WebSocket |
 | +9 | weechat_adapter | WeeChat WS adapter HTTP API |
 
+Extended block (20000-29999, registry version ≥ 6; slots dedicated through v11):
+
+| Offset | Service | Description |
+|--------|---------|-------------|
+| ebase+0 | darkirc_adapter | DarkIRC adapter HTTP |
+| ebase+1 | darkirc_irc | DarkIRC IRC port |
+| ebase+2 | darkirc_rpc | DarkIRC RPC port |
+| ebase+3 | nanocode_health | Nanocode worker `/health` (host self-heal) |
+| ebase+4 | pebble_health | Pebble worker `/health` (host self-heal) |
+| ebase+5 | vision_service | LunarVision sidecar API (OCR port 8088) |
+| ebase+6 | vision_health | LunarVision sidecar `/health` (port 8089) |
+| ebase+7 | opencode_wss | Opencode worker WebSocket (v11) |
+| ebase+8 | opencode_health | Opencode worker `/health` (host self-heal, v11) |
+
 ### Example allocation
 
 | Tenant | Base | Gateway | HTTP | Bridge | PG | Proxy | Orchestrator | Nanocode | Pebble |
@@ -260,9 +299,11 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
 
 ```json
 {
-  "version": 5,
+  "version": 11,
   "range": { "start": 10000, "end": 19999 },
   "block_size": 10,
+  "extended_range": { "start": 20000, "end": 29999 },
+  "extended_block_size": 10,
   "tenants": {
     "ruffles": {
       "base_port": 10000,
@@ -279,6 +320,18 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
         "nanocode_wss": 10007,
         "pebble_wss": 10008,
         "weechat_adapter": 10009
+      },
+      "extended_base": 20000,
+      "extended_ports": {
+        "darkirc_adapter": 20000,
+        "darkirc_irc": 20001,
+        "darkirc_rpc": 20002,
+        "nanocode_health": 20003,
+        "pebble_health": 20004,
+        "vision_service": 20005,
+        "vision_health": 20006,
+        "opencode_wss": 20007,
+        "opencode_health": 20008
       }
     }
   }
@@ -305,6 +358,7 @@ Each tenant gets a contiguous block of 10 ports from the range `10000-19999`, su
     xmpp/                      # XMPP OMEMO state
   nanocode-workspace/          # Nanocode worker task workspace (if enabled)
   pebble-workspace/            # Pebble worker task workspace (if enabled)
+  opencode-workspace/          # Opencode worker task workspace (if enabled)
   logs/                        # Log files (OpenRC) or symlink to journal
   run/                         # PID files, sockets
 ```
@@ -357,16 +411,17 @@ Each tenant gets its own Docker/Podman container named `lunarwing-pg-<name>`, bo
 
 The container is created with `--restart unless-stopped` so it survives host reboots when using Docker. Podman has no daemon to honor that policy, so each tenant's container gets a first-class **supervised unit** instead:
 
-- **OpenRC** — a dedicated `/etc/init.d/lunarwing-pg-<name>` service (which the main daemon `need`s) `podman start`s the container and waits for `pg_isready`; the workers get `/etc/init.d/lunarwing-{nanocode,pebble}-<name>` the same way. See [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](MT-GENTOO-SETUP-AND-CHANGES-MADE.md).
+- **OpenRC** — a dedicated `/etc/init.d/lunarwing-pg-<name>` service (which the main daemon `need`s) `podman start`s the container and waits for `pg_isready`; the workers get `/etc/init.d/lunarwing-{nanocode,pebble,opencode}-<name>` the same way. See [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](MT-GENTOO-SETUP-AND-CHANGES-MADE.md).
 - **Podman + systemd (rootless)** — a per-tenant **Quadlet** `.container` at `~/.config/containers/systemd/lunarwing-pg-<name>.container` (`Restart=on-failure`, `HealthCmd=pg_isready`), which the podman user-generator turns into `lunarwing-pg-<name>.service` at `daemon-reload`. This supersedes the older `podman generate systemd` approach. See [`../proposals/MT_SYSTEMD_PARITY.md`](../proposals/MT_SYSTEMD_PARITY.md).
 
 ## Container Runtime
 
 The script supports both Docker and Podman. Detection priority:
 
-1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`)
-2. If only Podman is installed, use Podman
-3. Otherwise default to Docker
+1. `LUNARWING_CONTAINER_RUNTIME` env var override (`docker` or `podman`) — persisted machine-wide on use
+2. Saved choice in `/etc/lunarwing/container-runtime`
+3. If only Podman is installed, use Podman
+4. Otherwise default to Docker
 
 All container operations use the detected runtime — no Docker-specific commands are hardcoded.
 
@@ -385,11 +440,12 @@ sudo scripts/lunarwing-mt-admin.sh build-all
 sudo scripts/lunarwing-mt-admin.sh build-all --with-wasm
 
 # Include worker images
-sudo scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble
+sudo scripts/lunarwing-mt-admin.sh build-all --with-nanocode --with-pebble --with-opencode
 
 # Build worker images standalone
 sudo scripts/lunarwing-mt-admin.sh build-pebble-worker
 sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
+sudo scripts/lunarwing-mt-admin.sh build-opencode-worker
 ```
 
 ## Security Considerations
@@ -407,7 +463,7 @@ sudo scripts/lunarwing-mt-admin.sh build-nanocode-worker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LUNARWING_SERVICE_MANAGER` | auto-detect | Force `systemd` or `openrc` |
-| `LUNARWING_CONTAINER_RUNTIME` | auto-detect | Force `docker` or `podman` |
+| `LUNARWING_CONTAINER_RUNTIME` | saved choice, else auto-detect | Force `docker` or `podman` — persisted to /etc/lunarwing/container-runtime on first explicit use (set once) |
 | `LUNARWING_MT_PROFILE` | `release` | Build profile (`release` or `debug`) |
 | `LUNARWING_MT_SOURCE_REPO` | parent of script | Path to source repo to clone from |
 | `LUNARWING_MT_TENSORZERO_URL` | `http://192.168.1.157:3000` | Default upstream TensorZero URL |
@@ -440,11 +496,13 @@ build-tenant <name>              Build binaries for one tenant (flock-serialized
   --with-wasm                    Also build WASM extensions
   --with-nanocode                Also build the nanocode worker Docker image
   --with-pebble                  Also build the pebble worker Docker image
+  --with-opencode                Also build the opencode worker Docker image
 
 build-all                        Build each tenant sequentially
   --with-wasm                    Also build WASM extensions
   --with-nanocode                Also build the nanocode worker Docker image
   --with-pebble                  Also build the pebble worker Docker image
+  --with-opencode                Also build the opencode worker Docker image
 
 build-nanocode-worker            Build the nanocode worker Docker image
   --no-cache                     Force a full rebuild without Docker cache
@@ -452,12 +510,19 @@ build-nanocode-worker            Build the nanocode worker Docker image
 build-pebble-worker              Build the pebble worker Docker image
   --no-cache                     Force a full rebuild without Docker cache
 
+build-opencode-worker            Build the opencode worker Docker image
+  --no-cache                     Force a full rebuild without Docker cache
+
 configure-pebble <name>          Configure pebble worker for a tenant
   --nanogpt-api-key <key>        NanoGPT API key (required)
   --model <model>                Pebble model (default: openai/gpt-5.2)
 
+configure-opencode <name>        Configure opencode worker for a tenant
+  --model <model>                Opencode model override (OPENCODE_MODEL)
+  --base-url <url>               Opencode upstream base URL (OPENCODE_BASE_URL)
+
 start-tenant <name>              Start all services for a tenant
-                                 (includes nanocode/pebble workers if images exist)
+                                 (includes nanocode/pebble/opencode workers if images exist)
 stop-tenant <name>               Stop all services for a tenant
 restart-tenant <name>            Stop then start
 

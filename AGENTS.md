@@ -48,32 +48,32 @@ Start with these deeper docs as needed (keep in mind most of these are outdated 
 - Extension registry catalog: `src/registry/`
 - OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
 
-## Build Constraints (Arch Linux Dev VM)
+## Build Constraints (Fedora Dev Machine)
 
-This dev/test VM has limited resources. **All cargo commands must follow these rules:**
+This dev/test machine has limited resources. **All cargo commands must follow these rules:**
 
-- **6 threads max**: prefix every cargo command with `taskset -c 0-5`
-- **Use `cargo check` for compile verification, NOT `cargo build`** — full debug builds are wasteful and should be avoided unless producing a release binary.
-- **Use `taskset -c 0-5` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
+- **16 threads max**: prefix every cargo command with `taskset -c 0-15`
+- **Use `cargo check` for compile verification, NOT `cargo build`** — full debug builds are wasteful and should be avoided. Reserve release builds (`cargo build --release`) for deploying to a new tenant or upgrading an existing tenant's release binary.
+- **Use `taskset -c 0-15` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
 
 ```bash
-taskset -c 0-5 cargo check -j6                              # compile check
-taskset -c 0-5 cargo check -j6 --no-default-features --features postgres  # postgres-only
-taskset -c 0-5 cargo check -j6 --no-default-features --features libsql    # libsql-only
-taskset -c 0-5 cargo check -j6 --all-features               # all features
-taskset -c 0-5 cargo test -j6 -- --test-threads=6            # unit tests
-taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples -- -D warnings  # lint
-taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples --all-features -- -D warnings
+taskset -c 0-15 cargo check -j16                              # compile check
+taskset -c 0-15 cargo check -j16 --no-default-features --features postgres  # postgres-only
+taskset -c 0-15 cargo check -j16 --no-default-features --features libsql    # libsql-only
+taskset -c 0-15 cargo check -j16 --all-features               # all features
+taskset -c 0-15 cargo test -j16 -- --test-threads=16            # unit tests
+taskset -c 0-15 cargo clippy -j16 --all --benches --tests --examples -- -D warnings  # lint
+taskset -c 0-15 cargo clippy -j16 --all --benches --tests --examples --all-features -- -D warnings
 ```
 
 Long-running commands (5–20+ minutes) **must use tmux**:
 ```bash
-tmux new-session -d -s build "taskset -c 0-5 cargo build --release -j6 2>&1 | tee /tmp/build.log"
+tmux new-session -d -s build "taskset -c 0-15 cargo build --release -j16 2>&1 | tee /tmp/build.log"
 ```
 
 ## Build, Test, and Lint Commands
 
-Run these from the `ic/` directory. Apply `taskset -c 0-5` and `-j6` per the build constraints above.
+Run these from the `ic/` directory. Apply `taskset -c 0-15` and `-j16` per the build constraints above.
 
 ```bash
 # Compile check (preferred over cargo build for verification)
@@ -124,7 +124,7 @@ cargo bench --all-features --no-run
 
 ## Repo-Wide Coding Rules
 
-- **Edition**: Rust 2024, MSRV 1.92.
+- **Edition**: Rust 2024, MSRV 1.92 or 1.96 or 1.96.1.
 - **Formatting**: Standard `rustfmt`. Run `cargo fmt --all` before committing.
 - **Imports**: Prefer `crate::` for cross-module references. Group std, external, then internal crates.
 - **Error handling**: Use `thiserror` for structured errors and `anyhow` for propagation. Avoid `.unwrap()` and `.expect()` in production; they are allowed only in tests or for truly infallible invariants (e.g., literals/regexes) with a safety comment.
@@ -147,7 +147,7 @@ cargo bench --all-features --no-run
 
 - Review any change touching listeners, routes, auth, secrets, sandboxing, approvals, or outbound HTTP with a security mindset.
 - Do not weaken bearer-token auth, webhook auth, CORS/origin checks, body limits, rate limits, allowlists, or secret-handling guarantees.
-- Treat Docker containers and external services as untrusted.
+- Treat Docker and podman containers and external services as untrusted.
 - Session/thread/turn state matters. Submission parsing happens before normal chat handling.
 - Skills are selected deterministically. Tool approval and auth flows are special paths and must not be mixed into normal chat history carelessly.
 - Persistent memory is the workspace system, not just transcript storage; preserve file-like semantics, chunking/search behavior, and identity/system-prompt loading.
