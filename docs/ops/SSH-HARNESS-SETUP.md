@@ -169,6 +169,11 @@ jq -n --arg key "$(cat ~/.ssh/id_ed25519)" --arg pass 'secret' \
 
 ### 3. ⚠️ Restart the daemon after uploading a key
 
+> **mt-admin handles this automatically.** `start-tenant` uploads the staged
+> key and bounces the daemon in one pass, so multi-tenant deployments need no
+> manual restart. The rest of this section applies to manual/API uploads on a
+> running daemon.
+
 **Keys become usable for signing only when the agent starts.** Uploading a key
 to an already-running agent stores it (encrypted) and makes it show up in
 `/agent/status`, but it is **not** usable for signing until the **next daemon
@@ -254,9 +259,10 @@ cargo component build --release --target wasm32-wasip2 \
 # -> tools-src/ssh/target/wasm32-wasip2/release/ssh_tool.wasm
 ```
 
-Grant it a host allowlist in `tools-src/ssh/ssh-tool.capabilities.json`
-(`capabilities.ssh.allowed_hosts`). In dev mode it's auto-discovered from
-`tools-src/ssh/`; the registry entry is `registry/tools/ssh.json`.
+On mt-admin tenants the installed sidecar's `capabilities.ssh.allowed_hosts`
+is patched automatically from the tenant's `[[ssh.hosts]]` (by `install-wasm`
+/ `build-tenant --with-wasm` / `configure-ssh`). For manual installs, edit
+`tools-src/ssh/ssh-tool.capabilities.json` before installing.
 
 ## Full HTTP API reference
 
@@ -310,7 +316,7 @@ doc §7.)
 |---|---|
 | No SSH API on the HTTP port | `config.toml` has no `[[ssh.hosts]]`, or no master key/secrets store. Both are required. |
 | `agent/status` → `running:false` | Agent failed to start; check the daemon log for `SSH agent server failed to start` (fail-soft warn). |
-| `keys_loaded: 0` but key was uploaded | Upload happened while the agent was running; **restart the daemon**. |
+| `keys_loaded: 0` but key was uploaded | Upload happened while the agent was running; **restart the daemon** (mt-admin's start-tenant does this automatically after upload). |
 | Worker: "agent has no identities" | Same as above — restart the daemon after uploading. |
 | Worker: `SSH_AUTH_SOCK` unset / socket missing | Worker container was created before the socket existed, or the bind-mount is a stale touch-file. Recreate the worker container **after** the daemon is up (mt-admin orders this for you; a plain `restart` may reuse a stale container). |
 | Socket exists but worker can't use it | Permissions: the socket is `0o666`, but the run dir must be tenant-owned and readable by the worker's UID. |

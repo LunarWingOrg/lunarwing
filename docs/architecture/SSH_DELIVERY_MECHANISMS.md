@@ -188,7 +188,9 @@ cargo component build --release --target wasm32-wasip2 \
 
 The registry entry is `ic/registry/tools/ssh.json`; the capability sidecar
 (`tools-src/ssh/ssh-tool.capabilities.json`) declares the `ssh.allowed_hosts`
-list. In dev mode the tool is auto-discovered from `tools-src/ssh/`.
+list. On mt-admin tenants the installed copy's allowlist is auto-patched to the
+tenant's `[[ssh.hosts]]` hosts; the shipped `"myhost"` placeholder only needs
+hand-editing for non-mt-admin installs. In dev mode the tool is auto-discovered from `tools-src/ssh/`.
 
 **Honest caveat.** The WASM sandbox adds **near-zero isolation for the SSH
 operation itself** — russh runs host-side with full privilege inside the host
