@@ -1308,6 +1308,18 @@ ports_get() {
     port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_5 // empty" "$PORTS_REGISTRY")"
     [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
   fi
+  # Back-compat: pre-v11 registries had `reserved_7`/`reserved_8` where
+  # `opencode_wss`/`opencode_health` now live (renamed by ports_migrate_v11).
+  # Read either name so an unmigrated tenant's opencode worker still resolves
+  # its port instead of being skipped — mirrors the vision_service case above.
+  if [[ "$port_name" == "opencode_wss" ]]; then
+    port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_7 // empty" "$PORTS_REGISTRY")"
+    [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
+  fi
+  if [[ "$port_name" == "opencode_health" ]]; then
+    port="$(jq -r ".tenants[\"$name\"].extended_ports.reserved_8 // empty" "$PORTS_REGISTRY")"
+    [[ -n "$port" ]] && { printf '%s' "$port"; return 0; }
+  fi
   return 1
 }
 
@@ -3432,7 +3444,10 @@ start_tenant_opencode() {
   ensure_container_runtime
 
   local wss_port container_name opencode_dir
-  wss_port="$(ports_get "$name" opencode_wss)"
+  # `|| true`: ports_get returns nonzero for a genuinely unallocated key; under
+  # `set -euo pipefail` a bare assignment would abort the whole start-tenant run
+  # before the `[[ -z "$wss_port" ]]` skip below (mirrors start_tenant_vision).
+  wss_port="$(ports_get "$name" opencode_wss)" || true
   container_name="lunarwing-opencode-$name"
   opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
 
