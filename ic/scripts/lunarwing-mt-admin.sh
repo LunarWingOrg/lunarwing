@@ -5485,6 +5485,32 @@ render_tenant_units() {
   say "run-command changes need a restart to apply: $0 restart-tenant $name"
 }
 
+# Poll the tenant gateway's /agent/status until reachable (up to ~30s).
+_wait_tenant_gateway() {
+  local name="$1" http_port i=0
+  http_port="$(ports_get "$name" http)"
+  while ! curl -sf --max-time 2 "http://127.0.0.1:${http_port}/agent/status" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [[ $i -lt 15 ]] || return 1
+    sleep 2
+  done
+  return 0
+}
+
+# Restart ONLY the lunarwing daemon unit for a tenant (not the full stack).
+# Used by start_tenant to make a freshly-uploaded SSH key signable: the agent
+# loads keys from the secrets store at startup only ("runtime key add is
+# status-only" — see docs/architecture/SSH_AGENT_HARNESS.md §7).
+_restart_tenant_daemon() {
+  local name="$1"
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    _systemctl_user "$name" restart "lunarwing-${name}.service"
+  else
+    rc-service "lunarwing-${name}" restart
+  fi
+}
+
 start_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -5529,15 +5555,34 @@ start_tenant() {
     start_tenant_openrc "$name"
   fi
 
-  # Workers start AFTER the daemon so the SSH agent socket is already a real
-  # Unix socket (not a touch-file) when podman bind-mounts it.
+  # Upload the staged SSH key to the secrets store (if one was provisioned by
+  # add-tenant but not yet uploaded), BEFORE the workers start. If a key was
+  # actually ingested, bounce the daemon once so the agent loads it (keys are
+  # only read from the secrets store at startup); the workers then bind-mount
+  # the post-bounce socket inode, so they are never left on a stale socket.
+  local staged_key
+  staged_key="$(tenant_env_dir "$name")/ssh_key_staged"
+  if [[ -f "$staged_key" ]]; then
+    upload_tenant_ssh_key "$name" || true
+    if [[ ! -f "$staged_key" ]]; then
+      # Upload succeeded (upload_tenant_ssh_key deletes the staged file).
+      say "restarting lunarwing-${name} so the SSH agent loads the new key ..."
+      if _restart_tenant_daemon "$name"; then
+        if _wait_tenant_gateway "$name"; then
+          say "lunarwing-${name} restarted; SSH key active"
+        else
+          say "WARNING: gateway not reachable after SSH-key restart (check 'status $name')" >&2
+        fi
+      else
+        say "WARNING: daemon restart failed after SSH key upload; run '$0 restart-tenant $name' manually" >&2
+      fi
+    fi
+  fi
+
+  # Workers start AFTER the daemon (and after any SSH-key bounce) so the SSH
+  # agent socket is already a real, current Unix socket when podman bind-mounts it.
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
-
-  # Upload the staged SSH key to the secrets store (if one was provisioned
-  # by add-tenant but not yet uploaded). Init-system-agnostic — uses the
-  # gateway's HTTP API, which both systemd and OpenRC serve.
-  upload_tenant_ssh_key "$name" || true
 }
 
 stop_tenant() {
