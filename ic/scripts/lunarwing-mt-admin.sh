@@ -233,6 +233,10 @@ Commands:
                                    (written to lunarwing.env as NANOCODE_MODEL)
     --nanocode-base-url <url>      Override the nanocode worker's TensorZero baseURL
                                    (written to lunarwing.env as NANOCODE_BASE_URL)
+    --opencode-model <model>       Override the opencode worker's LLM model
+                                   (written to lunarwing.env as OPENCODE_MODEL)
+    --opencode-base-url <url>      Override the opencode worker's TensorZero baseURL
+                                   (written to lunarwing.env as OPENCODE_BASE_URL)
     --llm-model <model>            Override LLM_MODEL (default:
                                    tensorzero::function_name::lunarwing)
     --gateway-host <host>          Override GATEWAY_HOST bind address (default:
@@ -242,9 +246,9 @@ Commands:
                                    written to both lunarwing.env and xmpp-bridge.env)
 
   add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
-    (same options as add-tenant apply to all, including --enable-darkirc,
-     --nanocode-model/--nanocode-base-url, --llm-model, --gateway-host,
-     and --xmpp-allow-from)
+     (same options as add-tenant apply to all, including --enable-darkirc,
+      --nanocode-model/--nanocode-base-url, --opencode-model/--opencode-base-url,
+      --llm-model, --gateway-host, and --xmpp-allow-from)
 
   remove-tenant <name>             Stop services, deallocate ports
     --purge                        Also delete OS user and home directory
@@ -253,16 +257,21 @@ Commands:
     --with-wasm                    Also build WASM extensions
     --with-nanocode                Also build the nanocode worker Docker image
     --with-pebble                  Also build the pebble worker Docker image
+    --with-opencode                Also build the opencode worker Docker image
 
   build-all                        Build each tenant sequentially
     --with-wasm                    Also build WASM extensions
     --with-nanocode                Also build the nanocode worker Docker image
     --with-pebble                  Also build the pebble worker Docker image
+    --with-opencode                Also build the opencode worker Docker image
 
   build-nanocode-worker            Build the nanocode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
   build-pebble-worker             Build the pebble worker Docker image
+    --no-cache                     Force a full rebuild without Docker cache
+
+  build-opencode-worker            Build the opencode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
 
   build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
@@ -290,6 +299,11 @@ Commands:
   configure-nanocode <name>        Set nanocode worker LLM overrides for a tenant
     --model <model>                TensorZero model (NANOCODE_MODEL; any string)
     --base-url <url>               TensorZero baseURL (NANOCODE_BASE_URL; full URL)
+                                   (restart the worker after: stop-tenant && start-tenant)
+
+  configure-opencode <name>        Set opencode worker LLM overrides for a tenant
+    --model <model>                TensorZero model (OPENCODE_MODEL; any string)
+    --base-url <url>               TensorZero baseURL (OPENCODE_BASE_URL; full URL)
                                    (restart the worker after: stop-tenant && start-tenant)
 
   configure-ssh <name>             Provision SSH harness for an existing tenant
@@ -1038,6 +1052,7 @@ ports_migrate() {
   if [[ "$current_version" -lt 8 ]]; then ports_migrate_v8; fi
   if [[ "$current_version" -lt 9 ]]; then ports_migrate_v9; fi
   if [[ "$current_version" -lt 10 ]]; then ports_migrate_v10; fi
+  if [[ "$current_version" -lt 11 ]]; then ports_migrate_v11; fi
 }
 
 # v8 -> v9: rename extended_ports.reserved_5 -> vision_service.
@@ -1107,6 +1122,41 @@ ports_migrate_v10() {
   local tmp
   tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
   jq '.version = 10' "$PORTS_REGISTRY" >"$tmp"
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+}
+
+# v10 -> v11: dedicate extended_ports.reserved_7 -> opencode_wss,
+# extended_ports.reserved_8 -> opencode_health.
+ports_migrate_v11() {
+  if jq -e '.tenants | to_entries[] | select(.value.extended_ports | has("opencode_wss") | not) | select(.value.extended_ports | has("reserved_7"))' "$PORTS_REGISTRY" >/dev/null 2>&1; then
+    say "migrating port registry -> v11 (assign opencode_wss from reserved_7 slot) ..."
+    local tmp
+    tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+    jq '
+      .tenants |= with_entries(
+          .value |= (
+            if (.extended_ports | type == "object") then
+              .extended_ports |= (
+                .opencode_wss = ((.opencode_wss) // (.reserved_7) // ((.extended_base // 0) + 7))
+                | .opencode_health = ((.opencode_health) // (.reserved_8) // ((.extended_base // 0) + 8))
+                | del(.reserved_7, .reserved_8)
+              )
+            else . end
+          )
+        )
+    ' "$PORTS_REGISTRY" >"$tmp"
+    chmod 0644 "$tmp"
+    mv "$tmp" "$PORTS_REGISTRY"
+    say "port registry migrated to v11 (opencode_wss + opencode_health dedicated at extended_base+7/+8)"
+  fi
+
+  # Always bump the version when the dispatcher calls v11, even if there were
+  # no tenants to migrate (e.g. empty registry) — otherwise .version stays
+  # stale and ports_allocate writes v11-shaped tenants into a v10-labeled file.
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  jq '.version = 11' "$PORTS_REGISTRY" >"$tmp"
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
 }
@@ -1182,9 +1232,11 @@ ports_allocate() {
             nanocode_health: ($ebase + 3),
             pebble_health: ($ebase + 4),
             vision_service: ($ebase + 5),
-            vision_health: ($ebase + 6)
+            vision_health: ($ebase + 6),
+            opencode_wss: ($ebase + 7),
+            opencode_health: ($ebase + 8)
           }
-          + (reduce range(7; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
+          + (reduce range(9; $ebs) as $i ({}; . + { ("reserved_\($i)"): ($ebase + $i) }))
         )
       }
   ' "$PORTS_REGISTRY" >"$tmp"
@@ -1553,6 +1605,7 @@ build_tenant() {
   local with_wasm="${2:-false}"
   local with_nanocode="${3:-false}"
   local with_pebble="${4:-false}"
+  local with_opencode="${5:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -1592,11 +1645,21 @@ build_tenant() {
   ) 200>"$BUILD_LOCK"
 
   if [[ "$with_nanocode" == "true" ]]; then
+    say ""
+    say "=== Building nanocode worker image ==="
     build_nanocode_worker "false"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
+    say ""
+    say "=== Building pebble worker image ==="
     build_pebble_worker "false"
+  fi
+
+  if [[ "$with_opencode" == "true" ]]; then
+    say ""
+    say "=== Building opencode worker image ==="
+    build_opencode_worker "false"
   fi
 
   # After a rebuild, the tenant will be restarted with the new binary. If the
@@ -1680,6 +1743,7 @@ build_all() {
   local with_wasm="${1:-false}"
   local with_nanocode="${2:-false}"
   local with_pebble="${3:-false}"
+  local with_opencode="${4:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -1688,7 +1752,6 @@ build_all() {
     return 0
   fi
 
-  # Build worker images once (shared across tenants)
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
@@ -1699,6 +1762,12 @@ build_all() {
     say ""
     say "=== Building pebble worker image ==="
     build_pebble_worker "false"
+  fi
+
+  if [[ "$with_opencode" == "true" ]]; then
+    say ""
+    say "=== Building opencode worker image ==="
+    build_opencode_worker "false"
   fi
 
   while IFS= read -r name; do
@@ -1779,6 +1848,36 @@ build_pebble_worker() {
   fi
 
   say "pebble worker image built: lunarwing-worker-pebble:latest"
+}
+
+build_opencode_worker() {
+  local no_cache="${1:-false}"
+  local opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
+
+  [[ -d "$opencode_dir" ]] || die "opencode worker dir not found at $opencode_dir"
+
+  ensure_container_runtime
+
+  say "building opencode worker Docker image ..."
+  local cache_flag=""
+  [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
+
+  if [[ "$CONTAINER_RT" == "podman" ]]; then
+    # --network=host (F8): see build_nanocode_worker — podman build's default network
+    # can't reach the internet for RUN steps (apt/bun) on hosts where the bridge/pasta
+    # path is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
+    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
+    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
+    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct if
+    # the image is ever run directly / under a healthcheck-honouring runtime).
+    podman build $cache_flag --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
+      || die "opencode worker image build failed"
+  else
+    docker build $cache_flag -t lunarwing-worker-opencode:latest "$opencode_dir" \
+      || die "opencode worker image build failed"
+  fi
+
+  say "opencode worker image built: lunarwing-worker-opencode:latest"
 }
 
 # ── WASM install ─────────────────────────────────────────────────────────────
@@ -1997,8 +2096,10 @@ write_tenant_lunarwing_env() {
   local llm_model="${9:-}"
   local gateway_host="${10:-}"
   local xmpp_allow_from="${11:-}"
+  local opencode_model="${12:-}"
+  local opencode_base_url="${13:-}"
 
-  local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port
+  local path gateway_port http_port bridge_port pg_port proxy_port weechat_port weechat_adapter_port orchestrator_port nanocode_wss_port pebble_wss_port opencode_wss_port
   path="$(tenant_env_dir "$name")/lunarwing.env"
   gateway_port="$(ports_get "$name" gateway)"
   http_port="$(ports_get "$name" http)"
@@ -2010,6 +2111,7 @@ write_tenant_lunarwing_env() {
   orchestrator_port="$(ports_get "$name" orchestrator)"
   nanocode_wss_port="$(ports_get "$name" nanocode_wss)"
   pebble_wss_port="$(ports_get "$name" pebble_wss)"
+  opencode_wss_port="$(ports_get "$name" opencode_wss)"
 
   local state_dir run_dir
   state_dir="$(tenant_state_dir "$name")"
@@ -2033,6 +2135,8 @@ write_tenant_lunarwing_env() {
   # existing value so re-running add-tenant without the flags keeps prior settings.
   [[ -n "$nanocode_model" ]]    || nanocode_model="$(_env_existing "$path" NANOCODE_MODEL)"
   [[ -n "$nanocode_base_url" ]] || nanocode_base_url="$(_env_existing "$path" NANOCODE_BASE_URL)"
+  [[ -n "$opencode_model" ]]    || opencode_model="$(_env_existing "$path" OPENCODE_MODEL)"
+  [[ -n "$opencode_base_url" ]] || opencode_base_url="$(_env_existing "$path" OPENCODE_BASE_URL)"
   # Stable + migration-safe; resolved before the heredoc so it can read an
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
@@ -2131,6 +2235,9 @@ ORCHESTRATOR_PORT=$orchestrator_port
 # Nanocode worker (WebSocket port for agent communication)
 NANOCODE_WSS_PORT=$nanocode_wss_port
 
+# Opencode worker (WebSocket port for agent communication)
+OPENCODE_WSS_PORT=$opencode_wss_port
+
 # Pebble worker (WebSocket port for agent communication)
 PEBBLE_WSS_PORT=$pebble_wss_port
 
@@ -2174,6 +2281,8 @@ ENVEOF
   # an unconfigured tenant gets the image's baked-in nanocode.json defaults.
   [[ -n "$nanocode_model" ]]    && printf '\nNANOCODE_MODEL=%s\n'    "$nanocode_model"     >> "$path"
   [[ -n "$nanocode_base_url" ]] && printf 'NANOCODE_BASE_URL=%s\n' "$nanocode_base_url" >> "$path"
+  [[ -n "$opencode_model" ]]    && printf '\nOPENCODE_MODEL=%s\n'    "$opencode_model"     >> "$path"
+  [[ -n "$opencode_base_url" ]] && printf 'OPENCODE_BASE_URL=%s\n' "$opencode_base_url" >> "$path"
   chown "$name:$name" "$path"
   say "wrote: $path"
 }
@@ -3240,8 +3349,10 @@ start_tenant_nanocode() {
     host_health_port="$(ports_get "$name" nanocode_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     # SSH agent socket (always included — daemon creates it at startup).
+    # :z label so SELinux (Enforcing on Fedora) permits container_t to access the
+    # tenant-home-labeled socket; without it SSH_AUTH_SOCK reads fail despite 0666 mode.
     local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
-    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-nanocode-${name}" \
@@ -3279,6 +3390,184 @@ stop_tenant_nanocode() {
   elif _ctr "$name" inspect "$container_name" &>/dev/null; then
     _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
     say "nanocode worker stopped ($container_name)"
+  fi
+}
+
+# ── OpenCode worker container ──────────────────────────────────────────────────
+
+configure_opencode() {
+  local name="$1"
+  local model="${2:-}"
+  local base_url="${3:-}"
+
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  [[ -n "$model" || -n "$base_url" ]] \
+    || die "configure-opencode: pass --model <model> and/or --base-url <url>"
+
+  local env_path
+  env_path="$(tenant_env_dir "$name")/lunarwing.env"
+  [[ -f "$env_path" ]] || die "env file not found: $env_path (run add-tenant first)"
+
+  local tmp
+  tmp="$(mktemp)"
+  grep -v -e '^OPENCODE_MODEL=' -e '^OPENCODE_BASE_URL=' "$env_path" >"$tmp" || true
+  [[ -n "$model" ]]    && printf 'OPENCODE_MODEL=%s\n'    "$model"    >>"$tmp"
+  [[ -n "$base_url" ]] && printf 'OPENCODE_BASE_URL=%s\n' "$base_url" >>"$tmp"
+  cat "$tmp" >"$env_path"
+  rm -f "$tmp"
+  chown "$name:$name" "$env_path"
+  chmod 600 "$env_path"
+  say "opencode LLM overrides written to $env_path for tenant '$name'"
+
+  local container_name="lunarwing-opencode-$name"
+  if _ctr "$name" inspect "$container_name" &>/dev/null 2>&1; then
+    say "note: restart the opencode worker to pick up the new config:"
+    say "  sudo $0 stop-tenant $name && sudo $0 start-tenant $name"
+  fi
+}
+
+start_tenant_opencode() {
+  local name="$1"
+  ensure_container_runtime
+
+  local wss_port container_name opencode_dir
+  wss_port="$(ports_get "$name" opencode_wss)"
+  container_name="lunarwing-opencode-$name"
+  opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
+
+  if [[ -z "$wss_port" ]]; then
+    say "no opencode_wss port allocated for $name (skipping opencode worker)"
+    return 0
+  fi
+
+  if ! _ensure_tenant_image "$name" lunarwing-worker-opencode:latest; then
+    say "opencode worker image not available; run 'build-opencode-worker' first (skipping)"
+    return 0
+  fi
+
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "systemd" && "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
+    _wait_user_manager "$name"
+    local quadlet_file="$(tenant_quadlet_dir "$name")/lunarwing-opencode-${name}.container"
+    render_worker_quadlet "$name" opencode 8443
+    _systemctl_user "$name" daemon-reload 2>/dev/null || true
+    if _container_config_changed "$name" "lunarwing-opencode-${name}" "$quadlet_file"; then
+      _recreate_quadlet_container "$name" "lunarwing-opencode-${name}.service" "lunarwing-opencode-${name}"
+    fi
+    if _systemctl_user "$name" start "lunarwing-opencode-${name}.service" >/dev/null 2>&1; then
+      _store_container_hash "$name" "lunarwing-opencode-${name}" "$quadlet_file"
+      say "opencode worker ready via quadlet (lunarwing-opencode-${name}.service, WSS port $wss_port)"
+    else
+      say "WARNING: lunarwing-opencode-${name}.service failed to start" >&2
+      _systemctl_user "$name" status "lunarwing-opencode-${name}.service" --no-pager >&2 || true
+    fi
+    return 0
+  fi
+
+  if _ctr "$name" inspect "$container_name" &>/dev/null; then
+    local env_file_for_hash
+    env_file_for_hash="$(tenant_env_dir "$name")/lunarwing.env"
+    if _container_config_changed "$name" "$container_name" "$env_file_for_hash"; then
+      say "config changed for $container_name; force-recreating"
+      _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+      _ctr "$name" rm -f "$container_name" >/dev/null 2>&1 || true
+    elif _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true; then
+      say "opencode worker already running ($container_name, WSS port $wss_port)"
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" opencode
+      return 0
+    else
+      say "starting existing opencode worker container $container_name"
+      _ctr "$name" start "$container_name" >/dev/null
+      _store_container_hash "$name" "$container_name" "$env_file_for_hash"
+      _register_worker_unit "$name" opencode
+      say "opencode worker ready ($container_name, WSS port $wss_port)"
+      return 0
+    fi
+  fi
+
+  if ! _ctr "$name" inspect "$container_name" &>/dev/null; then
+    say "creating opencode worker container $container_name on WSS port $wss_port"
+
+    local tenant_env_path
+    tenant_env_path="$(tenant_env_dir "$name")/lunarwing.env"
+
+    local opencode_env_path
+    opencode_env_path="$(tenant_env_dir "$name")/opencode.env"
+
+    local env_flags=()
+    if [[ -f "$tenant_env_path" ]]; then
+      local gateway_token
+      gateway_token="$(grep '^GATEWAY_AUTH_TOKEN=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$gateway_token" ]] && env_flags+=(-e "AGENT_AUTH_TOKEN=$gateway_token")
+
+      local llm_api_key
+      llm_api_key="$(grep '^LLM_API_KEY=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$llm_api_key" ]] && env_flags+=(-e "TENSORZERO_API_KEY=$llm_api_key")
+
+      local opencode_model opencode_base_url
+      opencode_model="$(grep '^OPENCODE_MODEL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$opencode_model" ]] && env_flags+=(-e "OPENCODE_MODEL=$opencode_model")
+      opencode_base_url="$(grep '^OPENCODE_BASE_URL=' "$tenant_env_path" | cut -d= -f2- || true)"
+      [[ -n "$opencode_base_url" ]] && env_flags+=(-e "OPENCODE_BASE_URL=$opencode_base_url")
+    fi
+
+    if [[ -f "$opencode_env_path" ]]; then
+      env_flags+=(--env-file "$opencode_env_path")
+    fi
+
+    local workspace_dir
+    workspace_dir="$(tenant_lw_root "$name")/opencode-workspace"
+    mkdir -p "$workspace_dir"
+    chown "$name:$name" "$workspace_dir"
+    chmod 777 "$workspace_dir"
+
+    local -a restart_arg=()
+    [[ "$MT_ROOTLESS" == "true" ]] || restart_arg=(--restart unless-stopped)
+    local -a health_publish=()
+    local host_health_port
+    host_health_port="$(ports_get "$name" opencode_health)" || true
+    [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
+    local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
+    local -a ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    _ctr "$name" run -d \
+      --name "$container_name" \
+      -e LUNARWING_WORKER_ID="worker-opencode-${name}" \
+      -e WS_PORT="$wss_port" \
+      -e HEALTH_PORT="8443" \
+      -e OPENCODE_MODE=websocket \
+      -e WS_ROLE=server \
+      -e WS_BIND_HOST=0.0.0.0 \
+      -e WS_PATH=/ws/agent \
+      "${env_flags[@]}" \
+      "${ssh_mount[@]}" \
+      -p "127.0.0.1:${wss_port}:${wss_port}" \
+      "${health_publish[@]}" \
+      -v "$workspace_dir:/workspace:z" \
+      "${restart_arg[@]}" \
+      lunarwing-worker-opencode:latest \
+      --mode websocket >/dev/null
+    _store_container_hash "$name" "$container_name" "$(tenant_env_dir "$name")/lunarwing.env"
+  fi
+
+  _register_worker_unit "$name" opencode
+  say "opencode worker ready ($container_name, WSS port $wss_port)"
+}
+
+stop_tenant_opencode() {
+  local name="$1"
+  ensure_container_runtime
+
+  local container_name="lunarwing-opencode-$name"
+  ensure_init_system
+  if [[ "$INIT_SYSTEM" == "openrc" && -f "/etc/init.d/${container_name}" ]]; then
+    _deregister_babysitter "$container_name"
+    rc-service "$container_name" stop >/dev/null 2>&1 || true
+    say "opencode worker stopped ($container_name)"
+  elif _ctr "$name" inspect "$container_name" &>/dev/null; then
+    _ctr "$name" stop "$container_name" >/dev/null 2>&1 || true
+    say "opencode worker stopped ($container_name)"
   fi
 }
 
@@ -3381,9 +3670,10 @@ start_tenant_pebble() {
     host_health_port="$(ports_get "$name" pebble_health)" || true
     [[ -n "$host_health_port" ]] && health_publish=(-p "127.0.0.1:${host_health_port}:8443")
     # SSH agent socket (always included — daemon creates it at startup).
+    # :z label for SELinux (Enforcing on Fedora) — see start_tenant_nanocode.
     local -a ssh_mount=()
     local ssh_agent_socket="$(tenant_run_dir "$name")/ssh-agent.sock"
-    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
+    ssh_mount=(-v "${ssh_agent_socket}:/tmp/ssh-agent.sock:z" -e SSH_AUTH_SOCK=/tmp/ssh-agent.sock)
     _ctr "$name" run -d \
       --name "$container_name" \
       -e LUNARWING_WORKER_ID="worker-pebble-${name}" \
@@ -4153,7 +4443,9 @@ EOF
     # SSH agent socket mount + env (always included — the daemon creates the
     # socket at startup; if SSH isn't configured, the socket won't exist and
     # SSH commands from the worker will fail with a clear "no agent" error).
-    printf 'Volume=%s:/tmp/ssh-agent.sock\n' "$ssh_agent_socket"
+    # :z label so SELinux (Enforcing on Fedora) permits container_t access to
+    # the tenant-home-labeled socket.
+    printf 'Volume=%s:/tmp/ssh-agent.sock:z\n' "$ssh_agent_socket"
     printf 'Environment=SSH_AUTH_SOCK=/tmp/ssh-agent.sock\n'
     # Publish the per-tenant dedicated health port (v8) -> container's 8443, so
     # the host self-heal pipeline can probe /health directly. The container still
@@ -4164,16 +4456,24 @@ EOF
       printf 'Environment=WS_ROLE=server\n'
     elif [[ "$worker" == "pebble" ]]; then
       printf 'Environment=PEBBLE_MODE=websocket\n'
+    elif [[ "$worker" == "opencode" ]]; then
+      printf 'Environment=OPENCODE_MODE=websocket\n'
+      printf 'Environment=WS_ROLE=server\n'
     fi
     [[ -n "$agent_token" ]] && printf 'Environment=AGENT_AUTH_TOKEN=%s\n' "$agent_token"
     [[ "$worker" == "nanocode" && -n "$tz_key" ]] && printf 'Environment=TENSORZERO_API_KEY=%s\n' "$tz_key"
     [[ "$worker" == "nanocode" && -n "$nanocode_model" ]] && printf 'Environment=NANOCODE_MODEL=%s\n' "$nanocode_model"
     [[ "$worker" == "nanocode" && -n "$nanocode_base_url" ]] && printf 'Environment=NANOCODE_BASE_URL=%s\n' "$nanocode_base_url"
+    [[ "$worker" == "opencode" && -n "$tz_key" ]] && printf 'Environment=TENSORZERO_API_KEY=%s\n' "$tz_key"
+    local oc_model oc_base_url
+    oc_model="$(grep '^OPENCODE_MODEL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+    oc_base_url="$(grep '^OPENCODE_BASE_URL=' "$tenant_env_path" 2>/dev/null | cut -d= -f2- || true)"
+    [[ "$worker" == "opencode" && -n "$oc_model" ]] && printf 'Environment=OPENCODE_MODEL=%s\n' "$oc_model"
+    [[ "$worker" == "opencode" && -n "$oc_base_url" ]] && printf 'Environment=OPENCODE_BASE_URL=%s\n' "$oc_base_url"
     # Operator override file (optional). EnvironmentFile= has existed since the
     # Quadlet 4.4 debut, so it is safe at our >= 4.6 floor.
     [[ -f "$worker_env_path" ]] && printf 'EnvironmentFile=%s\n' "$worker_env_path"
-    # nanocode takes a trailing CMD arg; pebble uses the image default.
-    [[ "$worker" == "nanocode" ]] && printf 'Exec=--mode websocket\n'
+    [[ "$worker" == "nanocode" || "$worker" == "opencode" ]] && printf 'Exec=--mode websocket\n'
     cat <<EOF
 HealthCmd=curl -sf http://127.0.0.1:${health_port}/health || exit 1
 HealthInterval=15s
@@ -4451,7 +4751,7 @@ stop_tenant_systemd() {
   local uid
   uid="$(id -u "$name" 2>/dev/null)" || return 0
 
-  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-vision-${name}.service" "lunarwing-pg-${name}.service"; do
+  for svc in "lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-adapter-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-darkirc-adapter-${name}.service" "lunarwing-darkirc-${name}.service" "lunarwing-nanocode-${name}.service" "lunarwing-pebble-${name}.service" "lunarwing-opencode-${name}.service" "lunarwing-vision-${name}.service" "lunarwing-pg-${name}.service"; do
     if _systemctl_user "$name" is-active --quiet "$svc" 2>/dev/null; then
       _systemctl_user "$name" stop "$svc"
       say "stopped $svc"
@@ -4476,9 +4776,10 @@ uninstall_tenant_systemd() {
   rm -f "$qdir/lunarwing-pg-${name}.container" \
         "$qdir/lunarwing-nanocode-${name}.container" \
         "$qdir/lunarwing-pebble-${name}.container" \
+        "$qdir/lunarwing-opencode-${name}.container" \
         "$qdir/lunarwing-vision-${name}.container"
   if id -u "$name" >/dev/null 2>&1; then
-    for w in nanocode pebble; do
+    for w in nanocode pebble opencode; do
       _ctr "$name" rm -f "lunarwing-${w}-${name}" >/dev/null 2>&1 || true
     done
     _ctr "$name" rm -f "lunarwing-vision-${name}" >/dev/null 2>&1 || true
@@ -5087,7 +5388,7 @@ start_tenant_openrc() {
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
   # Start worker babysitters (if workers are configured)
-  for worker in nanocode pebble; do
+  for worker in nanocode pebble opencode; do
     rc-service "lunarwing-${worker}-${name}-sup" start 2>/dev/null || true
   done
   say "OpenRC services started for $name"
@@ -5104,7 +5405,7 @@ start_tenant_openrc() {
     fi
   done
   # Auto-enable worker babysitters
-  for worker in nanocode pebble; do
+  for worker in nanocode pebble opencode; do
     if rc-service "lunarwing-${worker}-${name}-sup" status >/dev/null 2>&1; then
       rc-update add "lunarwing-${worker}-${name}-sup" default >/dev/null 2>&1 || true
     fi
@@ -5122,7 +5423,7 @@ stop_tenant_openrc() {
   rc-service "lunarwing-darkirc-adapter-${name}" stop 2>/dev/null || true
   rc-service "lunarwing-darkirc-${name}" stop 2>/dev/null || true
   # Worker babysitters: stop the supervisors so they don't respawn the stopped containers.
-  for worker in nanocode pebble; do
+  for worker in nanocode pebble opencode; do
     rc-service "lunarwing-${worker}-${name}-sup" stop 2>/dev/null || true
   done
   rc-service "lunarwing-vision-${name}" stop 2>/dev/null || true
@@ -5134,7 +5435,7 @@ stop_tenant_openrc() {
 
 uninstall_tenant_openrc() {
   local name="$1"
-  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-darkirc-adapter-${name}" "lunarwing-darkirc-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-vision-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup"; do
+  for svc in "lunarwing-${name}" "xmpp-bridge-${name}" "lunarwing-proxy-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-weechat-${name}" "lunarwing-darkirc-adapter-${name}" "lunarwing-darkirc-${name}" "lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-opencode-${name}" "lunarwing-vision-${name}" "lunarwing-pg-${name}-sup" "lunarwing-nanocode-${name}-sup" "lunarwing-pebble-${name}-sup" "lunarwing-opencode-${name}-sup"; do
     rc-update del "$svc" default 2>/dev/null || true
     rm -f "/etc/init.d/$svc" "/etc/conf.d/$svc"
   done
@@ -5375,6 +5676,8 @@ add_tenant() {
   local llm_model="${13:-}"
   local gateway_host="${14:-}"
   local xmpp_allow_from="${15:-}"
+  local opencode_model="${16:-}"
+  local opencode_base_url="${17:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -5386,8 +5689,8 @@ add_tenant() {
   # unit and could mask a real outage as `skipped`), so forbid such names at the
   # source. (weechat-* also covers weechat-adapter-*.)
   case "$name" in
-    pg-*|proxy-*|nanocode-*|pebble-*|weechat-*)
-      die "tenant name '$name' collides with a reserved per-service unit prefix (pg-/proxy-/nanocode-/pebble-/weechat-/weechat-adapter-); choose another name" ;;
+    pg-*|proxy-*|nanocode-*|pebble-*|opencode-*|weechat-*)
+      die "tenant name '$name' collides with a reserved per-service unit prefix (pg-/proxy-/nanocode-/pebble-/opencode-/weechat-/weechat-adapter-); choose another name" ;;
   esac
 
   say "=== Adding tenant: $name ==="
@@ -5408,7 +5711,7 @@ add_tenant() {
 
   say "--- Generating environment files ---"
   write_tenant_vision_env "$name" >/dev/null
-  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
+  write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password" "$xmpp_allow_from"
   write_tenant_proxy_env "$name" "$tensorzero_url"
   if [[ "$enable_darkirc" == "true" ]]; then
@@ -5418,6 +5721,7 @@ add_tenant() {
   write_tenant_gotify_config "$name" "$gotify_url" "$gotify_title"
   ensure_external_worker_config "$name" "nanocode" "nanocode_wss"
   ensure_external_worker_config "$name" "pebble" "pebble_wss"
+  ensure_external_worker_config "$name" "opencode" "opencode_wss"
 
   # SSH harness: config.toml [[ssh.hosts]] block + ed25519 key pair.
   # Enabled by default; opt out with --no-ssh or LUNARWING_MT_SSH_ENABLED=false.
@@ -5468,6 +5772,7 @@ add_tenant() {
   say "  orchestrator:     $(ports_get "$name" orchestrator)"
   say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
   say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  opencode_wss:     $(ports_get "$name" opencode_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say "  darkirc:          $( [[ "$enable_darkirc" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-darkirc to enable)" )"
   say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key upload + activation handled by start-tenant)" || echo "disabled (pass --no-ssh)" )"
@@ -5678,6 +5983,7 @@ start_tenant() {
   # agent socket is already a real, current Unix socket when podman bind-mounts it.
   start_tenant_nanocode "$name"
   start_tenant_pebble "$name"
+  start_tenant_opencode "$name"
   _ssh_ready_summary "$name" || true
 }
 
@@ -5698,6 +6004,7 @@ stop_tenant() {
   stop_tenant_vision "$name"
   stop_tenant_pebble "$name"
   stop_tenant_nanocode "$name"
+  stop_tenant_opencode "$name"
   stop_tenant_postgres "$name"
 }
 
@@ -5728,6 +6035,7 @@ status_tenant() {
   say "  orchestrator:     $(ports_get "$name" orchestrator)"
   say "  nanocode_wss:     $(ports_get "$name" nanocode_wss)"
   say "  pebble_wss:       $(ports_get "$name" pebble_wss)"
+  say "  opencode_wss:     $(ports_get "$name" opencode_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say ""
 
@@ -5757,6 +6065,15 @@ status_tenant() {
     say "Pebble worker: not created"
   fi
 
+  local opencode_container="lunarwing-opencode-$name"
+  if _ctr "$name" inspect -f '{{.State.Running}}' "$opencode_container" 2>/dev/null | grep -q true; then
+    say "OpenCode worker: running ($opencode_container, WSS port $(ports_get "$name" opencode_wss))"
+  elif _ctr "$name" inspect "$opencode_container" &>/dev/null; then
+    say "OpenCode worker: stopped ($opencode_container)"
+  else
+    say "OpenCode worker: not created"
+  fi
+
   ensure_init_system
   say ""
   say "Services ($INIT_SYSTEM):"
@@ -5769,7 +6086,7 @@ status_tenant() {
     # pg + workers are Quadlet units only on rootless podman; on rootful docker
     # they run as plain containers (shown above), not systemd units.
     if [[ "$MT_ROOTLESS" == "true" ]] && podman_supports_quadlet; then
-      svcs+=("lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}")
+      svcs+=("lunarwing-pg-${name}" "lunarwing-nanocode-${name}" "lunarwing-pebble-${name}" "lunarwing-opencode-${name}")
     fi
     local svc state
     for svc in "${svcs[@]}"; do
@@ -5783,7 +6100,8 @@ status_tenant() {
       rc_svcs+=("lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}")
     fi
     rc_svcs+=("lunarwing-nanocode-${name}" "lunarwing-nanocode-${name}-sup" \
-              "lunarwing-pebble-${name}" "lunarwing-pebble-${name}-sup")
+              "lunarwing-pebble-${name}" "lunarwing-pebble-${name}-sup" \
+              "lunarwing-opencode-${name}" "lunarwing-opencode-${name}-sup")
     local svc state
     for svc in "${rc_svcs[@]}"; do
       state="$(rc-service "$svc" status 2>/dev/null | grep -oE 'started|stopped|crashed' || echo "unknown")"
@@ -5804,13 +6122,13 @@ list_tenants() {
     return 0
   fi
 
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "WS_ADPT" "ORCH" "NANOCODE" "PEBBLE"
-  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
-    "------" "-------" "----" "------" "--" "-----" "-------" "-------" "----" "--------" "------"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "TENANT" "GATEWAY" "HTTP" "BRIDGE" "PG" "PROXY" "WEECHAT" "WS_ADPT" "ORCH" "NANOCODE" "PEBBLE" "OPENCODE"
+  printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    "------" "-------" "----" "------" "--" "-----" "-------" "-------" "----" "--------" "------" "--------"
 
   while IFS= read -r name; do
-    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
+    printf '%-15s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s %-8s\n' \
       "$name" \
       "$(ports_get "$name" gateway)" \
       "$(ports_get "$name" http)" \
@@ -5821,7 +6139,8 @@ list_tenants() {
       "$(ports_get "$name" weechat_adapter)" \
       "$(ports_get "$name" orchestrator)" \
       "$(ports_get "$name" nanocode_wss)" \
-      "$(ports_get "$name" pebble_wss)"
+      "$(ports_get "$name" pebble_wss)" \
+      "$(ports_get "$name" opencode_wss)"
   done <<< "$names"
 }
 
@@ -5955,15 +6274,19 @@ doctor() {
   _check "nanocode worker Dockerfile exists" test -f "$LUNARWING_ROOT/lunarcode4lunarwing/Dockerfile"
   _check "pebble worker dir exists" test -d "$LUNARWING_ROOT/pebble4lunarwing"
   _check "pebble worker Dockerfile exists" test -f "$LUNARWING_ROOT/pebble4lunarwing/Dockerfile"
+  _check "opencode worker dir exists" test -d "$LUNARWING_ROOT/opencode4lunarwing"
+  _check "opencode worker Dockerfile exists" test -f "$LUNARWING_ROOT/opencode4lunarwing/Dockerfile"
 
   # Check if worker images are built
   if command -v docker >/dev/null 2>&1; then
     _check "nanocode worker image exists" docker image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" docker image inspect lunarwing-worker-pebble:latest
+    _check "opencode worker image exists" docker image inspect lunarwing-worker-opencode:latest
     _check "vision sidecar image exists" docker image inspect "$VISION_SIDECAR_IMAGE"
   elif command -v podman >/dev/null 2>&1; then
     _check "nanocode worker image exists" podman image inspect lunarwing-worker-nanocode:latest
     _check "pebble worker image exists" podman image inspect lunarwing-worker-pebble:latest
+    _check "opencode worker image exists" podman image inspect lunarwing-worker-opencode:latest
     _check "vision sidecar image exists" podman image inspect "$VISION_SIDECAR_IMAGE"
   fi
 
@@ -5992,7 +6315,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from=""
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -6008,6 +6331,8 @@ main() {
           --gotify-title)    gotify_title="$2"; shift 2 ;;
           --nanocode-model)    nanocode_model="$2"; shift 2 ;;
           --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
+          --opencode-model)    opencode_model="$2"; shift 2 ;;
+          --opencode-base-url) opencode_base_url="$2"; shift 2 ;;
           --llm-model)         llm_model="$2"; shift 2 ;;
           --gateway-host)      gateway_host="$2"; shift 2 ;;
           --xmpp-allow-from)   xmpp_allow_from="$2"; shift 2 ;;
@@ -6021,12 +6346,12 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from=""
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -6041,6 +6366,8 @@ main() {
           --gotify-title)    gotify_title="$2"; shift 2 ;;
           --nanocode-model)    nanocode_model="$2"; shift 2 ;;
           --nanocode-base-url) nanocode_base_url="$2"; shift 2 ;;
+          --opencode-model)    opencode_model="$2"; shift 2 ;;
+          --opencode-base-url) opencode_base_url="$2"; shift 2 ;;
           --llm-model)         llm_model="$2"; shift 2 ;;
           --gateway-host)      gateway_host="$2"; shift 2 ;;
           --xmpp-allow-from)   xmpp_allow_from="$2"; shift 2 ;;
@@ -6062,7 +6389,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
       done
       ;;
 
@@ -6086,13 +6413,14 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false" with_nanocode="false" with_pebble="false"
+      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)     with_wasm="true"; shift ;;
-          --with-nanocode) with_nanocode="true"; shift ;;
-          --with-pebble)   with_pebble="true"; shift ;;
-          -*)              die "unknown flag: $1" ;;
+          --with-wasm)      with_wasm="true"; shift ;;
+          --with-nanocode)  with_nanocode="true"; shift ;;
+          --with-pebble)    with_pebble="true"; shift ;;
+          --with-opencode)  with_opencode="true"; shift ;;
+          -*)               die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
             else die "unexpected argument: $1"
@@ -6100,23 +6428,24 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false" with_nanocode="false" with_pebble="false"
+      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)     with_wasm="true"; shift ;;
-          --with-nanocode) with_nanocode="true"; shift ;;
-          --with-pebble)   with_pebble="true"; shift ;;
-          -*)              die "unknown flag: $1" ;;
-          *)               die "unexpected argument: $1" ;;
+          --with-wasm)      with_wasm="true"; shift ;;
+          --with-nanocode)  with_nanocode="true"; shift ;;
+          --with-pebble)    with_pebble="true"; shift ;;
+          --with-opencode)  with_opencode="true"; shift ;;
+          -*)               die "unknown flag: $1" ;;
+          *)                die "unexpected argument: $1" ;;
         esac
       done
-      build_all "$with_wasm" "$with_nanocode" "$with_pebble"
+      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
       ;;
 
     build-darkirc)
@@ -6156,6 +6485,19 @@ main() {
         esac
       done
       build_pebble_worker "$no_cache"
+      ;;
+
+    build-opencode-worker)
+      require_root
+      local no_cache="false"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --no-cache) no_cache="true"; shift ;;
+          -*)         die "unknown flag: $1" ;;
+          *)          die "unexpected argument: $1" ;;
+        esac
+      done
+      build_opencode_worker "$no_cache"
       ;;
 
     build-vision-sidecar)
@@ -6268,6 +6610,25 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: configure-nanocode <name> [--model <model>] [--base-url <url>]"
       configure_nanocode "$name" "$nc_model" "$nc_base_url"
+      ;;
+
+    configure-opencode)
+      require_root
+      local name="" oc_model="" oc_base_url=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --model)    oc_model="$2"; shift 2 ;;
+          --base-url) oc_base_url="$2"; shift 2 ;;
+          -*)         die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: configure-opencode <name> [--model <model>] [--base-url <url>]"
+      configure_opencode "$name" "$oc_model" "$oc_base_url"
       ;;
 
     configure-ssh)

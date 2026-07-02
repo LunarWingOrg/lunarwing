@@ -71,6 +71,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 ### Worker Containers
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
+* **Opencode Worker** -- Persistent [opencode](https://opencode.ai) (sst/opencode) worker container speaking the `ironclaw-agent-v1` WebSocket protocol, with the `@opencode-ai/sdk`, optional Paseo MCP integration, git/ssh key support, and health endpoints (`opencode4lunarwing/`)
 * **Reworked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obsolete worker modes in favor of specialized worker container support (`ic/src/worker/`)
 * **Reworked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
@@ -80,7 +81,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
-* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry (v10 schema — dedicated per-tenant ports for workers, DarkIRC, and the LunarVision sidecar), and support for systemd, macOS (launchd), and OpenRC
+* Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry (v11 schema — dedicated per-tenant ports for workers, DarkIRC, and the LunarVision sidecar), and support for systemd, macOS (launchd), and OpenRC
 * TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
 * Support for embedded memory search models
 * Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
@@ -89,7 +90,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 
 ### Development & Testing
 * Automated test suite with trace-replay E2E testing (no real LLM required)
-* Worker test harness for all 4 worker types with Docker Compose isolation (`tests/`)
+* Worker test harness for all worker types with Docker Compose isolation (`tests/`)
 * REPLv2 server and client with better output formatting and subagent support, backout and approval support included
 * Support for external agentic coding tools via external worker mode
 * Cross-platform test harness (`lunarwing-xmpp-test-env.sh`) with launchd (macOS), systemd (Linux), and OpenRC support as well as a production-grade developer testing suite

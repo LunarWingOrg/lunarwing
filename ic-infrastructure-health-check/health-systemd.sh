@@ -179,7 +179,7 @@ if [ "$IS_MT" = "true" ] && command -v jq >/dev/null 2>&1; then
       # but not serving) is caught instead of reported healthy.
       uhealth=""
       case "$tunit" in
-        lunarwing-pg-*|lunarwing-nanocode-*|lunarwing-pebble-*)
+        lunarwing-pg-*|lunarwing-nanocode-*|lunarwing-opencode-*|lunarwing-pebble-*)
           uhealth=$(_tenant_ctr_health "$tuser" "$tuid" "${tunit%.service}")
           if [ "$uhealth" = "unhealthy" ] && [ "$uexit" -lt 2 ]; then
             ustatus="critical"; uexit=2; issues+=("$tunit ($tuser) container unhealthy")
