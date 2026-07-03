@@ -30,7 +30,7 @@
 25. [x] Retest kawarimi tenant migration (export/import full process)
 26. [x] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
 27. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
-28. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #27)
+28. [x] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #27)
 29. [x] make cool community button for readme. I have some unique idea about this — Added IRC chat badge (`#lunarwing` on Libera, links to web chat) in lunarpunk teal/black matching the existing zread badge aesthetic. Placed in both the top badge cluster and the Community section.
 30. [ ] Update release date in release notes prior to last two steps below
 31. [ ] Create new branch to correspond with releases
