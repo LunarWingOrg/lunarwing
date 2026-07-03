@@ -1,16 +1,16 @@
-# Release Notes for LunarWing v1.1.8 — Codename `Unknown`
+# Release Notes for LunarWing v1.1.8 — Codename `Tatara`
 
 **Release Date:** 2026-07-XX *(to be set before tag — see GOALS_1.1.8 #29)*
 
-> Codename *Unknown* — placeholder for the final codename. v1.1.8 is a **feature + polish** release with a brand-new **opencode external worker**. Additionally, 1.1.8 brings the full completion of the **Agent SSH tooling** (delivery Options 2 and 3 plus hardening), and the **hard-disable of DarkIRC** unless explicitly opted in, since it can be rather resource intensive on certain hardware. Beneath those headline changes, the release folds in a round of multi-tenant admin streamlining (SSH provisioning folded into `start-tenant`, persistent runtime detection, `add-tenant`/`add-tenants` enhancement flags), the removal of the default GitHub WASM tool and bundled MCP manifests from the fresh-install registry, routine-engine improvements carried over from v1.1.7, and more.
+> Codename *Tatara* (たたら/踏鞴/踏鞴場) — the traditional Japanese clay smelting furnace used to produce tamahagane, the high-purity steel forged into katana. The *tatara-ba* (踏鞴場, literally "treading-bellows place") is the whole ironworks — the forge where raw material is refined through fire into something sharp and enduring. The word *tatara* originally referred to the foot-operated bellows that workers pumped in shifts before expanding to mean the entire furnace operation. v1.1.8 is a **feature + polish** release with a brand-new **opencode external worker**. Additionally, 1.1.8 brings the full completion of the **Agent SSH tooling** (delivery Options 2 and 3 plus additional hardening). Beneath those headline changes, the release folds in a round of multi-tenant admin streamlining (SSH provisioning folded into `start-tenant`, persistent runtime detection, `add-tenant`/`add-tenants` enhancement flags), the removal of the default GitHub WASM tool and bundled MCP manifests from the fresh-install registry, routine-engine improvements carried over from v1.1.7, slight modifications to the way MT-Admin does things (further ideas have started to be developed for future releases), and more.
 
 ## Overview
 
-1. **The opencode external worker** (`opencode4lunarwing/`) — a persistent [opencode](https://opencode.ai) (sst/opencode) worker container speaking the `ironclaw-agent-v1` WebSocket protocol, with the `@opencode-ai/sdk`, optional Paseo MCP integration, git/ssh key support, and health endpoints. It is the third external worker container (joining nanocode and pebble). The daemon-side `ExternalWorkerManager` was already generic, so **no Rust changes were required** to add it — only the container, the port-registry v10→v11 migration (`opencode_wss` / `opencode_health`), and the full `lunarwing-mt-admin.sh` lifecycle (`build-opencode-worker`, `configure-opencode`, start/stop/doctor/status, `--with-opencode`, `--opencode-model`/`--opencode-base-url`). Opencode is mostly the same as the current Nanocode worker (since Nanocode was originally a fork of Opencode).
+1. **The opencode external worker** (`opencode4lunarwing/`) — a persistent [opencode](https://opencode.ai) (sst/opencode***) worker container speaking the `ironclaw-agent-v1` WebSocket protocol, with the `@opencode-ai/sdk`, optional Paseo MCP integration, git/ssh key support, and health endpoints. It is the third external worker container (joining nanocode and pebble). The daemon-side `ExternalWorkerManager` was already generic, so **no Rust changes were required** to add it — only the container, the port-registry v10→v11 migration (`opencode_wss` / `opencode_health`), and the full `lunarwing-mt-admin.sh` lifecycle (`build-opencode-worker`, `configure-opencode`, start/stop/doctor/status, `--with-opencode`, `--opencode-model`/`--opencode-base-url`). Opencode is mostly the same as the current Nanocode worker (since Nanocode was originally a fork of Opencode).
 
 2. **Agent SSH tooling — delivery Options 2 and 3.** v1.1.7 introduced the Agent SSH Harness (the per-tenant `ssh-agent` socket + encrypted secrets store). v1.1.8 completes the tool surface so agents and workers can actually *use* that harness: a **built-in in-process Rust SSH tool** (Option 2, phase 1) and a **`ssh_git` tool** for git-over-SSH through the harness agent (Option 2, phase 2), plus a **WASM `ssh` guest tool** (Option 3) with a host function bridge. The `mt-admin` SSH provisioning was also streamlined: `start-tenant` now uploads the staged key, bounces the daemon once so the agent loads it, and starts workers *after* the socket is real (see *SSH harness streamlining*).
 
-The fairly useless default GitHub WASM tool and the bundled MCP server manifests from the fresh-install registry catalog have been removed. The `add-tenant` command has some new flags such as `--llm-model` / `--gateway-host` / `--xmpp-allow-from`. A new method of persisting the detected container-runtime choice was added so `LUNARWING_CONTAINER_RUNTIME` only needs to be set once.
+The fairly useless default GitHub WASM tool and the bundled MCP server manifests from the fresh-install registry catalog have been removed. The `add-tenant` command has some new flags such as `--llm-model` / `--gateway-host` / `--xmpp-allow-from`. A new method of persisting the detected container-runtime choice was added so `LUNARWING_CONTAINER_RUNTIME` only needs to be set once. The new ssh-git tool, the external worker containers, and the upcoming dedicated Git tool are all suitable replacements for the dead Github extension, so there's nothing really lost here.
 
 This release **does not** add database schema changes.
 
@@ -21,8 +21,6 @@ This release **does not** add database schema changes.
 ### Opencode External Worker
 
 A persistent external worker container built on [opencode](https://opencode.ai) (the sst/opencode agentic coding tool), speaking the same `ironclaw-agent-v1` WebSocket protocol as the nanocode and pebble workers. It brings the external-worker count to three and is the first worker added since the External Worker Enhancement suite in v1.1.6.
-
-Full live validation log: `docs/proposals/DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md`.
 
 #### What landed (`commit 6fe0ec3e` + follow-ups)
 
@@ -120,6 +118,17 @@ Two fresh-install-registry changes:
 
 Both align with the privacy-first posture (no proprietary-platform defaults) and reduce the fresh-install surface. See GOALS_1.1.8 items #2 and #3.
 
+### Deprecation Notices
+
+- **OpenAI Codex** Deprecation of this external worker type was announced some time ago and is planned for removal in the upcoming release (1.1.9)
+- **Nanocode External Worker** This is the official announcement that the Nanocode external worker will also be deprecated at some point in favor of the new *Opencode External Worker*. Nanocode is now a fairly old fork of Opencode, originally made by 0xGingi, but it is no longer being maintained. It also seems redundant to have both Nanocode and Opencode as supported external workers.
+
+### Pebble and other external worker types going forward
+
+- **Pebble** will be supported for the forseeable future as an external worker type. It's an impressive project and offers a unique, lightweight, simple option for agents to use. Even if 0xGingi decides to stop maintaining it, we believe it's something that the LunarWing organization will be able to maintain.
+- **External Worker Mechanism** We've been looking into a more streamlined, easier way to add support for additional external worker types in the future. The current method is sloppy and not very flexible. The new method in the future will allow adding new external workers to be more stable, far easier for developers to integrate new external worker types, and will streamline the MT Admin Setup by seperating out external worker creation into dedicated command/function.
+- **New external worker types** We've been looking into all kinds of various coding agent software that have been coming out and some of the new tools are quite impressive. It is most likely though that nothing new will be added until the improved external worker mechanism mentioned above is added into LunarWing though, however.
+
 ### Multi-Tenant Admin Enhancements
 
 #### `add-tenant` / `add-tenants` flags (PR #114, `commit 59a7da24` + follow-ups)
@@ -206,7 +215,6 @@ The v1.1.7-era `ROUTINE_FALLBACK_RETRY_IMPROVEMENTS.md` proposal was folded into
 
 ### Resolved since v1.1.7
 
-- **No third external worker container — resolved.** The opencode external worker (`opencode4lunarwing/`) is now available alongside nanocode and pebble, with full `mt-admin` lifecycle and live-validated end-to-end on tenant `octest`.
 - **SSH harness provisioning chicken-and-egg — resolved (with a deferred root fix).** `start-tenant` now uploads the staged key, bounces the daemon once to load it, and starts workers after the socket is real. The deferred root fix (runtime `add_identity` so no restart is needed at all) remains open — see *New in v1.1.8*.
 - **DarkIRC services rendered despite the disabled flag — resolved.** DarkIRC is now hard-disabled: services are not created unless `--enable-darkirc` is set, and the binary is not built unless `build-darkirc` is invoked.
 - **Worker SSH agent socket denied by SELinux on Fedora — resolved, fleet-wide.** All worker launch sites now mount the SSH agent socket with a `:z` SELinux label.
@@ -220,7 +228,12 @@ The v1.1.7-era `ROUTINE_FALLBACK_RETRY_IMPROVEMENTS.md` proposal was folded into
 - **RSA key support is blocked.** Needs a `russh` upgrade (0.45 signs ssh-rsa with SHA-1). Ed25519 and ECDSA are supported.
 - **opencode telemetry log noise.** PostHog emits `ConnectionRefused` / `PostHogFetchNetworkError` lines under rootless network isolation. Cosmetic only; tasks complete normally.
 - **opencode workspace file ownership under rootless userns — deferred by design.** Workers run as non-root `USER` directives; files written to `/workspace` appear owned by a host subuid. The current `chmod 777` workaround is functional; the UID-pinning + `keep-id:uid=` hardening pass is deferred (touches all three worker Dockerfiles).
+- **`ssh_git` ref=null serialization.** When the agent omits the `ref` parameter, the tool-call serialization layer may convert the absent value to the literal string `"null"`, causing `git clone --branch null` to fail. The Rust tool code itself handles `None` correctly; the bug is in the serialization layer. Workaround: always pass `ref` explicitly (e.g. `ref: main`). See `docs/bugs/BUG-ssh-git-null-ref-serialization.md`.
+- **`ssh_git` clone fails on bare repos with mismatched HEAD.** Bare repos initialized with `git init --bare` default HEAD to `refs/heads/master`; if the only branch is `main`, cloning without `--branch` fails or produces an empty checkout. Workaround: normalize bare repos with `git symbolic-ref HEAD refs/heads/main`, or always pass `ref` explicitly. See `docs/bugs/BUG-ssh-git-bare-repo-head-mismatch.md`.
 - **Interactive onboarding walkthrough is unbuilt.** The guided setup mode for fresh operators remains a stated goal; runtime persistence (shipped this cycle) removes one of its biggest hazards, but the walkthrough itself is not yet built.
+- **Kawarimi import script does not support `--with-opencode`.** `import-tenant.sh` exposes `--with-nanocode` and `--with-pebble` flags for building external worker images during migration, but does not expose `--with-opencode`. The opencode worker image must be built separately via `build-opencode-worker` after the import completes. Additionally, the script does not accept `--with-wasm` as a flag (it hardcodes `--with-wasm` internally — always on), which can confuse operators expecting parity with `build-tenant`'s flag surface.
+- **opencode worker does not expand `~` in workspace paths.** When the agent creates files using `~/`-relative paths inside the opencode container, the shell does not expand the tilde — a literal `~` directory is created under `/workspace` instead. This affects any worker task that writes to `$HOME`-relative paths. The workspace root is `/workspace`, not `$HOME`, so `~` resolution doesn't apply. Discovered during live validation on tenant `orca` (Gentoo/OpenRC, rootless Podman). The same pattern likely affects nanocode and pebble workers since they share the workspace-mount model.
+- **Agent loop blocks on synchronous (`wait=true`) external worker jobs.** When the agent dispatches a job to an external worker (opencode, nanocode, pebble) via `create_job` with `wait=true`, the entire conversational turn blocks until the job completes. A multi-minute worker task (e.g. a 4.5-minute repo analysis) leaves the agent idle — it cannot perform other actions in parallel or service other conversations. The existing `wait=false` path exists but offers no way to poll for completion mid-conversation without losing the turn. The fix is an agent-loop / orchestrator-level change: an async job registry that allows the agent to fire off worker jobs and check back on them later in the same or subsequent turns, enabling parallel worker dispatch and non-blocking tool execution.
 
 ### Carried forward (unchanged in v1.1.8)
 
@@ -266,5 +279,8 @@ The v1.1.7-era `ROUTINE_FALLBACK_RETRY_IMPROVEMENTS.md` proposal was folded into
 - **Library unit tests:** `cargo test --all-features --lib` — **4087 passed, 0 failed, 4 ignored** (Fedora dev host, Rust 1.96.1 stable). Includes the three formerly-stale failures fixed this cycle (github→ssh registry sentinel; rebranded CLI snapshots accepted).
 - **Integration test binaries + doctests:** `cargo test --all-features --no-fail-fast` — all pass except the two known-deferred binaries (`e2e_advanced_traces`, `multi_tenant_system_prompt`), documented above under *Known Issues*.
 - **Opencode external worker:** live end-to-end validated on tenant `octest` (rootless Podman, systemd) — full `add-tenant` → `build-tenant --with-opencode` → `start-tenant` lifecycle, image sync via `podman save | load`, orchestrator WebSocket handshake, gateway dispatch (`POST /api/chat/send` → `create_job mode:"opencode"`), result returned via SSE. See `docs/proposals/DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md`.
+- **Extensive testing and documentation of new SSH tools** - See docs and rest of notes above.
 
 ---
+
+***The repo was transferred from the sst org to the anomalyco org — PR #6920 updated all internal references from sst/opencode to anomalyco/opencode. The sst/opencode URL redirects to anomalyco/opencode now. LunarWing's opencode worker is built on the same codebase — just under the old org name in our references. The upstream is now anomalyco/opencode (>179K stars, MIT licensed, led by thdxr/adamdotdevin).
