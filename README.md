@@ -11,7 +11,7 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 ## Why LunarWing
 
 - **Self-hostable end to end** — runs entirely on your own infrastructure, no third-party dependencies required.
-- **Privacy-first channels** — DarkIRC, XMPP/OMEMO, and WeeChat relay support out of the box. No Slack, Discord, or Telegram — by design.
+- **Privacy-first channels** — XMPP/OMEMO, WeeChat relay, and DarkIRC (opt-in as of v1.1.8). No Slack, Discord, or Telegram — by design.
 - **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
 - **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
 - **Self-healing infrastructure** — advanced healthchecks and automatic recovery for LunarWing, channel bridges, adapters, daemons, and even scheduled routines.
@@ -31,9 +31,11 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 
 [LunarWing](https://lunarwing.org/)
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/LunarWingOrg/lunarwing?utm_source=oss&utm_medium=github&utm_campaign=LunarWingOrg%2Flunarwing&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 [![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=for-the-badge&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/LunarWingOrg/lunarwing)
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/LunarWingOrg/lunarwing?utm_source=oss&utm_medium=github&utm_campaign=LunarWingOrg%2Flunarwing&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Chat on IRC](https://img.shields.io/badge/IRC-%23lunarwing-00b0aa?style=for-the-badge&labelColor=000000)](https://web.libera.chat/?channel=#lunarwing)
 
 ##### End of Introduction
 ---
@@ -60,7 +62,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **XMPP with OMEMO** -- WASM channel, bridge service, and core code changes for full encrypted chat (1:1 and group), with XEP-0363 HTTP file upload support
 * **Weechat** -- WASM channel allowing the agent to use Weechat as an IRC/DarkIRC/Signal/XMPP/Slack/Matrix/Rocketchat client
 * **Enjin** -- optional weechat plugin to enable E2E for normal IRC
-* **DarkIRC** -- DarkIRC WASM channel, p2p e2e protocol from DarkFi
+* **DarkIRC** -- DarkIRC WASM channel, p2p e2e protocol from DarkFi. **As of v1.1.8, DarkIRC is hard-disabled by default** — services are not created and the binary is not built unless explicitly opted in via `--enable-darkirc` (on `add-tenant`/`start-tenant`) and `build-darkirc`. Existing tenants are unaffected until their units are re-rendered.
 
 ### Tools & Notifications
 * **Gotify** -- WASM tool for agent-initiated push notifications
@@ -76,7 +78,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * **Reworked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 
 ### Infrastructure & Operations
-* **Agent SSH Harness** (v1.1.7) -- A centralized, per-tenant SSH bridge that lets worker containers authenticate to a host over SSH **without the private key ever touching disk** inside the container (or on the host outside the encrypted secrets store). Key material lives AES-256-GCM-encrypted in the secrets store and is served to workers over a per-tenant `ssh-agent` Unix socket; the agent signs challenges in memory. Host-key verification is fail-closed. Enabled by default for new tenants; configurable via `configure-ssh` and the `[ssh]` section of `config.toml`. Live-validated on systemd and OpenRC
+* **Agent SSH Harness** (introduced v1.1.7, tooling completed v1.1.8) -- A centralized, per-tenant SSH bridge that lets worker containers authenticate to a host over SSH **without the private key ever touching disk** inside the container (or on the host outside the encrypted secrets store). Key material lives AES-256-GCM-encrypted in the secrets store and is served to workers over a per-tenant `ssh-agent` Unix socket; the agent signs challenges in memory. Host-key verification is fail-closed. **v1.1.8 added the consuming tools:** a built-in in-process Rust `ssh` tool (delivery Option 2), a `ssh_git` tool for git-over-SSH through the harness, and a WASM `ssh` guest tool (delivery Option 3). `start-tenant` now uploads the staged key, bounces the daemon once to load it, and starts workers after the socket is real. Enabled by default for new tenants; configurable via `configure-ssh` and the `[ssh]` section of `config.toml`. Live-validated on systemd and OpenRC.
 * Specialized secret management wrapper scripts for both PostgreSQL and libSQL
 * Optional systemd, launchd, and OpenRC services for LunarWing, channel bridges, and healthcheck services
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
@@ -107,85 +109,80 @@ Our core team uses a self-hosted Vikunja kanban board to track tasks. Additional
 
 ## Instance Setup
 
-LunarWing supports a preseeded instance layout for fresh installs. This means that your agents can have any identity and any pre-seeded memories before you even interact with them for the first time if you wish. 
+There are two ways to run LunarWing: a **single local instance** (the fastest way to try it) and **multi-tenant production** (the way it is deployed for real, with per-tenant OS isolation). The multi-tenant path is the maintained, primary deployment model.
 
-## Examples: 
+### Quick local instance (onboarding wizard)
 
-### PostgreSQL
-
-```bash
-ic/scripts/setup-instance.sh \
-  --base-dir /srv/lunarwing \
-  --database postgres \
-  --database-url 'postgres://user:pass@db:5432/lunarwing' \
-  --llm-api-key unneeded \
-  --run-onboard
-```
-
-### libSQL
+The fastest way to a running agent is to build the release binary and let the onboarding wizard configure everything. On first run with no database configured, `lunarwing run` auto-triggers **quick onboarding**, which defaults every non-LLM choice (embedded libSQL at `~/.lunarwing/lunarwing.db`, keychain-or-env secrets) and only prompts for the inference provider and model.
 
 ```bash
-ic/scripts/setup-instance.sh \
-  --base-dir /srv/lunarwing-dev \
-  --database libsql \
-  --libsql-path /srv/lunarwing-dev/lunarwing.db \
-  --run-onboard
+cd ic
+cargo build --release
+./target/release/lunarwing run          # auto-triggers quick onboarding on first run
+# or explicitly:
+./target/release/lunarwing onboard --quick
 ```
 
-### With Preseeded Secrets
-
-```bash
-ic/scripts/setup-instance.sh \
-  --base-dir /srv/lunarwing-secure \
-  --database postgres \
-  --database-url 'postgres://user:pass@db:5432/lunarwing' \
-  --agent-name lunarwing \
-  --gateway-token 'replace-me-gateway-token' \
-  --secrets-master-key '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
-  --llm-api-key unneeded \
-  --run-onboard
-```
-
-Setup writes:
-- `$LUNARWING_BASE_DIR/config.toml`
-- `$LUNARWING_BASE_DIR/.env`
-- `$LUNARWING_BASE_DIR/workspace-template/*.md`
-
-Preferred env var: `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR` still accepted).
-
-### Setup Options
-
-| Flag | Effect |
-|------|--------|
-| `--agent-name` | Writes `[agent].name` to `config.toml` |
-| `--gateway-token` | Writes `GATEWAY_AUTH_TOKEN` to `.env` |
-| `--secrets-master-key` | Writes `SECRETS_MASTER_KEY` to `.env` (64-char hex) |
-
-`SECRETS_MASTER_KEY` enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this value automatically when it is missing. macOS prefers keychain storage by default.
-
-### Config Defaults
-
-```
-llm_backend = "openai_compatible"
-openai_compatible_base_url = "http://127.0.0.1:3002"
-selected_model = "tensorzero::function_name::lunarwing"
-agent.name = "lunarwing"
-```
-
-Seed files:
-- Runtime config template: [ic/deploy/config.toml](ic/deploy/config.toml)
-- Persona and memory seeds: [ic/deploy/workspace-template/](ic/deploy/workspace-template/)
-
-At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before generic built-in seeds, so files such as `SOUL.md`, `IDENTITY.md`, `BOOTSTRAP.md`, `TOOLS.md`, and `USER.md` can be customized per instance.
-
-## Running Locally
+If you want to run a local instance repeatedly without rebuilding, `ic/run.sh` wraps the release binary with sane dev defaults (`HTTP_PORT=9098`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `AGENT_NAME=lunarwing`, 2s start delay). It does **not** inject LLM URL or model defaults — those come from `config.toml` or env vars:
 
 ```bash
 cd ic
 LUNARWING_BASE_DIR=/path/to/instance ./run.sh
 ```
 
-`run.sh` defaults `AGENT_NAME=lunarwing` and passes through any explicit `AGENT_NAME`, `LUNARWING_BASE_DIR`, or legacy `IRONCLAW_BASE_DIR` you export. It does not inject LLM URL or model defaults, so fresh instances use `config.toml` unless you override with env vars.
+`run.sh` bridges `LUNARWING_BASE_DIR` to the legacy `IRONCLAW_BASE_DIR` for older code paths. macOS prefers keychain storage for secrets by default; on Linux, `lunarwing onboard --quick` generates and persists a `SECRETS_MASTER_KEY` automatically when one is missing.
+
+### Multi-tenant production (`lunarwing-mt-admin.sh`) — primary path
+
+This is how LunarWing is actually deployed. Each tenant is a real OS user with its own home, repo clone, release build, rootless Podman container store, per-tenant PostgreSQL, per-tenant secrets, a 10-port block, and per-tenant systemd (or OpenRC) service units. Full walkthrough: [docs/guides/MT-ADMIN-QUICKSTART.md](docs/guides/MT-ADMIN-QUICKSTART.md). Production reference: [docs/ops/MULTITENANCY-PRODUCTION.md](docs/ops/MULTITENANCY-PRODUCTION.md).
+
+Prerequisites: root/sudo, Docker **or** Podman, `jq`, `git`. No host Rust toolchain needed — `add-tenant` installs a per-tenant rustup toolchain with WASM targets.
+
+```bash
+# 1. Check dependencies
+sudo ic/scripts/lunarwing-mt-admin.sh doctor
+
+# 2. Provision a tenant (creates OS user, allocates ports, clones repo,
+#    writes env files, starts per-tenant PostgreSQL, renders service units)
+sudo ic/scripts/lunarwing-mt-admin.sh add-tenant ruffles --docker-group
+
+# 3. Build the tenant's release binary (+ WASM tools)
+sudo ic/scripts/lunarwing-mt-admin.sh build-tenant ruffles --with-wasm
+sudo ic/scripts/lunarwing-mt-admin.sh install-wasm ruffles
+
+# 4. Start it
+sudo ic/scripts/lunarwing-mt-admin.sh start-tenant ruffles
+
+# 5. Inspect
+sudo ic/scripts/lunarwing-mt-admin.sh status ruffles     # service + container health
+sudo ic/scripts/lunarwing-mt-admin.sh tokens ruffles     # gateway auth token, ports, etc.
+```
+
+The gateway binds `127.0.0.1` by default; for remote access, tunnel the HTTP port over SSH (e.g. `ssh -L 10000:127.0.0.1:10000 user@host`, then open `http://localhost:10000`). Batch provisioning is supported: `add-tenants "Ruffles,Miyuki,Sparkie" --docker-group` then `build-all --with-wasm` / `install-wasm-all`.
+
+Additional worker containers (nanocode, pebble, opencode) can be attached at build time with `--with-nanocode` / `--with-pebble` / `--with-opencode`. DarkIRC is opt-in (`--enable-darkirc` + `build-darkirc`). See the quickstart for the full flag reference.
+
+### Preseeding persona files before first run (optional)
+
+LunarWing supports a preseeded workspace layout: you can give an agent a custom identity and memories *before* its first interaction. At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before the generic built-in seeds, so the persona and memory files under [ic/deploy/workspace-template/](ic/deploy/workspace-template/) can be customized per instance: `SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, `USER.md`, `MEMORY.md`, `HEARTBEAT.md`.
+
+`ic/scripts/setup-instance.sh` is a legacy helper that writes `config.toml`, `.env`, and copies the workspace template, then invokes onboarding. It still functions, but is **not actively maintained** — the maintained paths are the onboarding wizard (single instance) and `lunarwing-mt-admin.sh` (multi-tenant). If you only need to preseed persona files, copy them into `$LUNARWING_BASE_DIR/workspace-template/` manually and run `lunarwing onboard --quick`.
+
+### Config defaults
+
+The shipped runtime config template is [ic/deploy/config.toml](ic/deploy/config.toml). Defaults: `llm_backend = "openai_compatible"`, `selected_model = "tensorzero::function_name::lunarwing"`, `agent.name = "lunarwing"`. The default `openai_compatible_base_url` in the template points at a TensorZero proxy; override it via env or `config.toml` for your environment.
+
+`SECRETS_MASTER_KEY` (a 64-char hex value) enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this automatically when missing; in multi-tenant setups `lunarwing-mt-admin.sh` provisions it per tenant.
+
+## Upgrading & Migration
+
+LunarWing ships dedicated tooling for two distinct operations, both driven by `ic/scripts/lunarwing-mt-admin.sh` and documented under `docs/ops/`:
+
+- **Same-host version upgrade** — bump an existing tenant from an older LunarWing release to a newer one in place. The general-purpose upgrader is `ic/scripts/upgrade-tenant-version.sh` (PostgreSQL, rootful Docker; supports `--target <version>` and a read-only dry-run by default, `--apply` to execute). A readiness preflight is available via `ic/scripts/upgrade-preflight.sh`. See `docs/ops/MT-LEGACY-UPGRADE-NOTES.md` for the full runbook and gates.
+
+- **Cross-host migration (Kawarimi)** — move a tenant to a different host while leaving the old one as a rollback standby. The flow is `export-tenant.sh <tenant>` on the source (produces a `0600` bundle: `pg_dump`, env manifests, OMEMO store + workspace) → `import-tenant.sh <bundle.tar>` on the target. **PostgreSQL-only**; libSQL tenants are refused. This is a cutover with per-tenant downtime. See `docs/guides/MIGRATE_IRONCLAW_TO_LUNARWING.md` and `docs/ops/MT-MACHINE-MIGRATION.md`.
+
+Both paths are **hardened but should be rehearsed** against a non-production tenant before being trusted on live data. Always back up first (`mt-admin.sh backup-tenant <name>`).
 
 ## Testing
 
@@ -212,7 +209,7 @@ pytest scenarios/
 
 ### Worker Test Harness
 
-Matrix test suite for all 4 worker types, including external workers. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
+Matrix test suite for all external worker types (nanocode, pebble, opencode), plus the built-in and sandbox workers. Validates health endpoints, WebSocket protocol, error handling, and resource cleanup.
 
 ```bash
 cd tests
@@ -325,7 +322,7 @@ Full documentation index: [docs/README.md](docs/README.md)
 - **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
 - **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
 - **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
-- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.7 (in progress: see [RELEASE-v1.1.7.md](RELEASE-v1.1.7.md))
+- **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.8 (latest: [RELEASE-v1.1.8.md](docs/releases/RELEASE-v1.1.8.md))
 - **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
 - **Active proposals:** [docs/proposals/](docs/proposals/)
 - **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
@@ -334,5 +331,7 @@ Full documentation index: [docs/README.md](docs/README.md)
 ## Community
 
 ### Interested in development or otherwise general discussion of LunarWing?
+
+[![Chat on IRC](https://img.shields.io/badge/IRC-%23lunarwing-00b0aa?style=for-the-badge&labelColor=000000)](https://web.libera.chat/?channel=#lunarwing)
 
 #### See: COMMUNITY.md for more information

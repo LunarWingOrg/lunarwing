@@ -83,12 +83,16 @@ mod tests {
     #[test]
     fn test_load_embedded_parses() {
         let manifests = load_embedded();
-        // Should have at least the manifests from registry/ if built from the repo
-        // (empty is also valid for minimal builds without registry/)
+        // The catalog should parse without error. It is either empty (a minimal
+        // build without the registry/ source directory) or populated with real
+        // entries. The github tool was removed from the default registry in
+        // v1.1.8 (GOALS #2); use `tools/ssh` — added the same cycle via the
+        // Agent SSH Harness — as the populated-catalog sentinel.
         assert!(
-            manifests.is_empty() || manifests.contains_key("tools/github"),
-            "Expected either empty catalog or github tool, got {} entries",
-            manifests.len()
+            manifests.is_empty() || manifests.contains_key("tools/ssh"),
+            "Expected either empty catalog or ssh tool, got {} entries: {:?}",
+            manifests.len(),
+            manifests.keys().collect::<Vec<_>>()
         );
     }
 
