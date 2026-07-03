@@ -2,28 +2,7 @@
 
 Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems.
 
-## Notes about the roadmap
-
-* The roadmap does not normally track items and goals related to the upcoming release. The roadmap contains a list which begins with the release after the next one.
-* i.e. If the current stable release is 1.1.7 and the upcoming release is 1.1.8, the roadmap would begin with 1.1.9
-
-### Near-term (prior to next significant release)
-
-| Feature | Target |
-|---------|--------|
-| Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) | v1.1.9 |
-| Remove deprecated Codex external worker from project | v1.1.9 |
-| Remove support for all (or at least, some of) the other random unsupported LLM providers | v1.1.9 |
-| Remove rest of non-LunarWing third party extensions/tools/skills from default installation | v1.1.9 |
-| Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new) | v1.1.9 |
-| Per-tenant WeeChat health-glob gate (fix the flap / `render-units` footgun) | v1.1.9 |
-| Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup | v1.1.9 |
-| Related to the above, deprecate or update legacy setup scripts | v1.1.9 |
-| Remove/archive stale documentation | v1.1.9 |
-| Update outdated documentation | v1.1.9 |
-| Further re-organization of repository documentation | v1.1.9 |
-
-### Longer-term (including next significant release and beyond)
+**TODO: REOrg with VB**
 
 | Feature | Target |
 |---------|--------|
