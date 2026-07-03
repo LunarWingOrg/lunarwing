@@ -6,6 +6,9 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
+| Drop legacy `ironclaw-agent-v1` subprotocol offer from the daemon (delete the `SUBPROTOCOL_LEGACY` offer in `ic/src/orchestrator/external_worker.rs`) and `git rm` the 1.1.9-only repo-root compat symlinks `ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw` (deployed tenants must have re-run mt-admin unit regen by then) — deferred from 1.1.9 item #2 | v1.2.0 |
+| Drop legacy `ironclaw-agent-v1` acceptance from external workers (pebble/lunarcode/opencode `LEGACY_SUBPROTOCOL` constants + negotiation fallback), one release after the daemon stops offering it | v1.2.1 |
+| Org/registry decisions deferred from 1.1.9 item #2: re-host registry WASM artifacts or make them source-build-only (nearai/ironclaw release URLs in `ic/registry/*.json` + `installer.rs` allowlist), replace `nearaidev/*` Docker Hub images in `docker.yml`/`rebuild-release-image.yml`, fix or delete the `release-plz.yml` `repository_owner == 'nearai'` guard, keep-or-drop the GCP deploy path (`ic/deploy/`) — fits alongside the Forgejo/CI migration | v1.2.1 |
 | LunarWing UI performance overhaul | v1.2.0 |
 | Several large proposals to ship | v1.2.0 |
 | Engine crate Refactor | v1.2.0 |
