@@ -13,7 +13,6 @@
 6. [ ] Remove support for all (or at least, some of) the other random unsupported LLM providers
 7. [ ] Remove rest of non-LunarWing third party extensions/tools/skills from default installation
 8. [ ] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)
-9. [ ] Per-tenant WeeChat health-glob gate (fix the flap /`render-units` footgun)
 10. [ ] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup
 11. [ ] Related to the above, deprecate or update legacy setup scripts
 12. [ ] Remove/archive stale documentation
