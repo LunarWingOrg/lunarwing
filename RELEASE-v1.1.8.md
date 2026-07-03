@@ -1,6 +1,6 @@
 # Release Notes for LunarWing v1.1.8 — Codename `Tatara`
 
-**Release Date:** 2026-07-XX *(to be set before tag — see GOALS_1.1.8 #29)*
+**Release Date:** 2026-07-03
 
 > Codename *Tatara* (たたら/踏鞴/踏鞴場) — the traditional Japanese clay smelting furnace used to produce tamahagane, the high-purity steel forged into katana. The *tatara-ba* (踏鞴場, literally "treading-bellows place") is the whole ironworks — the forge where raw material is refined through fire into something sharp and enduring. The word *tatara* originally referred to the foot-operated bellows that workers pumped in shifts before expanding to mean the entire furnace operation. v1.1.8 is a **feature + polish** release with a brand-new **opencode external worker**. Additionally, 1.1.8 brings the full completion of the **Agent SSH tooling** (delivery Options 2 and 3 plus additional hardening). Beneath those headline changes, the release folds in a round of multi-tenant admin streamlining (SSH provisioning folded into `start-tenant`, persistent runtime detection, `add-tenant`/`add-tenants` enhancement flags), the removal of the default GitHub WASM tool and bundled MCP manifests from the fresh-install registry, routine-engine improvements carried over from v1.1.7, slight modifications to the way MT-Admin does things (further ideas have started to be developed for future releases), and more.
 
