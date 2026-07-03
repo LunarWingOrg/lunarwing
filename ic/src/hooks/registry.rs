@@ -326,6 +326,7 @@ mod tests {
             user_id: "user-1".into(),
             channel: "test".into(),
             content: "hello".into(),
+            attachments: Vec::new(),
             thread_id: None,
         }
     }

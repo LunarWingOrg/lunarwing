@@ -1281,6 +1281,11 @@ impl Agent {
                 user_id: message.user_id.clone(),
                 channel: message.channel.clone(),
                 content: content.clone(),
+                attachments: message
+                    .attachments
+                    .iter()
+                    .map(crate::hooks::AttachmentSummary::from_incoming)
+                    .collect(),
                 thread_id: message.thread_id.clone(),
             };
             match self.hooks().run(&event).await {

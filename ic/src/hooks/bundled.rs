@@ -138,11 +138,21 @@ pub async fn register_bundled_hooks(registry: &Arc<HookRegistry>) -> HookRegistr
         .register_with_priority(Arc::new(AuditLogHook), 25)
         .await;
 
-    HookRegistrationSummary {
+    let mut summary = HookRegistrationSummary {
         hooks: 1,
         outbound_webhooks: 0,
         errors: 0,
+    };
+
+    // LunarVision inbound hook — auto-registers if VISION_SERVICE_URL is set.
+    if let Some(hook) = crate::hooks::lunarvision::LunarVisionHook::from_env() {
+        registry
+            .register_with_priority(Arc::new(hook), 50)
+            .await;
+        summary.hooks += 1;
     }
+
+    summary
 }
 
 /// Register all hooks from a declarative bundle.
@@ -905,6 +915,7 @@ mod tests {
             user_id: "user-1".to_string(),
             channel: "test".to_string(),
             content: content.to_string(),
+            attachments: Vec::new(),
             thread_id: None,
         }
     }
