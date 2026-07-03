@@ -1,5 +1,7 @@
 # PRE-RELEASE CHECKLIST for 1.1.9 Codename `Kiyome きよめ`
 **Open TODOs (1.1.9) — To be done before release**
+https://github.com/LunarWingOrg/lunarwing/issues/140
+
 
 ### Helps to do items in order (generally)
 
