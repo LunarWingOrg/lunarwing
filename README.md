@@ -15,7 +15,7 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 - **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
 - **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
 - **Self-healing infrastructure** — advanced healthchecks and automatic recovery for LunarWing, channel bridges, adapters, daemons, and even scheduled routines.
-- **TensorZero integration** — HTTP proxy with optimized tool_choice routing for local and remote model providers.
+- **TensorZero integration** — Integrates with Tensorzero as well as offering an additional, optional HTTP proxy with optimized tool_choice routing for local and remote model providers.
 - **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 
 <p align="center">
