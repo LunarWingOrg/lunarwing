@@ -4,7 +4,7 @@
 ### Helps to do items in order (generally)
 
 1. [ ] Finalize goals
-2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing left for item #3; nearai provider refs for item #4; experimental TZ proxy files for
+2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing left for item #3; nearai provider refs for item #4; experimental TZ proxy files for -  Ensure all is documented
 3. [ ] test renames-test branch changes with fresh tenant on systemd machine
 4. [ ] test renames-test branch changes with fresh tenant on openrc machine
 5. [ ] test renames-test branch changes with 1.1.7/1.1.8 tenant -> upgrade on systemd machine
@@ -28,7 +28,7 @@
 23. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3/v4
 24. [ ] Run automated testing scripts if still relevant
 25. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-26. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests)
+26. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests, i.e. a 1.1.8 or 1.1.7 tenant or even lower version kawarimi'd to 1.1.9 pre-release build)
 27. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
 28. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9 explaining all changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`
 29. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #28)
