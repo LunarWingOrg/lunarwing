@@ -4,11 +4,11 @@
 ### Helps to do items in order (generally)
 
 1. [ ] Finalize goals
-2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing left for item #3; nearai provider refs for item #4; experimental TZ proxy files for -  Ensure all is documented
-3. [ ] test renames-test branch changes with fresh tenant on systemd machine
-4. [ ] test renames-test branch changes with fresh tenant on openrc machine
-5. [ ] test renames-test branch changes with 1.1.7/1.1.8 tenant -> upgrade on systemd machine
-6. [ ] test renames-test branch changes with 1.1.7/1.1.8 tenant -> upgrade on openrc machine
+2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing (item#7); nearai provider refs for item #8 or item #10; experimental TZ proxy (#10) - Ensure all is documented
+3. [ ] test 1.1.9-renames-test branch changes with fresh tenant on systemd machine
+4. [ ] test 1.1.9-renames-test branch changes with fresh tenant on openrc machine
+5. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on systemd machine
+6. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on openrc machine
 7. [ ] Remove deprecated Codex external worker from project
 8. [ ] Remove support for all (or at least, some of) the other random unsupported LLM providers
 9. [ ] Remove rest of non-LunarWing third party extensions/tools/skills from default installation
