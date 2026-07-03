@@ -23,17 +23,18 @@
 18. [x] Update ROADMAP file to reflect accuracy
 19. [x] Run all cargo tests — full `--all-features --no-fail-fast` run: lib 4087 passed/0 failed/4 ignored; all integration binaries + doctests pass except the 6 known-deferred (4 `multi_tenant_system_prompt` architectural, 2 `e2e_advanced_traces` bootstrap-greeting). See `docs/proposals/CARGO_TESTS_FIX.md`.
 20. [x] Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure — Fixed the 3 stale `lib` failures this cycle: `registry::embedded::tests::test_load_embedded_parses` (github→ssh sentinel), `cli::tests::test_help_output` + `test_long_help_output` (accepted rebranded insta snapshots). Lib re-run: 4087 passed/0 failed. The 6 remaining failures are documented known-deferred (architectural / harness), not regressions.
-21. [ ] Retest kawarimi tenant migration
-22. [ ] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
-23. [ ] Run automated testing scripts if still relevant
-24. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-25. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
-26. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
-27. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #26)
-28. [x] make cool community button for readme. I have some unique idea about this (see #17) — Added IRC chat badge (`#lunarwing` on Libera, links to web chat) in lunarpunk teal/black matching the existing zread badge aesthetic. Placed in both the top badge cluster and the Community section.
-29. [ ] Update release date in release notes prior to last two steps below
-30. [ ] Create new branch to correspond with releases
-31. [ ] Create GH release tag and add release notes to it like other releases already have
+21. [x] Retest expo
+22. [x] Perform successful upgrade in place route with legacy upgrade harness. Document legacy upgrade harness success and plan unified upgrade harness v3
+23. [x] Run automated testing scripts if still relevant
+24. [x] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
+25. [ ] Retest kawarimi tenant migration (export/import full process)
+26. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
+27. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.8 explaining all changes since v1.1.7 as well as revising and including an ACCURATE VERSION OF `known issues list`
+28. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated (only after #27)
+29. [x] make cool community button for readme. I have some unique idea about this — Added IRC chat badge (`#lunarwing` on Libera, links to web chat) in lunarpunk teal/black matching the existing zread badge aesthetic. Placed in both the top badge cluster and the Community section.
+30. [ ] Update release date in release notes prior to last two steps below
+31. [ ] Create new branch to correspond with releases
+32. [ ] Create GH release tag and add release notes to it like other releases already have
 
 ---
 
