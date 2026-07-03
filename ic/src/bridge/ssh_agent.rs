@@ -21,6 +21,12 @@ pub struct SshAgent {
     keys: Arc<Mutex<HashMap<String, Arc<KeyPair>>>>,
 }
 
+impl Default for SshAgent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SshAgent {
     pub fn new() -> Self {
         Self {
@@ -53,10 +59,7 @@ impl SshAgent {
 
 pub(crate) fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
     let key_str = String::from_utf8_lossy(&creds.key_data).to_string();
-    let passphrase = creds
-        .passphrase
-        .as_ref()
-        .map(|s| s.expose_secret().as_ref());
+    let passphrase = creds.passphrase.as_ref().map(|s| s.expose_secret());
 
     // Use the internal format decoder - it's public in the crate root
     russh_keys::decode_secret_key(&key_str, passphrase)

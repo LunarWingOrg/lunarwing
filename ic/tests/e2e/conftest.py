@@ -264,10 +264,10 @@ async def lunarwing_server(
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": home_dir,
         "LUNARWING_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
-        "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
+        "LUNARWING_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
         "RUST_LOG": "lunarwing=info",
         "RUST_BACKTRACE": "1",
-        "IRONCLAW_OWNER_ID": OWNER_SCOPE_ID,
+        "LUNARWING_OWNER_ID": OWNER_SCOPE_ID,
         "GATEWAY_ENABLED": "true",
         "GATEWAY_HOST": "127.0.0.1",
         "GATEWAY_PORT": str(gateway_port),
@@ -295,8 +295,8 @@ async def lunarwing_server(
         "ONBOARD_COMPLETED": "true",
         # Force gateway OAuth callback mode (non-loopback URL) and point
         # token exchange at mock_llm.py so OAuth tests work without Google.
-        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
-        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+        "LUNARWING_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+        "LUNARWING_OAUTH_EXCHANGE_URL": mock_llm_server,
     }
     _forward_coverage_env(env)
     proc = await asyncio.create_subprocess_exec(
@@ -365,6 +365,8 @@ async def hosted_oauth_refresh_server(
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": home_dir,
             "LUNARWING_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
+            # Intentionally uses the legacy IRONCLAW_* env names to keep
+            # alias regression coverage (the daemon must accept both).
             "IRONCLAW_BASE_DIR": os.path.join(home_dir, ".lunarwing"),
             "RUST_LOG": "lunarwing=info",
             "RUST_BACKTRACE": "1",
@@ -497,8 +499,8 @@ async def http_channel_server_without_secret(
         "ONBOARD_COMPLETED": "true",
         # Force gateway OAuth callback mode (non-loopback URL) and point
         # token exchange at mock_llm.py so OAuth tests work without Google.
-        "IRONCLAW_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
-        "IRONCLAW_OAUTH_EXCHANGE_URL": mock_llm_server,
+        "LUNARWING_OAUTH_CALLBACK_URL": "https://oauth.test.example/oauth/callback",
+        "LUNARWING_OAUTH_EXCHANGE_URL": mock_llm_server,
     }
     _forward_coverage_env(env)
     proc = await asyncio.create_subprocess_exec(

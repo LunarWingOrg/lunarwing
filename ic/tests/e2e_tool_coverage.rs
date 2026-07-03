@@ -14,7 +14,7 @@ mod tests {
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;
 
-    const TEST_DIR_BASE: &str = "/tmp/ironclaw_coverage_test";
+    const TEST_DIR_BASE: &str = "/tmp/lunarwing_coverage_test";
 
     fn setup_test_dir(suffix: &str) -> String {
         let dir = format!("{TEST_DIR_BASE}_{suffix}");

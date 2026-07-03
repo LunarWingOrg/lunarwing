@@ -7,7 +7,8 @@
 # never blocks, so it can't get in your way.
 #
 # To make it block (opt-in, power users only), set:
-#   IRONCLAW_STRICT_PREPUSH=1
+#   LUNARWING_STRICT_PREPUSH=1
+# (IRONCLAW_STRICT_PREPUSH is still honored as a legacy alias)
 # which runs the CI quality gate (fmt + clippy correctness + lib tests) and
 # blocks on failure. Requires a working `cargo` on PATH.
 #
@@ -23,12 +24,15 @@ cd "$REPO_ROOT"
 # git pre-push feeds refs on stdin; consume them so git doesn't warn.
 cat >/dev/null 2>&1 || true
 
-if [ "${IRONCLAW_STRICT_PREPUSH:-0}" != "1" ]; then
+# LUNARWING_STRICT_PREPUSH is primary; IRONCLAW_STRICT_PREPUSH is a legacy alias.
+STRICT_PREPUSH="${LUNARWING_STRICT_PREPUSH:-${IRONCLAW_STRICT_PREPUSH:-0}}"
+
+if [ "$STRICT_PREPUSH" != "1" ]; then
   # Non-blocking reminder only.
   cat <<'REMINDER' >&2
 pre-push: reminder (non-blocking) — before this push hits CI, make sure you've run:
     cd ic && cargo fmt --all -- --check && cargo clippy --all -- -D warnings && cargo test --lib
-  (or set IRONCLAW_STRICT_PREPUSH=1 to enforce the quality gate locally)
+  (or set LUNARWING_STRICT_PREPUSH=1 to enforce the quality gate locally)
 REMINDER
   exit 0
 fi

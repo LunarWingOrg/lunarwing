@@ -2,7 +2,7 @@
 //!
 //! Models with native thinking support produce structured chain-of-thought
 //! via `reasoning_content` fields or built-in `<think>` tags. Injecting
-//! IronClaw's own `<think>/<final>` format instructions into the system
+//! LunarWing's own `<think>/<final>` format instructions into the system
 //! prompt collides with these models' native behavior, causing:
 //! - Thinking-only responses with no visible content
 //! - Double-wrapped thinking tags that confuse response cleaning
@@ -55,7 +55,7 @@ const NATIVE_THINKING_PATTERNS: &[&str] = &[
 
 /// Check if a model name indicates native thinking/reasoning support.
 ///
-/// Models that return `true` should NOT have IronClaw's `<think>/<final>`
+/// Models that return `true` should NOT have LunarWing's `<think>/<final>`
 /// format instructions injected into their system prompt, as this collides
 /// with their built-in reasoning behavior.
 ///

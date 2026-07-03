@@ -23,7 +23,7 @@ use crate::sandbox::connect_docker;
 pub enum JobMode {
     /// Standard LunarWing worker with proxied LLM calls.
     Worker,
-    /// Delegates to a named external worker (persistent container speaking ironclaw-agent-v1).
+    /// Delegates to a named external worker (persistent container speaking lunarwing-agent-v1).
     External(String),
 }
 
@@ -147,7 +147,7 @@ pub struct CompletionResult {
 /// There is a time-of-check/time-of-use gap between `canonicalize()` here
 /// and the actual Docker `binds.push()` in the caller. In a multi-tenant
 /// system a malicious actor could swap a symlink after validation. This is
-/// acceptable in IronClaw's single-tenant design where the user controls
+/// acceptable in LunarWing's single-tenant design where the user controls
 /// the filesystem.
 fn validate_bind_mount_path(
     dir: &std::path::Path,
@@ -345,7 +345,13 @@ impl ContainerJobManager {
             orchestrator_host, self.config.orchestrator_port
         );
 
+        // LUNARWING_* is the primary contract; the IRONCLAW_* duplicates are
+        // legacy aliases kept for one release so containers built from
+        // pre-rename worker images still start.
         let mut env_vec = vec![
+            format!("LUNARWING_WORKER_TOKEN={}", token),
+            format!("LUNARWING_JOB_ID={}", job_id),
+            format!("LUNARWING_ORCHESTRATOR_URL={}", orchestrator_url),
             format!("IRONCLAW_WORKER_TOKEN={}", token),
             format!("IRONCLAW_JOB_ID={}", job_id),
             format!("IRONCLAW_ORCHESTRATOR_URL={}", orchestrator_url),
@@ -356,6 +362,8 @@ impl ContainerJobManager {
         if let Some(ref dir) = project_dir {
             let canonical = validate_bind_mount_path(dir, job_id)?;
             binds.push(format!("{}:/workspace:rw", canonical.display()));
+            env_vec.push("LUNARWING_WORKSPACE=/workspace".to_string());
+            // Legacy alias for pre-rename worker images.
             env_vec.push("IRONCLAW_WORKSPACE=/workspace".to_string());
         }
 

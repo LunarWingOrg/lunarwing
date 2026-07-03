@@ -19,7 +19,7 @@ So the editable files are:
 | `opencode4lunarwing/entrypoint.sh` | Container startup (config override logic, SSH, opencode server launch) | Override behavior, env var handling |
 | `opencode4lunarwing/scripts/*.ts` | The bridge + executor + runtime (the WebSocket protocol) | Worker behavior, task execution, honest-result logic |
 | `opencode4lunarwing/health_server.py` | The `/health` + `/ready` endpoints | Health reporting |
-| `opencode4lunarwing/agent_comm_protocol.json` | The `ironclaw-agent-v1` message schema | Protocol shape |
+| `opencode4lunarwing/agent_comm_protocol.json` | The `lunarwing-agent-v1` message schema | Protocol shape |
 
 **Workflow to change any of them:**
 

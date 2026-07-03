@@ -236,11 +236,11 @@ pub enum Command {
     )]
     Service(ServiceCommand),
 
-    /// Connect to a running Ironclaw daemon via REPL
+    /// Connect to a running LunarWing daemon via REPL
     #[cfg(unix)]
     #[command(
         about = "Connect to running daemon via REPL",
-        long_about = "Connect to a running Ironclaw service via Unix socket REPL.\n\
+        long_about = "Connect to a running LunarWing service via Unix socket REPL.\n\
                       The daemon must already be running (e.g. via systemd).\n\
                       Examples:\n  lunarwing repl\n  lunarwing repl --socket /run/user/1000/lunarwing.sock"
     )]

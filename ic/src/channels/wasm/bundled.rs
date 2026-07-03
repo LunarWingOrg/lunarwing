@@ -32,10 +32,13 @@ pub fn bundled_channel_names() -> Vec<&'static str> {
 /// Resolve the channels source directory.
 ///
 /// Checks (in order):
-/// 1. `IRONCLAW_CHANNELS_SRC` env var
+/// 1. `LUNARWING_CHANNELS_SRC` env var (legacy alias `IRONCLAW_CHANNELS_SRC`)
 /// 2. `<CARGO_MANIFEST_DIR>/channels-src/` (dev builds)
 fn channels_src_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("IRONCLAW_CHANNELS_SRC") {
+    // Legacy alias `IRONCLAW_CHANNELS_SRC` is still accepted as a fallback.
+    if let Ok(dir) =
+        std::env::var("LUNARWING_CHANNELS_SRC").or_else(|_| std::env::var("IRONCLAW_CHANNELS_SRC"))
+    {
         return PathBuf::from(dir);
     }
     PathBuf::from(CARGO_MANIFEST_DIR).join("channels-src")

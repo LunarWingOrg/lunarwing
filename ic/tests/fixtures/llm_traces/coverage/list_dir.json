@@ -15,7 +15,7 @@
             "id": "call_list_dir",
             "name": "list_dir",
             "arguments": {
-              "path": "/tmp/ironclaw_coverage_test_list_dir",
+              "path": "/tmp/lunarwing_coverage_test_list_dir",
               "recursive": false
             }
           }

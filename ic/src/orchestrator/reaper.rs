@@ -1,6 +1,6 @@
 //! Orphaned Docker container cleanup.
 //!
-//! The SandboxReaper periodically scans Docker for IronClaw-labeled containers
+//! The SandboxReaper periodically scans Docker for LunarWing-labeled containers
 //! and cleans up those whose corresponding jobs are not active.
 //!
 //! **Problem:** If the agent process crashes between container creation and cleanup,
@@ -88,7 +88,7 @@ impl SandboxReaper {
     }
 
     async fn scan_and_reap(&self) {
-        let containers = match self.list_ironclaw_containers().await {
+        let containers = match self.list_lunarwing_containers().await {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!(error = %e, "Reaper: failed to list Docker containers");
@@ -145,10 +145,10 @@ impl SandboxReaper {
         }
     }
 
-    /// List all IronClaw-managed containers from Docker.
+    /// List all LunarWing-managed containers from Docker.
     ///
     /// Returns tuples of (container_id, job_id, created_at).
-    async fn list_ironclaw_containers(
+    async fn list_lunarwing_containers(
         &self,
     ) -> Result<Vec<(String, Uuid, DateTime<Utc>)>, bollard::errors::Error> {
         use bollard::container::ListContainersOptions;
@@ -663,24 +663,24 @@ mod tests {
     // ================================================================
     //
     // These tests verify the reaper works with actual Docker containers.
-    // They require Docker to be running and the IRONCLAW_E2E_DOCKER_TESTS
+    // They require Docker to be running and the LUNARWING_E2E_DOCKER_TESTS
     // environment variable to be set (to avoid running them in CI by default).
     //
-    // Run with: IRONCLAW_E2E_DOCKER_TESTS=1 cargo test orchestrator::reaper::e2e_tests --lib -- --nocapture
+    // Run with: LUNARWING_E2E_DOCKER_TESTS=1 cargo test orchestrator::reaper::e2e_tests --lib -- --nocapture
 
     #[cfg(all(test, not(target_env = "msvc")))]
     mod e2e_tests {
         use super::*;
 
         fn should_run_e2e() -> bool {
-            std::env::var("IRONCLAW_E2E_DOCKER_TESTS").is_ok()
+            std::env::var("LUNARWING_E2E_DOCKER_TESTS").is_ok()
         }
 
-        /// Test that reaper can list containers with IronClaw labels
+        /// Test that reaper can list containers with LunarWing labels
         #[tokio::test]
-        async fn e2e_reaper_lists_ironclaw_containers() {
+        async fn e2e_reaper_lists_lunarwing_containers() {
             if !should_run_e2e() {
-                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+                eprintln!("Skipping e2e test (set LUNARWING_E2E_DOCKER_TESTS=1 to run)");
                 return;
             }
 
@@ -693,7 +693,7 @@ mod tests {
                 }
             };
 
-            // Create a test container with IronClaw labels
+            // Create a test container with LunarWing labels
             let job_id = Uuid::new_v4();
             let test_name = format!("lunarwing-reaper-test-{}", &job_id.to_string()[..8]);
 
@@ -766,7 +766,7 @@ mod tests {
         #[tokio::test]
         async fn e2e_reaper_removes_orphaned_containers() {
             if !should_run_e2e() {
-                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+                eprintln!("Skipping e2e test (set LUNARWING_E2E_DOCKER_TESTS=1 to run)");
                 return;
             }
 
@@ -866,7 +866,7 @@ mod tests {
         #[tokio::test]
         async fn e2e_reaper_respects_age_threshold() {
             if !should_run_e2e() {
-                eprintln!("Skipping e2e test (set IRONCLAW_E2E_DOCKER_TESTS=1 to run)");
+                eprintln!("Skipping e2e test (set LUNARWING_E2E_DOCKER_TESTS=1 to run)");
                 return;
             }
 

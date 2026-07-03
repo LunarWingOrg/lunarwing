@@ -11,7 +11,7 @@ body:
       options:
         - hosted-staging (crab shack)
         - hosted-production
-        - local (cloned ironclaw)
+        - local (cloned lunarwing)
         - railway-staging
     validations:
       required: true

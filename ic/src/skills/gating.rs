@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn test_missing_binary_fails() {
         let req = GatingRequirements {
-            bins: vec!["__ironclaw_nonexistent_binary_xyz__".to_string()],
+            bins: vec!["__lunarwing_nonexistent_binary_xyz__".to_string()],
             ..Default::default()
         };
         let result = check_requirements_sync(&req);
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn test_missing_env_var_fails() {
         let req = GatingRequirements {
-            env: vec!["__IRONCLAW_TEST_NONEXISTENT_VAR__".to_string()],
+            env: vec!["__LUNARWING_TEST_NONEXISTENT_VAR__".to_string()],
             ..Default::default()
         };
         let result = check_requirements_sync(&req);
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_missing_config_fails() {
         let req = GatingRequirements {
-            config: vec!["/nonexistent/path/ironclaw_test.conf".to_string()],
+            config: vec!["/nonexistent/path/lunarwing_test.conf".to_string()],
             ..Default::default()
         };
         let result = check_requirements_sync(&req);

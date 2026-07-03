@@ -73,7 +73,7 @@ pub struct IncomingMessage {
     /// configured owner is speaking; otherwise it can be a guest/sender-scoped
     /// identifier to preserve isolation.
     pub user_id: String,
-    /// Stable instance owner scope for this IronClaw deployment.
+    /// Stable instance owner scope for this LunarWing deployment.
     pub owner_id: String,
     /// Channel-specific sender/actor identifier.
     pub sender_id: String,

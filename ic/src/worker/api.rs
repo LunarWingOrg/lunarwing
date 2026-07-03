@@ -1,6 +1,7 @@
 //! HTTP client for worker-to-orchestrator communication.
 //!
-//! Every request includes a bearer token from `IRONCLAW_WORKER_TOKEN` env var.
+//! Every request includes a bearer token from the `LUNARWING_WORKER_TOKEN` env var
+//! (legacy alias `IRONCLAW_WORKER_TOKEN` still accepted).
 //! The orchestrator validates this token is scoped to the correct job.
 
 use std::time::Duration;
@@ -122,10 +123,12 @@ pub struct CredentialResponse {
 impl WorkerHttpClient {
     /// Create a new client from environment.
     ///
-    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment.
+    /// Reads `LUNARWING_WORKER_TOKEN` from the environment (legacy alias
+    /// `IRONCLAW_WORKER_TOKEN` still accepted).
     pub fn from_env(orchestrator_url: String, job_id: Uuid) -> Result<Self, WorkerError> {
-        let token =
-            std::env::var("IRONCLAW_WORKER_TOKEN").map_err(|_| WorkerError::MissingToken)?;
+        let token = std::env::var("LUNARWING_WORKER_TOKEN")
+            .or_else(|_| std::env::var("IRONCLAW_WORKER_TOKEN"))
+            .map_err(|_| WorkerError::MissingToken)?;
 
         Ok(Self {
             client: Self::build_client(),

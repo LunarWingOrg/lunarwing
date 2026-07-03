@@ -1,7 +1,7 @@
 //! Unix Socket REPL Server Channel.
 //!
 //! Provides a REPL interface over a Unix domain socket so external clients
-//! (e.g. `lunarwing repl`) can connect to a running Ironclaw daemon without
+//! (e.g. `lunarwing repl`) can connect to a running LunarWing daemon without
 //! starting a second instance.
 //!
 //! # Protocol
@@ -170,7 +170,7 @@ impl UnixSocketReplChannel {
 
             // Send welcome before inserting so we own `write` exclusively here
             let welcome = ReplMessage::Response {
-                content: format!("Connected to Ironclaw REPL. Session: {session_id}"),
+                content: format!("Connected to LunarWing REPL. Session: {session_id}"),
                 session_id: Some(session_id.clone()),
                 is_complete: true,
             };

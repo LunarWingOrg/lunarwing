@@ -1,5 +1,5 @@
 [package]
-name = "ironclaw-safety-fuzz"
+name = "lunarwing-safety-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -38,3 +38,5 @@ doc = false
 name = "fuzz_credential_detect"
 path = "fuzz_targets/fuzz_credential_detect.rs"
 doc = false
+
+[workspace]

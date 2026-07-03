@@ -1,4 +1,4 @@
-//! Bootstrap helpers for IronClaw.
+//! Bootstrap helpers for LunarWing.
 //!
 //! The only setting that truly needs disk persistence before the database is
 //! available is `DATABASE_URL` (chicken-and-egg: can't connect to DB without
@@ -20,10 +20,10 @@ use std::sync::LazyLock;
 const LUNARWING_BASE_DIR_ENV: &str = "LUNARWING_BASE_DIR";
 const LEGACY_IRONCLAW_BASE_DIR_ENV: &str = "IRONCLAW_BASE_DIR";
 
-/// Lazily computed IronClaw base directory, cached for the lifetime of the process.
-static IRONCLAW_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_lunarwing_base_dir);
+/// Lazily computed LunarWing base directory, cached for the lifetime of the process.
+static LUNARWING_BASE_DIR: LazyLock<PathBuf> = LazyLock::new(compute_lunarwing_base_dir);
 
-/// Compute the IronClaw base directory from environment.
+/// Compute the LunarWing base directory from environment.
 ///
 /// This is the underlying implementation used by both the public
 /// `lunarwing_base_dir()` function (which caches the result) and tests
@@ -77,7 +77,7 @@ fn default_base_dir() -> PathBuf {
     }
 }
 
-/// Get the IronClaw base directory.
+/// Get the LunarWing base directory.
 ///
 /// Override with `LUNARWING_BASE_DIR` environment variable.
 /// Legacy `IRONCLAW_BASE_DIR` is still accepted as a fallback.
@@ -98,10 +98,10 @@ fn default_base_dir() -> PathBuf {
 /// A `PathBuf` pointing to the base directory. The path is not validated
 /// for existence.
 pub fn lunarwing_base_dir() -> PathBuf {
-    IRONCLAW_BASE_DIR.clone()
+    LUNARWING_BASE_DIR.clone()
 }
 
-/// Path to the IronClaw-specific `.env` file: `<base_dir>/.env`.
+/// Path to the LunarWing-specific `.env` file: `<base_dir>/.env`.
 pub fn lunarwing_env_path() -> PathBuf {
     lunarwing_base_dir().join(".env")
 }
@@ -512,7 +512,7 @@ pub fn pid_lock_path() -> PathBuf {
     lunarwing_base_dir().join("lunarwing.pid")
 }
 
-/// A PID-based lock that prevents multiple IronClaw instances from running
+/// A PID-based lock that prevents multiple LunarWing instances from running
 /// simultaneously.
 ///
 /// Uses `fs4::try_lock_exclusive()` for atomic locking (no TOCTOU race),
@@ -610,14 +610,14 @@ mod tests {
         let env_path = dir.path().join(".env");
 
         // Write in the quoted format that save_database_url uses
-        let url = "postgres://localhost:5432/ironclaw_test";
+        let url = "postgres://localhost:5432/lunarwing_test";
         std::fs::write(&env_path, format!("DATABASE_URL=\"{}\"\n", url)).unwrap();
 
         // Verify the content is a valid dotenv line (quoted)
         let content = std::fs::read_to_string(&env_path).unwrap();
         assert_eq!(
             content,
-            "DATABASE_URL=\"postgres://localhost:5432/ironclaw_test\"\n"
+            "DATABASE_URL=\"postgres://localhost:5432/lunarwing_test\"\n"
         );
 
         // Verify dotenvy can parse it (strips quotes automatically)
@@ -637,7 +637,7 @@ mod tests {
 
         // URLs with # in the password are common (URL-encoded special chars).
         // Without quoting, dotenvy treats # as a comment delimiter.
-        let url = "postgres://user:p%23ss@localhost:5432/ironclaw";
+        let url = "postgres://user:p%23ss@localhost:5432/lunarwing";
         std::fs::write(&env_path, format!("DATABASE_URL=\"{}\"\n", url)).unwrap();
 
         let parsed: Vec<(String, String)> = dotenvy::from_path_iter(&env_path)
@@ -755,7 +755,7 @@ INJECTED="pwned"#;
 
         // Write a legacy bootstrap.json
         let bootstrap_json = serde_json::json!({
-            "database_url": "postgres://localhost/ironclaw_upgrade",
+            "database_url": "postgres://localhost/lunarwing_upgrade",
             "database_pool_size": 5,
             "secrets_master_key_source": "keychain",
             "onboard_completed": true
@@ -777,7 +777,7 @@ INJECTED="pwned"#;
         let content = std::fs::read_to_string(&env_path).unwrap();
         assert_eq!(
             content,
-            "DATABASE_URL=\"postgres://localhost/ironclaw_upgrade\"\n"
+            "DATABASE_URL=\"postgres://localhost/lunarwing_upgrade\"\n"
         );
 
         // bootstrap.json should be renamed to .migrated
@@ -1308,14 +1308,14 @@ INJECTED="pwned"#;
 
     #[test]
     fn test_pid_lock_child_helper_holds_lock() {
-        if std::env::var("IRONCLAW_PID_LOCK_CHILD").ok().as_deref() != Some("1") {
+        if std::env::var("LUNARWING_PID_LOCK_CHILD").ok().as_deref() != Some("1") {
             return;
         }
 
         let pid_path = PathBuf::from(
-            std::env::var("IRONCLAW_PID_LOCK_PATH").expect("IRONCLAW_PID_LOCK_PATH missing"),
+            std::env::var("LUNARWING_PID_LOCK_PATH").expect("LUNARWING_PID_LOCK_PATH missing"),
         );
-        let hold_ms = std::env::var("IRONCLAW_PID_LOCK_HOLD_MS")
+        let hold_ms = std::env::var("LUNARWING_PID_LOCK_HOLD_MS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(3000);
@@ -1337,9 +1337,9 @@ INJECTED="pwned"#;
                 "--nocapture",
                 "--test-threads=1",
             ])
-            .env("IRONCLAW_PID_LOCK_CHILD", "1")
-            .env("IRONCLAW_PID_LOCK_PATH", pid_path.display().to_string())
-            .env("IRONCLAW_PID_LOCK_HOLD_MS", "3000")
+            .env("LUNARWING_PID_LOCK_CHILD", "1")
+            .env("LUNARWING_PID_LOCK_PATH", pid_path.display().to_string())
+            .env("LUNARWING_PID_LOCK_HOLD_MS", "3000")
             .spawn()
             .unwrap();
 

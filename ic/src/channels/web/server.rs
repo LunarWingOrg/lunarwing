@@ -776,7 +776,7 @@ fn oauth_error_page(label: &str) -> axum::response::Response {
 ///
 /// Used on hosted instances where `LUNARWING_OAUTH_CALLBACK_URL` (or legacy
 /// `IRONCLAW_OAUTH_CALLBACK_URL`) points to the gateway (e.g.,
-/// `https://kind-deer.agent1.near.ai/oauth/callback`).
+/// `https://agent.example.com/oauth/callback`).
 /// Local/desktop mode continues to use the TCP listener on port 9876.
 async fn oauth_callback_handler(
     State(state): State<Arc<GatewayState>>,
@@ -1642,7 +1642,7 @@ async fn chat_threads_handler(
 
     // Fallback: in-memory only (no assistant thread without DB)
     let mut sorted_threads: Vec<_> = sess.threads.values().collect();
-    sorted_threads.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    sorted_threads.sort_by_key(|t| std::cmp::Reverse(t.updated_at));
     let threads: Vec<ThreadInfo> = sorted_threads
         .into_iter()
         .map(|t| ThreadInfo {

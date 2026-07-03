@@ -45,7 +45,7 @@ async function checkWebSocket(): Promise<boolean> {
   return new Promise((resolve) => {
     const uri = `ws://${WS_HOST}:${WS_PORT}${WS_PATH}`
     const headers: Record<string, string> = {
-      "Sec-WebSocket-Protocol": "ironclaw-agent-v1",
+      "Sec-WebSocket-Protocol": "lunarwing-agent-v1, ironclaw-agent-v1",
     }
     if (AUTH_TOKEN) {
       headers["Authorization"] = `Bearer ${AUTH_TOKEN}`

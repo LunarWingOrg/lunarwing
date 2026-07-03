@@ -2,8 +2,8 @@
 //!
 //! Skills are discovered from multiple sources:
 //! 1. Workspace skills directory (`<workspace>/skills/`) -- Trusted
-//! 2. User skills directory (`~/.ironclaw/skills/`) -- Trusted
-//! 3. Installed skills directory (`~/.ironclaw/installed_skills/`) -- Installed
+//! 2. User skills directory (`<base_dir>/skills/`) -- Trusted
+//! 3. Installed skills directory (`<base_dir>/installed_skills/`) -- Installed
 //! 4. Bundled skills compiled into the binary -- Trusted
 //!
 //! Both flat (`skills/SKILL.md`) and subdirectory (`skills/<name>/SKILL.md`)
@@ -88,9 +88,9 @@ pub enum SkillRegistryError {
 pub struct SkillRegistry {
     /// All loaded skills.
     skills: Vec<LoadedSkill>,
-    /// User skills directory (~/.ironclaw/skills/). Skills here are Trusted.
+    /// User skills directory (<base_dir>/skills/). Skills here are Trusted.
     user_dir: PathBuf,
-    /// Registry-installed skills directory (~/.ironclaw/installed_skills/). Skills here are Installed.
+    /// Registry-installed skills directory (<base_dir>/installed_skills/). Skills here are Installed.
     installed_dir: Option<PathBuf>,
     /// Optional workspace skills directory.
     workspace_dir: Option<PathBuf>,

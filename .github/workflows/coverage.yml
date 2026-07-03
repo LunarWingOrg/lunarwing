@@ -6,11 +6,11 @@
 # What it does:
 # - Runs unit and integration tests with coverage instrumentation
 # - Runs E2E tests with coverage instrumentation
-# - Uploads coverage reports to Codecov (https://codecov.io/gh/nearai/ironclaw)
+# - Uploads coverage reports to Codecov (https://codecov.io/gh/LunarWingOrg/lunarwing)
 #
 # Viewing coverage reports:
 # - PRs automatically get coverage comments showing changes in coverage
-# - Visit https://codecov.io/gh/nearai/ironclaw for detailed coverage reports
+# - Visit https://codecov.io/gh/LunarWingOrg/lunarwing for detailed coverage reports
 # - Coverage reports are generated for three configurations:
 #   1. all-features: Full feature set
 #   2. default: Default features
@@ -60,7 +60,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ironclaw_test
+          POSTGRES_DB: lunarwing_test
         ports:
           - 5432:5432
         options: >-
@@ -104,11 +104,11 @@ jobs:
           PGHOST: localhost
           PGUSER: postgres
           PGPASSWORD: postgres
-          PGDATABASE: ironclaw_test
+          PGDATABASE: lunarwing_test
 
       - name: Set DATABASE_URL for postgres configs
         if: matrix.has_postgres
-        run: echo "DATABASE_URL=postgres://postgres:postgres@localhost/ironclaw_test" >> "$GITHUB_ENV"
+        run: echo "DATABASE_URL=postgres://postgres:postgres@localhost/lunarwing_test" >> "$GITHUB_ENV"
 
       - name: Generate coverage
         run: cargo llvm-cov ${{ matrix.flags }} --workspace --lcov --output-path lcov.info
@@ -179,7 +179,7 @@ jobs:
         run: |
           pytest tests/e2e/ -v --timeout=120
         env:
-          RUST_LOG: ironclaw=info
+          RUST_LOG: lunarwing=info
           RUST_BACKTRACE: "1"
 
       - name: Verify profraw files exist

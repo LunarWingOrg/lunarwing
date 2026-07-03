@@ -178,7 +178,7 @@ pub struct SetupConfig {
     pub steps: Vec<String>,
 }
 
-/// Interactive setup wizard for IronClaw.
+/// Interactive setup wizard for LunarWing.
 pub struct SetupWizard {
     config: SetupConfig,
     settings: Settings,

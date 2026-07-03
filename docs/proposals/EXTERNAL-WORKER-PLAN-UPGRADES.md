@@ -31,7 +31,7 @@ User asked to find improvement opportunities for the external worker systems (na
 - Boundary: Both orchestrator-side AND worker container repos can be touched
 
 **Research Findings**:
-- `ExternalWorkerManager` (`src/orchestrator/external_worker.rs`) manages WebSocket connections via `ironclaw-agent-v1` protocol
+- `ExternalWorkerManager` (`src/orchestrator/external_worker.rs`) manages WebSocket connections via the `lunarwing-agent-v1` protocol (legacy alias `ironclaw-agent-v1`)
 - Each task opens a new WebSocket — no reuse despite "persistent" worker label
 - `task_request` sends `"context": {}` — no workspace, conversation, or credential data
 - `ExternalWorkerConfig` (name, url, auth_token, timeout_ms) — single endpoint per name
@@ -54,7 +54,7 @@ User asked to find improvement opportunities for the external worker systems (na
 Transform external workers from stateless one-shot WebSocket callers into efficient persistent work delegation with real context and scalable routing.
 
 ### Concrete Deliverables
-- Extended `ironclaw-agent-v1` protocol (backward compatible)
+- Extended `lunarwing-agent-v1` protocol (backward compatible)
 - `WorkerConnectionPool` struct with connection reuse
 - Multi-instance `ExternalWorkerConfig` with load balancer
 - `ExternalTaskStatus` enum

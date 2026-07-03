@@ -3,7 +3,7 @@
 //! Spawns any ACP-compliant agent (Goose, Codex, Gemini CLI, etc.) as a
 //! subprocess inside a Docker container and communicates via the standard
 //! ACP protocol (JSON-RPC over stdio). Agent output is translated into
-//! IronClaw's `JobEventPayload` stream and posted to the orchestrator.
+//! LunarWing's `JobEventPayload` stream and posted to the orchestrator.
 //!
 //! Security model: the Docker container is the primary security boundary
 //! (cap-drop ALL, non-root user, memory limits, network isolation).
@@ -59,7 +59,8 @@ pub struct AcpBridgeRuntime {
 impl AcpBridgeRuntime {
     /// Create a new bridge runtime.
     ///
-    /// Reads `IRONCLAW_WORKER_TOKEN` from the environment for auth.
+    /// Reads `LUNARWING_WORKER_TOKEN` from the environment for auth (legacy
+    /// alias `IRONCLAW_WORKER_TOKEN` still accepted).
     pub fn new(config: AcpBridgeConfig) -> Result<Self, WorkerError> {
         let client = Arc::new(WorkerHttpClient::from_env(
             config.orchestrator_url.clone(),
@@ -213,15 +214,15 @@ impl AcpBridgeRuntime {
                 let incoming = child_stdout.compat();
 
                 // Create ACP connection
-                let ironclaw_client = IronClawAcpClient::new(Arc::clone(&client_for_acp));
+                let lunarwing_client = LunarWingAcpClient::new(Arc::clone(&client_for_acp));
 
                 let (conn, handle_io) =
-                    acp::ClientSideConnection::new(ironclaw_client, outgoing, incoming, |fut| {
+                    acp::ClientSideConnection::new(lunarwing_client, outgoing, incoming, |fut| {
                         tokio::task::spawn_local(fut);
                     });
                 tokio::task::spawn_local(handle_io);
 
-                conn.initialize(ironclaw_init_request())
+                conn.initialize(lunarwing_init_request())
                     .await
                     .map_err(|e| WorkerError::ExecutionFailed {
                         reason: format!("ACP initialize failed: {}", e),
@@ -362,7 +363,7 @@ impl AcpBridgeRuntime {
 /// Sink for ACP events translated from session notifications.
 ///
 /// The bridge posts events to the orchestrator via HTTP; the CLI test
-/// command prints them to stdout. Both share the same `IronClawAcpClient`.
+/// command prints them to stdout. Both share the same `LunarWingAcpClient`.
 pub(crate) trait AcpEventSink: 'static {
     fn emit_event(&self, payload: &JobEventPayload) -> impl std::future::Future<Output = ()>;
 }
@@ -373,23 +374,23 @@ impl AcpEventSink for Arc<WorkerHttpClient> {
     }
 }
 
-/// IronClaw's implementation of the ACP Client trait.
+/// LunarWing's implementation of the ACP Client trait.
 ///
 /// Handles callbacks from the agent: session notifications (streaming output)
 /// and permission requests (auto-approved). Generic over the event sink so
 /// both the container bridge and CLI test command can reuse it.
-pub(crate) struct IronClawAcpClient<S: AcpEventSink> {
+pub(crate) struct LunarWingAcpClient<S: AcpEventSink> {
     sink: S,
 }
 
-impl<S: AcpEventSink> IronClawAcpClient<S> {
+impl<S: AcpEventSink> LunarWingAcpClient<S> {
     pub(crate) fn new(sink: S) -> Self {
         Self { sink }
     }
 }
 
 #[async_trait::async_trait(?Send)]
-impl<S: AcpEventSink> acp::Client for IronClawAcpClient<S> {
+impl<S: AcpEventSink> acp::Client for LunarWingAcpClient<S> {
     async fn request_permission(
         &self,
         args: acp::RequestPermissionRequest,
@@ -413,8 +414,8 @@ impl<S: AcpEventSink> acp::Client for IronClawAcpClient<S> {
     }
 }
 
-/// Build the standard IronClaw ACP initialization request.
-pub(crate) fn ironclaw_init_request() -> acp::InitializeRequest {
+/// Build the standard LunarWing ACP initialization request.
+pub(crate) fn lunarwing_init_request() -> acp::InitializeRequest {
     acp::InitializeRequest::new(acp::ProtocolVersion::V1).client_info(
         acp::Implementation::new("lunarwing", env!("CARGO_PKG_VERSION")).title("LunarWing"),
     )
@@ -422,7 +423,7 @@ pub(crate) fn ironclaw_init_request() -> acp::InitializeRequest {
 
 // ==================== Event translation ====================
 
-/// Convert an ACP `SessionUpdate` into an IronClaw `JobEventPayload`.
+/// Convert an ACP `SessionUpdate` into an LunarWing `JobEventPayload`.
 fn session_update_to_payload(update: &acp::SessionUpdate) -> Option<JobEventPayload> {
     match update {
         acp::SessionUpdate::AgentMessageChunk(chunk) => text_from_content_block(&chunk.content)

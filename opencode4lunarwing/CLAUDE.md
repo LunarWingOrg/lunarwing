@@ -87,7 +87,7 @@ timeout_ms = 300000
 The bridge uses `@opencode-ai/sdk/v2` (`createOpencodeClient`) to talk to the internal opencode server. Each `task_request` creates a session with full-auto permissions, sends a prompt, and subscribes to SSE events for streaming progress.
 
 ### WebSocket protocol (`agent_comm_protocol.json`)
-Same protocol as nanocode: JSON envelope with `id`, `type`, `timestamp`, `payload`. Subprotocol: `ironclaw-agent-v1`. Worker sends `ready` on connect, receives `task_request`, streams `task_progress`, sends `task_result`.
+Same protocol as nanocode: JSON envelope with `id`, `type`, `timestamp`, `payload`. Subprotocol: `lunarwing-agent-v1` (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle). Worker sends `ready` on connect, receives `task_request`, streams `task_progress`, sends `task_result`.
 
 ### Health server (`health_server.py`)
 Python stdlib HTTP server. `/ready` reads `/tmp/lunarwing_ws_state.json` written by the bridge to report WebSocket readiness.

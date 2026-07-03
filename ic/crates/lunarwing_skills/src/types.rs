@@ -55,9 +55,9 @@ impl std::fmt::Display for SkillTrust {
 pub enum SkillSource {
     /// Workspace skills directory (<workspace>/skills/).
     Workspace(PathBuf),
-    /// User skills directory (~/.ironclaw/skills/).
+    /// User skills directory (<base_dir>/skills/).
     User(PathBuf),
-    /// Registry-installed skills directory (~/.ironclaw/installed_skills/).
+    /// Registry-installed skills directory (<base_dir>/installed_skills/).
     Installed(PathBuf),
     /// Bundled with the application.
     Bundled(PathBuf),

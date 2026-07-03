@@ -75,7 +75,7 @@ for h in "$HOOK_DIR"/*; do
   case "$name" in
     pre-commit)  echo "  $name   — secret scan + version-bump check (fast, no cargo)" ;;
     commit-msg)  echo "  $name   — require regression tests for fix: commits" ;;
-    pre-push)    echo "  $name   — non-blocking reminder (set IRONCLAW_STRICT_PREPUSH=1 to enforce cargo gate)" ;;
+    pre-push)    echo "  $name   — non-blocking reminder (set LUNARWING_STRICT_PREPUSH=1 to enforce cargo gate)" ;;
     *)           echo "  $name" ;;
   esac
 done

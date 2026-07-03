@@ -94,7 +94,7 @@ No changes needed for these.
 
 Explicitly documented as kept per `CLAUDE.md` and `docs/ops/history/PENDING_CLEANUP.md`:
 
-- `ironclaw-agent-v1` WebSocket subprotocol (shared external protocol)
+- ~~`ironclaw-agent-v1` WebSocket subprotocol (shared external protocol)~~ — renamed in 1.1.9 to `lunarwing-agent-v1` with `ironclaw-agent-v1` kept as an accepted legacy alias for one release
 - `tensorzero::function_name::ironclaw` TensorZero function name
 - `codex4ironclaw/`, `nanocode-config/` directory names (deprecated but kept)
 - `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh` shell completions

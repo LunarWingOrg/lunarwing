@@ -389,7 +389,7 @@ mod tests {
                 assert_eq!(event_type, "issue.opened");
                 assert_eq!(
                     filters.get("repository").map(String::as_str),
-                    Some("nearai/ironclaw")
+                    Some("LunarWingOrg/lunarwing")
                 );
                 assert_eq!(filters.get("priority").map(String::as_str), Some("p1"));
             }
@@ -500,7 +500,7 @@ mod tests {
                 assert_eq!(event_type, "issue.opened");
                 assert_eq!(
                     filters.get("repository").map(String::as_str),
-                    Some("nearai/ironclaw")
+                    Some("LunarWingOrg/lunarwing")
                 );
                 assert_eq!(filters.get("priority").map(String::as_str), Some("p1"));
             }

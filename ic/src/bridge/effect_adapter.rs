@@ -1,6 +1,6 @@
 //! Effect bridge adapter — wraps `ToolRegistry` + `SafetyLayer` as `lunarwing_engine::EffectExecutor`.
 //!
-//! This is the security boundary between the engine and existing IronClaw
+//! This is the security boundary between the engine and existing LunarWing
 //! infrastructure. All v1 security controls are enforced here:
 //! - Tool approval (requires_approval, auto-approve tracking)
 //! - Output sanitization (sanitize_tool_output + wrap_for_llm)
@@ -1437,7 +1437,7 @@ mod tests {
 
         // Call execute_action with http tool params pointing to api.github.com
         let params = serde_json::json!({
-            "url": "https://api.github.com/repos/nearai/ironclaw/issues",
+            "url": "https://api.github.com/repos/LunarWingOrg/lunarwing/issues",
             "method": "GET"
         });
         let lease = lunarwing_engine::CapabilityLease {

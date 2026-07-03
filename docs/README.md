@@ -45,15 +45,15 @@ How-to guides, build instructions, and setup walkthroughs.
 | [`MULTICA_DEPLOYMENT.md`](guides/MULTICA_DEPLOYMENT.md) | Multica/Lunartica deployment guide |
 | [`human-delay-mode.md`](guides/human-delay-mode.md) | Human-delay mode overview |
 | [`DEBUG_LOG.md`](guides/DEBUG_LOG.md) | Catalog of debug/info log points by `file:line` |
-| [`darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
-| [`darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
-| [`ironclaw_weechat_wss/README.md`](guides/ironclaw_weechat_wss/README.md) | WeeChat WSS channel overview |
-| [`ironclaw_weechat_wss/weechat_relay/INSTALL.md`](guides/ironclaw_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
-| [`ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
+| [`darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
+| [`darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
+| [`lunarwing_weechat_wss/README.md`](guides/lunarwing_weechat_wss/README.md) | WeeChat WSS channel overview |
+| [`lunarwing_weechat_wss/weechat_relay/INSTALL.md`](guides/lunarwing_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
+| [`lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
 | [`gotify-wasm/README.md`](guides/gotify-wasm/README.md) | Gotify WASM tool |
 | [`ic_sm/README.md`](guides/ic_sm/README.md) | Secret manager (`ic_sm`) |
 | [`tensorzero-proxy-configurations/README.md`](guides/tensorzero-proxy-configurations/README.md) | TensorZero proxy configuration |
-| [`git-ironclaw-unix-socket-repl-server-repo/README.md`](guides/git-ironclaw-unix-socket-repl-server-repo/README.md) | REPLv2 Unix-socket REPL server |
+| [`git-lunarwing-unix-socket-repl-server-repo/README.md`](guides/git-lunarwing-unix-socket-repl-server-repo/README.md) | REPLv2 Unix-socket REPL server |
 | [`nanocode-config/README.md`](guides/nanocode-config/README.md) | Nanocode custom-config overview |
 | [`nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md`](guides/nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md) | Point nanocode at the TensorZero gateway |
 
@@ -132,7 +132,7 @@ the reorg.
 | [`MULTICA_INTEGRATION_PLAN.md`](proposals/MULTICA_INTEGRATION_PLAN.md) | Multica/Lunartica integration plan |
 | [`CHAOS_FOLLOWUP_TESTS.md`](proposals/CHAOS_FOLLOWUP_TESTS.md) | Follow-up chaos / self-heal test scenarios |
 | [`RENDER_UNITS_SMALL_BUG.md`](proposals/RENDER_UNITS_SMALL_BUG.md) | `render-units` small-bug note |
-| [`RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`](proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER) | TODO: rename the WeeChat channel/adapter in code + references |
+| [`RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`](proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER) | Rename the WeeChat channel/adapter in code + references (implemented in 1.1.9, item #2) |
 | [`human-delay-mode-phase2-plan.md`](proposals/human-delay-mode-phase2-plan.md) | Human-delay mode phase 2 plan |
 | [`human-delay-mode-phase1-test-checklist.md`](proposals/human-delay-mode-phase1-test-checklist.md) | Human-delay mode phase 1 test checklist |
 | [`human-delay-mode-phase1-verification-handoff.md`](proposals/human-delay-mode-phase1-verification-handoff.md) | Human-delay mode phase 1 verification handoff |
@@ -193,7 +193,6 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 
 | File | Description |
 |------|-------------|
-| [`DOCS_AUDIT.md`](DOCS_AUDIT.md) | Documentation audit (M/L items): stale IronClaw references, naming inconsistencies, and their current status |
 | [`DOCS_REORG_CHECKLIST.md`](DOCS_REORG_CHECKLIST.md) | Progress tracker + work log for the 2026-06 `docs/` reorganization |
 
 ---

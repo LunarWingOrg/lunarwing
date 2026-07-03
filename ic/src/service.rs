@@ -159,7 +159,7 @@ fn install_macos() -> Result<()> {
     }
 
     let exe = std::env::current_exe().context("failed to resolve current executable")?;
-    let logs_dir = ironclaw_logs_dir();
+    let logs_dir = lunarwing_logs_dir();
     std::fs::create_dir_all(&logs_dir)?;
 
     let stdout = logs_dir.join("daemon.stdout.log");
@@ -506,7 +506,7 @@ fn linux_openrc_env_dir() -> PathBuf {
     PathBuf::from("/etc/lunarwing")
 }
 
-fn ironclaw_logs_dir() -> PathBuf {
+fn lunarwing_logs_dir() -> PathBuf {
     lunarwing_base_dir().join("logs")
 }
 
@@ -633,7 +633,7 @@ fn linux_xmpp_bridge_unit_content(exe: &Path) -> String {
     )
 }
 
-fn linux_bridge_executable_path(ironclaw_exe: &Path) -> Option<PathBuf> {
+fn linux_bridge_executable_path(lunarwing_exe: &Path) -> Option<PathBuf> {
     if let Ok(explicit) = std::env::var("XMPP_BRIDGE_EXECUTABLE") {
         let path = PathBuf::from(explicit.trim());
         if path.is_file() {
@@ -643,7 +643,7 @@ fn linux_bridge_executable_path(ironclaw_exe: &Path) -> Option<PathBuf> {
 
     let mut candidates = Vec::new();
 
-    if let Some(exe_dir) = ironclaw_exe.parent() {
+    if let Some(exe_dir) = lunarwing_exe.parent() {
         candidates.push(exe_dir.join("xmpp-bridge"));
 
         if let (Some(target_dir), Some(profile_dir_name)) = (exe_dir.parent(), exe_dir.file_name())
@@ -915,7 +915,7 @@ fn openrc_command_hint(action: &str) -> Result<String> {
     let exe = std::env::current_exe().context("failed to resolve current executable")?;
     let base_dir = lunarwing_base_dir();
     Ok(format!(
-        "sudo env IRONCLAW_BASE_DIR={} {} service {}",
+        "sudo env LUNARWING_BASE_DIR={} {} service {}",
         shell_quote(&base_dir.display().to_string()),
         shell_quote(&exe.display().to_string()),
         action,
@@ -1132,7 +1132,7 @@ mod tests {
 
     #[test]
     fn logs_dir_under_lunarwing() {
-        let path = ironclaw_logs_dir();
+        let path = lunarwing_logs_dir();
         let s = path.to_string_lossy();
         assert!(s.ends_with(".ironclaw/logs"), "unexpected path: {s}");
     }

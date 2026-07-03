@@ -42,7 +42,7 @@ const MAX_REDIRECTS: usize = 3;
 
 /// Descriptive User-Agent so public APIs don't reject bare requests.
 const USER_AGENT: &str = concat!(
-    "IronClaw-Agent/",
+    "LunarWing-Agent/",
     env!("CARGO_PKG_VERSION"),
     " (https://github.com/LunarWingOrg/lunarwing)"
 );

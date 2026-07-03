@@ -1,4 +1,4 @@
-//! Vision Analysis WASM Tool for IronClaw.
+//! Vision Analysis WASM Tool for LunarWing.
 //!
 //! Thin client that forwards image analysis requests to the LunarWing
 //! Vision Service (OCR sidecar). Does one HTTP call and returns the result.

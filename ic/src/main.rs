@@ -1,4 +1,4 @@
-//! IronClaw - Main entry point.
+//! LunarWing - Main entry point.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -385,7 +385,7 @@ async fn async_main() -> anyhow::Result<()> {
     let log_level_handle =
         lunarwing::channels::web::log_layer::init_tracing(Arc::clone(&log_broadcaster));
 
-    tracing::debug!("Starting IronClaw...");
+    tracing::debug!("Starting LunarWing...");
     tracing::debug!("Loaded configuration for agent: {}", config.agent.name);
     tracing::debug!("LLM backend: {}", config.llm.backend);
 
@@ -523,26 +523,26 @@ async fn async_main() -> anyhow::Result<()> {
     }));
 
     // Mount SSH API routes if the bridge was initialized.
-    if let Some(ref ssh_bridge) = components.ssh_bridge {
-        if let Some(ref secrets_store) = components.secrets_store {
-            // Extract the running agent server from the bridge (if it was
-            // started in AppBuilder) so the API layer can report its status
-            // and manage keys.
-            let agent_server = {
-                let bridge_read = ssh_bridge.read().await;
-                bridge_read.agent_server()
-            };
-            let ssh_api_state = Arc::new(lunarwing::bridge::ssh_api::SshApiState {
-                bridge: Arc::clone(ssh_bridge),
-                secrets: Arc::new(lunarwing::bridge::ssh_secrets::SshSecretsManager::new(
-                    Arc::clone(secrets_store),
-                    &config.owner_id,
-                )),
-                agent: Arc::new(tokio::sync::RwLock::new(agent_server)),
-            });
-            webhook_routes.push(lunarwing::bridge::ssh_api::create_router(ssh_api_state));
-            tracing::debug!("SSH API routes mounted");
-        }
+    if let Some(ref ssh_bridge) = components.ssh_bridge
+        && let Some(ref secrets_store) = components.secrets_store
+    {
+        // Extract the running agent server from the bridge (if it was
+        // started in AppBuilder) so the API layer can report its status
+        // and manage keys.
+        let agent_server = {
+            let bridge_read = ssh_bridge.read().await;
+            bridge_read.agent_server()
+        };
+        let ssh_api_state = Arc::new(lunarwing::bridge::ssh_api::SshApiState {
+            bridge: Arc::clone(ssh_bridge),
+            secrets: Arc::new(lunarwing::bridge::ssh_secrets::SshSecretsManager::new(
+                Arc::clone(secrets_store),
+                &config.owner_id,
+            )),
+            agent: Arc::new(tokio::sync::RwLock::new(agent_server)),
+        });
+        webhook_routes.push(lunarwing::bridge::ssh_api::create_router(ssh_api_state));
+        tracing::debug!("SSH API routes mounted");
     }
 
     // Load WASM channels and register their webhook routes.

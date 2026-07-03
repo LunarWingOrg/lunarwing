@@ -47,7 +47,7 @@ create_job(title: "Fix the tests", description: "Run cargo test and fix failures
 
 ## Protocol
 
-Speaks `ironclaw-agent-v1` WebSocket subprotocol. See `agent_comm_protocol.json` for the full spec.
+Speaks `lunarwing-agent-v1` WebSocket subprotocol (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle). See `agent_comm_protocol.json` for the full spec.
 
 ## Environment Variables
 

@@ -712,6 +712,12 @@ async fn handle_streaming(
     let sse = Sse::new(stream).keep_alive(KeepAlive::new().text(""));
     let mut response = sse.into_response();
     response.headers_mut().insert(
+        "x-lunarwing-streaming",
+        HeaderValue::from_static("simulated"),
+    );
+    // Legacy header kept for one release so existing clients that sniff it
+    // keep working.
+    response.headers_mut().insert(
         "x-ironclaw-streaming",
         HeaderValue::from_static("simulated"),
     );

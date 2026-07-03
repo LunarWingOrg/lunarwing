@@ -43,7 +43,7 @@ XMPP currently lives in the native channel bucket:
 That breaks the product model established by custom channels like `weechat` and `darkirc`, where the channel is:
 
 - separately compiled
-- installed into `~/.ironclaw/channels/`
+- installed into `~/.lunarwing/channels/`
 - configured by capabilities-driven setup
 - surfaced through extension/channel management
 
@@ -166,8 +166,8 @@ or, if you want it versioned like your custom channels:
 The user installs `xmpp` like any other channel:
 
 - registry entry resolves to `xmpp.wasm`
-- artifact copied into `~/.ironclaw/channels/xmpp.wasm`
-- capabilities copied into `~/.ironclaw/channels/xmpp.capabilities.json`
+- artifact copied into `~/.lunarwing/channels/xmpp.wasm`
+- capabilities copied into `~/.lunarwing/channels/xmpp.capabilities.json`
 
 ### Configure
 
@@ -464,11 +464,11 @@ Persist separately:
 
 Recommended path:
 
-- `~/.ironclaw/extensions/xmpp/bridge/`
+- `~/.lunarwing/extensions/xmpp/bridge/`
 
 or, for managed sidecars:
 
-- `~/.ironclaw/state/channels/xmpp/`
+- `~/.lunarwing/state/channels/xmpp/`
 
 ## Migration Plan
 

@@ -1,7 +1,7 @@
 //! Unix Socket REPL Server Channel.
 //!
 //! Provides a REPL interface over a Unix domain socket so external clients
-//! (e.g. `lunarwing repl`) can connect to a running Ironclaw daemon without
+//! (e.g. `lunarwing repl`) can connect to a running LunarWing daemon without
 //! starting a second instance.
 //!
 //! # Protocol

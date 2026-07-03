@@ -1,8 +1,8 @@
 # LunarWing and XMPP Bridge Testing
 
-This guide sets up an isolated local environment for the project currently
-branded as LunarWing. Some binaries, environment variables, and service names
-still use `ironclaw`; keep those names until the codebase is renamed.
+This guide sets up an isolated local environment for LunarWing. The binary,
+socket file, and service names now use `lunarwing`; the legacy `IRONCLAW_*`
+environment variables are still accepted as aliases for backward compatibility.
 
 The goal is to test in layers:
 
@@ -24,12 +24,12 @@ scripts/lunarwing-xmpp-test-env.sh smoke
 `scripts/lunarwing-xmpp-test-env.sh build` also compiles the real REPLv2
 client with `cargo build --release` from:
 
-- `/home/sun/lw_workspace/lunarwing/replv2git/git-ironclaw-unix-socket-client-repo`
+- `<repo-root>/replv2git/git-lunarwing-unix-socket-client-repo`
 
 When you source the generated harness env file, both the integrated CLI and the
 standalone REPLv2 client target the harness-specific Unix socket under
-`$LUNARWING_TEST_ROOT/run/ironclaw.sock` instead of the shared
-`/run/user/$UID/ironclaw.sock`.
+`$LUNARWING_TEST_ROOT/run/lunarwing.sock` instead of the shared
+`/run/user/$UID/lunarwing.sock`.
 
 For convenience, the harness script can launch the standalone client directly:
 
@@ -54,8 +54,8 @@ Generated files:
 
 - `env/lunarwing.env` for the LunarWing daemon.
 - `env/xmpp-bridge.env` for the XMPP bridge.
-- `state/` for the isolated `IRONCLAW_BASE_DIR`, libSQL database, and OMEMO
-  store.
+- `state/` for the isolated `LUNARWING_BASE_DIR` (legacy alias
+  `IRONCLAW_BASE_DIR`), libSQL database, and OMEMO store.
 - `logs/` and `run/` for harness-managed processes.
 - `systemd/` for generated user-service unit files.
 
@@ -65,8 +65,9 @@ and bridge tokens, so do not paste their contents into chat, issues, or logs.
 The generated `env/lunarwing.env` is already seeded for the common private-lab
 stack used by this harness:
 
-- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
-- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
+- `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/lunarwing.sock`
+- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/lunarwing.sock` (legacy alias, set
+  alongside the new name)
 - `DATABASE_BACKEND=postgres`
 - `DATABASE_SSLMODE=disable`
 - `PGSSLMODE=disable`
@@ -133,7 +134,7 @@ bridge resets the override back to bridge configuration defaults.
 
 ## Running LunarWing Locally
 
-The harness can start the current `ironclaw` binary with isolated state:
+The harness can start the `lunarwing` binary with isolated state:
 
 ```bash
 scripts/lunarwing-xmpp-test-env.sh start-lunarwing
@@ -144,17 +145,17 @@ scripts/lunarwing-xmpp-test-env.sh stop-lunarwing
 By default this runs:
 
 ```bash
-target/debug/ironclaw --no-onboard run
+target/debug/lunarwing --no-onboard run
 ```
 
-Use your isolated `IRONCLAW_BASE_DIR` for onboarding or live credentials instead
-of sharing `~/.ironclaw`:
+Use your isolated `LUNARWING_BASE_DIR` (legacy alias `IRONCLAW_BASE_DIR`) for
+onboarding or live credentials instead of sharing `~/.lunarwing`:
 
 ```bash
 set -a
 . /tmp/lunarwing-xmpp-test/env/lunarwing.env
 set +a
-target/debug/ironclaw onboard
+target/debug/lunarwing onboard
 ```
 
 For alternate runtime flags, pass the full argument list after `--`:
@@ -208,7 +209,7 @@ The generated units inherit the current harness env file, including
 `ALLOW_PRIVATE_IPS=1`, `DATABASE_SSLMODE=disable`, and `PGSSLMODE=disable`.
 
 Starting `lunarwing-test.service` is enough; it already pulls in
-`xmpp-bridge-test.service` and `ironclaw-proxy-test.service` through
+`xmpp-bridge-test.service` and `lunarwing-proxy-test.service` through
 `Wants=` / `After=`.
 
 Use read-only diagnostics before restarting anything:
@@ -229,7 +230,7 @@ assume the bridge caused a LunarWing stop just because both units changed state
 together.
 
 The built-in Rust service manager also uses the LunarWing name now.
-`ironclaw service install` detects the host service manager:
+`lunarwing service install` detects the host service manager:
 
 - systemd: installs `~/.config/systemd/user/lunarwing.service` and, when the
   bridge binary is available, `xmpp-bridge.service`
@@ -249,7 +250,7 @@ Production-ready system service templates live in:
 They assume:
 
 - a dedicated `lunarwing` system user and group
-- binaries at `/usr/local/bin/ironclaw` and `/usr/local/bin/xmpp-bridge`
+- binaries at `/usr/local/bin/lunarwing` and `/usr/local/bin/xmpp-bridge`
 - state under `/var/lib/lunarwing`
 - logs under `/var/log/lunarwing`
 - root-readable env files under `/etc/lunarwing`
@@ -334,9 +335,6 @@ Migration note: `install-lunarwing-watchdog.sh` disables and removes old
 `ironclaw-watchdog` units, wrappers, and hourly hooks before installing the
 renamed watchdog so duplicate checks do not run side by side.
 
-The current app binary is still named `ironclaw`. If you install a renamed
-`lunarwing` binary, change `ExecStart=` in `systemd/lunarwing.service`.
-
 Inspect `systemctl status`, `systemctl show`, `journalctl`, and `/v1/status`
 before restarting services.
 
@@ -353,7 +351,7 @@ Keep these as follow-up harness checks when the current setup work is stable:
 - `Gotify real send`: add a real `gotify_app_token`, set `gotify_url`, and make
   the tool send one notification.
 - `Dual-instance socket isolation`: run two harness roots at once and confirm
-  each gets its own `run/ironclaw.sock` and `repl` attaches to the correct
+  each gets its own `run/lunarwing.sock` and `repl` attaches to the correct
   daemon.
 - `Init idempotence`: run `init` twice on the same root after customizing env
   values and confirm the harness preserves user-edited tokens, DB mode, agent

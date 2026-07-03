@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12",
   "version": "1.0.0",
-  "description": "IronClaw Nanocode Worker — WebSocket agent communication protocol",
+  "description": "LunarWing Nanocode Worker — WebSocket agent communication protocol",
 
   "connection": {
     "uri": "ws://agent-hub:9000/nanocode",

@@ -71,7 +71,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 ### Worker Containers
 * **Nanocode Worker** -- Persistent NanoGPT community Nanocode worker container with optional ACP bridge, git/ssh key support, persistent storage, and development tools (`lunarcode4lunarwing/`)
 * **Pebble Worker** -- Persistent Rust-based Pebble agentic coding harness worker with NDJSON event streaming and health endpoints (`pebble4lunarwing/`)
-* **Opencode Worker** -- Persistent [opencode](https://opencode.ai) (sst/opencode) worker container speaking the `ironclaw-agent-v1` WebSocket protocol, with the `@opencode-ai/sdk`, optional Paseo MCP integration, git/ssh key support, and health endpoints (`opencode4lunarwing/`)
+* **Opencode Worker** -- Persistent [opencode](https://opencode.ai) (sst/opencode) worker container speaking the `lunarwing-agent-v1` WebSocket protocol (legacy alias `ironclaw-agent-v1` still accepted), with the `@opencode-ai/sdk`, optional Paseo MCP integration, git/ssh key support, and health endpoints (`opencode4lunarwing/`)
 * **Reworked Built-in Worker - Debloated** -- Native worker running inside the LunarWing daemon getting debloated, rip out obsolete worker modes in favor of specialized worker container support (`ic/src/worker/`)
 * **Reworked Sandbox Worker - Debloated** -- Docker-isolated execution sandbox, debloated (`ic/src/sandbox/`)
 

@@ -15,7 +15,7 @@
             "id": "call_shell_echo",
             "name": "shell",
             "arguments": {
-              "command": "echo 'hello from ironclaw shell test'"
+              "command": "echo 'hello from lunarwing shell test'"
             }
           }
         ],
@@ -26,7 +26,7 @@
     {
       "response": {
         "type": "text",
-        "content": "The shell command executed successfully and printed: hello from ironclaw shell test",
+        "content": "The shell command executed successfully and printed: hello from lunarwing shell test",
         "input_tokens": 100,
         "output_tokens": 20
       }

@@ -31,7 +31,8 @@ the most common configurations.
 ## NEAR AI (default)
 
 No additional configuration required. On first run, `lunarwing onboard` opens a browser
-for OAuth authentication. Credentials are saved to `~/.ironclaw/session.json`.
+for OAuth authentication. Credentials are saved to `~/.lunarwing/session.json`
+(or `$LUNARWING_BASE_DIR/session.json`).
 
 ```env
 NEARAI_MODEL=claude-3-5-sonnet-20241022

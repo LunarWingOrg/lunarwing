@@ -104,7 +104,7 @@ jobs:
       with:
         node-version: "22"
     - name: Check gateway app.js syntax
-      run: node --check crates/ironclaw_gateway/static/app.js
+      run: node --check ic/src/channels/web/static/app.js
 
   deny-check:
     name: cargo-deny

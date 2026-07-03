@@ -2,7 +2,7 @@
 name = "llm-context-tool"
 version = "0.1.0"
 edition = "2021"
-description = "Brave Search LLM Context tool for IronClaw (WASM component)"
+description = "Brave Search LLM Context tool for LunarWing (WASM component)"
 license = "MIT OR Apache-2.0"
 publish = false
 

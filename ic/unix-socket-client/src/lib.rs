@@ -1,7 +1,9 @@
-//! `ironclaw repl` — connect to a running Ironclaw daemon via Unix socket.
+//! `lunarwing repl` — connect to a running LunarWing daemon via Unix socket.
 //!
-//! The daemon must already be running (e.g. via `systemctl start ironclaw`)
-//! and listening on its Unix socket (default: `~/.ironclaw/ironclaw.sock`).
+//! The daemon must already be running (e.g. via `systemctl start lunarwing`)
+//! and listening on its Unix socket. The default path mirrors the daemon's
+//! resolution: `$LUNARWING_SOCKET` (legacy `$IRONCLAW_SOCKET`), then
+//! `$XDG_RUNTIME_DIR/lunarwing.sock`, then `<base_dir>/lunarwing.sock`.
 
 use std::path::PathBuf;
 
@@ -40,19 +42,15 @@ async fn main() -> anyhow::Result<()> {
     let socket_path = std::env::args()
         .nth(1)
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".ironclaw/ironclaw.sock")
-        });
+        .unwrap_or_else(default_socket_path);
 
-    println!("IronClaw Unix Socket Client");
+    println!("LunarWing Unix Socket Client");
     println!("Connecting to: {}", socket_path.display());
 
     let stream = UnixStream::connect(&socket_path).await.map_err(|e| {
         anyhow::anyhow!(
-            "Failed to connect to Ironclaw REPL at {}: {}.\n\
-             Make sure the daemon is running (`ironclaw run` or `systemctl start ironclaw`).",
+            "Failed to connect to LunarWing REPL at {}: {}.\n\
+             Make sure the daemon is running (`lunarwing run` or `systemctl start lunarwing`).",
             socket_path.display(),
             e
         )
@@ -142,6 +140,32 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Resolve the default socket path, mirroring the daemon's resolution order:
+/// `$LUNARWING_SOCKET` (legacy `$IRONCLAW_SOCKET`), then
+/// `$XDG_RUNTIME_DIR/lunarwing.sock`, then `<base_dir>/lunarwing.sock` where
+/// `<base_dir>` is `$LUNARWING_BASE_DIR` (legacy `$IRONCLAW_BASE_DIR`) or
+/// `~/.ironclaw` as the pre-rename fallback.
+fn default_socket_path() -> PathBuf {
+    if let Ok(path) = std::env::var("LUNARWING_SOCKET") {
+        return PathBuf::from(path);
+    }
+    if let Ok(path) = std::env::var("IRONCLAW_SOCKET") {
+        return PathBuf::from(path);
+    }
+    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        return PathBuf::from(runtime_dir).join("lunarwing.sock");
+    }
+    let base_dir = std::env::var("LUNARWING_BASE_DIR")
+        .or_else(|_| std::env::var("IRONCLAW_BASE_DIR"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".ironclaw")
+        });
+    base_dir.join("lunarwing.sock")
 }
 
 async fn send_message(write: &mut OwnedWriteHalf, msg: &ReplMessage) -> anyhow::Result<()> {

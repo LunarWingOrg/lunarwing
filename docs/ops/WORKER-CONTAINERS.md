@@ -68,7 +68,7 @@ Persistent worker mode (`PEBBLE_MODE=websocket`). Requires `AGENT_AUTH_TOKEN` fo
 
 ## Opencode Worker
 
-[opencode](https://opencode.ai) (sst/opencode) integrated as a persistent LunarWing external worker. A Bun/TypeScript bridge wraps the `@opencode-ai/sdk` and translates between the opencode session/event model and the `ironclaw-agent-v1` WebSocket protocol. The opencode headless server runs internally on `127.0.0.1:4096` (not exposed). Health on 8443, WebSocket on 9090.
+[opencode](https://opencode.ai) (sst/opencode) integrated as a persistent LunarWing external worker. A Bun/TypeScript bridge wraps the `@opencode-ai/sdk` and translates between the opencode session/event model and the `lunarwing-agent-v1` WebSocket protocol. The opencode headless server runs internally on `127.0.0.1:4096` (not exposed). Health on 8443, WebSocket on 9090.
 
 **Dockerfile:** `opencode4lunarwing/Dockerfile`
 
@@ -104,7 +104,7 @@ Modes: `--mode websocket` (default, persistent), `--mode cli` (one-shot), `--mod
 
 ## Shared Protocol
 
-All worker images use the `ironclaw-agent-v1` WebSocket subprotocol. Messages are JSON envelopes with `id`, `type`, `timestamp`, `payload`. The worker sends `ready` on connect, receives `task_request`, streams `task_progress`, and sends a final `task_result`.
+All worker images use the `lunarwing-agent-v1` WebSocket subprotocol; the legacy `ironclaw-agent-v1` name is still accepted as an alias for one release. Messages are JSON envelopes with `id`, `type`, `timestamp`, `payload`. The worker sends `ready` on connect, receives `task_request`, streams `task_progress`, and sends a final `task_result`.
 
 ## Proxy Note
 

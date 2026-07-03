@@ -1,4 +1,4 @@
-//! Brave Search LLM Context WASM Tool for IronClaw.
+//! Brave Search LLM Context WASM Tool for LunarWing.
 //!
 //! Fetches pre-extracted web content from the Brave Search LLM Context API,
 //! optimized for grounding LLM responses (RAG, fact-checking, research).
@@ -6,7 +6,7 @@
 //! # Authentication
 //!
 //! Uses the same Brave Search API key as the Web Search tool:
-//! `ironclaw secret set brave_api_key <key>`
+//! `lunarwing secret set brave_api_key <key>`
 //!
 //! Get a key at: https://brave.com/search/api/
 
@@ -246,7 +246,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
 fn preflight_check() -> Result<(), String> {
     if !near::agent::host::secret_exists("brave_api_key") {
         return Err("Brave API key not found in secret store. Set it with: \
-             ironclaw secret set brave_api_key <key>. \
+             lunarwing secret set brave_api_key <key>. \
              Get a key at: https://brave.com/search/api/"
             .into());
     }
@@ -450,7 +450,7 @@ fn build_request_headers(params: &LlmContextParams) -> serde_json::Value {
     );
     map.insert(
         "User-Agent".to_string(),
-        serde_json::Value::String("IronClaw-LlmContext-Tool/0.1".to_string()),
+        serde_json::Value::String("LunarWing-LlmContext-Tool/0.1".to_string()),
     );
 
     // Location-aware headers: (X-Loc-* name, optional value from params)

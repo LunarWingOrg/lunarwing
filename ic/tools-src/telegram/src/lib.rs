@@ -1,4 +1,4 @@
-//! Telegram User-Mode WASM Tool for IronClaw.
+//! Telegram User-Mode WASM Tool for LunarWing.
 //!
 //! Provides Telegram integration operating from the **user's personal account**,
 //! not a bot. This tool sends encrypted MTProto messages directly to Telegram's
@@ -24,8 +24,8 @@
 //! # Prerequisites
 //!
 //! 1. Get Telegram API credentials from https://my.telegram.org/apps
-//! 2. Store them: `ironclaw secret set telegram_api_id <id>`
-//!    `ironclaw secret set telegram_api_hash <hash>`
+//! 2. Store them: `lunarwing secret set telegram_api_id <id>`
+//!    `lunarwing secret set telegram_api_hash <hash>`
 //! 3. Use the `login` action with your phone number
 //!
 //! # Authentication Flow

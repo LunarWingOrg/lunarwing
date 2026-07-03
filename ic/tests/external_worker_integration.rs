@@ -1,7 +1,8 @@
 //! Integration tests for the external-worker (EWE) WebSocket path.
 //!
-//! These tests stand up a mock worker speaking the `ironclaw-agent-v1` protocol
-//! on an ephemeral loopback port and drive the real
+//! These tests stand up a mock worker speaking the `lunarwing-agent-v1`
+//! protocol (legacy alias `ironclaw-agent-v1`) on an ephemeral loopback port
+//! and drive the real
 //! [`ExternalWorkerManager::execute_task`] against it. They close the largest
 //! pre-existing test gap (T1 in SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md):
 //! `connect_and_handshake`, `run_external_task`, and `execute_task` were
@@ -15,6 +16,8 @@
 //! - connection failure (unreachable endpoint) -> `ExternalWorkerConnectionFailed`
 //! - protocol error (connection closed before `ready`) -> `ExternalWorkerProtocolError`
 //! - connection-pool reuse across two sequential successful tasks
+//! - subprotocol negotiation with legacy-only (`ironclaw-agent-v1`) and
+//!   new-only (`lunarwing-agent-v1`) workers
 //!
 //! No PostgreSQL / Docker / external services required; pure loopback WS.
 
@@ -33,7 +36,9 @@ use uuid::Uuid;
 use lunarwing::config::{ExternalWorkerConfig, LoadBalanceStrategy, WorkerEndpoint};
 use lunarwing::error::OrchestratorError;
 use lunarwing::orchestrator::ExternalWorkerManager;
-use lunarwing::orchestrator::external_worker::{ExternalTaskStatus, TaskContext};
+use lunarwing::orchestrator::external_worker::{
+    ExternalTaskStatus, SUBPROTOCOL, SUBPROTOCOL_LEGACY, TaskContext,
+};
 
 /// How long we wait for any single test assertion before declaring the test
 /// hung. The protocol path under test should resolve in well under this.
@@ -60,6 +65,29 @@ enum MockBehavior {
     CloseBeforeReady,
 }
 
+/// Which subprotocol names the mock worker accepts, simulating worker
+/// generations on either side of the ironclaw -> lunarwing rename.
+#[derive(Clone, Copy)]
+enum SubprotocolPolicy {
+    /// Current worker: accepts both names, prefers `lunarwing-agent-v1`.
+    PreferNew,
+    /// Pre-rename worker: only knows `ironclaw-agent-v1`.
+    LegacyOnly,
+    /// Future worker with the legacy alias dropped: only `lunarwing-agent-v1`.
+    NewOnly,
+}
+
+impl SubprotocolPolicy {
+    /// Accepted names in preference order.
+    fn accepted(self) -> &'static [&'static str] {
+        match self {
+            Self::PreferNew => &[SUBPROTOCOL, SUBPROTOCOL_LEGACY],
+            Self::LegacyOnly => &[SUBPROTOCOL_LEGACY],
+            Self::NewOnly => &[SUBPROTOCOL],
+        }
+    }
+}
+
 /// Build a protocol envelope as a JSON string. The id/timestamp are opaque to
 /// the client; hardcoded values are fine.
 fn envelope(msg_type: &str, payload: serde_json::Value) -> String {
@@ -72,16 +100,34 @@ fn envelope(msg_type: &str, payload: serde_json::Value) -> String {
     .to_string()
 }
 
-/// Spawn a mock worker with no auth check. See [`spawn_mock_worker_with_auth`].
+/// Spawn a mock worker with no auth check. See [`spawn_mock_worker_full`].
 async fn spawn_mock_worker_async(behavior: MockBehavior) -> (String, Arc<AtomicUsize>) {
-    spawn_mock_worker_with_auth(behavior, None).await
+    spawn_mock_worker_full(behavior, None, SubprotocolPolicy::PreferNew).await
 }
 
-/// Spawn a mock worker bound to an ephemeral loopback port that optionally
-/// requires a Bearer token matching `expected_token` on the WS upgrade.
+/// Spawn a mock worker that requires a matching Bearer token on the WS upgrade.
 async fn spawn_mock_worker_with_auth(
     behavior: MockBehavior,
     expected_token: Option<String>,
+) -> (String, Arc<AtomicUsize>) {
+    spawn_mock_worker_full(behavior, expected_token, SubprotocolPolicy::PreferNew).await
+}
+
+/// Spawn a mock worker with a specific subprotocol acceptance policy.
+async fn spawn_mock_worker_with_subprotocol(
+    behavior: MockBehavior,
+    subprotocols: SubprotocolPolicy,
+) -> (String, Arc<AtomicUsize>) {
+    spawn_mock_worker_full(behavior, None, subprotocols).await
+}
+
+/// Spawn a mock worker bound to an ephemeral loopback port that optionally
+/// requires a Bearer token matching `expected_token` on the WS upgrade and
+/// negotiates subprotocols per `subprotocols`.
+async fn spawn_mock_worker_full(
+    behavior: MockBehavior,
+    expected_token: Option<String>,
+    subprotocols: SubprotocolPolicy,
 ) -> (String, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
@@ -95,6 +141,7 @@ async fn spawn_mock_worker_with_auth(
         behavior,
         conn_count.clone(),
         expected_token,
+        subprotocols,
     ));
 
     (url, conn_count)
@@ -106,6 +153,7 @@ async fn run_accept_loop(
     behavior: MockBehavior,
     conn_count: Arc<AtomicUsize>,
     expected_token: Option<String>,
+    subprotocols: SubprotocolPolicy,
 ) {
     loop {
         let (stream, _peer) = match listener.accept().await {
@@ -116,7 +164,7 @@ async fn run_accept_loop(
         let b = behavior.clone();
         let tok = expected_token.clone();
         tokio::spawn(async move {
-            let _ = handle_connection(stream, b, tok).await;
+            let _ = handle_connection(stream, b, tok, subprotocols).await;
         });
     }
 }
@@ -129,15 +177,24 @@ fn unauthorized_response() -> ErrorResponse {
         .expect("valid error response")
 }
 
+/// 400 response used to reject a WS upgrade with no acceptable subprotocol.
+fn bad_subprotocol_response() -> ErrorResponse {
+    tokio_tungstenite::tungstenite::http::Response::builder()
+        .status(tokio_tungstenite::tungstenite::http::StatusCode::BAD_REQUEST)
+        .body(Some("no acceptable subprotocol".to_string()))
+        .expect("valid error response")
+}
+
 /// Per-connection protocol handler. Implements the server side of
-/// `ironclaw-agent-v1` for the scripted behavior. When `expected_token` is set,
-/// the WS upgrade is rejected unless the client sends a matching
-/// `Authorization: Bearer <token>` header.
+/// `lunarwing-agent-v1` (or its legacy alias, per the policy) for the scripted
+/// behavior. When `expected_token` is set, the WS upgrade is rejected unless
+/// the client sends a matching `Authorization: Bearer <token>` header.
 #[allow(clippy::result_large_err)] // Err type is fixed by tungstenite's Callback trait
 async fn handle_connection(
     stream: tokio::net::TcpStream,
     behavior: MockBehavior,
     expected_token: Option<String>,
+    subprotocols: SubprotocolPolicy,
 ) {
     let handshake = move |req: &Request, mut resp: Response| -> Result<Response, ErrorResponse> {
         // Validate Bearer auth when a token is configured.
@@ -152,13 +209,31 @@ async fn handle_connection(
                 return Err(unauthorized_response());
             }
         }
-        // Echo the negotiated subprotocol (the orchestrator rejects "no
-        // subprotocol"); mirrors what real worker containers must do.
-        if req.headers().contains_key("sec-websocket-protocol") {
-            resp.headers_mut().insert(
-                "sec-websocket-protocol",
-                "ironclaw-agent-v1".parse().expect("valid header value"),
-            );
+        // Echo the matched OFFERED subprotocol, never a static constant:
+        // tungstenite rejects both "no subprotocol" (when one was offered)
+        // and an echo that was not in the client's offer list. This mirrors
+        // what real worker containers must do to stay compatible with both
+        // old and new daemons.
+        if let Some(offer) = req.headers().get("sec-websocket-protocol") {
+            let offered: Vec<&str> = offer
+                .to_str()
+                .ok()
+                .map(|v| v.split(',').map(str::trim).collect())
+                .unwrap_or_default();
+            let matched = subprotocols
+                .accepted()
+                .iter()
+                .copied()
+                .find(|name| offered.contains(name));
+            match matched {
+                Some(name) => {
+                    resp.headers_mut().insert(
+                        "sec-websocket-protocol",
+                        name.parse().expect("valid header value"),
+                    );
+                }
+                None => return Err(bad_subprotocol_response()),
+            }
         }
         Ok(resp)
     };
@@ -549,6 +624,76 @@ async fn connection_pool_reuse_across_sequential_tasks() {
         "expected pool reuse (1 connection), got {}",
         conn_count.load(Ordering::SeqCst)
     );
+}
+
+#[tokio::test]
+async fn legacy_only_worker_still_negotiates() {
+    // Regression test for the ironclaw -> lunarwing subprotocol rename: a
+    // worker built before the rename only knows `ironclaw-agent-v1`. Because
+    // the daemon offers both names (new first), the worker matches and echoes
+    // the legacy alias, and the handshake + task must still succeed.
+    let (url, _count) = spawn_mock_worker_with_subprotocol(
+        MockBehavior::Success {
+            progress: vec![],
+            output: "ok".to_string(),
+        },
+        SubprotocolPolicy::LegacyOnly,
+    )
+    .await;
+    let mgr = ExternalWorkerManager::new(vec![config_for(&url)]);
+
+    let res = timeout(
+        TEST_BOUND,
+        mgr.execute_task(
+            Uuid::new_v4(),
+            "mock",
+            "task",
+            Some(5_000),
+            true,
+            TaskContext::default(),
+        ),
+    )
+    .await
+    .expect("test timed out")
+    .expect("execute_task errored against legacy-only worker")
+    .expect("expected result");
+
+    assert_eq!(res.status, ExternalTaskStatus::Success);
+    assert_eq!(res.output, "ok");
+}
+
+#[tokio::test]
+async fn new_only_worker_negotiates_primary_name() {
+    // A worker that only accepts `lunarwing-agent-v1` rejects the upgrade
+    // unless the daemon actually offers the new primary name — this fails if
+    // the client offer ever regresses to the legacy name alone.
+    let (url, _count) = spawn_mock_worker_with_subprotocol(
+        MockBehavior::Success {
+            progress: vec![],
+            output: "ok".to_string(),
+        },
+        SubprotocolPolicy::NewOnly,
+    )
+    .await;
+    let mgr = ExternalWorkerManager::new(vec![config_for(&url)]);
+
+    let res = timeout(
+        TEST_BOUND,
+        mgr.execute_task(
+            Uuid::new_v4(),
+            "mock",
+            "task",
+            Some(5_000),
+            true,
+            TaskContext::default(),
+        ),
+    )
+    .await
+    .expect("test timed out")
+    .expect("execute_task errored against new-only worker")
+    .expect("expected result");
+
+    assert_eq!(res.status, ExternalTaskStatus::Success);
 }
 
 #[tokio::test]

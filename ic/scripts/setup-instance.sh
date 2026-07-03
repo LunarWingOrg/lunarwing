@@ -29,7 +29,7 @@ usage() {
 Usage:
   scripts/setup-instance.sh [options]
 
-Prepare a fresh LunarWing/IronClaw instance directory with:
+Prepare a fresh LunarWing instance directory with:
   - config.toml
   - .env bootstrap file
   - workspace-template/*.md defaults (SOUL.md, IDENTITY.md, ...)

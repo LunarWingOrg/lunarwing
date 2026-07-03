@@ -187,10 +187,10 @@ async def test_telegram_hot_activation_transitions_installed_to_active(page):
                     {
                         "success": True,
                         "activated": False,
-                        "message": "Configuration saved for 'telegram'. Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. IronClaw will finish setup automatically.",
+                        "message": "Configuration saved for 'telegram'. Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. LunarWing will finish setup automatically.",
                         "verification": {
                             "code": "iclaw-7qk2m9",
-                            "instructions": "Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. IronClaw will finish setup automatically.",
+                            "instructions": "Send `/start iclaw-7qk2m9` to @test_hot_bot in Telegram. LunarWing will finish setup automatically.",
                             "deep_link": "https://t.me/test_hot_bot?start=iclaw-7qk2m9",
                         },
                     }

@@ -225,7 +225,7 @@ async fn test_agent(name: &str) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("failed to capture agent stdout"))?;
 
     // Run ACP handshake inside a LocalSet (!Send futures).
-    // Uses IronClawAcpClient with a PrintEventSink so the test exercises
+    // Uses LunarWingAcpClient with a PrintEventSink so the test exercises
     // the same permission auto-approval and event translation as real jobs.
     let local_set = tokio::task::LocalSet::new();
     let result = local_set
@@ -233,7 +233,7 @@ async fn test_agent(name: &str) -> anyhow::Result<()> {
             let outgoing = child_stdin.compat_write();
             let incoming = child_stdout.compat();
 
-            let client = acp_bridge::IronClawAcpClient::new(PrintEventSink);
+            let client = acp_bridge::LunarWingAcpClient::new(PrintEventSink);
 
             let (conn, handle_io) =
                 acp::ClientSideConnection::new(client, outgoing, incoming, |fut| {
@@ -243,7 +243,7 @@ async fn test_agent(name: &str) -> anyhow::Result<()> {
 
             let handshake = tokio::time::timeout(
                 std::time::Duration::from_secs(15),
-                conn.initialize(acp_bridge::ironclaw_init_request()),
+                conn.initialize(acp_bridge::lunarwing_init_request()),
             )
             .await;
 

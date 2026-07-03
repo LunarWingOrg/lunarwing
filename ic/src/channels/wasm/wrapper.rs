@@ -3437,18 +3437,26 @@ fn read_attachments(paths: &[String]) -> Result<Vec<wit_channel::Attachment>, St
     let mut attachments = Vec::with_capacity(paths.len());
     let mut total_bytes: u64 = 0;
     let tmp_base = std::path::Path::new("/tmp");
-    let home_base = dirs::home_dir()
+    let base_dir = crate::bootstrap::lunarwing_base_dir();
+    // Legacy default base dir (`~/.ironclaw`) is still accepted so attachments
+    // keep working on installs that predate the rename.
+    let legacy_home_base = dirs::home_dir()
         .map(|h| h.join(".ironclaw"))
         .unwrap_or_default();
 
     for path in paths {
-        // Validate paths are under /tmp/ or ~/.lunarwing/ to prevent arbitrary file reads
+        // Validate paths are under /tmp/ or the base dir to prevent arbitrary file reads
         let validated = crate::tools::builtin::path_utils::validate_path(path, Some(tmp_base))
-            .or_else(|_| crate::tools::builtin::path_utils::validate_path(path, Some(&home_base)));
+            .or_else(|_| crate::tools::builtin::path_utils::validate_path(path, Some(&base_dir)))
+            .or_else(|_| {
+                crate::tools::builtin::path_utils::validate_path(path, Some(&legacy_home_base))
+            });
         let validated = validated.map_err(|e| {
             format!(
-                "Invalid attachment path '{}': must be under /tmp/ or ~/.lunarwing/: {}",
-                path, e
+                "Invalid attachment path '{}': must be under /tmp/ or the LunarWing base directory ({}): {}",
+                path,
+                base_dir.display(),
+                e
             )
         })?;
 
@@ -3559,7 +3567,13 @@ mod tests {
             return target;
         }
 
+        let base_installed = crate::bootstrap::lunarwing_base_dir().join("channels/xmpp.wasm");
+        if base_installed.exists() {
+            return base_installed;
+        }
+
         if let Some(home) = std::env::var_os("HOME") {
+            // Legacy default base dir, kept for pre-rename installs.
             let installed = std::path::PathBuf::from(home).join(".ironclaw/channels/xmpp.wasm");
             if installed.exists() {
                 return installed;

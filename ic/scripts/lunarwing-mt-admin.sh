@@ -2341,6 +2341,7 @@ write_tenant_bridge_env() {
   (
     umask 077
     cat >"$path" <<ENVEOF
+LUNARWING_BASE_DIR=$state_dir
 IRONCLAW_BASE_DIR=$state_dir
 XMPP_BRIDGE_BIND=127.0.0.1:${bridge_port}
 XMPP_BRIDGE_TOKEN=$bridge_token
@@ -2469,8 +2470,9 @@ generate_darkirc_config() {
 
 # ── External-worker config.toml generation ────────────────────────────────────
 #
-# External workers (nanocode, pebble, …) speak the ironclaw-agent-v1 WebSocket
-# protocol and are routed by the agent's `create_job(mode: "<worker>")` tool.
+# External workers (nanocode, pebble, …) speak the lunarwing-agent-v1 WebSocket
+# protocol (legacy alias ironclaw-agent-v1 is still accepted for back-compat)
+# and are routed by the agent's `create_job(mode: "<worker>")` tool.
 # The daemon discovers them from `[[sandbox.external_workers]]` blocks in
 # `config.toml` under the tenant's LUNARWING_BASE_DIR (the state dir). Without
 # this block the agent has nothing to route `create_job(mode: "<worker>")` to
@@ -4544,7 +4546,7 @@ render_tenant_systemd_units() {
   proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/lunarwing_weechat_wss/weechat_relay/ws_adapter.py"
 
   # Proxy unit
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
@@ -4609,7 +4611,7 @@ EOF
 
   if tenant_darkirc_enabled "$name"; then
     local darkirc_adapter_path
-    darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+    darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_lunarwing/darkirc/adapter/darkirc_adapter.py"
 
     cat >"$user_unit_dir/lunarwing-darkirc-adapter-${name}.service" <<EOF
 [Unit]
@@ -4839,7 +4841,7 @@ render_tenant_openrc_units() {
   proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/lunarwing_weechat_wss/weechat_relay/ws_adapter.py"
   local ws_adapter_dir
   ws_adapter_dir="$(dirname "$ws_adapter_path")"
 
@@ -5289,7 +5291,7 @@ INITEOF
   # DarkIRC adapter init script (only when enabled)
   if tenant_darkirc_enabled "$name"; then
   local darkirc_adapter_path darkirc_adapter_dir
-  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_lunarwing/darkirc/adapter/darkirc_adapter.py"
   darkirc_adapter_dir="$(dirname "$darkirc_adapter_path")"
 
   cat >"/etc/init.d/lunarwing-darkirc-adapter-${name}" <<INITEOF

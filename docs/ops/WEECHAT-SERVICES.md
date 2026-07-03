@@ -26,7 +26,7 @@ Three components per tenant:
 | WS adapter | `ws_adapter.py` | Bridges WeeChat's WebSocket relay to a local HTTP API |
 | WASM channel | `weechat_relay_channel` | Polls the adapter every 3s; sends directly to the relay |
 
-The adapter script lives at `ironclaw_weechat_wss/weechat_relay/ws_adapter.py` in the source repo.
+The adapter script lives at `lunarwing_weechat_wss/weechat_relay/ws_adapter.py` in the source repo.
 
 ## Service Dependency Chain
 
@@ -108,9 +108,9 @@ PartOf=lunarwing-<name>.service
 
 [Service]
 Type=simple
-WorkingDirectory=<repo>/ironclaw_weechat_wss/weechat_relay
+WorkingDirectory=<repo>/lunarwing_weechat_wss/weechat_relay
 EnvironmentFile=<env_dir>/lunarwing.env
-ExecStart=/usr/bin/python3 <repo>/ironclaw_weechat_wss/weechat_relay/ws_adapter.py
+ExecStart=/usr/bin/python3 <repo>/lunarwing_weechat_wss/weechat_relay/ws_adapter.py
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

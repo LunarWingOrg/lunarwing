@@ -106,12 +106,12 @@ The model and baseURL baked into `config/nanocode.json` can be overridden per-te
 The bridge uses `@nanogpt/sdk/v2` (`createOpencodeClient`) to talk to the internal nanocode server. Each `task_request` creates a session with full-auto permissions, sends a prompt, and subscribes to SSE events for streaming progress. This is in-process SDK communication, not subprocess spawning.
 
 ### WebSocket protocol (`agent_comm_protocol.json`)
-Same protocol as codex4ironclaw: JSON envelope with `id`, `type`, `timestamp`, `payload`. Subprotocol: `ironclaw-agent-v1`. Worker sends `ready` on connect, receives `task_request`, streams `task_progress`, sends `task_result`.
+Same protocol as the other LunarWing workers (pebble, opencode): JSON envelope with `id`, `type`, `timestamp`, `payload`. Subprotocol: `lunarwing-agent-v1` (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle). Worker sends `ready` on connect, receives `task_request`, streams `task_progress`, sends `task_result`.
 
 ### Health server (`health_server.py`)
 Python stdlib HTTP server. `/ready` reads `/tmp/lunarwing_ws_state.json` written by the bridge to report WebSocket readiness.
 
-### Key difference from codex4ironclaw
+### Key difference from the codex worker (`codex4lunarwing/`)
 - TypeScript/Bun bridge instead of Python (uses nanocode SDK natively)
 - In-process SDK calls instead of subprocess spawning
 - Stateful sessions (nanocode keeps session history in SQLite)

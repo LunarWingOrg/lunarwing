@@ -582,9 +582,9 @@ low-RAM hosts (Rust compilation is memory-intensive). Options:
   full configuration reference, port registry schema, security model
 - [Gentoo + OpenRC + Podman Setup & Changes](../ops/MT-GENTOO-SETUP-AND-CHANGES-MADE.md)
   -- OpenRC/Podman-specific setup, the env-file fix, and operational caveats
-- [WeeChat Relay Channel](ironclaw_weechat_wss/README.md) -- channel
+- [WeeChat Relay Channel](lunarwing_weechat_wss/README.md) -- channel
   protocol details, architecture, and development
-- [WeeChat Relay Installation](ironclaw_weechat_wss/weechat_relay/INSTALL.md)
+- [WeeChat Relay Installation](lunarwing_weechat_wss/weechat_relay/INSTALL.md)
   -- standalone installation guide
 - [Single-Tenant Test Harness](../ops/HARNESS-SINGLE-TENANT.md) -- for
   development/testing without production isolation
