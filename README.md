@@ -109,7 +109,7 @@ Our core team uses a self-hosted Vikunja kanban board to track tasks. Additional
 
 There are two ways to run LunarWing: a **single local instance** (the fastest way to try it) and **multi-tenant production** (the way it is deployed for real, with per-tenant OS isolation). The multi-tenant path is the maintained, primary deployment model.
 
-### Quick local instance (onboarding wizard)
+### Quick local instance (We strongly recommend the multi-tenant approach below as this method is not currently maintained)
 
 The fastest way to a running agent is to build the release binary and let the onboarding wizard configure everything. On first run with no database configured, `lunarwing run` auto-triggers **quick onboarding**, which defaults every non-LLM choice (embedded libSQL at `~/.lunarwing/lunarwing.db`, keychain-or-env secrets) and only prompts for the inference provider and model.
 
