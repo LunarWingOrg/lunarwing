@@ -1,6 +1,6 @@
 # pebble4lunarwing
 
-WebSocket bridge that integrates the [Pebble](../pebble/) agentic coding harness as a LunarWing external worker.
+WebSocket bridge that integrates the [Pebble](https://github.com/nanogpt-community/pebble) agentic coding harness as a LunarWing external worker.
 
 ## Quick Start
 
