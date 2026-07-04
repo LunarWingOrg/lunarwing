@@ -1,5 +1,7 @@
 # PRE-RELEASE CHECKLIST for 1.1.9 Codename `Kiyome きよめ`
 **Open TODOs (1.1.9) — To be done before release**
+
+See Issue: 
 https://github.com/LunarWingOrg/lunarwing/issues/140
 
 
@@ -37,6 +39,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 30. [ ] Update release date in release notes prior to last two steps below
 31. [ ] Create new branch to correspond with releases
 32. [ ] Create GH release tag and add release notes to it like other releases already have
+33. [ ] Maintain 1.1.9.X going forward as stable supported build. Backport easy high priority bug fixes to it
 
 ---
 
