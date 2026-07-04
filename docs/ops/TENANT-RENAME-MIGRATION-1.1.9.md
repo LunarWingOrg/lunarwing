@@ -68,13 +68,16 @@ no operator action — workers and daemon negotiate automatically.
 there; a tenant reaching 1.2.0 with un-rerendered units will have adapter
 services pointing at paths that no longer exist.
 
-## Caveat: render-units footgun (GOALS 1.1.9 item #7)
+## Caveat: render-units footgun (fix scheduled v1.2.3)
 
-GOALS_1.1.9 item #7 flags a per-tenant WeeChat health-glob gate /
-service-flap footgun around `render-units`. Since that fix is slated for
-1.1.9 itself, the comfortable sequence is: land item #7 first, then do
-the tenant-by-tenant `render-units` sweep as one pass of the 1.1.9
-rollout.
+A per-tenant WeeChat health-glob gate / service-flap footgun exists
+around `render-units` (writeup: `docs/proposals/RENDER_UNITS_SMALL_BUG.md`;
+carried as a known issue since v1.1.4). The fix is scheduled for
+**v1.2.3** (`ROADMAP_2026.md`), so it will NOT land in 1.1.9: when doing
+the tenant-by-tenant `render-units` sweep, watch the weechat/adapter
+services for a flap after restart (`supervise-daemon` respawn limit is
+5 per 60s) and expect possible transient health-pipeline noise. See
+`TEST-PLAN-UPGRADED-TENANT-1.1.9.md` for the validated upgrade test flow.
 
 ## Single-tenant deployments
 

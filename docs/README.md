@@ -69,6 +69,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`DARKIRC-MULTITENANT.md`](ops/DARKIRC-MULTITENANT.md) | DarkIRC multitenant operations: port migration, provisioning, lifecycle, health, troubleshooting |
 | [`TENANT-CONFIGURATION.md`](ops/TENANT-CONFIGURATION.md) | Per-tenant configuration reference (env, LLM, XMPP, ports) |
 | [`TENANT-RENAME-MIGRATION-1.1.9.md`](ops/TENANT-RENAME-MIGRATION-1.1.9.md) | Upgrading 1.1.7/1.1.8 tenants across the 1.1.9 directory renames (render-units flow, compat-symlink window, v1.2.0 deadline) |
+| [`TEST-PLAN-UPGRADED-TENANT-1.1.9.md`](ops/TEST-PLAN-UPGRADED-TENANT-1.1.9.md) | Validated test plan for the upgraded-tenant path: synthesize a v1.1.8 tenant, upgrade, assert compat symlinks/protocol/render-units (OpenRC) |
 | [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multi-tenant test harness guide |
 | [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant test harness guide |
 | [`SSH-HARNESS-SETUP.md`](ops/SSH-HARNESS-SETUP.md) | SSH harness setup & ops: config, key provisioning (mt-admin + manual), verifying in a worker, troubleshooting |
