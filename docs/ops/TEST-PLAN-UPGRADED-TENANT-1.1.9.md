@@ -1,5 +1,7 @@
 # Test Plan: Upgraded Tenant Across the 1.1.9 Renames (OpenRC/Gentoo)
 
+**Current**
+
 **Goal:** validate `docs/ops/TENANT-RENAME-MIGRATION-1.1.9.md` end-to-end on a
 tenant that was **provisioned on v1.1.8** and upgraded to 1.1.9 — the case the
 fresh-tenant test (tenant `lion`, provisioned 2026-07-04 from the 1.1.9 tree)
