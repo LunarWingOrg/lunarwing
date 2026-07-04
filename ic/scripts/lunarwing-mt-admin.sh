@@ -273,6 +273,7 @@ Commands:
 
   build-opencode-worker            Build the opencode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
+    --with-toolchains              Include Rust/Go/C++ toolchains (default: slim)
 
   build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
 
@@ -287,6 +288,15 @@ Commands:
   restart-tenant <name>           Stop then start
   render-units <name>             Re-render a tenant's service units from the current
                                   generator (no restart; applies init-script changes)
+  upgrade-tenant <name> --target <ref>
+                                  In-place upgrade: backup, stop, git fetch + checkout
+                                  <ref> (as the tenant user), rebuild with WASM,
+                                  re-render units, patch env, start. Long-running —
+                                  run inside tmux.
+    --source-repo <path>           Point the tenant's git origin at this repo first
+    --no-backup                    Skip the pre-upgrade Postgres backup
+    --skip-render                  Keep existing unit files (run render-units later;
+                                   must happen before v1.2.0 for pre-1.1.9 tenants)
   rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
@@ -1618,6 +1628,7 @@ build_tenant() {
   local with_nanocode="${3:-false}"
   local with_pebble="${4:-false}"
   local with_opencode="${5:-false}"
+  local with_toolchains="${6:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -1671,7 +1682,7 @@ build_tenant() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   # After a rebuild, the tenant will be restarted with the new binary. If the
@@ -1756,6 +1767,7 @@ build_all() {
   local with_nanocode="${2:-false}"
   local with_pebble="${3:-false}"
   local with_opencode="${4:-false}"
+  local with_toolchains="${5:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -1779,7 +1791,7 @@ build_all() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   while IFS= read -r name; do
@@ -1864,32 +1876,32 @@ build_pebble_worker() {
 
 build_opencode_worker() {
   local no_cache="${1:-false}"
+  local with_toolchains="${2:-false}"
   local opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
 
   [[ -d "$opencode_dir" ]] || die "opencode worker dir not found at $opencode_dir"
 
   ensure_container_runtime
 
-  say "building opencode worker Docker image ..."
+  local toolchain_desc="slim (no toolchains)"
+  [[ "$with_toolchains" == "true" ]] && toolchain_desc="fat (with Rust/Go/C++ toolchains)"
+  say "building opencode worker Docker image [$toolchain_desc] ..."
+
   local cache_flag=""
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
+  local toolchain_arg=""
+  [[ "$with_toolchains" == "true" ]] && toolchain_arg="--build-arg WITH_TOOLCHAINS=true"
+
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    # --network=host (F8): see build_nanocode_worker — podman build's default network
-    # can't reach the internet for RUN steps (apt/bun) on hosts where the bridge/pasta
-    # path is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
-    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
-    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
-    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct if
-    # the image is ever run directly / under a healthcheck-honouring runtime).
-    podman build $cache_flag --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    podman build $cache_flag $toolchain_arg --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   else
-    docker build $cache_flag -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    docker build $cache_flag $toolchain_arg -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   fi
 
-  say "opencode worker image built: lunarwing-worker-opencode:latest"
+  say "opencode worker image built: lunarwing-worker-opencode:latest [$toolchain_desc]"
 }
 
 # ── WASM install ─────────────────────────────────────────────────────────────
@@ -6044,6 +6056,84 @@ restart_tenant() {
   start_tenant "$name"
 }
 
+# In-place tenant upgrade: composes the verified sequence (backup -> stop ->
+# fetch/checkout as the tenant user -> rebuild with WASM -> re-render units ->
+# patch env -> start). The verbs it calls dispatch OpenRC/systemd themselves,
+# so this works on any supported init system. See
+# docs/ops/TENANT-RENAME-MIGRATION-1.1.9.md for the 1.1.9 rename specifics.
+upgrade_tenant() {
+  local name="$1" target="$2" source_repo="$3" do_backup="$4" do_render="$5"
+  local lw_root repo
+  lw_root="$(tenant_lw_root "$name")"
+  repo="$(tenant_repo "$name")"
+
+  [[ -d "$lw_root/.git" ]] || die "no git checkout at $lw_root; run add-tenant first"
+
+  local tgit=(sudo -u "$name" git -c safe.directory="$lw_root" -C "$lw_root")
+
+  if [[ -n "$source_repo" ]]; then
+    [[ -d "$source_repo/.git" || -f "$source_repo/HEAD" ]] || die "--source-repo $source_repo is not a git repository"
+    say "pointing origin at $source_repo ..."
+    "${tgit[@]}" remote set-url origin "$source_repo" || die "failed to retarget origin"
+  fi
+
+  local before
+  before="$("${tgit[@]}" describe --tags --always 2>/dev/null || echo unknown)"
+  say "upgrading tenant '$name': $before -> $target"
+
+  if [[ "$do_backup" == "true" ]]; then
+    backup_tenant_postgres "$name"
+  else
+    say "skipping pre-upgrade backup (--no-backup)"
+  fi
+
+  say "fetching tags + refs from origin (as $name) ..."
+  "${tgit[@]}" fetch --tags --prune origin || die "git fetch failed"
+  "${tgit[@]}" rev-parse --verify --quiet "${target}^{commit}" >/dev/null 2>&1 \
+    || "${tgit[@]}" rev-parse --verify --quiet "origin/${target}^{commit}" >/dev/null 2>&1 \
+    || die "target ref '$target' not found after fetch (need a branch, tag, or commit reachable from origin)"
+
+  stop_tenant "$name"
+
+  say "checking out $target (as $name) ..."
+  if "${tgit[@]}" rev-parse --verify --quiet "refs/remotes/origin/$target" >/dev/null 2>&1; then
+    # Branch on origin: (re)create the local branch on it so repeat upgrades
+    # of the same branch move forward instead of reusing a stale local tip.
+    "${tgit[@]}" checkout -B "$target" "origin/$target" || die "git checkout $target failed"
+  else
+    "${tgit[@]}" checkout "$target" || die "git checkout $target failed"
+  fi
+  [[ -d "$repo/migrations" ]] || die "ic/migrations missing after checkout — wrong ref? Aborting before build."
+  say "  now at: $("${tgit[@]}" describe --tags --always 2>/dev/null)"
+
+  build_tenant "$name" "true"
+  install_wasm_tenant "$name"
+
+  if [[ "$do_render" == "true" ]]; then
+    render_tenant_units "$name"
+  else
+    say "skipping render-units (--skip-render); unit files keep their embedded paths"
+  fi
+
+  patch_tenant_env "$name"
+  start_tenant "$name"
+
+  # Pre-1.1.9 units embed renamed adapter paths that only keep working through
+  # the 1.1.9-only compat symlinks — warn (don't fail) if any remain.
+  local stale
+  stale="$(grep -rlE 'ironclaw_weechat_wss|darkirc_channel_for_ironclaw' \
+    /etc/init.d /etc/conf.d "$(tenant_home "$name")/.config/systemd/user" 2>/dev/null \
+    | grep -F -- "$name" || true)"
+  if [[ -n "$stale" ]]; then
+    say "WARNING: these units still embed pre-rename paths (run render-units before v1.2.0):"
+    say "$stale"
+  fi
+
+  say ""
+  say "tenant '$name' upgraded: $before -> $("${tgit[@]}" describe --tags --always 2>/dev/null)"
+  say "verify with: $0 status $name"
+}
+
 status_tenant() {
   local name="$1"
   name="$(sanitize_name "$name")"
@@ -6443,14 +6533,15 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
             else die "unexpected argument: $1"
@@ -6458,24 +6549,25 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
-          *)                die "unexpected argument: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
+          *)                 die "unexpected argument: $1" ;;
         esac
       done
-      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-darkirc)
@@ -6520,14 +6612,16 @@ main() {
     build-opencode-worker)
       require_root
       local no_cache="false"
+      local with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --no-cache) no_cache="true"; shift ;;
-          -*)         die "unknown flag: $1" ;;
-          *)          die "unexpected argument: $1" ;;
+          --no-cache)         no_cache="true"; shift ;;
+          --with-toolchains)  with_toolchains="true"; shift ;;
+          -*)                 die "unknown flag: $1" ;;
+          *)                  die "unexpected argument: $1" ;;
         esac
       done
-      build_opencode_worker "$no_cache"
+      build_opencode_worker "$no_cache" "$with_toolchains"
       ;;
 
     build-vision-sidecar)
@@ -6569,6 +6663,31 @@ main() {
       [[ -n "${1:-}" ]] || die "usage: render-units <name>"
       ports_registry_init
       render_tenant_units "$1"
+      ;;
+
+    upgrade-tenant)
+      require_root
+      local name="" target="" source_repo="" do_backup="true" do_render="true"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --target)      target="$2"; shift 2 ;;
+          --source-repo) source_repo="$2"; shift 2 ;;
+          --no-backup)   do_backup="false"; shift ;;
+          --skip-render) do_render="false"; shift ;;
+          -*)            die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: upgrade-tenant <name> --target <ref> [--source-repo <path>] [--no-backup] [--skip-render]"
+      [[ -n "$target" ]] || die "upgrade-tenant requires an explicit --target <ref> (no implicit default)"
+      name="$(sanitize_name "$name")"
+      ports_registry_init
+      tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+      upgrade_tenant "$name" "$target" "$source_repo" "$do_backup" "$do_render"
       ;;
 
     rotate-pg-password)
