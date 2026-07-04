@@ -273,6 +273,7 @@ Commands:
 
   build-opencode-worker            Build the opencode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
+    --with-toolchains              Include Rust/Go/C++ toolchains (default: slim)
 
   build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
 
@@ -1618,6 +1619,7 @@ build_tenant() {
   local with_nanocode="${3:-false}"
   local with_pebble="${4:-false}"
   local with_opencode="${5:-false}"
+  local with_toolchains="${6:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -1671,7 +1673,7 @@ build_tenant() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   # After a rebuild, the tenant will be restarted with the new binary. If the
@@ -1756,6 +1758,7 @@ build_all() {
   local with_nanocode="${2:-false}"
   local with_pebble="${3:-false}"
   local with_opencode="${4:-false}"
+  local with_toolchains="${5:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -1779,7 +1782,7 @@ build_all() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   while IFS= read -r name; do
@@ -1864,32 +1867,32 @@ build_pebble_worker() {
 
 build_opencode_worker() {
   local no_cache="${1:-false}"
+  local with_toolchains="${2:-false}"
   local opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
 
   [[ -d "$opencode_dir" ]] || die "opencode worker dir not found at $opencode_dir"
 
   ensure_container_runtime
 
-  say "building opencode worker Docker image ..."
+  local toolchain_desc="slim (no toolchains)"
+  [[ "$with_toolchains" == "true" ]] && toolchain_desc="fat (with Rust/Go/C++ toolchains)"
+  say "building opencode worker Docker image [$toolchain_desc] ..."
+
   local cache_flag=""
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
+  local toolchain_arg=""
+  [[ "$with_toolchains" == "true" ]] && toolchain_arg="--build-arg WITH_TOOLCHAINS=true"
+
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    # --network=host (F8): see build_nanocode_worker — podman build's default network
-    # can't reach the internet for RUN steps (apt/bun) on hosts where the bridge/pasta
-    # path is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
-    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
-    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
-    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct if
-    # the image is ever run directly / under a healthcheck-honouring runtime).
-    podman build $cache_flag --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    podman build $cache_flag $toolchain_arg --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   else
-    docker build $cache_flag -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    docker build $cache_flag $toolchain_arg -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   fi
 
-  say "opencode worker image built: lunarwing-worker-opencode:latest"
+  say "opencode worker image built: lunarwing-worker-opencode:latest [$toolchain_desc]"
 }
 
 # ── WASM install ─────────────────────────────────────────────────────────────
@@ -6443,14 +6446,15 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
             else die "unexpected argument: $1"
@@ -6458,24 +6462,25 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
-          *)                die "unexpected argument: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
+          *)                 die "unexpected argument: $1" ;;
         esac
       done
-      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-darkirc)
@@ -6520,14 +6525,16 @@ main() {
     build-opencode-worker)
       require_root
       local no_cache="false"
+      local with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --no-cache) no_cache="true"; shift ;;
-          -*)         die "unknown flag: $1" ;;
-          *)          die "unexpected argument: $1" ;;
+          --no-cache)         no_cache="true"; shift ;;
+          --with-toolchains)  with_toolchains="true"; shift ;;
+          -*)                 die "unknown flag: $1" ;;
+          *)                  die "unexpected argument: $1" ;;
         esac
       done
-      build_opencode_worker "$no_cache"
+      build_opencode_worker "$no_cache" "$with_toolchains"
       ;;
 
     build-vision-sidecar)

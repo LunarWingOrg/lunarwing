@@ -48,10 +48,18 @@ LABEL org.opencontainers.image.title="LunarWing OpenCode Worker" \
       org.opencontainers.image.description="Persistent opencode worker with WebSocket agent communication" \
       org.opencontainers.image.version="1.0.0"
 
+# WITH_TOOLCHAINS=false (default): slim runtime — no Rust/Go/C++ toolchains.
+# The opencode binary is already built in the builder stage; these are only
+# needed if coding tasks inside the container must compile native code.
+# Pass --build-arg WITH_TOOLCHAINS=true for the fat image (CI, dev tenants).
+# Also gates the heavy -dev packages and build tools (cmake, clang, llvm, etc.)
+# which are only needed to compile native dependencies at runtime.
+ARG WITH_TOOLCHAINS=false
+
+# Runtime packages: always installed (needed by the worker itself).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       python3 \
-      python3-dev \
       python3-pip \
       python3-venv \
       git \
@@ -59,36 +67,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       wget \
       ca-certificates \
-      build-essential \
-      gcc \
-      g++ \
-      libc-dev \
-      binutils \
-      cmake \
-      ninja-build \
-      clang \
-      lld \
-      llvm \
-      pkg-config \
-      libssl-dev \
-      zlib1g-dev \
-      libsqlite3-dev \
-      libpq-dev \
-      libffi-dev \
-      libz-dev \
-      liblzma-dev \
-      libzstd-dev \
-      protobuf-compiler \
-      libprotobuf-dev \
-      musl-tools \
-      libcurl4-openssl-dev \
-      libxml2-dev \
-      nodejs \
-      npm \
       openssh-client \
       jq \
       neovim \
     && rm -rf /var/lib/apt/lists/*
+
+# Toolchain packages: only when WITH_TOOLCHAINS=true.
+RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        python3-dev \
+        build-essential \
+        gcc \
+        g++ \
+        libc-dev \
+        binutils \
+        cmake \
+        ninja-build \
+        clang \
+        lld \
+        llvm \
+        pkg-config \
+        libssl-dev \
+        zlib1g-dev \
+        libsqlite3-dev \
+        libpq-dev \
+        libffi-dev \
+        libz-dev \
+        liblzma-dev \
+        libzstd-dev \
+        protobuf-compiler \
+        libprotobuf-dev \
+        musl-tools \
+        libcurl4-openssl-dev \
+        libxml2-dev \
+        nodejs \
+        npm \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # ── GitHub CLI ─────────────────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -99,21 +114,25 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Rust toolchain (rustup + cargo + rustc) ────────────────────────────────────
+# ── Rust toolchain (only with WITH_TOOLCHAINS=true) ───────────────────────────
+RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain 1.92.0 \
+      && chmod -R a+r /usr/local/rustup /usr/local/cargo; \
+    fi
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-      | sh -s -- -y --default-toolchain 1.92.0 \
-    && chmod -R a+r /usr/local/rustup /usr/local/cargo
 
-# ── Go toolchain ───────────────────────────────────────────────────────────────
+# ── Go toolchain (only with WITH_TOOLCHAINS=true) ──────────────────────────────
+RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
+      ARCH=$(dpkg --print-architecture) \
+      && curl -fsSL "https://go.dev/dl/go1.24.3.linux-${ARCH}.tar.gz" \
+        | tar -C /usr/local -xz; \
+    fi
 ENV GOROOT=/usr/local/go \
     GOPATH=/home/opencode/go \
     PATH=/usr/local/go/bin:/home/opencode/go/bin:$PATH
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://go.dev/dl/go1.24.3.linux-${ARCH}.tar.gz" \
-      | tar -C /usr/local -xz
 
 # ── non-root user ──────────────────────────────────────────────────────────────
 RUN groupadd -r opencode && useradd -r -g opencode -m -d /home/opencode opencode
