@@ -120,16 +120,27 @@ Note: running any *current* mt-admin command (as above for `status`) will
 backfill tiger's v9–v11 port fields via the content-gated migration — that is
 expected and part of what we're testing.
 
-## Phase 2 — Upgrade the checkout (validates the no-breakage-window claim)
+## Phase 2 — Upgrade the checkout (validates the no-breakage-window claim
+## AND the new `upgrade-tenant` verb)
+
+The `upgrade-tenant` verb (added in 1.1.9, `lunarwing-mt-admin.sh`) composes
+the whole sequence; this test doubles as its validation run. `--skip-render`
+is essential here: it stops before the unit rewrite, preserving the
+old-path-units-through-symlinks state that Assertions A6–A9 exist to test.
 
 ```bash
-sudo /home/eris/lunarwing/ic/scripts/lunarwing-mt-admin.sh backup-tenant tiger
-sudo /home/eris/lunarwing/ic/scripts/lunarwing-mt-admin.sh stop-tenant tiger
-# retarget origin to the live repo and move to the release ref (D4)
-sudo -u tiger git -c safe.directory=/home/tiger/lunarwing -C /home/tiger/lunarwing remote set-url origin /home/eris/lunarwing
-sudo -u tiger git -c safe.directory=/home/tiger/lunarwing -C /home/tiger/lunarwing fetch --tags --prune origin
-sudo -u tiger git -c safe.directory=/home/tiger/lunarwing -C /home/tiger/lunarwing checkout -b upgrade-test origin/1.1.9-renames
+# one command: backup, stop, retarget origin, fetch, checkout D4 ref,
+# rebuild with WASM, patch env, start — WITHOUT re-rendering units (tmux!)
+sudo /home/eris/lunarwing/ic/scripts/lunarwing-mt-admin.sh \
+  upgrade-tenant tiger --target 1.1.9-renames \
+  --source-repo /home/eris/lunarwing --skip-render
 ```
+
+Expect the verb's post-start WARNING listing tiger's units as still embedding
+pre-rename paths — that is Phase 2 working as intended, not a failure.
+(Manual fallback: `backup-tenant` → `stop-tenant` → tenant-user
+`git remote set-url` / `fetch` / `checkout` → `build-tenant --with-wasm` →
+`start-tenant`, as in the migration doc.)
 
 **Assertions — symlinks arrive with the checkout:**
 
@@ -140,15 +151,9 @@ test -f /home/tiger/lunarwing/ironclaw_weechat_wss/weechat_relay/ws_adapter.py &
 sudo -u tiger git -C /home/tiger/lunarwing config core.symlinks  # must NOT be false
 ```
 
-Rebuild and start **without re-rendering units** — old-path units must work
-through the symlinks:
-
-```bash
-sudo /home/eris/lunarwing/ic/scripts/lunarwing-mt-admin.sh build-tenant tiger --with-wasm   # tmux
-sudo /home/eris/lunarwing/ic/scripts/lunarwing-mt-admin.sh start-tenant tiger
-```
-
-**Assertions — the bridging claim:**
+**Assertions — the bridging claim** (services are already up: the verb
+started the tenant on old-path units, which must have worked through the
+symlinks):
 
 ```bash
 # A6: adapter runs FROM the old path in argv, resolving to the new real dir

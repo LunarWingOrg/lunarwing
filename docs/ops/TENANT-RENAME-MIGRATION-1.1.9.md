@@ -35,18 +35,34 @@ no operator action — workers and daemon negotiate automatically.
 1. **Tenant stays on 1.1.7/1.1.8 → do nothing.** Old checkout, old dir
    names, old units — everything matches. The renames only exist in
    1.1.9 checkouts.
-2. **Upgrade the tenant's checkout to 1.1.9** (normal upgrade flow:
-   pull/deploy + rebuild). Existing units keep working immediately — the
-   compat symlinks arrive with the pull, so the old embedded paths still
-   resolve. There is no breakage window at pull time.
-3. **Re-render the tenant's units** at any convenient time afterwards:
+2. **Upgrade the tenant in place.** One command (new in 1.1.9; run in
+   tmux — it rebuilds the tenant):
+
+   ```bash
+   ic/scripts/lunarwing-mt-admin.sh upgrade-tenant <tenant> --target <ref>
+   ```
+
+   This composes the full verified sequence: backup → stop → `git fetch`
+   + checkout `<ref>` as the tenant user → rebuild with WASM →
+   `render-units` → `patch-env` → start, and warns if any unit still
+   embeds a pre-rename path afterwards. Pass `--skip-render` to defer the
+   unit rewrite (old units keep working through the compat symlinks —
+   there is no breakage window), `--no-backup` to skip the Postgres dump,
+   `--source-repo <path>` to retarget the tenant's git origin first.
+
+   Equivalent manual sequence, if you prefer the individual verbs:
+   `backup-tenant` → `stop-tenant` → (as the tenant user)
+   `git fetch --tags --prune && git checkout <ref>` →
+   `build-tenant <t> --with-wasm` → `render-units <t>` →
+   `patch-env <t>` → `start-tenant <t>`.
+3. **If you deferred the unit rewrite** (`--skip-render`), run it at any
+   convenient time afterwards:
 
    ```bash
    ic/scripts/lunarwing-mt-admin.sh render-units <tenant>
    ```
 
-   This rewrites the units with the new adapter paths. Then reload and
-   restart the affected adapter services:
+   Then reload and restart the affected adapter services:
    - systemd: `systemctl --user daemon-reload` (as the tenant user, or
      the system-level equivalent), then restart the weechat/darkirc
      adapter units.
