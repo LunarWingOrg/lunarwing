@@ -29,7 +29,7 @@ free disk; tmux available. Tenant checkouts are full git clones with
 **Known-expected behaviors (do not treat as test failures):**
 
 - **WeeChat health-glob / render-units flap**: the fix is scheduled for
-  v1.2.3 (`ROADMAP_2026.md`; writeup in
+  v2.0.3 (`ROADMAP_2026.md`; writeup in
   `docs/proposals/RENDER_UNITS_SMALL_BUG.md`) and is NOT in 1.1.9. Watch for
   adapter/weechat flap after `render-units` + restart, record what happens,
   tolerate it. (`supervise-daemon` respawn limit: 5 per 60 s.)
@@ -172,7 +172,7 @@ grep 'differ; using' /home/tiger/lunarwing/logs/lunarwing.err     # expect empty
 grep "External worker" /home/tiger/lunarwing/logs/lunarwing.err | tail -5   # 'ready', no 'connection failed'/'protocol error'
 ```
 
-**Optional A10 — v1.2.0 rehearsal (destructive-ish, tiger only, pre-render):**
+**Optional A10 — v2.0.0 rehearsal (destructive-ish, tiger only, pre-render):**
 move `ironclaw_weechat_wss` symlink aside → adapter restart must FAIL →
 restore symlink → restart recovers. Validates the migration doc's deadline
 claim. Never run against lion.
@@ -224,4 +224,4 @@ Phase 0 baseline.
   whitespace (mtime Jul 4 20:25) — likely a stray binary copy; worth a look.
 - `TENANT-RENAME-MIGRATION-1.1.9.md`'s footgun caveat originally pointed at
   "GOALS item #7", which has since been renumbered; the fix is actually
-  scheduled for v1.2.3 (see that doc's corrected caveat).
+   scheduled for v2.0.3 (see that doc's corrected caveat).
