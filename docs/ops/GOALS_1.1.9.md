@@ -1,10 +1,9 @@
 # PRE-RELEASE CHECKLIST for 1.1.9 Codename `Kiyome きよめ`
 **Open TODOs (1.1.9) — To be done before release**
 
-See Issue: 
+See Issue:
 https://github.com/LunarWingOrg/lunarwing/issues/140
 
-#### colgate-1 working branch
 
 ### Helps to do items in order (generally)
 
@@ -21,8 +20,8 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 11. [ ] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup (still kind of an in-planning stage thing but want local http web gui and/or interactive cli application for this)
 12. [ ] Related to the above, deprecate or update legacy setup scripts
 13. [x] Remove/archive stale documentation
-14. [x] Update outdated documentation. Ensure that references in documentation which refer to 1.2.0 correctly mention 2.0.0 - 1.2.0 will be 2.0.0 from now on
-15. [ ] Further re-organization of repository documentation
+14. [x] Ensure that references in documentation which refer to 1.2.0 correctly mention 2.0.0 - 1.2.0 will be 2.0.0 from now on
+15. [ ] Further updating and re-organization of repository documentation
 16. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
 17. [x] Bump crate versions to 1.1.9
 18. [ ] Ensure all relevant crates are bumped to 1.1.9 and build works properly
