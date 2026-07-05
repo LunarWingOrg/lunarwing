@@ -1,14 +1,23 @@
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 # Stage 1: build nanocode from source
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 FROM docker.io/oven/bun:debian AS builder
 
 WORKDIR /build
 
 # System deps for native addons (tree-sitter, bun-pty)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git python3 make g++ ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Snapshot fallback helper — tries live mirror first, falls back to
+# snapshot.debian.org if live mirror has an invalid signature (e.g. pre-staged
+# trixie-security signatures not yet valid for the current UTC window).
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends \
+      git python3 make g++ ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy nanocode monorepo source
 COPY nanocode/ ./nanocode/
@@ -29,16 +38,16 @@ RUN bun run build 2>/dev/null || true
 WORKDIR /build/nanocode/packages/opencode
 RUN bun run build 2>/dev/null || true
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 # Stage 2: runtime image
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 FROM docker.io/oven/bun:debian AS runtime
 
 LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
       org.opencontainers.image.description="Persistent nanocode worker with WebSocket agent communication" \
       org.opencontainers.image.version="1.0.0"
 
-# ── system packages ────────────────────────────────────────────────────────────
+# ── system packages ──────────────────────
 # tini            : PID-1 signal reaping
 # python3 + pip   : health server + installable Python packages
 # git             : nanocode needs git for project context
@@ -53,7 +62,13 @@ LABEL org.opencontainers.image.title="LunarWing Nanocode Worker" \
 # openssh-client  : SSH for git auth and remote access
 # jq              : JSON processing
 # neovim          : terminal editor
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends \
       tini \
       python3 \
       python3-dev \
@@ -95,7 +110,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       neovim \
     && rm -rf /var/lib/apt/lists/*
 
-# ── GitHub CLI ─────────────────────────────────────────────────────────────────
+# ── GitHub CLI ─────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -112,7 +127,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
       | sh -s -- -y --default-toolchain 1.92.0 \
     && chmod -R a+r /usr/local/rustup /usr/local/cargo
 
-# ── Go toolchain ───────────────────────────────────────────────────────────────
+# ── Go toolchain ───────────────────────
 ENV GOROOT=/usr/local/go \
     GOPATH=/home/nanocode/go \
     PATH=/usr/local/go/bin:/home/nanocode/go/bin:$PATH
@@ -120,10 +135,10 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://go.dev/dl/go1.24.3.linux-${ARCH}.tar.gz" \
       | tar -C /usr/local -xz
 
-# ── non-root user ──────────────────────────────────────────────────────────────
+# ── non-root user ──────────────────────
 RUN groupadd -r nanocode && useradd -r -g nanocode -m -d /home/nanocode nanocode
 
-# ── app layout ─────────────────────────────────────────────────────────────────
+# ── app layout ─────────────────
 WORKDIR /app
 
 # Copy built nanocode
@@ -143,7 +158,7 @@ RUN chmod +x /app/entrypoint.sh /app/health_server.py
 # Symlink node_modules so bridge scripts can resolve @nanogpt/sdk
 RUN ln -s /app/nanocode/node_modules /app/node_modules
 
-# ── XDG directories for nanocode state ────────────────────────────────────────
+# ── XDG directories for nanocode state ────────────────────────
 RUN mkdir -p /home/nanocode/.local/share/nanocode \
              /home/nanocode/.config/nanocode \
              /workspace \
@@ -151,13 +166,13 @@ RUN mkdir -p /home/nanocode/.local/share/nanocode \
               /app/results \
     && chown -R nanocode:nanocode /home/nanocode /workspace /var/log/lunarwing /app/results
 
-# ── ports ──────────────────────────────────────────────────────────────────────
+# ── ports ──────────────────────
 # 8443 : health-check HTTP endpoint
 # 9090 : inbound LunarWing WebSocket server (server role)
 EXPOSE 8443
 EXPOSE 9090
 
-# ── health check ───────────────────────────────────────────────────────────────
+# ── health check ───────────────────────
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -sf http://127.0.0.1:8443/health || exit 1
 

@@ -1,6 +1,16 @@
 FROM docker.io/library/rust:1.92-bookworm AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+# Snapshot fallback helper — tries live mirror first, falls back to
+# snapshot.debian.org if live mirror has an invalid signature (e.g. pre-staged
+# security signatures not yet valid for the current UTC window).
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -16,8 +26,14 @@ RUN cd pebble && cargo build --release --bin pebble
 # --- Runtime ---
 FROM docker.io/library/debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git curl && \
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates git curl && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/bridge/target/release/pebble4lunarwing /usr/local/bin/pebble4lunarwing
