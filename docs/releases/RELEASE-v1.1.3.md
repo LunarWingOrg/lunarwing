@@ -80,14 +80,14 @@ The DarkIRC WASM channel (`darkirc_channel_for_ironclaw/darkirc/src/lib.rs`) was
 
 ## Features and changes deferred to future releases
 
-The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`**. Items respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish, even-numbered releases on features, and majors (1.2.0+) on large overhauls. Near-term highlights:
+The full, canonical list lives in **`docs/ops/ROADMAP_2026.MD`**. Items respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish, even-numbered releases on features, and majors (2.0.0+) on large overhauls. Near-term highlights:
 
 | Feature | Target |
 |---------|--------|
 | Multica bridge/channel refinements; Lunartica UI reskin; Lunarvision K.E.R.S. setup polishing | v1.1.4 / v1.1.5 |
 | XMPP file transfer remaining polish (live e2e, optional SSRF guard); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 |
 | Further development and ironing out of the new self-healing infrastructure | v1.1.6 |
-| Self-healing epic (first-class, wired-in) | v1.2.0 |
+| Self-healing epic (first-class, wired-in) | v2.0.0 |
 
 ## Release Cadence
 

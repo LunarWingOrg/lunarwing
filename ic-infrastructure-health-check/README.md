@@ -1,6 +1,6 @@
 # LunarWing Infrastructure Health Check System
 
-_Last updated: 2026-06-24 — self-heal watchdog v1.2.0; LunarVision check added._
+_Last updated: 2026-06-24 — self-heal watchdog v2.0.0; LunarVision check added._
 
 Automated health monitoring and self-healing for LunarWing infrastructure.
 Nine parallel component checks aggregate into a JSON report; a separate
@@ -210,7 +210,7 @@ Report shape:
 
 ## Self-Healing
 
-`lunarwing-self-heal.sh` (v1.2.0) reads the latest health report and:
+`lunarwing-self-heal.sh` (v2.0.0) reads the latest health report and:
 
 1. **Maps** unhealthy logical components to base service names
    (`gateway → lunarwing`, …) and discovers per-tenant init sub-units from the

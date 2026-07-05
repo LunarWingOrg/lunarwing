@@ -1,10 +1,10 @@
-# Chaos Engineering Test Plan — LunarWing Self-Healing v1.2.0
+# Chaos Engineering Test Plan — LunarWing Self-Healing v2.0.0
 
 *Drafted by Baud, 2026-06-10*
 
 ## 1. Scope
 
-This test plan covers the **lunarwing-self-heal.sh** watchdog (v1.2.0) and its interaction with the `infrastructure-health-check.sh` report pipeline. It does **not** test the health-check probes themselves (separate concern) — only how the self-healer reacts to the reports those probes generate.
+This test plan covers the **lunarwing-self-heal.sh** watchdog (v2.0.0) and its interaction with the `infrastructure-health-check.sh` report pipeline. It does **not** test the health-check probes themselves (separate concern) — only how the self-healer reacts to the reports those probes generate.
 
 ### Guardrails
 
