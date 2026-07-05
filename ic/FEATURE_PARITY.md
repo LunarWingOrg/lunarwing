@@ -211,19 +211,18 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Provider | OpenClaw | LunarWing | Priority | Notes |
 |----------|----------|----------|----------|-------|
 | LUANRWING | ✅ | ✅ | - | Primary provider |
-| io.net | ✅ | ✅ | P3 | Via `ionet` adapter |
-| Mistral | ✅ | ✅ | P3 | Via `mistral` adapter |
-| Yandex AI Studio | ✅ | ✅ | P3 | Via `yandex` adapter |
-| Cloudflare Workers AI | ✅ | ✅ | P3 | Via `cloudflare` adapter |
-| NVIDIA API | ✅ | ✅ | P3 | Via `nvidia` adapter and `providers.json` |
-| OpenRouter | ✅ | ✅ | - | Via OpenAI-compatible provider (RigAdapter) |
+| OpenAI | ✅ | ✅ | - | Via `openai` adapter |
+| Anthropic | ✅ | ✅ | - | Via `anthropic` adapter |
+| Google Gemini | ✅ | ✅ | - | Via `gemini` (API key) or `gemini_oauth` (OAuth) |
+| Mistral | ✅ | ✅ | - | Via `mistral` adapter |
+| Groq | ✅ | ✅ | - | Via `groq` adapter |
 | Tinfoil | ❌ | ✅ | - | Private inference provider (LunarWing-only) |
+| OpenRouter | ✅ | ✅ | - | Via `openrouter` adapter |
 | OpenAI-compatible | ❌ | ✅ | - | Generic OpenAI-compatible endpoint (RigAdapter) |
 | GitHub Copilot | ✅ | ✅ | - | Dedicated provider with OAuth token exchange (`GithubCopilotProvider`) |
 | Ollama (local) | ✅ | ✅ | - | via `rig::providers::ollama` (full support) |
 | Perplexity | ✅ | ❌ | P3 | Freshness parameter for web_search |
-| MiniMax | ✅ | ❌ | P3 | Regional endpoint selection |
-| GLM-5 | ✅ | ✅ | P3 | Via Z.AI provider (`zai`) using OpenAI-compatible chat completions |
+| AWS Bedrock | ✅ | ✅ | - | Native Converse API (feature-gated) |
 | node-llama-cpp | ✅ | ➖ | - | N/A for Rust |
 | llama.cpp (native) | ❌ | 🔮 | P3 | Rust bindings |
 

@@ -1616,7 +1616,7 @@ impl SetupWizard {
 
                 // Only store base URL for providers that resolve through
                 // LLM_BASE_URL (openai_compatible, openrouter). Other providers
-                // like groq/nvidia have their own base_url_env and don't need
+                // like groq/tinfoil have their own base_url_env and don't need
                 // this backward-compat setting.
                 if def.base_url_env.as_deref() == Some("LLM_BASE_URL")
                     && let Some(ref base_url) = def.default_base_url

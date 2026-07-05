@@ -12,19 +12,22 @@ the most common configurations.
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | Claude models |
 | OpenAI | `openai` | `OPENAI_API_KEY` | GPT models |
 | Google Gemini | `gemini_oauth` | OAuth (browser) | Gemini models; function calling |
-| io.net | `ionet` | `IONET_API_KEY` | Intelligence API |
 | Mistral | `mistral` | `MISTRAL_API_KEY` | Mistral models |
-| Yandex AI Studio | `yandex` | `YANDEX_API_KEY` | YandexGPT models |
-| MiniMax | `minimax` | `MINIMAX_API_KEY` | MiniMax-M2.7 models |
-| Cloudflare Workers AI | `cloudflare` | `CLOUDFLARE_API_KEY` | Access to Workers AI |
+| Groq | `groq` | `GROQ_API_KEY` | Ultra-fast LPU inference |
+| Tinfoil | `tinfoil` | `TINFOIL_API_KEY` | Hardware-attested TEE inference |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | 300+ models |
+| Google Gemini (API key) | `gemini` | `GEMINI_API_KEY` | Gemini via OpenAI-compat endpoint |
 | GitHub Copilot | `github_copilot` | `GITHUB_COPILOT_TOKEN` | Multi-models |
 | Ollama | `ollama` | No | Local inference |
 | AWS Bedrock | `bedrock` | AWS credentials | Native Converse API |
-| OpenRouter | `openai_compatible` | `LLM_API_KEY` | 300+ models |
-| Together AI | `openai_compatible` | `LLM_API_KEY` | Fast inference |
-| Fireworks AI | `openai_compatible` | `LLM_API_KEY` | Fast inference |
 | vLLM / LiteLLM | `openai_compatible` | Optional | Self-hosted |
 | LM Studio | `openai_compatible` | No | Local GUI |
+
+> **Removed providers:** NVIDIA NIM, Venice.ai, Together AI, Fireworks AI, DeepSeek,
+> Z.AI/BigModel, Cerebras, SambaNova, io.net, Yandex AI Studio, MiniMax, and
+> Cloudflare Workers AI have been removed as dedicated registry entries. You can
+> still use any of these via the generic `openai_compatible` backend by setting
+> `LLM_BASE_URL` and `LLM_API_KEY` appropriately.
 
 ---
 
@@ -150,25 +153,6 @@ Pull a model first: `ollama pull llama3.2`
 
 ---
 
-## MiniMax
-
-[MiniMax](https://platform.minimax.io) provides high-performance language models with 204,800 token context windows.
-
-```env
-LLM_BACKEND=minimax
-MINIMAX_API_KEY=...
-```
-
-Available models: `MiniMax-M2.7` (default), `MiniMax-M2.7-highspeed`, `MiniMax-M2.5`, `MiniMax-M2.5-highspeed`
-
-To use the China mainland endpoint, set:
-
-```env
-MINIMAX_BASE_URL=https://api.minimaxi.com/v1
-```
-
----
-
 ## AWS Bedrock (requires `--features bedrock`)
 
 Uses the native AWS Converse API via `aws-sdk-bedrockruntime`. Supports standard AWS
@@ -228,10 +212,9 @@ provider's OpenAI-compatible endpoint and `LLM_API_KEY` to your API key.
 [OpenRouter](https://openrouter.ai) routes to 300+ models from a single API key.
 
 ```env
-LLM_BACKEND=openai_compatible
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_API_KEY=sk-or-...
-LLM_MODEL=anthropic/claude-sonnet-4
+LLM_BACKEND=openrouter
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=anthropic/claude-sonnet-4
 ```
 
 Popular OpenRouter model IDs:
@@ -245,36 +228,6 @@ Popular OpenRouter model IDs:
 | Mistral Small | `mistralai/mistral-small-3.1-24b-instruct` |
 
 Browse all models at [openrouter.ai/models](https://openrouter.ai/models).
-
-### Together AI
-
-[Together AI](https://www.together.ai) provides fast inference for open-source models.
-
-```env
-LLM_BACKEND=openai_compatible
-LLM_BASE_URL=https://api.together.xyz/v1
-LLM_API_KEY=...
-LLM_MODEL=meta-llama/Llama-3.3-70B-Instruct-Turbo
-```
-
-Popular Together AI model IDs:
-
-| Model | ID |
-|---|---|
-| Llama 3.3 70B | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |
-| DeepSeek R1 | `deepseek-ai/DeepSeek-R1` |
-| Qwen 2.5 72B | `Qwen/Qwen2.5-72B-Instruct-Turbo` |
-
-### Fireworks AI
-
-[Fireworks AI](https://fireworks.ai) offers fast inference with compound AI system support.
-
-```env
-LLM_BACKEND=openai_compatible
-LLM_BASE_URL=https://api.fireworks.ai/inference/v1
-LLM_API_KEY=fw_...
-LLM_MODEL=accounts/fireworks/models/llama4-maverick-instruct-basic
-```
 
 ### vLLM / LiteLLM (self-hosted)
 
@@ -317,6 +270,6 @@ Instead of editing `.env` manually, run the onboarding wizard:
 lunarwing onboard
 ```
 
-Select **"OpenAI-compatible"** for OpenRouter, Together AI, Fireworks, vLLM, LiteLLM,
-or LM Studio. You will be prompted for the base URL and (optionally) an API key.
-The model name is configured in the following step.
+Select **"OpenAI-compatible"** for OpenRouter, vLLM, LiteLLM, LM Studio, or any
+other OpenAI-compatible provider. You will be prompted for the base URL and
+(optionally) an API key. The model name is configured in the following step.

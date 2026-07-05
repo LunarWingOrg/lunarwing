@@ -899,27 +899,27 @@ mod tests {
     }
 
     #[test]
-    fn registry_provider_alias_resolves_zai() {
+    fn registry_provider_alias_resolves_mistral() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("ZAI_API_KEY");
-            std::env::remove_var("ZAI_MODEL");
+            std::env::remove_var("MISTRAL_API_KEY");
+            std::env::remove_var("MISTRAL_MODEL");
         }
 
         let settings = Settings {
-            llm_backend: Some("bigmodel".to_string()),
-            selected_model: Some("glm-5".to_string()),
+            llm_backend: Some("mistral_ai".to_string()),
+            selected_model: Some("mistral-large-latest".to_string()),
             ..Default::default()
         };
 
         let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "zai");
+        assert_eq!(cfg.backend, "mistral");
         let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "zai");
-        assert_eq!(provider.model, "glm-5");
-        assert_eq!(provider.base_url, "https://api.z.ai/api/paas/v4");
+        assert_eq!(provider.provider_id, "mistral");
+        assert_eq!(provider.model, "mistral-large-latest");
+        assert_eq!(provider.base_url, "https://api.mistral.ai/v1");
         assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
     }
 
