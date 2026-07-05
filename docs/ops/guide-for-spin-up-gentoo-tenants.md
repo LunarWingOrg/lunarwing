@@ -36,7 +36,7 @@ sudo LUNARWING_SERVICE_MANAGER=openrc LUNARWING_CONTAINER_RUNTIME=podman \
   ic/scripts/lunarwing-mt-admin.sh add-tenant luna1 --docker-group
 ```
 
-Optional `add-tenant` flags (all take a value except booleans `--docker-group`/`--no-health`/`--enable-darkirc`): `--xmpp-jid <jid>` (default `luna1@xmpp.localhost`), `--xmpp-password <pass>`, `--llm-api-key <key>`, `--llm-base-url <url>`, `--tensorzero-url <url>`, `--gotify-url <url>`, `--no-health`, `--enable-darkirc` (enables DarkIRC daemon and adapter services; disabled by default).
+Optional `add-tenant` flags (all take a value except booleans `--docker-group`/`--no-health`/`--enable-darkirc`/`--enable-proxy`): `--xmpp-jid <jid>` (default `luna1@xmpp.localhost`), `--xmpp-password <pass>`, `--llm-api-key <key>`, `--llm-base-url <url>`, `--tensorzero-url <url>`, `--gotify-url <url>`, `--no-health`, `--enable-darkirc` (enables DarkIRC daemon and adapter services; disabled by default).
 
 ## 2. Build everything (binary + WASM + workers)
 
@@ -81,6 +81,8 @@ sudo ic/scripts/lunarwing-mt-admin.sh configure-pebble luna1 --nanogpt-api-key <
 ## 3. Start + enable services (OpenRC)
 
 `start-tenant` runs the whole sequence itself: `rc-update add lunarwing-luna1 default`, then starts pg → (optional weechat/adapter) → proxy → xmpp-bridge → daemon in dependency order, then boot-enables every unit that came up. Workers start only if their images exist (step 2).
+
+> **Proxy opt-in (v1.1.9+):** The proxy step is only present if the tenant was created with `--enable-proxy`. New tenants skip the proxy and connect directly to the upstream `TENSORZERO_URL`.
 
 ```bash
 sudo LUNARWING_SERVICE_MANAGER=openrc LUNARWING_CONTAINER_RUNTIME=podman \

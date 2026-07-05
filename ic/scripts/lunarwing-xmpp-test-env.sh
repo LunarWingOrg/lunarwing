@@ -26,6 +26,7 @@ LIBSQL_PATH="${LUNARWING_TEST_LIBSQL_PATH:-$STATE_DIR/lunarwing.db}"
 PROXY_PORT="${LUNARWING_TEST_PROXY_PORT:-3002}"
 PROXY_BIND="${LUNARWING_TEST_PROXY_BIND:-127.0.0.1}"
 TENSORZERO_URL="${LUNARWING_TEST_TENSORZERO_URL:-http://192.168.1.157:3000}"
+ENABLE_PROXY="${LUNARWING_TEST_ENABLE_PROXY:-true}"
 
 # LunarWing service ports
 GATEWAY_PORT="${LUNARWING_TEST_GATEWAY_PORT:-8765}"
@@ -443,7 +444,11 @@ write_lunarwing_env_if_missing() {
       printf '\n'
       printf '# LLM — TensorZero proxy (start with: start-proxy)\n'
       printf 'LLM_BACKEND=openai_compatible\n'
-      printf 'LLM_BASE_URL=http://%s:%s/v1\n' "$PROXY_BIND" "$PROXY_PORT"
+      if [[ "$ENABLE_PROXY" == "true" ]]; then
+        printf 'LLM_BASE_URL=http://%s:%s/v1\n' "$PROXY_BIND" "$PROXY_PORT"
+      else
+        printf 'LLM_BASE_URL=%s/openai/v1\n' "$TENSORZERO_URL"
+      fi
       printf 'LLM_API_KEY=token-integration-test\n'
       printf 'LLM_MODEL=tensorzero::function_name::lunarwing\n'
       printf 'ALLOW_PRIVATE_IPS=1\n'
@@ -1019,8 +1024,12 @@ stack_up() {
     say "libSQL path: $LIBSQL_PATH"
   fi
 
-  say "--- TensorZero proxy ---"
-  start_proxy || die "proxy failed to start"
+  if [[ "$ENABLE_PROXY" == "true" ]]; then
+    say "--- TensorZero proxy ---"
+    start_proxy || die "proxy failed to start"
+  else
+    say "--- TensorZero proxy: disabled (LUNARWING_TEST_ENABLE_PROXY=false) ---"
+  fi
 
   say "--- XMPP bridge ---"
   start_bridge || die "XMPP bridge failed to start"
@@ -1110,8 +1119,10 @@ verify_stack() {
       test -f "$LIBSQL_PATH"
   fi
 
-  _check "TensorZero proxy responds at :${PROXY_PORT}" \
-    proxy_ready
+  if [[ "$ENABLE_PROXY" == "true" ]]; then
+    _check "TensorZero proxy responds at :${PROXY_PORT}" \
+      proxy_ready
+  fi
 
   local base
   base="$(bridge_base)"

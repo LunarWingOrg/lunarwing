@@ -80,6 +80,8 @@ sudo ic/scripts/lunarwing-mt-admin.sh add-tenant ruffles --docker-group
 ```
 
 > **Tip:** To include DarkIRC daemon and adapter services for this tenant, add `--enable-darkirc` to the command above. DarkIRC is disabled by default.
+>
+> **Tip:** To enable the TensorZero proxy for this tenant, add `--enable-proxy`. The proxy is disabled by default; without it, the daemon connects directly to the upstream LLM endpoint (`--llm-base-url` or `--tensorzero-url`).
 
 This single command does all of the following:
 
@@ -90,7 +92,8 @@ This single command does all of the following:
    (e.g., `10000`-`10009`).
 4. Clones the source repo into `/home/ruffles/lunarwing/`.
 5. Generates environment files (`lunarwing.env`, `xmpp-bridge.env`,
-   `proxy.env`) in `/home/ruffles/lunarwing/env/`, all mode `0600`. All HTTP
+   and optionally `proxy.env` when `--enable-proxy` is used) in
+   `/home/ruffles/lunarwing/env/`, all mode `0600`. All HTTP
    services (gateway and webhook) bind `127.0.0.1`, and the HTTP webhook gets a
    generated `HTTP_WEBHOOK_SECRET` so its channel starts cleanly.
 6. Starts a per-tenant PostgreSQL container (`lunarwing-pg-ruffles`) bound to

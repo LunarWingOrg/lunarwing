@@ -70,6 +70,7 @@ WATCHDOG_SCHEDULER="auto"
 
 # LLM
 TENSORZERO_URL="http://192.168.1.157:3000/openai/v1"
+ENABLE_PROXY=false
 
 # Gotify (notifications)
 GOTIFY_URL="https://gotify.darkc.sobe.world"
@@ -236,6 +237,7 @@ phase_1() {
 
   local -a flags=()
   [[ "$ENABLE_DARKIRC" == true ]] && flags+=(--enable-darkirc)
+  [[ "$ENABLE_PROXY" == true ]] && flags+=(--enable-proxy)
   flags+=(--gotify-url "$GOTIFY_URL")
   flags+=(--llm-base-url "$TENSORZERO_URL")
   flags+=(--xmpp-domain "$XMPP_DOMAIN")

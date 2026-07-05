@@ -14,6 +14,9 @@ Set them before running `init` to generate env files with your chosen ports.
 | PostgreSQL | `LUNARWING_TEST_PG_PORT` | 5432 | Postgres container host port |
 | TensorZero proxy | `LUNARWING_TEST_PROXY_PORT` | 3002 | Local LLM routing proxy |
 | TensorZero proxy bind | `LUNARWING_TEST_PROXY_BIND` | 127.0.0.1 | Proxy listen address |
+
+> **Note:** The test harness always starts a proxy for isolation. In production, the proxy is opt-in via `--enable-proxy` (v1.1.9+) — new tenants connect directly to the upstream LLM endpoint by default.
+
 | Gateway (REST API) | `LUNARWING_TEST_GATEWAY_PORT` | 8765 | LunarWing gateway HTTP |
 | HTTP webhook | `LUNARWING_TEST_HTTP_PORT` | 9098 | Inbound webhook listener |
 | XMPP bridge | `LUNARWING_TEST_BRIDGE_BIND` | 127.0.0.1:8787 | Bridge HTTP bind (host:port) |

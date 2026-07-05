@@ -100,6 +100,8 @@ TENSORZERO_URL=http://192.168.1.157:3000/openai/v1
 
 `TENSORZERO_URL` is the upstream TensorZero instance that the per-tenant proxy forwards to. Change this if your TensorZero server is at a different address.
 
+> **Proxy opt-in (v1.1.9+):** New tenants no longer get a proxy by default — `proxy.env` and the proxy service unit are only provisioned when `--enable-proxy` is passed to `add-tenant`. Without it, `LLM_BASE_URL` points directly at the upstream `TENSORZERO_URL`.
+
 ## XMPP Configuration
 
 XMPP settings in `lunarwing.env` control how the tenant connects to the XMPP network:
