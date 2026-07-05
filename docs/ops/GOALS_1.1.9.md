@@ -16,7 +16,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 7. [x] Remove deprecated Codex external worker from project
 8. [ ] Remove support for all (or at least, some of) the other random unsupported LLM providers
 9. [ ] Remove rest of non-LunarWing third party extensions/tools/skills from default installation
-10. [ ] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)
+10. [x] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)
 11. [ ] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup
 12. [ ] Related to the above, deprecate or update legacy setup scripts
 13. [ ] Remove/archive stale documentation
