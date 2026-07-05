@@ -13,63 +13,12 @@ use crate::bootstrap::lunarwing_base_dir;
 use crate::llm::registry::ProviderProtocol;
 use crate::llm::session::SessionConfig;
 
-/// Sentinel value used as `api_key` when only an OAuth token is present.
-///
-/// When we only have an OAuth token the provider factory in `llm/mod.rs`
-/// checks for this value and routes to `AnthropicOAuthProvider`, so this
-/// placeholder is never sent over the wire.
-pub const OAUTH_PLACEHOLDER: &str = "oauth-placeholder";
-
-/// Prompt cache retention policy for Anthropic.
-///
-/// Controls Anthropic's automatic prompt caching via a top-level
-/// `cache_control` field injected through rig-core's `additional_params`.
-/// - `None` — caching disabled, no `cache_control` injected.
-/// - `Short` — 5-minute TTL (default), `{"type": "ephemeral"}`, 1.25× write surcharge.
-/// - `Long` — 1-hour TTL, `{"type": "ephemeral", "ttl": "1h"}`, 2× write surcharge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CacheRetention {
-    /// No prompt caching.
-    None,
-    /// 5-minute TTL (default). Write cost: 1.25× base input.
-    #[default]
-    Short,
-    /// 1-hour TTL. Write cost: 2× base input.
-    Long,
-}
-
-impl std::str::FromStr for CacheRetention {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "none" | "off" | "disabled" => Ok(Self::None),
-            "short" | "5m" | "ephemeral" => Ok(Self::Short),
-            "long" | "1h" => Ok(Self::Long),
-            _ => Err(format!(
-                "invalid cache retention '{}', expected one of: none, short, long",
-                s
-            )),
-        }
-    }
-}
-
-impl std::fmt::Display for CacheRetention {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => write!(f, "none"),
-            Self::Short => write!(f, "short"),
-            Self::Long => write!(f, "long"),
-        }
-    }
-}
-
 /// Resolved configuration for a registry-based provider.
 ///
 /// This single struct replaces what used to be five separate config types
-/// (`OpenAiDirectConfig`, `AnthropicDirectConfig`, `OllamaConfig`,
-/// `OpenAiCompatibleConfig`, `TinfoilConfig`). The `protocol` field
-/// determines which rig-core client constructor to use.
+/// (`OpenAiDirectConfig`, `OllamaConfig`, `OpenAiCompatibleConfig`,
+/// `TinfoilConfig`). The `protocol` field determines which rig-core client
+/// constructor to use.
 #[derive(Debug, Clone)]
 pub struct RegistryProviderConfig {
     /// Which API protocol to use (determines the rig-core client).
@@ -77,7 +26,6 @@ pub struct RegistryProviderConfig {
     /// Provider identifier (e.g., "groq", "openai", "tinfoil").
     pub provider_id: String,
     /// API key (optional for some providers like Ollama).
-    /// For Anthropic OAuth, this is set to `OAUTH_PLACEHOLDER`.
     pub api_key: Option<SecretString>,
     /// Base URL for the API endpoint.
     pub base_url: String,
@@ -85,9 +33,6 @@ pub struct RegistryProviderConfig {
     pub model: String,
     /// Extra HTTP headers injected into every request.
     pub extra_headers: Vec<(String, String)>,
-    /// OAuth token for providers that support Bearer auth (e.g. Anthropic via `claude login`).
-    /// When set, the provider factory routes to the OAuth-specific provider implementation.
-    pub oauth_token: Option<SecretString>,
     /// When true, route OpenAI-compatible traffic to the Codex ChatGPT
     /// Responses API provider instead of rig-core's Chat Completions path.
     pub is_codex_chatgpt: bool,
@@ -95,12 +40,18 @@ pub struct RegistryProviderConfig {
     pub refresh_token: Option<SecretString>,
     /// Path to Codex auth.json for persisting refreshed tokens.
     pub auth_path: Option<PathBuf>,
-    /// Prompt cache retention (Anthropic-specific).
-    pub cache_retention: CacheRetention,
     /// Parameter names that this provider does not support (e.g., `["temperature"]`).
     /// Supported keys: `"temperature"`, `"max_tokens"`, `"stop_sequences"`.
     /// Listed parameters are stripped from requests before sending to avoid 400 errors.
     pub unsupported_params: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CacheRetention {
+    #[default]
+    None,
+    Short,
+    Long,
 }
 
 /// Configuration for OpenAI Codex (ChatGPT subscription OAuth).
@@ -133,19 +84,6 @@ impl Default for OpenAiCodexConfig {
     }
 }
 
-/// Configuration for AWS Bedrock (native Converse API).
-#[derive(Debug, Clone)]
-pub struct BedrockConfig {
-    /// AWS region (e.g. "us-east-1").
-    pub region: String,
-    /// Bedrock model ID (e.g. "anthropic.claude-opus-4-6-v1").
-    pub model: String,
-    /// Cross-region inference prefix: "us", "eu", "apac", "global", or None.
-    pub cross_region: Option<String>,
-    /// AWS named profile (for SSO / assume-role workflows).
-    pub profile: Option<String>,
-}
-
 /// LLM provider configuration.
 ///
 /// NearAI remains the default backend with its own config struct (session auth).
@@ -161,12 +99,8 @@ pub struct LlmConfig {
     /// NEAR AI config (always populated, also used for embeddings).
     pub nearai: NearAiConfig,
     /// Resolved provider config for registry-based providers.
-    /// `None` when backend is "nearai" or "bedrock".
+    /// `None` when backend is "nearai".
     pub provider: Option<RegistryProviderConfig>,
-    /// AWS Bedrock config (populated when backend=bedrock, requires --features bedrock).
-    pub bedrock: Option<BedrockConfig>,
-    /// Gemini OAuth config (populated when backend=gemini_oauth).
-    pub gemini_oauth: Option<GeminiOauthConfig>,
     /// OpenAI Codex config (populated when backend=openai_codex).
     pub openai_codex: Option<OpenAiCodexConfig>,
     /// HTTP request timeout in seconds for LLM API calls.
@@ -295,33 +229,3 @@ impl NearAiConfig {
     }
 }
 
-/// Configuration for Gemini OAuth integration.
-///
-/// Extended generation config parameters (topP, topK, seed, etc.) are read from
-/// environment variables at request time:
-/// - `GEMINI_TOP_P` — nucleus sampling (0.0–1.0)
-/// - `GEMINI_TOP_K` — top-k sampling (integer)
-/// - `GEMINI_SEED` — deterministic generation seed
-/// - `GEMINI_PRESENCE_PENALTY` — presence penalty (-2.0–2.0)
-/// - `GEMINI_FREQUENCY_PENALTY` — frequency penalty (-2.0–2.0)
-/// - `GEMINI_RESPONSE_MIME_TYPE` — e.g. "application/json"
-/// - `GEMINI_RESPONSE_JSON_SCHEMA` — JSON schema string for structured output
-/// - `GEMINI_CACHED_CONTENT` — cached content resource name
-/// - `GEMINI_CLI_CUSTOM_HEADERS` — custom headers (key:value,key:value)
-/// - `GOOGLE_GENAI_API_VERSION` — API version (default: v1beta)
-/// - `GEMINI_API_KEY` — optional API key for non-OAuth auth mode
-/// - `GEMINI_API_KEY_AUTH_MECHANISM` — "x-goog-api-key" (default) or "bearer"
-#[derive(Debug, Clone)]
-pub struct GeminiOauthConfig {
-    pub model: String,
-    pub credentials_path: PathBuf,
-}
-
-impl GeminiOauthConfig {
-    pub fn default_credentials_path() -> PathBuf {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".gemini")
-            .join("oauth_creds.json")
-    }
-}

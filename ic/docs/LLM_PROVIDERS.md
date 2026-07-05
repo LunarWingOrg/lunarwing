@@ -17,7 +17,6 @@ the most common configurations.
 | Tinfoil | `tinfoil` | `TINFOIL_API_KEY` | Hardware-attested TEE inference |
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | 300+ models |
 | Google Gemini (API key) | `gemini` | `GEMINI_API_KEY` | Gemini via OpenAI-compat endpoint |
-| GitHub Copilot | `github_copilot` | `GITHUB_COPILOT_TOKEN` | Multi-models |
 | Ollama | `ollama` | No | Local inference |
 | AWS Bedrock | `bedrock` | AWS credentials | Native Converse API |
 | vLLM / LiteLLM | `openai_compatible` | Optional | Self-hosted |
@@ -108,34 +107,6 @@ as any `gemini-` model with major version >= 2, route through the Cloud Code
 API (`cloudcode-pa.googleapis.com`) which supports SSE streaming
 and project-scoped access. Other models use the standard Generative Language
 API (`generativelanguage.googleapis.com`).
-
----
-
-## GitHub Copilot
-
-GitHub Copilot exposes chat endpoint at
-`https://api.githubcopilot.com`. LunarWing uses that endpoint directly through the
-built-in `github_copilot` provider.
-
-```env
-LLM_BACKEND=github_copilot
-GITHUB_COPILOT_TOKEN=gho_...
-GITHUB_COPILOT_MODEL=gpt-4o
-# Optional advanced headers if your setup needs them:
-# GITHUB_COPILOT_EXTRA_HEADERS=Copilot-Integration-Id:vscode-chat
-```
-
-`lunarwing onboard` can acquire this token for you using GitHub device login. If you
-already signed into Copilot through VS Code or a JetBrains IDE, you can also reuse
-the `oauth_token` stored in `~/.config/github-copilot/apps.json`. If you prefer,
-`LLM_BACKEND=github-copilot` also works as an alias.
-
-Popular models vary by subscription, but `gpt-4o` is a safe default. LunarWing keeps
-model entry manual for this provider because GitHub Copilot model listing may require
-extra integration headers on some clients. LunarWing automatically injects the standard
-VS Code identity headers (`User-Agent`, `Editor-Version`, `Editor-Plugin-Version`,
-`Copilot-Integration-Id`) and lets you override them with
-`GITHUB_COPILOT_EXTRA_HEADERS`.
 
 ---
 

@@ -219,7 +219,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Tinfoil | ❌ | ✅ | - | Private inference provider (LunarWing-only) |
 | OpenRouter | ✅ | ✅ | - | Via `openrouter` adapter |
 | OpenAI-compatible | ❌ | ✅ | - | Generic OpenAI-compatible endpoint (RigAdapter) |
-| GitHub Copilot | ✅ | ✅ | - | Dedicated provider with OAuth token exchange (`GithubCopilotProvider`) |
+| GitHub Copilot | ❌ | ❌ | - | Removed — use `openai_compatible` with GitHub's API |
 | Ollama (local) | ✅ | ✅ | - | via `rig::providers::ollama` (full support) |
 | Perplexity | ✅ | ❌ | P3 | Freshness parameter for web_search |
 | AWS Bedrock | ✅ | ✅ | - | Native Converse API (feature-gated) |

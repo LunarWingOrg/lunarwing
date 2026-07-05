@@ -20,7 +20,7 @@ pub struct CustomLlmProviderSettings {
     pub id: String,
     /// Display name.
     pub name: String,
-    /// Adapter protocol: "open_ai_completions", "anthropic", "ollama".
+    /// Adapter protocol: "open_ai_completions", "openai_compatible", "ollama".
     pub adapter: String,
     /// Base URL for the API endpoint.
     #[serde(default)]
@@ -111,7 +111,7 @@ pub struct Settings {
     pub secrets_master_key_hex: Option<String>,
 
     // === Step 3: Inference Provider ===
-    /// LLM backend: "nearai", "anthropic", "openai", "github_copilot", "ollama", "openai_compatible", "tinfoil", "bedrock".
+    /// LLM backend: "nearai", "openai", "ollama", "openai_compatible", "tinfoil", "openai_codex".
     #[serde(default)]
     pub llm_backend: Option<String>,
 
@@ -130,18 +130,6 @@ pub struct Settings {
     /// OpenAI-compatible endpoint base URL (when llm_backend = "openai_compatible").
     #[serde(default)]
     pub openai_compatible_base_url: Option<String>,
-
-    /// Bedrock region (when llm_backend = "bedrock").
-    #[serde(default)]
-    pub bedrock_region: Option<String>,
-
-    /// Bedrock cross-region inference prefix (when llm_backend = "bedrock").
-    #[serde(default)]
-    pub bedrock_cross_region: Option<String>,
-
-    /// AWS profile name for Bedrock (when llm_backend = "bedrock").
-    #[serde(default)]
-    pub bedrock_profile: Option<String>,
 
     // === Step 4: Model Selection ===
     /// Currently selected model.
@@ -1653,7 +1641,7 @@ mod tests {
         let path = dir.path().join("settings.json");
 
         let settings = Settings {
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             ollama_base_url: Some("http://localhost:11434".to_string()),
             openai_compatible_base_url: Some("http://my-vllm:8000/v1".to_string()),
             ..Default::default()
@@ -1662,7 +1650,7 @@ mod tests {
         std::fs::write(&path, json).unwrap();
 
         let loaded = Settings::load_from(&path);
-        assert_eq!(loaded.llm_backend, Some("anthropic".to_string()));
+        assert_eq!(loaded.llm_backend, Some("openai_compatible".to_string()));
         assert_eq!(
             loaded.ollama_base_url,
             Some("http://localhost:11434".to_string())
@@ -2050,7 +2038,7 @@ timeout_ms = 300000
         let prior_run = Settings {
             database_backend: Some("postgres".to_string()),
             database_url: Some("postgres://old-host/lunarwing".to_string()),
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             embeddings: EmbeddingsSettings {
                 enabled: true,
@@ -2089,7 +2077,7 @@ timeout_ms = 300000
         // Prior run's steps 2-4 settings are preserved
         assert_eq!(
             current.llm_backend,
-            Some("anthropic".to_string()),
+            Some("openai_compatible".to_string()),
             "Prior run's LLM backend must be recovered"
         );
         assert_eq!(
@@ -2151,7 +2139,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
             database_url: Some("postgres://host/db".to_string()),
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             openai_compatible_base_url: Some("http://vllm:8000/v1".to_string()),
             secrets_master_key_source: KeySource::Keychain,
@@ -2205,7 +2193,7 @@ timeout_ms = 300000
         );
         assert_eq!(
             restored.llm_backend,
-            Some("anthropic".to_string()),
+            Some("openai_compatible".to_string()),
             "llm_backend lost"
         );
         assert_eq!(
@@ -2411,15 +2399,15 @@ timeout_ms = 300000
         // then user picks a new provider + model via step_inference_provider
         let mut current = Settings::from_db_map(&db_map);
 
-        // Simulate step_inference_provider: user switches to anthropic
-        current.llm_backend = Some("anthropic".to_string());
+        // Simulate step_inference_provider: user switches to openai_compatible
+        current.llm_backend = Some("openai_compatible".to_string());
         current.selected_model = None; // cleared because backend changed
 
         // Simulate step_model_selection: user picks a model
         current.selected_model = Some("claude-sonnet-4-5".to_string());
 
         // Verify: provider/model changed
-        assert_eq!(current.llm_backend.as_deref(), Some("anthropic"));
+        assert_eq!(current.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(current.selected_model.as_deref(), Some("claude-sonnet-4-5"));
 
         // Verify: everything else preserved
@@ -2451,7 +2439,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("postgres".to_string()),
             database_url: Some("postgres://host/db".to_string()),
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             embeddings: EmbeddingsSettings {
                 enabled: true,
@@ -2487,7 +2475,7 @@ timeout_ms = 300000
         assert_eq!(current.channels.wasm_channels.len(), 2);
 
         // Verify: everything else preserved
-        assert_eq!(current.llm_backend.as_deref(), Some("anthropic"));
+        assert_eq!(current.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(current.selected_model.as_deref(), Some("claude-sonnet-4-5"));
         assert!(current.embeddings.enabled);
         assert_eq!(current.embeddings.provider, "nearai");
@@ -2543,15 +2531,15 @@ timeout_ms = 300000
         current.merge_from(&from_db);
         current.merge_from(&step1);
 
-        // 3. step_inference_provider: user picks anthropic this time
-        current.llm_backend = Some("anthropic".to_string());
+        // 3. step_inference_provider: user picks openai_compatible this time
+        current.llm_backend = Some("openai_compatible".to_string());
         current.selected_model = None; // cleared because backend changed
 
         // 4. step_model_selection: user picks model
         current.selected_model = Some("claude-opus-4-6".to_string());
 
         // Verify: provider/model updated
-        assert_eq!(current.llm_backend.as_deref(), Some("anthropic"));
+        assert_eq!(current.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(current.selected_model.as_deref(), Some("claude-opus-4-6"));
 
         // Verify: channels, embeddings, heartbeat survived quick mode
@@ -2590,7 +2578,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("postgres".to_string()),
             database_url: Some("postgres://host/db".to_string()),
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             ..Default::default()
         };
@@ -2611,7 +2599,7 @@ timeout_ms = 300000
         // After merge, prior settings recovered
         assert_eq!(
             current.llm_backend.as_deref(),
-            Some("anthropic"),
+            Some("openai_compatible"),
             "Prior provider must be recovered from DB"
         );
         assert_eq!(
@@ -2620,10 +2608,10 @@ timeout_ms = 300000
             "Prior model must be recovered from DB"
         );
 
-        // Step 3: user picks same provider (anthropic)
+        // Step 3: user picks same provider (openai_compatible)
         // set_llm_backend_preserving_model checks if backend changed
-        let backend_changed = current.llm_backend.as_deref() != Some("anthropic");
-        current.llm_backend = Some("anthropic".to_string());
+        let backend_changed = current.llm_backend.as_deref() != Some("openai_compatible");
+        current.llm_backend = Some("openai_compatible".to_string());
         if backend_changed {
             current.selected_model = None;
         }
@@ -2644,7 +2632,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("postgres".to_string()),
             database_url: Some("postgres://host/db".to_string()),
-            llm_backend: Some("anthropic".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("claude-sonnet-4-5".to_string()),
             ..Default::default()
         };

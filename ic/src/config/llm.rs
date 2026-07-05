@@ -37,8 +37,6 @@ impl LlmConfig {
                 smart_routing_cascade: false,
             },
             provider: None,
-            bedrock: None,
-            gemini_oauth: None,
             openai_codex: None,
             request_timeout_secs: 120,
             llm_turn_budget_secs: 370,
@@ -80,16 +78,11 @@ impl LlmConfig {
         let backend_lower = backend.to_lowercase();
         let is_nearai =
             backend_lower == "nearai" || backend_lower == "near_ai" || backend_lower == "near";
-        let is_bedrock =
-            backend_lower == "bedrock" || backend_lower == "aws_bedrock" || backend_lower == "aws";
-        let is_gemini_oauth = backend_lower == "gemini_oauth" || backend_lower == "gemini-oauth";
         let is_openai_codex = backend_lower == "openai_codex"
             || backend_lower == "openai-codex"
             || backend_lower == "codex";
 
         if !is_nearai
-            && !is_bedrock
-            && !is_gemini_oauth
             && !is_openai_codex
             && registry.find(&backend_lower).is_none()
         {
@@ -154,8 +147,8 @@ impl LlmConfig {
             smart_routing_cascade: parse_optional_env("SMART_ROUTING_CASCADE", true)?,
         };
 
-        // Resolve registry provider config (for non-NearAI, non-Bedrock, non-Gemini, non-Codex backends)
-        let provider = if is_nearai || is_bedrock || is_gemini_oauth || is_openai_codex {
+        // Resolve registry provider config (for non-NearAI, non-Codex backends)
+        let provider = if is_nearai || is_openai_codex {
             None
         } else {
             Some(Self::resolve_registry_provider(
@@ -163,43 +156,6 @@ impl LlmConfig {
                 &registry,
                 settings,
             )?)
-        };
-
-        let bedrock = if is_bedrock {
-            let explicit_region =
-                optional_env("BEDROCK_REGION")?.or_else(|| settings.bedrock_region.clone());
-            if explicit_region.is_none() {
-                tracing::info!("BEDROCK_REGION not set, defaulting to us-east-1");
-            }
-            let region = explicit_region.unwrap_or_else(|| "us-east-1".to_string());
-            let model = optional_env("BEDROCK_MODEL")?
-                .or_else(|| settings.selected_model.clone())
-                .ok_or_else(|| ConfigError::MissingRequired {
-                    key: "BEDROCK_MODEL".to_string(),
-                    hint: "Set BEDROCK_MODEL when LLM_BACKEND=bedrock".to_string(),
-                })?;
-            let cross_region = optional_env("BEDROCK_CROSS_REGION")?
-                .or_else(|| settings.bedrock_cross_region.clone());
-            if let Some(ref cr) = cross_region
-                && !matches!(cr.as_str(), "us" | "eu" | "apac" | "global")
-            {
-                return Err(ConfigError::InvalidValue {
-                    key: "BEDROCK_CROSS_REGION".to_string(),
-                    message: format!(
-                        "'{}' is not valid, expected one of: us, eu, apac, global",
-                        cr
-                    ),
-                });
-            }
-            let profile = optional_env("AWS_PROFILE")?.or_else(|| settings.bedrock_profile.clone());
-            Some(BedrockConfig {
-                region,
-                model,
-                cross_region,
-                profile,
-            })
-        } else {
-            None
         };
 
         // Resolve OpenAI Codex config
@@ -241,19 +197,6 @@ impl LlmConfig {
         // hard-killed mid-turn (which clears the thread's pending queue and drops
         // the user's queued follow-up). See ic/src/llm/timeout.rs. 0 disables.
         let llm_turn_budget_secs = parse_optional_env("LLM_TURN_BUDGET_SECS", 370)?;
-
-        let gemini_oauth = if backend_lower == "gemini_oauth" || backend_lower == "gemini-oauth" {
-            let model = Self::resolve_model("GEMINI_MODEL", settings, "gemini-2.5-flash")?;
-            let credentials_path = optional_env("GEMINI_CREDENTIALS_PATH")?
-                .map(PathBuf::from)
-                .unwrap_or_else(GeminiOauthConfig::default_credentials_path);
-            Some(GeminiOauthConfig {
-                model,
-                credentials_path,
-            })
-        } else {
-            None
-        };
 
         // Generic cheap model (works with any backend).
         // Falls back to NearAI-specific cheap_model in provider chain logic.
@@ -322,10 +265,6 @@ impl LlmConfig {
         Ok(Self {
             backend: if is_nearai {
                 "nearai".to_string()
-            } else if is_bedrock {
-                "bedrock".to_string()
-            } else if is_gemini_oauth {
-                "gemini_oauth".to_string()
             } else if is_openai_codex {
                 "openai_codex".to_string()
             } else if let Some(ref p) = provider {
@@ -336,8 +275,6 @@ impl LlmConfig {
             session,
             nearai,
             provider,
-            bedrock,
-            gemini_oauth,
             openai_codex,
             request_timeout_secs,
             llm_turn_budget_secs,
@@ -497,47 +434,6 @@ impl LlmConfig {
         } else {
             Vec::new()
         };
-        let extra_headers = if canonical_id == "github_copilot" {
-            merge_extra_headers(
-                crate::llm::github_copilot_auth::default_headers(),
-                extra_headers,
-            )
-        } else {
-            extra_headers
-        };
-
-        // Resolve OAuth token (Anthropic-specific: `claude login` flow).
-        // Only check for OAuth token when the provider is actually Anthropic.
-        let oauth_token = if canonical_id == "anthropic" {
-            optional_env("ANTHROPIC_OAUTH_TOKEN")?.map(SecretString::from)
-        } else {
-            None
-        };
-        let api_key = if api_key.is_none() && oauth_token.is_some() {
-            // OAuth token present but no API key: use a placeholder so the
-            // config block is populated. The provider factory will route to
-            // the OAuth provider instead of rig-core's x-api-key client.
-            Some(SecretString::from(OAUTH_PLACEHOLDER.to_string()))
-        } else {
-            api_key
-        };
-
-        // Resolve Anthropic prompt cache retention from env (default: Short).
-        let cache_retention: CacheRetention = if canonical_id == "anthropic" {
-            optional_env("ANTHROPIC_CACHE_RETENTION")?
-                .and_then(|val| match val.parse::<CacheRetention>() {
-                    Ok(r) => Some(r),
-                    Err(e) => {
-                        tracing::warn!(
-                            "Invalid ANTHROPIC_CACHE_RETENTION: {e}; defaulting to short"
-                        );
-                        None
-                    }
-                })
-                .unwrap_or_default()
-        } else {
-            CacheRetention::default()
-        };
 
         Ok(RegistryProviderConfig {
             protocol,
@@ -546,11 +442,9 @@ impl LlmConfig {
             base_url,
             model,
             extra_headers,
-            oauth_token,
             is_codex_chatgpt,
             refresh_token: codex_refresh_token,
             auth_path: codex_auth_path,
-            cache_retention,
             unsupported_params,
         })
     }
@@ -590,26 +484,6 @@ fn parse_extra_headers_with_key(
         headers.push((key.to_string(), value.trim().to_string()));
     }
     Ok(headers)
-}
-
-fn merge_extra_headers(
-    defaults: Vec<(String, String)>,
-    overrides: Vec<(String, String)>,
-) -> Vec<(String, String)> {
-    let mut merged = Vec::new();
-    let mut positions = std::collections::HashMap::<String, usize>::new();
-
-    for (key, value) in defaults.into_iter().chain(overrides) {
-        let normalized = key.to_ascii_lowercase();
-        if let Some(existing_index) = positions.get(&normalized).copied() {
-            merged[existing_index] = (key, value);
-        } else {
-            positions.insert(normalized, merged.len());
-            merged.push((key, value));
-        }
-    }
-
-    merged
 }
 
 /// Get the default session file path (~/.lunarwing/session.json).
@@ -744,29 +618,6 @@ mod tests {
             vec![
                 ("HTTP-Referer".to_string(), "https://myapp.com".to_string()),
                 ("X-Title".to_string(), "MyApp".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn merge_extra_headers_prefers_overrides_case_insensitively() {
-        let merged = merge_extra_headers(
-            vec![
-                ("User-Agent".to_string(), "default-agent".to_string()),
-                ("X-Test".to_string(), "default".to_string()),
-            ],
-            vec![
-                ("user-agent".to_string(), "override-agent".to_string()),
-                ("X-Extra".to_string(), "present".to_string()),
-            ],
-        );
-
-        assert_eq!(
-            merged,
-            vec![
-                ("user-agent".to_string(), "override-agent".to_string()),
-                ("X-Test".to_string(), "default".to_string()),
-                ("X-Extra".to_string(), "present".to_string()),
             ]
         );
     }
@@ -924,54 +775,6 @@ mod tests {
     }
 
     #[test]
-    fn registry_provider_resolves_github_copilot_alias() {
-        let _guard = lock_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("LLM_BACKEND", "github-copilot");
-            std::env::set_var("GITHUB_COPILOT_TOKEN", "gho_test_token");
-            std::env::set_var(
-                "GITHUB_COPILOT_EXTRA_HEADERS",
-                "Copilot-Integration-Id:custom-chat,X-Test:enabled",
-            );
-        }
-
-        let settings = Settings::default();
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "github_copilot");
-        let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "github_copilot");
-        assert_eq!(provider.base_url, "https://api.githubcopilot.com");
-        assert_eq!(provider.model, "gpt-4o");
-        assert!(
-            provider
-                .extra_headers
-                .iter()
-                .any(|(key, value)| { key == "Copilot-Integration-Id" && value == "custom-chat" })
-        );
-        assert!(
-            provider
-                .extra_headers
-                .iter()
-                .any(|(key, value)| key == "User-Agent" && value == "GitHubCopilotChat/0.26.7")
-        );
-        assert!(
-            provider
-                .extra_headers
-                .iter()
-                .any(|(key, value)| key == "X-Test" && value == "enabled")
-        );
-
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("GITHUB_COPILOT_TOKEN");
-            std::env::remove_var("GITHUB_COPILOT_EXTRA_HEADERS");
-        }
-    }
-
-    #[test]
     fn nearai_backend_has_no_registry_provider() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
@@ -1104,203 +907,8 @@ mod tests {
         }
     }
 
-    // ── OAuth resolution tests ──────────────────────────────────────
-
-    /// Clear all Anthropic-related env vars.
-    fn clear_anthropic_env() {
-        // SAFETY: Only called under ENV_MUTEX in tests.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("ANTHROPIC_API_KEY");
-            std::env::remove_var("ANTHROPIC_OAUTH_TOKEN");
-            std::env::remove_var("ANTHROPIC_MODEL");
-            std::env::remove_var("ANTHROPIC_BASE_URL");
-        }
-    }
-
     #[test]
-    fn anthropic_oauth_token_sets_placeholder_api_key() {
-        use secrecy::ExposeSecret;
-
-        let _guard = lock_env();
-        clear_anthropic_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("ANTHROPIC_OAUTH_TOKEN", TEST_ANTHROPIC_OAUTH_TOKEN);
-        }
-
-        let settings = Settings {
-            llm_backend: Some("anthropic".to_string()),
-            ..Default::default()
-        };
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let provider = cfg.provider.expect("provider config should be present");
-
-        assert_eq!(
-            provider
-                .api_key
-                .as_ref()
-                .map(|k| k.expose_secret().to_string()),
-            Some(OAUTH_PLACEHOLDER.to_string()),
-            "api_key should be the OAuth placeholder when only OAuth token is set"
-        );
-        assert!(
-            provider.oauth_token.is_some(),
-            "oauth_token should be populated"
-        );
-        assert_eq!(
-            provider.oauth_token.as_ref().unwrap().expose_secret(),
-            TEST_ANTHROPIC_OAUTH_TOKEN
-        );
-
-        clear_anthropic_env();
-    }
-
-    #[test]
-    fn anthropic_api_key_takes_priority_over_oauth() {
-        use secrecy::ExposeSecret;
-
-        let _guard = lock_env();
-        clear_anthropic_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("ANTHROPIC_API_KEY", TEST_ANTHROPIC_API_KEY);
-            std::env::set_var("ANTHROPIC_OAUTH_TOKEN", TEST_ANTHROPIC_OAUTH_TOKEN);
-        }
-
-        let settings = Settings {
-            llm_backend: Some("anthropic".to_string()),
-            ..Default::default()
-        };
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let provider = cfg.provider.expect("provider config should be present");
-
-        assert_eq!(
-            provider
-                .api_key
-                .as_ref()
-                .map(|k| k.expose_secret().to_string()),
-            Some(TEST_ANTHROPIC_API_KEY.to_string()),
-            "real API key should take priority over OAuth placeholder"
-        );
-        assert!(
-            provider.oauth_token.is_some(),
-            "oauth_token should still be populated"
-        );
-
-        clear_anthropic_env();
-    }
-
-    #[test]
-    fn non_anthropic_provider_has_no_oauth_token() {
-        let _guard = lock_env();
-        clear_anthropic_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("ANTHROPIC_OAUTH_TOKEN", TEST_ANTHROPIC_OAUTH_TOKEN);
-        }
-
-        let settings = Settings {
-            llm_backend: Some("openai".to_string()),
-            ..Default::default()
-        };
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let provider = cfg.provider.expect("provider config should be present");
-
-        assert!(
-            provider.oauth_token.is_none(),
-            "non-Anthropic providers should not pick up ANTHROPIC_OAUTH_TOKEN"
-        );
-
-        clear_anthropic_env();
-    }
-
-    // ── Cache retention tests ───────────────────────────────────────
-
-    #[test]
-    fn cache_retention_from_str_primary_values() {
-        assert_eq!(
-            "none".parse::<CacheRetention>().unwrap(),
-            CacheRetention::None
-        );
-        assert_eq!(
-            "short".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Short
-        );
-        assert_eq!(
-            "long".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Long
-        );
-    }
-
-    #[test]
-    fn cache_retention_from_str_aliases() {
-        assert_eq!(
-            "off".parse::<CacheRetention>().unwrap(),
-            CacheRetention::None
-        );
-        assert_eq!(
-            "disabled".parse::<CacheRetention>().unwrap(),
-            CacheRetention::None
-        );
-        assert_eq!(
-            "5m".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Short
-        );
-        assert_eq!(
-            "ephemeral".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Short
-        );
-        assert_eq!(
-            "1h".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Long
-        );
-    }
-
-    #[test]
-    fn cache_retention_from_str_case_insensitive() {
-        assert_eq!(
-            "NONE".parse::<CacheRetention>().unwrap(),
-            CacheRetention::None
-        );
-        assert_eq!(
-            "Short".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Short
-        );
-        assert_eq!(
-            "LONG".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Long
-        );
-        assert_eq!(
-            "Ephemeral".parse::<CacheRetention>().unwrap(),
-            CacheRetention::Short
-        );
-    }
-
-    #[test]
-    fn cache_retention_from_str_invalid() {
-        let err = "bogus".parse::<CacheRetention>().unwrap_err();
-        assert!(
-            err.contains("bogus"),
-            "error should mention the invalid value"
-        );
-    }
-
-    #[test]
-    fn cache_retention_display_round_trip() {
-        for variant in [
-            CacheRetention::None,
-            CacheRetention::Short,
-            CacheRetention::Long,
-        ] {
-            let s = variant.to_string();
-            let parsed: CacheRetention = s.parse().unwrap();
-            assert_eq!(parsed, variant, "round-trip failed for {s}");
-        }
-    }
-
-    #[test]
-    fn test_request_timeout_defaults_to_120() {
+    fn test_request_timeout_default() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
