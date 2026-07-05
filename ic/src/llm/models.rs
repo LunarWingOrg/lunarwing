@@ -1,90 +1,5 @@
 //! Model discovery and fetching for multiple LLM providers.
 
-/// Fetch models from the Anthropic API.
-///
-/// Returns `(model_id, display_label)` pairs. Falls back to static defaults on error.
-pub(crate) async fn fetch_anthropic_models(cached_key: Option<&str>) -> Vec<(String, String)> {
-    let static_defaults = vec![
-        (
-            "claude-opus-4-6".into(),
-            "Claude Opus 4.6 (latest flagship)".into(),
-        ),
-        ("claude-sonnet-4-6".into(), "Claude Sonnet 4.6".into()),
-        ("claude-opus-4-5".into(), "Claude Opus 4.5".into()),
-        ("claude-sonnet-4-5".into(), "Claude Sonnet 4.5".into()),
-        ("claude-haiku-4-5".into(), "Claude Haiku 4.5 (fast)".into()),
-    ];
-
-    let api_key = cached_key
-        .map(String::from)
-        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-        .filter(|k| !k.is_empty() && k != crate::config::OAUTH_PLACEHOLDER);
-
-    // Fall back to OAuth token if no API key
-    let oauth_token = if api_key.is_none() {
-        crate::config::helpers::optional_env("ANTHROPIC_OAUTH_TOKEN")
-            .ok()
-            .flatten()
-            .filter(|t| !t.is_empty())
-    } else {
-        None
-    };
-
-    let (key_or_token, is_oauth) = match (api_key, oauth_token) {
-        (Some(k), _) => (k, false),
-        (None, Some(t)) => (t, true),
-        (None, None) => return static_defaults,
-    };
-
-    let client = reqwest::Client::new();
-    let mut request = client
-        .get("https://api.anthropic.com/v1/models")
-        .header("anthropic-version", "2023-06-01")
-        .timeout(std::time::Duration::from_secs(5));
-
-    if is_oauth {
-        request = request
-            .bearer_auth(&key_or_token)
-            .header("anthropic-beta", "oauth-2025-04-20");
-    } else {
-        request = request.header("x-api-key", &key_or_token);
-    }
-
-    let resp = match request.send().await {
-        Ok(r) if r.status().is_success() => r,
-        _ => return static_defaults,
-    };
-
-    #[derive(serde::Deserialize)]
-    struct ModelEntry {
-        id: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct ModelsResponse {
-        data: Vec<ModelEntry>,
-    }
-
-    match resp.json::<ModelsResponse>().await {
-        Ok(body) => {
-            let mut models: Vec<(String, String)> = body
-                .data
-                .into_iter()
-                .filter(|m| !m.id.contains("embedding") && !m.id.contains("audio"))
-                .map(|m| {
-                    let label = m.id.clone();
-                    (m.id, label)
-                })
-                .collect();
-            if models.is_empty() {
-                return static_defaults;
-            }
-            models.sort_by(|a, b| a.0.cmp(&b.0));
-            models
-        }
-        Err(_) => static_defaults,
-    }
-}
-
 /// Fetch models from the OpenAI API.
 ///
 /// Returns `(model_id, display_label)` pairs. Falls back to static defaults on error.
@@ -350,8 +265,6 @@ pub(crate) fn build_nearai_model_fetch_config() -> crate::config::LlmConfig {
         response_cache_max_entries: nearai.response_cache_max_entries,
         nearai,
         provider: None,
-        bedrock: None,
-        gemini_oauth: None,
         request_timeout_secs: 120,
         llm_turn_budget_secs: 270,
         cheap_model: None,

@@ -56,7 +56,6 @@ fn bootstrap_env_round_trips_llm_backend() {
     for backend in &[
         "nearai",
         "anthropic",
-        "github_copilot",
         "ollama",
         "openai_compatible",
         "tinfoil",

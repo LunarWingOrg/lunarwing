@@ -52,7 +52,6 @@ pub use self::safety::SafetyConfig;
 use self::safety::resolve_safety_config;
 pub use self::sandbox::{
     AcpModeConfig, ExternalWorkerConfig, LoadBalanceStrategy, SandboxModeConfig, WorkerEndpoint,
-    extract_anthropic_oauth_token,
 };
 pub use self::search::WorkspaceSearchConfig;
 pub use self::secrets::SecretsConfig;
@@ -63,8 +62,8 @@ pub use self::tunnel::TunnelConfig;
 pub use self::wasm::WasmConfig;
 pub use self::workspace::WorkspaceConfig;
 pub use crate::llm::config::{
-    BedrockConfig, CacheRetention, GeminiOauthConfig, LlmConfig, NearAiConfig, OAUTH_PLACEHOLDER,
-    OpenAiCodexConfig, RegistryProviderConfig,
+    LlmConfig, NearAiConfig, OpenAiCodexConfig,
+    RegistryProviderConfig,
 };
 pub use crate::llm::session::SessionConfig;
 
@@ -427,7 +426,6 @@ pub async fn inject_llm_keys_from_secrets(
     // so new providers added to providers.json get injection automatically.
     let mut mappings: Vec<(&str, &str)> = vec![
         ("llm_nearai_api_key", "NEARAI_API_KEY"),
-        ("llm_anthropic_oauth_token", "ANTHROPIC_OAUTH_TOKEN"),
     ];
 
     // Dynamically discover secret->env mappings from the provider registry.
@@ -467,20 +465,6 @@ pub async fn inject_llm_keys_from_secrets(
         }
     }
 
-    inject_os_credential_store_tokens(&mut injected);
-
-    merge_injected_vars(injected);
-}
-
-/// Load tokens from OS credential stores (no DB required).
-///
-/// Called unconditionally during startup — even when the encrypted secrets DB
-/// is unavailable (no master key, no DB connection). This ensures OAuth tokens
-/// from `claude login` (macOS Keychain / Linux credentials.json)
-/// are available for config resolution.
-pub fn inject_os_credentials() {
-    let mut injected = HashMap::new();
-    inject_os_credential_store_tokens(&mut injected);
     merge_injected_vars(injected);
 }
 
@@ -512,13 +496,5 @@ pub fn inject_single_var(key: &str, value: &str) {
                 .into_inner()
                 .insert(key.to_string(), value.to_string());
         }
-    }
-}
-
-/// Shared helper: extract tokens from OS credential stores into the overlay map.
-fn inject_os_credential_store_tokens(injected: &mut HashMap<String, String>) {
-    if let Some(fresh) = crate::config::sandbox::extract_anthropic_oauth_token() {
-        injected.insert("ANTHROPIC_OAUTH_TOKEN".to_string(), fresh);
-        tracing::debug!("Refreshed ANTHROPIC_OAUTH_TOKEN from OS credential store");
     }
 }

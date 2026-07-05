@@ -295,9 +295,7 @@ fn check_llm_config(settings: &Settings) -> CheckResult {
     match crate::llm::LlmConfig::resolve(settings) {
         Ok(config) => {
             // Show the model for the active backend, not always nearai.model.
-            let model = if let Some(ref bedrock) = config.bedrock {
-                &bedrock.model
-            } else if let Some(ref provider) = config.provider {
+            let model = if let Some(ref provider) = config.provider {
                 &provider.model
             } else {
                 &config.nearai.model

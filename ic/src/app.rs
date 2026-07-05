@@ -248,10 +248,7 @@ impl AppBuilder {
         let master_key = match self.config.secrets.master_key() {
             Some(k) => k,
             None => {
-                // No secrets DB available, but we can still load tokens from
-                // OS credential stores (e.g., Anthropic OAuth via Claude Code's
-                // macOS Keychain / Linux ~/.claude/.credentials.json).
-                crate::config::inject_os_credentials();
+                // No secrets DB available.
 
                 // Consume unused handles
                 self.handles.take();
@@ -859,12 +856,12 @@ impl AppBuilder {
         self.init_database().await?;
         self.init_secrets().await?;
 
-        // Post-init validation: backends with dedicated config (nearai, gemini_oauth,
+        // Post-init validation: backends with dedicated config (nearai,
         // bedrock, openai_codex) handle their own credential resolution. For registry-based
         // backends, fail early if no provider config was resolved.
         if !matches!(
             self.config.llm.backend.as_str(),
-            "nearai" | "gemini_oauth" | "bedrock" | "openai_codex"
+            "nearai" | "bedrock" | "openai_codex"
         ) && self.config.llm.provider.is_none()
         {
             let backend = &self.config.llm.backend;

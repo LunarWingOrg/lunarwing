@@ -142,49 +142,6 @@ impl SandboxModeConfig {
     }
 }
 
-/// Extract an OAuth access token from the host's credential store.
-///
-/// On macOS: reads from Keychain (`Claude Code-credentials` service).
-/// On Linux: reads from `~/.claude/.credentials.json`.
-pub fn extract_anthropic_oauth_token() -> Option<String> {
-    if cfg!(target_os = "macos") {
-        match std::process::Command::new("security")
-            .args([
-                "find-generic-password",
-                "-s",
-                "Claude Code-credentials",
-                "-w",
-            ])
-            .output()
-        {
-            Ok(output) if output.status.success() => {
-                if let Ok(json) = String::from_utf8(output.stdout) {
-                    return parse_oauth_access_token(json.trim());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(home) = dirs::home_dir() {
-        let creds_path = home.join(".claude").join(".credentials.json");
-        if let Ok(json) = std::fs::read_to_string(&creds_path) {
-            return parse_oauth_access_token(&json);
-        }
-    }
-
-    None
-}
-
-fn parse_oauth_access_token(json: &str) -> Option<String> {
-    let creds: serde_json::Value = serde_json::from_str(json).ok()?;
-    let token = creds["claudeAiOauth"]["accessToken"].as_str()?;
-    if !token.starts_with("sk-ant-oat") {
-        return None;
-    }
-    Some(token.to_string())
-}
-
 /// A single endpoint for a named external worker (URL + optional auth).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerEndpoint {
@@ -401,70 +358,6 @@ mod tests {
             !sc.network_allowlist.is_empty(),
             "default allowlist should not be empty"
         );
-    }
-
-    // ── parse_oauth_access_token ────────────────────────────────────
-
-    #[test]
-    fn parse_oauth_token_valid() {
-        let json = format!(
-            r#"{{"claudeAiOauth": {{"accessToken": "{}"}}}}"#,
-            TEST_ANTHROPIC_OAUTH_BASIC
-        );
-        let token = parse_oauth_access_token(&json);
-        assert_eq!(token, Some(TEST_ANTHROPIC_OAUTH_BASIC.to_string()));
-    }
-
-    #[test]
-    fn parse_oauth_token_missing_access_token() {
-        let json = r#"{"claudeAiOauth": {}}"#;
-        assert_eq!(parse_oauth_access_token(json), None);
-    }
-
-    #[test]
-    fn parse_oauth_token_missing_oauth_key() {
-        let json = r#"{"someOtherKey": {"accessToken": "tok"}}"#;
-        assert_eq!(parse_oauth_access_token(json), None);
-    }
-
-    #[test]
-    fn parse_oauth_token_invalid_json() {
-        assert_eq!(parse_oauth_access_token("not json at all"), None);
-    }
-
-    #[test]
-    fn parse_oauth_token_empty_string() {
-        assert_eq!(parse_oauth_access_token(""), None);
-    }
-
-    #[test]
-    fn parse_oauth_token_nested_extra_fields() {
-        let json = format!(
-            r#"{{
-            "claudeAiOauth": {{
-                "accessToken": "{}",
-                "refreshToken": "rt-abc",
-                "expiresAt": 1700000000
-            }}
-        }}"#,
-            TEST_ANTHROPIC_OAUTH_NESTED
-        );
-        assert_eq!(
-            parse_oauth_access_token(&json),
-            Some(TEST_ANTHROPIC_OAUTH_NESTED.to_string())
-        );
-    }
-
-    #[test]
-    fn parse_oauth_token_access_token_is_not_string() {
-        let json = r#"{"claudeAiOauth": {"accessToken": 12345}}"#;
-        assert_eq!(parse_oauth_access_token(json), None);
-    }
-
-    #[test]
-    fn parse_oauth_token_rejects_invalid_prefix() {
-        let json = r#"{"claudeAiOauth": {"accessToken": "not-an-oauth-token"}}"#;
-        assert_eq!(parse_oauth_access_token(json), None);
     }
 
     #[test]

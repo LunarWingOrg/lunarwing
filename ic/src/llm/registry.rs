@@ -33,12 +33,8 @@ pub enum ProviderProtocol {
     /// OpenAI Chat Completions API (`/v1/chat/completions`).
     /// Used by: OpenAI, Tinfoil, Groq, OpenRouter, etc.
     OpenAiCompletions,
-    /// Anthropic Messages API.
-    Anthropic,
     /// Ollama API (OpenAI-ish, no API key required).
     Ollama,
-    /// GitHub Copilot API (OpenAI-compatible with token exchange).
-    GithubCopilot,
 }
 
 /// How the setup wizard should collect credentials for this provider.
@@ -149,7 +145,7 @@ mod unsupported_params_de {
 pub struct ProviderDefinition {
     /// Unique identifier used in `LLM_BACKEND` (e.g., "groq", "tinfoil").
     pub id: String,
-    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["open_ai", "claude"]).
+    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["open_ai"]).
     #[serde(default)]
     pub aliases: Vec<String>,
     /// Which API protocol to use.

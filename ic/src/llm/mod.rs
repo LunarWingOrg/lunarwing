@@ -3,14 +3,9 @@
 //! Supports multiple backends:
 //! - **NEAR AI** (default): Session token or API key auth via Chat Completions API
 //! - **OpenAI**: Direct API access with your own key
-//! - **Anthropic**: Direct API access with your own key
 //! - **Ollama**: Local model inference
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
-//! - **AWS Bedrock**: Native Converse API via aws-sdk-bedrockruntime
 
-mod anthropic_oauth;
-#[cfg(feature = "bedrock")]
-mod bedrock;
 pub mod circuit_breaker;
 pub(crate) mod codex_auth;
 mod codex_chatgpt;
@@ -18,9 +13,6 @@ pub mod config;
 pub mod costs;
 pub mod error;
 pub mod failover;
-pub mod gemini_oauth;
-mod github_copilot;
-pub(crate) mod github_copilot_auth;
 mod nearai_chat;
 pub mod oauth_helpers;
 pub mod openai_codex_provider;
@@ -47,13 +39,9 @@ pub mod reasoning_models;
 pub mod vision_models;
 
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider};
-pub use config::{
-    BedrockConfig, CacheRetention, LlmConfig, NearAiConfig, OAUTH_PLACEHOLDER, OpenAiCodexConfig,
-    RegistryProviderConfig,
-};
+pub use config::{LlmConfig, NearAiConfig, OpenAiCodexConfig, RegistryProviderConfig};
 pub use error::LlmError;
 pub use failover::{CooldownConfig, FailoverProvider};
-pub use gemini_oauth::GeminiOauthProvider;
 pub use nearai_chat::{DEFAULT_MODEL, ModelInfo, NearAiChatProvider, default_models};
 pub use openai_codex_provider::OpenAiCodexProvider;
 pub use openai_codex_session::{OpenAiCodexSession, OpenAiCodexSessionManager};
@@ -97,25 +85,6 @@ pub async fn create_llm_provider(
 
     if config.backend == "nearai" || config.backend == "near_ai" || config.backend == "near" {
         return create_llm_provider_with_config(&config.nearai, session, timeout);
-    }
-
-    if config.backend == "gemini_oauth" || config.backend == "gemini-oauth" {
-        return create_gemini_oauth_provider(config);
-    }
-
-    // Bedrock uses a native AWS SDK, not the rig-core registry
-    if config.backend == "bedrock" {
-        #[cfg(feature = "bedrock")]
-        {
-            return create_bedrock_provider(config).await;
-        }
-        #[cfg(not(feature = "bedrock"))]
-        {
-            return Err(LlmError::RequestFailed {
-                provider: "bedrock".to_string(),
-                reason: "Bedrock support not compiled. Rebuild with --features bedrock".to_string(),
-            });
-        }
     }
 
     if config.backend == "openai_codex" {
@@ -183,19 +152,7 @@ fn create_registry_provider(
         ProviderProtocol::OpenAiCompletions => {
             create_openai_compat_from_registry(config, request_timeout_secs)
         }
-        ProviderProtocol::Anthropic => create_anthropic_from_registry(config, request_timeout_secs),
         ProviderProtocol::Ollama => create_ollama_from_registry(config, request_timeout_secs),
-        ProviderProtocol::GithubCopilot => {
-            let provider =
-                github_copilot::GithubCopilotProvider::new(config, request_timeout_secs)?;
-            tracing::debug!(
-                provider = %config.provider_id,
-                model = %config.model,
-                base_url = %config.base_url,
-                "Using GitHub Copilot provider (token exchange)"
-            );
-            Ok(Arc::new(provider))
-        }
     }
 }
 
@@ -224,25 +181,6 @@ fn create_codex_chatgpt_from_registry(
         config.refresh_token.clone(),
         config.auth_path.clone(),
         request_timeout_secs,
-    );
-
-    Ok(Arc::new(provider))
-}
-
-#[cfg(feature = "bedrock")]
-async fn create_bedrock_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    let br = config
-        .bedrock
-        .as_ref()
-        .ok_or_else(|| LlmError::AuthFailed {
-            provider: "bedrock".to_string(),
-        })?;
-
-    let provider = bedrock::BedrockProvider::new(br).await?;
-    tracing::debug!(
-        "Using AWS Bedrock (Converse API, region: {}, model: {})",
-        br.region,
-        provider.active_model_name(),
     );
 
     Ok(Arc::new(provider))
@@ -324,86 +262,6 @@ fn create_openai_compat_from_registry(
     let adapter = RigAdapter::new(model, &config.model)
         .with_unsupported_params(config.unsupported_params.clone());
     Ok(Arc::new(adapter))
-}
-
-fn create_anthropic_from_registry(
-    config: &RegistryProviderConfig,
-    request_timeout_secs: u64,
-) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    // Route to OAuth provider when an OAuth token is present and no real API
-    // key was provided. When both are set, the API key takes priority (standard
-    // x-api-key auth via rig-core).
-    let api_key_is_placeholder = config
-        .api_key
-        .as_ref()
-        .is_some_and(|k| k.expose_secret() == crate::llm::config::OAUTH_PLACEHOLDER);
-    if config.oauth_token.is_some() && (config.api_key.is_none() || api_key_is_placeholder) {
-        tracing::debug!(
-            provider = %config.provider_id,
-            model = %config.model,
-            base_url = if config.base_url.is_empty() { "default" } else { &config.base_url },
-            "Using Anthropic OAuth API"
-        );
-        let provider = anthropic_oauth::AnthropicOAuthProvider::new(config)?;
-        return Ok(Arc::new(provider));
-    }
-
-    use crate::llm::config::CacheRetention;
-    use rig::providers::anthropic;
-
-    let api_key = config
-        .api_key
-        .as_ref()
-        .map(|k| k.expose_secret().to_string())
-        .ok_or_else(|| LlmError::AuthFailed {
-            provider: config.provider_id.clone(),
-        })?;
-
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(request_timeout_secs))
-        .build()
-        .map_err(|e| LlmError::RequestFailed {
-            provider: config.provider_id.clone(),
-            reason: format!("Failed to create HTTP client: {e}"),
-        })?;
-
-    let mut builder = anthropic::Client::<reqwest::Client>::builder()
-        .api_key(&api_key)
-        .http_client(http_client);
-    if !config.base_url.is_empty() {
-        builder = builder.base_url(&config.base_url);
-    }
-
-    let client = builder.build().map_err(|e| LlmError::RequestFailed {
-        provider: config.provider_id.clone(),
-        reason: format!("Failed to create Anthropic client: {e}"),
-    })?;
-
-    let cache_retention = config.cache_retention;
-
-    let model = client.completion_model(&config.model);
-
-    if cache_retention != CacheRetention::None {
-        tracing::debug!(
-            model = %config.model,
-            retention = %cache_retention,
-            "Anthropic automatic prompt caching enabled"
-        );
-    }
-
-    tracing::debug!(
-        provider = %config.provider_id,
-        model = %config.model,
-        base_url = if config.base_url.is_empty() { "default" } else { &config.base_url },
-        timeout_secs = request_timeout_secs,
-        "Using Anthropic provider"
-    );
-
-    Ok(Arc::new(
-        RigAdapter::new(model, &config.model)
-            .with_cache_retention(cache_retention)
-            .with_unsupported_params(config.unsupported_params.clone()),
-    ))
 }
 
 fn create_ollama_from_registry(
@@ -509,7 +367,6 @@ pub fn create_cheap_llm_provider(
 ///
 /// Handles backend-specific provider construction:
 /// - `nearai` — clones NearAiConfig, swaps model, uses `create_llm_provider_with_config`
-/// - `bedrock` — returns error (smart routing not yet supported)
 /// - All others — clones `RegistryProviderConfig`, swaps model, uses `create_registry_provider`
 fn create_cheap_provider_for_backend(
     config: &LlmConfig,
@@ -522,26 +379,6 @@ fn create_cheap_provider_for_backend(
         let provider =
             create_llm_provider_with_config(&cheap_config, session, config.request_timeout_secs)?;
         return Ok(Some(provider));
-    }
-
-    if config.backend == "bedrock" {
-        return Err(LlmError::RequestFailed {
-            provider: "bedrock".to_string(),
-            reason: "Smart routing with cheap model is not supported for Bedrock yet".to_string(),
-        });
-    }
-
-    if config.backend == "gemini_oauth" {
-        let Some(ref gemini_config) = config.gemini_oauth else {
-            return Err(LlmError::RequestFailed {
-                provider: "gemini_oauth".to_string(),
-                reason: "Gemini OAuth config not available for cheap model".to_string(),
-            });
-        };
-        let mut cheap_gemini_config = gemini_config.clone();
-        cheap_gemini_config.model = cheap_model.to_string();
-        let provider = GeminiOauthProvider::new(cheap_gemini_config)?;
-        return Ok(Some(Arc::new(provider)));
     }
 
     // Registry-based provider: clone config and swap model
@@ -742,17 +579,6 @@ pub async fn build_provider_chain(
     Ok((llm, cheap_llm, recording_handle))
 }
 
-pub fn create_gemini_oauth_provider(config: &LlmConfig) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    let gemini_config = config
-        .gemini_oauth
-        .clone()
-        .ok_or_else(|| LlmError::AuthFailed {
-            provider: "gemini_oauth".to_string(),
-        })?;
-    let provider = gemini_oauth::GeminiOauthProvider::new(gemini_config)?;
-    Ok(Arc::new(provider))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -790,8 +616,6 @@ mod tests {
             response_cache_max_entries: nearai.response_cache_max_entries,
             nearai,
             provider: None,
-            bedrock: None,
-            gemini_oauth: None,
             request_timeout_secs: 120,
             llm_turn_budget_secs: 270,
             cheap_model: None,
@@ -856,45 +680,6 @@ mod tests {
         assert!(
             result.unwrap().is_none(),
             "NEARAI_CHEAP_MODEL should be ignored when backend is not nearai"
-        );
-    }
-
-    #[test]
-    fn test_create_cheap_llm_provider_bedrock_returns_error() {
-        let mut config = test_llm_config();
-        config.backend = "bedrock".to_string();
-        config.cheap_model = Some("cheap-model".to_string());
-
-        let session = Arc::new(SessionManager::new(SessionConfig::default()));
-        let result = create_cheap_llm_provider(&config, session);
-
-        assert!(
-            result.is_err(),
-            "Bedrock should return an error for cheap model"
-        );
-    }
-
-    #[test]
-    fn test_create_cheap_llm_provider_gemini_oauth_creates_provider() {
-        let mut config = test_llm_config();
-        config.backend = "gemini_oauth".to_string();
-        config.cheap_model = Some("gemini-2.5-flash-lite".to_string());
-        config.gemini_oauth = Some(crate::config::GeminiOauthConfig {
-            model: "gemini-2.5-pro".to_string(),
-            credentials_path: std::path::PathBuf::from("/tmp/nonexistent-creds.json"),
-        });
-
-        let session = Arc::new(SessionManager::new(SessionConfig::default()));
-        let result = create_cheap_llm_provider(&config, session);
-
-        // Should succeed and return a provider (credentials validation is deferred
-        // until the first LLM call, not at construction time).
-        let provider = result.expect("gemini_oauth cheap provider should succeed");
-        assert!(provider.is_some(), "Should return Some(provider)");
-        assert_eq!(
-            provider.unwrap().model_name(),
-            "gemini-2.5-flash-lite",
-            "Cheap provider should use the overridden model name"
         );
     }
 

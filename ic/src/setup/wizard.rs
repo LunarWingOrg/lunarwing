@@ -3,7 +3,7 @@
 //! The wizard guides users through:
 //! 1. Database connection
 //! 2. Security (secrets master key)
-//! 3. Inference provider (NEAR AI, Anthropic, OpenAI, GitHub Copilot, OpenAI Codex, Ollama, OpenAI-compatible)
+//! 3. Inference provider (NEAR AI, OpenAI, OpenAI Codex, Ollama, OpenAI-compatible)
 //! 4. Model selection
 //! 5. Embeddings
 //! 6. Channel configuration
@@ -25,8 +25,8 @@ use crate::channels::wasm::{
     ChannelCapabilitiesFile, available_channel_names, install_bundled_channel,
 };
 use crate::llm::models::{
-    build_nearai_model_fetch_config, fetch_anthropic_models, fetch_ollama_models,
-    fetch_openai_compatible_models, fetch_openai_models,
+    build_nearai_model_fetch_config, fetch_ollama_models, fetch_openai_compatible_models,
+    fetch_openai_models,
 };
 #[cfg(test)]
 use crate::llm::models::{is_openai_chat_model, sort_openai_models};
@@ -416,10 +416,6 @@ impl SetupWizard {
                     self.settings.llm_backend = Some(b);
                 } else if std::env::var("NEARAI_API_KEY").is_ok() {
                     self.settings.llm_backend = Some("nearai".to_string());
-                } else if std::env::var("ANTHROPIC_API_KEY").is_ok()
-                    || std::env::var("ANTHROPIC_OAUTH_TOKEN").is_ok()
-                {
-                    self.settings.llm_backend = Some("anthropic".to_string());
                 } else if std::env::var("OPENAI_API_KEY").is_ok() {
                     self.settings.llm_backend = Some("openai".to_string());
                 } else if std::env::var("OPENROUTER_API_KEY").is_ok() {
@@ -442,33 +438,6 @@ impl SetupWizard {
                 self.llm_api_key = Some(SecretString::from(api_key));
                 if self.settings.selected_model.is_none() {
                     let default = crate::llm::DEFAULT_MODEL;
-                    self.settings.selected_model = Some(default.to_string());
-                    print_info(&format!("Using default model: {default}"));
-                }
-                self.persist_after_step().await;
-            } else if self.settings.llm_backend.as_deref() == Some("anthropic")
-                && let Some(api_key) = Self::detect_anthropic_key()
-            {
-                // Anthropic key detected — skip interactive prompts
-                print_info("Anthropic credentials found — using Anthropic provider");
-                let secret_name = if api_key.starts_with("sk-ant-oat") {
-                    "llm_anthropic_oauth_token"
-                } else {
-                    "llm_anthropic_api_key"
-                };
-                if let Ok(ctx) = self.init_secrets_context().await {
-                    let key = SecretString::from(api_key.clone());
-                    if let Err(e) = ctx.save_secret(secret_name, &key).await {
-                        tracing::warn!("Failed to persist Anthropic key to secrets: {}", e);
-                    }
-                }
-                self.llm_api_key = Some(SecretString::from(api_key));
-                let registry = crate::llm::ProviderRegistry::load();
-                if self.settings.selected_model.is_none() {
-                    let default = registry
-                        .find("anthropic")
-                        .map(|d| d.default_model.as_str())
-                        .unwrap_or("claude-sonnet-4-20250514");
                     self.settings.selected_model = Some(default.to_string());
                     print_info(&format!("Using default model: {default}"));
                 }
@@ -1403,7 +1372,6 @@ impl SetupWizard {
             } else {
                 match current.as_str() {
                     "nearai" => "NEAR AI".to_string(),
-                    "gemini_oauth" | "gemini-oauth" => "Gemini API (OAuth)".to_string(),
                     _ => {
                         if let Some(def) = registry.find(&current) {
                             def.setup
@@ -1420,21 +1388,10 @@ impl SetupWizard {
             println!();
 
             let is_known = current == "nearai"
-                || current == "bedrock"
-                || current == "gemini_oauth"
-                || current == "gemini-oauth"
                 || current == "openai_codex"
                 || registry.is_known(&current);
 
             if is_known && confirm("Keep current provider?", true).map_err(SetupError::Io)? {
-                if current == "bedrock" {
-                    print_info("Keeping existing AWS Bedrock configuration.");
-                    return Ok(());
-                }
-                if current == "gemini_oauth" || current == "gemini-oauth" {
-                    print_info("Keeping existing Gemini CLI OAuth configuration.");
-                    return Ok(());
-                }
                 if current == "openai_codex" {
                     print_info("Keeping existing OpenAI Codex configuration.");
                     return Ok(());
@@ -1453,17 +1410,12 @@ impl SetupWizard {
         print_info("Select your inference provider:");
         println!();
 
-        // Build menu: NearAI first, then Gemini OAuth, then OpenAI Codex, then registry providers, then Bedrock
+        // Build menu: NearAI first, then OpenAI Codex, then registry providers
         let selectable = registry.selectable();
 
         // Detect which providers have API keys already set in the environment.
         let detected_env: HashMap<&str, bool> = [
             ("nearai", std::env::var("NEARAI_API_KEY").is_ok()),
-            (
-                "anthropic",
-                std::env::var("ANTHROPIC_API_KEY").is_ok()
-                    || std::env::var("ANTHROPIC_OAUTH_TOKEN").is_ok(),
-            ),
             ("openai", std::env::var("OPENAI_API_KEY").is_ok()),
             ("openrouter", std::env::var("OPENROUTER_API_KEY").is_ok()),
         ]
@@ -1495,16 +1447,6 @@ impl SetupWizard {
         });
 
         entries.push(ProviderEntry {
-            id: "gemini_oauth".to_string(),
-            label: make_label(
-                "gemini_oauth",
-                "Gemini CLI",
-                "Official Gemini API via Gemini CLI OAuth",
-            ),
-            detected: false,
-        });
-
-        entries.push(ProviderEntry {
             id: "openai_codex".to_string(),
             label: make_label(
                 "openai_codex",
@@ -1527,17 +1469,6 @@ impl SetupWizard {
             });
         }
 
-        // Bedrock is a special case (native AWS SDK, not registry-based)
-        entries.push(ProviderEntry {
-            id: "bedrock".to_string(),
-            label: make_label(
-                "bedrock",
-                "AWS Bedrock",
-                "Claude & other models via AWS (IAM, SSO)",
-            ),
-            detected: false,
-        });
-
         // Sort: detected providers first, preserving relative order within each group.
         entries.sort_by_key(|e| !e.detected);
 
@@ -1552,13 +1483,7 @@ impl SetupWizard {
         let choice = select_one("Provider:", &option_refs).map_err(SetupError::Io)?;
         let selected_id = &provider_ids[choice];
 
-        if selected_id == "bedrock" {
-            self.setup_bedrock().await?;
-        } else if selected_id == "gemini_oauth" {
-            self.setup_gemini_oauth().await?;
-        } else {
-            self.run_provider_setup(selected_id, &registry).await?;
-        }
+        self.run_provider_setup(selected_id, &registry).await?;
 
         Ok(())
     }
@@ -1594,15 +1519,6 @@ impl SetupWizard {
             self.set_llm_backend_preserving_model(provider_id);
             return Ok(());
         };
-
-        // Anthropic has a custom flow: API key or OAuth token from `claude login`.
-        if provider_id == "anthropic" {
-            return self.setup_anthropic().await;
-        }
-
-        if provider_id == "github_copilot" {
-            return self.setup_github_copilot().await;
-        }
 
         match setup {
             crate::llm::registry::SetupHint::ApiKey {
@@ -1648,24 +1564,6 @@ impl SetupWizard {
         }
 
         Ok(())
-    }
-
-    /// Detect an Anthropic credential from the environment.
-    ///
-    /// Checks `ANTHROPIC_API_KEY` first, then `ANTHROPIC_OAUTH_TOKEN`.
-    /// Returns the key/token string if found, or `None`.
-    fn detect_anthropic_key() -> Option<String> {
-        if let Ok(key) = std::env::var("ANTHROPIC_API_KEY")
-            && !key.is_empty()
-        {
-            return Some(key);
-        }
-        if let Ok(token) = std::env::var("ANTHROPIC_OAUTH_TOKEN")
-            && !token.is_empty()
-        {
-            return Some(token);
-        }
-        None
     }
 
     /// Update the selected LLM backend while preserving the current model when
@@ -1761,203 +1659,6 @@ impl SetupWizard {
         Ok(())
     }
 
-    /// Anthropic provider setup: API key or OAuth token from `claude login`.
-    async fn setup_anthropic(&mut self) -> Result<(), SetupError> {
-        let options = &["Direct API Key", "OAuth Token (from `claude login`)"];
-        let choice = select_one("How do you want to authenticate with Anthropic?", options)
-            .map_err(SetupError::Io)?;
-
-        if choice == 0 {
-            // Standard API key flow
-            self.setup_api_key_provider(
-                "anthropic",
-                "ANTHROPIC_API_KEY",
-                "llm_anthropic_api_key",
-                "Anthropic API key",
-                "https://console.anthropic.com/settings/keys",
-                None,
-            )
-            .await
-        } else {
-            // OAuth token flow
-            self.setup_anthropic_oauth().await
-        }
-    }
-
-    async fn setup_github_copilot(&mut self) -> Result<(), SetupError> {
-        print_info("GitHub Copilot authentication:");
-        let options = &[
-            "GitHub device login (recommended)",
-            "Paste an existing token (from IDE or personal access token)",
-        ];
-        let choice = select_one("Auth method:", options).map_err(SetupError::Io)?;
-        match choice {
-            0 => self.setup_github_copilot_device_login().await,
-            _ => self.setup_github_copilot_paste_token().await,
-        }
-    }
-
-    async fn setup_github_copilot_paste_token(&mut self) -> Result<(), SetupError> {
-        self.set_llm_backend_preserving_model("github_copilot");
-
-        print_info("Paste your GitHub token (requires an active Copilot subscription).");
-        print_info("Sources: `gh auth token`, or the oauth_token field in");
-        print_info("~/.config/github-copilot/apps.json (VS Code) or ~/.config/gh/hosts.yml.");
-        let token_secret = secret_input("GitHub Copilot token").map_err(SetupError::Io)?;
-        let token = token_secret.expose_secret().trim().to_string();
-        if token.is_empty() {
-            return Err(SetupError::Auth("No token provided".to_string()));
-        }
-
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()
-            .map_err(|e| SetupError::Auth(format!("Failed to create HTTP client: {e}")))?;
-
-        self.save_github_copilot_token(&client, &token).await
-    }
-
-    async fn setup_github_copilot_device_login(&mut self) -> Result<(), SetupError> {
-        self.set_llm_backend_preserving_model("github_copilot");
-
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()
-            .map_err(|e| SetupError::Auth(format!("Failed to create HTTP client: {e}")))?;
-
-        let device = crate::llm::github_copilot_auth::request_device_code(&client)
-            .await
-            .map_err(|e| SetupError::Auth(e.to_string()))?;
-
-        print_info("Authorize LunarWing with GitHub Copilot in your browser.");
-        print_info(&format!("Verification URL: {}", device.verification_uri));
-        print_info(&format!("One-time code: {}", device.user_code));
-
-        if let Err(e) = open::that(&device.verification_uri) {
-            tracing::debug!(
-                url = %device.verification_uri,
-                error = %e,
-                "Failed to open GitHub Copilot device login URL"
-            );
-            print_info("Open the URL above manually if your browser did not launch.");
-        } else {
-            print_info("Opened your browser to GitHub device login.");
-        }
-
-        print_info("Waiting for GitHub authorization...");
-        let token = crate::llm::github_copilot_auth::wait_for_device_login(&client, &device)
-            .await
-            .map_err(|e| SetupError::Auth(e.to_string()))?;
-
-        self.save_github_copilot_token(&client, &token).await
-    }
-
-    async fn save_github_copilot_token(
-        &mut self,
-        client: &reqwest::Client,
-        token: &str,
-    ) -> Result<(), SetupError> {
-        crate::llm::github_copilot_auth::validate_token(client, token)
-            .await
-            .map_err(|e| SetupError::Auth(e.to_string()))?;
-
-        if let Ok(ctx) = self.init_secrets_context().await {
-            let key = SecretString::from(token.to_string());
-            ctx.save_secret("llm_github_copilot_token", &key)
-                .await
-                .map_err(|e| SetupError::Config(format!("Failed to save GitHub token: {e}")))?;
-            print_success("GitHub Copilot token encrypted and saved");
-        } else {
-            print_info("Secrets not available. Set GITHUB_COPILOT_TOKEN in your environment.");
-        }
-
-        crate::config::inject_single_var("GITHUB_COPILOT_TOKEN", token);
-        self.llm_api_key = Some(SecretString::from(token.to_string()));
-
-        print_success("GitHub Copilot configured");
-        Ok(())
-    }
-
-    /// Anthropic OAuth setup: extract token from `claude login` credentials.
-    async fn setup_anthropic_oauth(&mut self) -> Result<(), SetupError> {
-        self.set_llm_backend_preserving_model("anthropic");
-
-        // Try to extract existing OAuth token from Claude Code credentials
-        if let Some(token) = crate::config::extract_anthropic_oauth_token() {
-            print_info(&format!("Found OAuth token: {}", mask_api_key(&token)));
-            if confirm("Use this token?", true).map_err(SetupError::Io)? {
-                return self.save_anthropic_oauth_token(&token).await;
-            }
-        } else {
-            print_info("No OAuth token found from `claude login`.");
-            print_info("Run `claude login` in a terminal to authenticate, then retry.");
-            println!();
-
-            if confirm("Retry after running `claude login`?", true).map_err(SetupError::Io)? {
-                // Block until the user has run `claude login` in another terminal
-                input("Press Enter after running `claude login` in another terminal...")
-                    .map_err(SetupError::Io)?;
-                if let Some(token) = crate::config::extract_anthropic_oauth_token() {
-                    print_info(&format!("Found OAuth token: {}", mask_api_key(&token)));
-                    return self.save_anthropic_oauth_token(&token).await;
-                }
-                print_error("Still no OAuth token found.");
-            }
-        }
-
-        // Fallback: let user paste the token manually, or switch to API key
-        print_info("You can paste your OAuth token directly (starts with sk-ant-oat01-).");
-        print_info("Or press Enter with no input to switch to the API key flow.");
-        let token = secret_input("Anthropic OAuth token").map_err(SetupError::Io)?;
-        let token_str = token.expose_secret();
-        if token_str.is_empty() {
-            print_info("Switching to API key flow...");
-            return self
-                .setup_api_key_provider(
-                    "anthropic",
-                    "ANTHROPIC_API_KEY",
-                    "llm_anthropic_api_key",
-                    "Anthropic API key",
-                    "https://console.anthropic.com/settings/keys",
-                    None,
-                )
-                .await;
-        }
-        self.save_anthropic_oauth_token(token_str).await
-    }
-
-    /// Save an Anthropic OAuth token to secrets and set env for immediate use.
-    async fn save_anthropic_oauth_token(&mut self, token: &str) -> Result<(), SetupError> {
-        // Validate token format to catch accidentally pasted API keys
-        if !token.starts_with("sk-ant-oat") {
-            print_error("Token doesn't look like an OAuth token (expected prefix: sk-ant-oat).");
-            print_info("If you have an API key instead, use the 'Direct API Key' option.");
-            return Err(SetupError::Config("Invalid OAuth token format".to_string()));
-        }
-
-        // Store in secrets if available
-        if let Ok(ctx) = self.init_secrets_context().await {
-            let key = SecretString::from(token.to_string());
-            ctx.save_secret("llm_anthropic_oauth_token", &key)
-                .await
-                .map_err(|e| SetupError::Config(format!("Failed to save OAuth token: {e}")))?;
-            print_success("OAuth token encrypted and saved");
-        } else {
-            print_info("Secrets not available. Set ANTHROPIC_OAUTH_TOKEN in your environment.");
-        }
-
-        // Make the token visible to `optional_env()` for subsequent config
-        // resolution (model selection step). Uses the thread-safe overlay
-        // instead of `std::env::set_var` to avoid UB on multi-threaded runtimes.
-        crate::config::inject_single_var("ANTHROPIC_OAUTH_TOKEN", token);
-
-        // Cache for model fetching
-        self.llm_api_key = Some(SecretString::from(token.to_string()));
-
-        print_success("Anthropic OAuth configured");
-        Ok(())
-    }
-
     /// Shared setup flow for API-key-based providers.
     async fn setup_api_key_provider(
         &mut self,
@@ -1969,7 +1670,6 @@ impl SetupWizard {
         override_display_name: Option<&str>,
     ) -> Result<(), SetupError> {
         let display_name = override_display_name.unwrap_or(match backend {
-            "anthropic" => "Anthropic",
             "openai" => "OpenAI",
             other => other,
         });
@@ -2084,92 +1784,6 @@ impl SetupWizard {
         Ok(())
     }
 
-    /// AWS Bedrock provider setup: region, auth, and cross-region config.
-    async fn setup_bedrock(&mut self) -> Result<(), SetupError> {
-        self.set_llm_backend_preserving_model("bedrock");
-
-        // Region
-        let default_region = self
-            .settings
-            .bedrock_region
-            .as_deref()
-            .unwrap_or("us-east-1");
-
-        let region_input =
-            optional_input("AWS region", Some(&format!("default: {}", default_region)))
-                .map_err(SetupError::Io)?;
-
-        let region = region_input.unwrap_or_else(|| default_region.to_string());
-        self.settings.bedrock_region = Some(region.clone());
-
-        // Auth method
-        print_info("Select authentication method:");
-        println!();
-        let auth_options = &[
-            "AWS default credentials (env vars, ~/.aws/credentials, IAM roles)",
-            "AWS named profile (SSO / assume-role)",
-        ];
-        let auth_choice = select_one("Auth:", auth_options).map_err(SetupError::Io)?;
-
-        match auth_choice {
-            0 => {
-                // Default AWS credentials — clear any stale named profile
-                self.settings.bedrock_profile = None;
-                print_info(
-                    "Using default AWS credential chain (env vars, ~/.aws/credentials, IAM roles).",
-                );
-            }
-            1 => {
-                // Named profile
-                let profile =
-                    input("AWS profile name (from ~/.aws/config)").map_err(SetupError::Io)?;
-                if profile.trim().is_empty() {
-                    // Empty input clears any previously configured profile
-                    self.settings.bedrock_profile = None;
-                    print_info("AWS profile cleared; using default AWS credential chain instead.");
-                } else {
-                    self.settings.bedrock_profile = Some(profile.clone());
-                    print_success(&format!("AWS profile '{}' saved", profile));
-                }
-            }
-            _ => return Err(SetupError::Config("Invalid auth selection".to_string())),
-        }
-
-        self.setup_bedrock_cross_region()
-    }
-
-    /// Bedrock cross-region inference prefix selection (sub-step of setup_bedrock).
-    fn setup_bedrock_cross_region(&mut self) -> Result<(), SetupError> {
-        print_info("Cross-region inference routes requests across AWS regions for capacity:");
-        println!();
-        let cross_options = &[
-            "us     - route within US regions (recommended for us-east-1)",
-            "global - route to any AWS region worldwide",
-            "eu     - route within European regions",
-            "apac   - route within Asia-Pacific regions",
-            "none   - single-region only (no cross-region routing)",
-        ];
-        let cross_choice = select_one("Cross-region:", cross_options).map_err(SetupError::Io)?;
-
-        let cross_region = match cross_choice {
-            0 => Some("us".to_string()),
-            1 => Some("global".to_string()),
-            2 => Some("eu".to_string()),
-            3 => Some("apac".to_string()),
-            4 => None,
-            _ => None,
-        };
-        self.settings.bedrock_cross_region = cross_region;
-
-        let region = self
-            .settings
-            .bedrock_region
-            .as_deref()
-            .unwrap_or("us-east-1");
-        print_success(&format!("AWS Bedrock configured (region: {})", region));
-        Ok(())
-    }
-
     /// Generic OpenAI-compatible setup: base URL + optional API key.
     async fn setup_openai_compatible_generic(
         &mut self,
@@ -2222,40 +1836,6 @@ impl SetupWizard {
         Ok(())
     }
 
-    async fn setup_gemini_oauth(&mut self) -> Result<(), SetupError> {
-        self.settings.llm_backend = Some("gemini_oauth".to_string());
-        print_info("Starting Gemini CLI OAuth authentication...");
-        println!();
-
-        let creds_path = crate::config::GeminiOauthConfig::default_credentials_path();
-        let cred_manager =
-            crate::llm::gemini_oauth::CredentialManager::new(&creds_path).map_err(|e| {
-                SetupError::Config(format!(
-                    "Failed to initialize Gemini credential manager: {}",
-                    e
-                ))
-            })?;
-
-        match cred_manager.get_valid_credential().await {
-            Ok(cred) => {
-                print_success("Gemini CLI authentication successful!");
-                if let Some(ref pid) = cred.project_id {
-                    print_info(&format!("Cloud Code project: {}", pid));
-                }
-            }
-            Err(e) => {
-                return Err(SetupError::Config(format!(
-                    "Gemini CLI authentication failed: {}. Please try again.",
-                    e
-                )));
-            }
-        }
-
-        println!();
-        print_success("Gemini API configured via Gemini CLI");
-        Ok(())
-    }
-
     /// Step 4: Model selection.
     ///
     /// Branches on the selected LLM backend and fetches models from the
@@ -2290,53 +1870,6 @@ impl SetupWizard {
                 };
                 self.select_from_model_list(&models)?;
             }
-            "gemini_oauth" | "gemini-oauth" => {
-                let default_models: Vec<(String, String)> = vec![
-                    (
-                        "gemini-3.1-pro-preview".into(),
-                        "Gemini 3.1 Pro (Latest, strongest reasoning)".into(),
-                    ),
-                    (
-                        "gemini-3.1-pro-preview-customtools".into(),
-                        "Gemini 3.1 Pro Custom Tools (Enhanced tool use)".into(),
-                    ),
-                    (
-                        "gemini-3-pro-preview".into(),
-                        "Gemini 3 Pro (Preview)".into(),
-                    ),
-                    (
-                        "gemini-3-flash-preview".into(),
-                        "Gemini 3 Flash (Fast preview with thinking)".into(),
-                    ),
-                    (
-                        "gemini-3.1-flash-lite-preview".into(),
-                        "Gemini 3.1 Flash Lite (Preview, lightweight)".into(),
-                    ),
-                    (
-                        "gemini-2.5-pro".into(),
-                        "Gemini 2.5 Pro (Stable, strong reasoning)".into(),
-                    ),
-                    (
-                        "gemini-2.5-flash".into(),
-                        "Gemini 2.5 Flash (Fast, good quality)".into(),
-                    ),
-                    (
-                        "gemini-2.5-flash-lite".into(),
-                        "Gemini 2.5 Flash Lite (Fastest, lightweight)".into(),
-                    ),
-                ];
-                self.select_from_model_list(&default_models)?;
-            }
-            "bedrock" => {
-                let model_id =
-                    input("Bedrock model ID (e.g., anthropic.claude-v3-sonnet-20240229-v1:0)")
-                        .map_err(SetupError::Io)?;
-                if model_id.is_empty() {
-                    return Err(SetupError::Config("Model ID is required".to_string()));
-                }
-                self.settings.selected_model = Some(model_id.clone());
-                print_success(&format!("Selected {}", model_id));
-            }
             _ => {
                 if let Some(def) = registry.find(backend) {
                     let can_list = def
@@ -2353,7 +1886,6 @@ impl SetupWizard {
                             .map(|k| k.expose_secret().to_string());
 
                         let models = match backend {
-                            "anthropic" => fetch_anthropic_models(cached_key.as_deref()).await,
                             "openai" => fetch_openai_models(cached_key.as_deref()).await,
                             "ollama" => {
                                 let base_url = self
@@ -3582,13 +3114,10 @@ impl SetupWizard {
         // Fact 1: Provider + model
         let provider_display = match self.settings.llm_backend.as_deref() {
             Some("nearai") => "NEAR AI".to_string(),
-            Some("anthropic") => "Anthropic".to_string(),
             Some("openai") => "OpenAI".to_string(),
             Some("ollama") => "Ollama".to_string(),
             Some("openai_compatible") => "OpenAI-compatible".to_string(),
-            Some("bedrock") => "AWS Bedrock".to_string(),
             Some("openai_codex") => "OpenAI Codex".to_string(),
-            Some("gemini_oauth") => "Gemini CLI".to_string(),
             Some(other) => other.to_string(),
             None => "unknown".to_string(),
         };
@@ -4239,18 +3768,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_anthropic_models_static_fallback() {
-        // With no API key, should return static defaults
-        let _guard = EnvGuard::clear("ANTHROPIC_API_KEY");
-        let models = fetch_anthropic_models(None).await;
-        assert!(!models.is_empty());
-        assert!(
-            models.iter().any(|(id, _)| id.contains("claude")),
-            "static defaults should include a Claude model"
-        );
-    }
-
-    #[tokio::test]
     async fn test_fetch_openai_models_static_fallback() {
         let _guard = EnvGuard::clear("OPENAI_API_KEY");
         let models = fetch_openai_models(None).await;
@@ -4259,36 +3776,6 @@ mod tests {
         assert!(
             models.iter().any(|(id, _)| id.contains("gpt")),
             "static defaults should include a GPT model"
-        );
-    }
-
-    #[test]
-    fn test_github_copilot_setup_preserves_model_for_same_backend() {
-        let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("github_copilot".to_string());
-        wizard.settings.selected_model = Some("gpt-4o".to_string());
-
-        wizard.set_llm_backend_preserving_model("github_copilot");
-
-        assert_eq!(wizard.settings.selected_model.as_deref(), Some("gpt-4o"));
-        assert_eq!(
-            wizard.settings.llm_backend.as_deref(),
-            Some("github_copilot")
-        );
-    }
-
-    #[test]
-    fn test_github_copilot_setup_clears_stale_model_on_switch() {
-        let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("openai".to_string());
-        wizard.settings.selected_model = Some("gpt-5".to_string());
-
-        wizard.set_llm_backend_preserving_model("github_copilot");
-
-        assert!(wizard.settings.selected_model.is_none());
-        assert_eq!(
-            wizard.settings.llm_backend.as_deref(),
-            Some("github_copilot")
         );
     }
 
@@ -4416,9 +3903,9 @@ mod tests {
         wizard.settings.llm_backend = Some("openai".to_string());
         wizard.settings.selected_model = Some("gpt-4o".to_string());
 
-        wizard.set_llm_backend_preserving_model("anthropic");
+        wizard.set_llm_backend_preserving_model("openai_compatible");
 
-        assert_eq!(wizard.settings.llm_backend.as_deref(), Some("anthropic"));
+        assert_eq!(wizard.settings.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(wizard.settings.selected_model, None);
     }
 
@@ -4461,66 +3948,6 @@ mod tests {
         assert!(
             wizard.settings.selected_model.is_none(),
             "model should be cleared when switching providers"
-        );
-    }
-
-    /// Regression: Bedrock setup_bedrock() should preserve selected_model
-    /// when re-entering the same provider (matches pattern from #600).
-    #[test]
-    fn test_bedrock_same_provider_preserves_model() {
-        let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("bedrock".to_string());
-        wizard.settings.selected_model = Some("anthropic.claude-opus-4-6-v1".to_string());
-
-        // Simulate the conditional clearing logic from setup_bedrock()
-        if wizard.settings.llm_backend.as_deref() != Some("bedrock") {
-            wizard.settings.selected_model = None;
-        }
-        wizard.settings.llm_backend = Some("bedrock".to_string());
-
-        assert_eq!(
-            wizard.settings.selected_model.as_deref(),
-            Some("anthropic.claude-opus-4-6-v1"),
-            "bedrock model should be preserved when re-selecting bedrock"
-        );
-    }
-
-    /// Regression: switching from another provider to bedrock must clear
-    /// selected_model, and choosing "default credentials" must clear
-    /// bedrock_profile.
-    #[test]
-    fn test_bedrock_clears_stale_profile_on_default_creds() {
-        let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("bedrock".to_string());
-        wizard.settings.bedrock_profile = Some("old-sso-profile".to_string());
-
-        // Simulate auth_choice == 0 (default credentials) clearing the profile
-        wizard.settings.bedrock_profile = None;
-
-        assert!(
-            wizard.settings.bedrock_profile.is_none(),
-            "bedrock_profile should be cleared when selecting default credentials"
-        );
-    }
-
-    /// Regression: empty profile input in named-profile auth should clear
-    /// any previously configured profile instead of leaving it stale.
-    #[test]
-    fn test_bedrock_empty_profile_clears_existing() {
-        let mut wizard = SetupWizard::new();
-        wizard.settings.bedrock_profile = Some("old-profile".to_string());
-
-        // Simulate auth_choice == 1 with empty input
-        let profile = "".to_string();
-        if profile.trim().is_empty() {
-            wizard.settings.bedrock_profile = None;
-        } else {
-            wizard.settings.bedrock_profile = Some(profile);
-        }
-
-        assert!(
-            wizard.settings.bedrock_profile.is_none(),
-            "empty profile input should clear existing bedrock_profile"
         );
     }
 
