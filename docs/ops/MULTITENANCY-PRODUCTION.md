@@ -14,6 +14,8 @@ The admin script runs as root and handles:
 6. **Per-user XMPP bridge** with its own JID
 7. **Service unit generation** for systemd (user-level) or OpenRC (system-level)
 
+> **Proxy opt-in (v1.1.9+):** The TensorZero proxy is opt-in as of v1.1.9. Use `--enable-proxy` on `add-tenant` to provision it. Without it, the daemon connects directly to the upstream LLM endpoint (`TENSORZERO_URL`). Existing tenants are unaffected until their units are re-rendered.
+
 ## Full Run Walkthrough
 
 Step-by-step commands to set up a fresh multi-tenant deployment from scratch. Run all commands from the repo root (`/home/sun/lunarwing`).
@@ -474,6 +476,9 @@ sudo scripts/lunarwing-mt-admin.sh build-opencode-worker
 add-tenant <name> [options]      Create user, allocate ports, clone repo,
                                  generate env, render and install services
   --docker-group                 Add user to docker/podman group
+  --enable-proxy                Provision TensorZero proxy service
+                                 (opt-in as of v1.1.9; without it, daemon
+                                 connects directly to upstream TENSORZERO_URL)
   --enable-darkirc               Enable DarkIRC daemon and adapter services
                                  (disabled by default; persisted in ports.json)
   --xmpp-jid <jid>              XMPP JID for this tenant
@@ -483,6 +488,8 @@ add-tenant <name> [options]      Create user, allocate ports, clone repo,
 
 add-tenants <names> [options]    Comma-separated list (e.g. "Ruffles,Miyuki")
   --docker-group                 Add user to docker/podman group
+  --enable-proxy                Provision TensorZero proxy service
+                                 (opt-in as of v1.1.9)
   --enable-darkirc               Enable DarkIRC daemon and adapter services
                                  (disabled by default; persisted in ports.json)
   --xmpp-domain <domain>        XMPP domain for JIDs (default: xmpp.localhost)
@@ -599,3 +606,4 @@ These mechanisms prevent a single failed routine from permanently blocking itsel
 - Gateways bind to `127.0.0.1` by default
 - Use SSH port forwarding: `ssh -L <port>:127.0.0.1:<port> <host>`
 - Or edit the tenant's `lunarwing.env` to set `GATEWAY_HOST=0.0.0.0` and restart
+
