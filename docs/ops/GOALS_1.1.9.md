@@ -15,7 +15,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 6. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on openrc machine using in-place upgrade feature of mt-admin-setup. document any failures/issues
 7. [x] Remove deprecated Codex external worker from project
 8. [x] Remove support for all (or at least, some of) the other random unsupported LLM providers
-9. [ ] Remove the following non-LunarWing third party skills from default installation: linear, github
+9. [x] Remove the following non-LunarWing third party skills from default installation: linear, github
 10. [x] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)
 11. [ ] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup (still kind of an in-planning stage thing but want local http web gui and/or interactive cli application for this)
 12. [ ] Related to the above, deprecate or update legacy setup scripts
@@ -23,7 +23,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 14. [ ] Update outdated documentation
 15. [ ] Further re-organization of repository documentation
 16. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
-17. [ ] Bump crate versions to 1.1.9
+17. [x] Bump crate versions to 1.1.9
 18. [ ] Ensure all relevant crates are bumped to 1.1.9 and build works properly
 19. [ ] Update repo root-level README.md
 20. [ ] Update ROADMAP file to reflect accuracy
