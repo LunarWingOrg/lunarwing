@@ -11,7 +11,7 @@
 
 llm_backend = "openai_compatible"
 selected_model = "tensorzero::function_name::lunarwing"
-openai_compatible_base_url = "http://192.168.1.157:3000/openai/v1"
+openai_compatible_base_url = "http://127.0.0.1:3000/openai/v1"
 
 [agent]
 name = "lunarwing"
