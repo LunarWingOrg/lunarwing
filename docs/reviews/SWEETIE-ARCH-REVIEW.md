@@ -1013,7 +1013,7 @@ Serious automated remediation system (~1,000 lines):
 
 **Service manager support:** systemd (incl. per-tenant user units), OpenRC, launchd.
 
-### Worker Runtime Packaging (`codex4lunarwing/`, `lunarcode4lunarwing/`, `pebble4lunarwing/`)
+### Worker Runtime Packaging (`codex4lunarwing/` *(removed v1.1.9)*, `lunarcode4lunarwing/`, `pebble4lunarwing/`)
 
 Each external worker runtime has its own miniature execution harness:
 - `entrypoint.sh` — container entrypoint.

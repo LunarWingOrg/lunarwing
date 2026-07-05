@@ -540,10 +540,13 @@ pub fn wasm_artifact_path(crate_dir: &Path, binary_name: &str) -> PathBuf {
 /// Resolve the tools source directory.
 ///
 /// Checks (in order):
-/// 1. `IRONCLAW_TOOLS_SRC` env var
+/// 1. `LUNARWING_TOOLS_SRC` env var (legacy alias `IRONCLAW_TOOLS_SRC`)
 /// 2. `<CARGO_MANIFEST_DIR>/tools-src/` (dev builds)
 fn tools_src_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("IRONCLAW_TOOLS_SRC") {
+    // Legacy alias `IRONCLAW_TOOLS_SRC` is still accepted as a fallback.
+    if let Ok(dir) =
+        std::env::var("LUNARWING_TOOLS_SRC").or_else(|_| std::env::var("IRONCLAW_TOOLS_SRC"))
+    {
         return PathBuf::from(dir);
     }
     PathBuf::from(CARGO_MANIFEST_DIR).join("tools-src")
@@ -610,7 +613,8 @@ pub async fn discover_dev_tools() -> Result<HashMap<String, DiscoveredTool>, std
 /// needing to install them to `~/.lunarwing/tools/` first. Build artifacts
 /// that are newer than installed copies take priority.
 ///
-/// Set `IRONCLAW_TOOLS_SRC` env var to override the source directory.
+/// Set `LUNARWING_TOOLS_SRC` env var (legacy alias `IRONCLAW_TOOLS_SRC`) to
+/// override the source directory.
 pub async fn load_dev_tools(
     loader: &WasmToolLoader,
     install_dir: &Path,

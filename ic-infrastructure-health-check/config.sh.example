@@ -13,11 +13,13 @@
 # Global / cross-component
 # ═════════════════════════════════════════════════════════════════════════════
 
-# Base directory for LunarWing installs. Most checks derive paths from this.
+# Base directory for LunarWing installs (locks, sessions, state).
+# Most checks derive paths from this.
 #LUNARWING_BASE_DIR="/opt/lunarwing"
 
-# IronClaw data directory (locks, sessions, state).
-#IRONCLAW_BASE_DIR="/var/lib/ironclaw"
+# Legacy alias: IRONCLAW_BASE_DIR is still accepted when LUNARWING_BASE_DIR
+# is unset.
+#IRONCLAW_BASE_DIR="/var/lib/lunarwing"
 
 # Rate-limit state directory (shared between gateway and health check).
 #RATELIMIT_DIR="/var/lib/lunarwing/ratelimit"

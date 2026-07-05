@@ -105,7 +105,7 @@ pub fn set_runtime_env(key: &str, value: &str) {
 pub fn env_or_override(key: &str) -> Option<String> {
     let (preferred_key, legacy_key) = aliased_env_keys(key);
 
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         // Real env vars always win
         if let Ok(val) = std::env::var(candidate)
             && !val.is_empty()
@@ -118,7 +118,7 @@ pub fn env_or_override(key: &str) -> Option<String> {
     let runtime_overrides = runtime_overrides()
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         if let Some(val) = runtime_overrides
             .get(candidate)
             .filter(|v| !v.is_empty())
@@ -130,7 +130,7 @@ pub fn env_or_override(key: &str) -> Option<String> {
 
     // Check INJECTED_VARS (secrets from DB, set once at startup)
     let injected_vars = INJECTED_VARS.lock().unwrap_or_else(|e| e.into_inner());
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         if let Some(val) = injected_vars
             .get(candidate)
             .filter(|v| !v.is_empty())
@@ -147,7 +147,7 @@ pub(crate) fn optional_env(key: &str) -> Result<Option<String>, ConfigError> {
     let (preferred_key, legacy_key) = aliased_env_keys(key);
 
     // Check real env vars first (always win over injected secrets)
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         match std::env::var(candidate) {
             Ok(val) if val.is_empty() => {}
             Ok(val) => return Ok(Some(val)),
@@ -164,7 +164,7 @@ pub(crate) fn optional_env(key: &str) -> Result<Option<String>, ConfigError> {
     let runtime_overrides = runtime_overrides()
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         if let Some(val) = runtime_overrides
             .get(candidate)
             .filter(|v| !v.is_empty())
@@ -176,7 +176,7 @@ pub(crate) fn optional_env(key: &str) -> Result<Option<String>, ConfigError> {
 
     // Fall back to thread-safe overlay (secrets injected from DB)
     let injected_vars = INJECTED_VARS.lock().unwrap_or_else(|p| p.into_inner());
-    for candidate in std::iter::once(preferred_key).chain(legacy_key.into_iter()) {
+    for candidate in std::iter::once(preferred_key).chain(legacy_key) {
         if let Some(val) = injected_vars.get(candidate).cloned() {
             return Ok(Some(val));
         }
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn runtime_env_override_is_visible_to_env_or_override() {
         // Use a unique key that won't collide with real env vars.
-        let key = "IRONCLAW_TEST_RUNTIME_OVERRIDE_42";
+        let key = "LUNARWING_TEST_RUNTIME_OVERRIDE_42";
 
         // Not set initially
         assert!(env_or_override(key).is_none());
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn runtime_env_override_is_visible_to_optional_env() {
-        let key = "IRONCLAW_TEST_OPTIONAL_ENV_OVERRIDE_42";
+        let key = "LUNARWING_TEST_OPTIONAL_ENV_OVERRIDE_42";
 
         assert_eq!(optional_env(key).unwrap(), None);
 
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn real_env_var_takes_priority_over_runtime_override() {
         let _guard = lock_env();
-        let key = "IRONCLAW_TEST_ENV_PRIORITY_42";
+        let key = "LUNARWING_TEST_ENV_PRIORITY_42";
 
         // Set runtime override
         set_runtime_env(key, "override_value");

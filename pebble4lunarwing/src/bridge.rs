@@ -157,22 +157,34 @@ async fn upgrade_websocket(
             .get("sec-websocket-protocol")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        if !protocols
-            .split(',')
-            .any(|p| p.trim() == protocol::SUBPROTOCOL)
-        {
+        let Some(matched) = negotiate_subprotocol(protocols) else {
             return Err(reject(StatusCode::BAD_REQUEST));
-        }
+        };
         // Echo the negotiated subprotocol back: the orchestrator's client
         // rejects the handshake ("Server sent no subprotocol") unless the server
-        // sets Sec-WebSocket-Protocol in the upgrade response.
+        // sets Sec-WebSocket-Protocol in the upgrade response — and the echoed
+        // value must be one the client actually offered.
         response.headers_mut().insert(
             "sec-websocket-protocol",
-            tokio_tungstenite::tungstenite::http::HeaderValue::from_static(protocol::SUBPROTOCOL),
+            tokio_tungstenite::tungstenite::http::HeaderValue::from_static(matched),
         );
         Ok(response)
     })
     .await
+}
+
+/// Pick the subprotocol to echo from a comma-separated client offer.
+/// Prefers the primary name; old daemons that only offer the legacy
+/// `ironclaw-agent-v1` alias still connect and get that value echoed back.
+fn negotiate_subprotocol(offer: &str) -> Option<&'static str> {
+    let offered: Vec<&str> = offer.split(',').map(str::trim).collect();
+    if offered.contains(&protocol::SUBPROTOCOL) {
+        Some(protocol::SUBPROTOCOL)
+    } else if offered.contains(&protocol::LEGACY_SUBPROTOCOL) {
+        Some(protocol::LEGACY_SUBPROTOCOL)
+    } else {
+        None
+    }
 }
 
 fn reject(status: StatusCode) -> http::Response<Option<String>> {
@@ -225,4 +237,43 @@ where
 
     *active_cancel = None;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn negotiate_prefers_primary_when_both_offered() {
+        assert_eq!(
+            negotiate_subprotocol("lunarwing-agent-v1, ironclaw-agent-v1"),
+            Some(protocol::SUBPROTOCOL)
+        );
+        assert_eq!(
+            negotiate_subprotocol("ironclaw-agent-v1, lunarwing-agent-v1"),
+            Some(protocol::SUBPROTOCOL)
+        );
+    }
+
+    #[test]
+    fn negotiate_accepts_primary_alone() {
+        assert_eq!(
+            negotiate_subprotocol("lunarwing-agent-v1"),
+            Some(protocol::SUBPROTOCOL)
+        );
+    }
+
+    #[test]
+    fn negotiate_echoes_legacy_for_old_daemons() {
+        assert_eq!(
+            negotiate_subprotocol("ironclaw-agent-v1"),
+            Some(protocol::LEGACY_SUBPROTOCOL)
+        );
+    }
+
+    #[test]
+    fn negotiate_rejects_unknown_offers() {
+        assert_eq!(negotiate_subprotocol(""), None);
+        assert_eq!(negotiate_subprotocol("some-other-proto"), None);
+    }
 }

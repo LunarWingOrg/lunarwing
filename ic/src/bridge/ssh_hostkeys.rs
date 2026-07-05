@@ -90,7 +90,7 @@ impl HostKeyVerifier {
     ///
     /// Returns (key_type, key_data, comment).
     pub fn parse_openssh_public_key(key_str: &str) -> Option<(String, Vec<u8>, String)> {
-        let parts: Vec<&str> = key_str.trim().split_whitespace().collect();
+        let parts: Vec<&str> = key_str.split_whitespace().collect();
         if parts.len() < 2 {
             return None;
         }

@@ -17,7 +17,7 @@ verification, see the operator guide linked above.
 ## 1. What it is
 
 The SSH Agent harness gives LunarWing worker containers (nanocode, pebble,
-codex), routines, and git operations the ability to authenticate to remote SSH
+opencode; codex removed in v1.1.9), routines, and git operations the ability to authenticate to remote SSH
 hosts **without ever exposing raw private-key bytes to those consumers**.
 
 It does this by splitting SSH state into two halves:
@@ -50,7 +50,7 @@ bytes never touch disk and never cross the container boundary.
                                          ▼
                         ┌──────────── worker container ────────────┐
                         │  git / ssh  ──►  SSH_AUTH_SOCK  ──►  sign │
-                        │  (nanocode, pebble, codex)               │
+                        │  (nanocode, pebble, opencode)            │
                         └──────────────────────────────────────────┘
 ```
 

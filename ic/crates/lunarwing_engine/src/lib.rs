@@ -1,6 +1,6 @@
-//! IronClaw Engine — unified thread-capability-CodeAct execution model.
+//! LunarWing Engine — unified thread-capability-CodeAct execution model.
 //!
-//! This crate provides the core execution engine for IronClaw, unifying
+//! This crate provides the core execution engine for LunarWing, unifying
 //! ~10 separate abstractions (Session, Job, Routine, Channel, Tool, Skill,
 //! Hook, Observer, Extension, LoopDelegate) around 5 primitives:
 //!

@@ -1,6 +1,6 @@
 #ic_sm
-## Working Name: Ironclaw Secret Manager
-###### via the agent REPL or web UI, ironclaw has (sometimes) options to interface with secrets.
+## Working Name: LunarWing Secret Manager
+###### via the agent REPL or web UI, lunarwing has (sometimes) options to interface with secrets.
 
 ### For example:
 1. You can ask the agent to list the secrets, and it will do so.
@@ -10,7 +10,7 @@
 ##### The predicament
 
 
-###### IronClaw is a bare bones project still and it needs a lot of tools built out for it.
+###### LunarWing is a bare bones project still and it needs a lot of tools built out for it.
 
 ###### In the meantime, I vibe coded a python script that lets me insert secrets directly into the databse, being encrypted right from the beginning.
 

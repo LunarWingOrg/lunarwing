@@ -205,7 +205,7 @@ mod e2e_import_tests {
     }
 
     #[tokio::test]
-    async fn test_settings_mapping_to_ironclaw_format() {
+    async fn test_settings_mapping_to_lunarwing_format() {
         let (_temp, openclaw_path) = setup_full_openclaw_test_env().await.expect("setup failed");
 
         let reader = OpenClawReader::new(&openclaw_path).expect("reader creation failed");

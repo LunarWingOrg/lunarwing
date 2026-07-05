@@ -13,14 +13,14 @@ This file gives Pebble repo-specific guidance for working in this project.
 
 ## Repository Shape
 - `ic/` — core LunarWing daemon (Cargo workspace).
-- `ic_sm/`, `gotify-wasm/`, `ironclaw-gotify-tool/`, `ironclaw_weechat_wss/`, and other top-level dirs — related tools/components; inspect each before changing.
+- `ic_sm/`, `gotify-wasm/`, `lunarwing-gotify-tool/`, `lunarwing_weechat_wss/`, and other top-level dirs — related tools/components; inspect each before changing.
 - `docs/` — guides (e.g., branching strategy under `docs/guides/`).
 - `.pebble/` — Pebble settings (currently untracked).
 - `CLAUDE.md`, `AGENTS.md`, `MANIFESTO.md`, `MIGRATION_GUIDES.MD`, `UPGRADE_CARGO.md` — project conventions; read these for deeper context.
 - Verify the exact contents/purpose of less-obvious top-level dirs before editing.
 
 ## Commands
-Run LunarWing commands from `ic/`. The exact LunarWing command list in `CLAUDE.md` is truncated — verify there before relying on these. The IronClaw section documents this workflow, which the fork likely mirrors:
+Run LunarWing commands from `ic/`. The exact LunarWing command list in `CLAUDE.md` is truncated — verify there before relying on these. Typical workflow:
 - `cargo fmt`
 - `cargo clippy --all --benches --tests --examples --all-features` (target zero warnings)
 - `cargo test`

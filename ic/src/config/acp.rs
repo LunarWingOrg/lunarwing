@@ -18,7 +18,7 @@ use crate::bootstrap::lunarwing_base_dir;
 /// Configuration for a single ACP-compliant agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpAgentConfig {
-    /// Unique name for this agent (e.g., "goose", "codex", "gemini").
+    /// Unique name for this agent (e.g., "goose", "pebble", "gemini").
     pub name: String,
 
     /// Command to spawn the agent subprocess.
@@ -504,7 +504,7 @@ mod tests {
             vec![],
             HashMap::new(),
         ));
-        let mut disabled = AcpAgentConfig::new("codex", "codex", vec![], HashMap::new());
+        let mut disabled = AcpAgentConfig::new("pebble", "pebble", vec![], HashMap::new());
         disabled.enabled = false;
         file.upsert(disabled);
 
@@ -617,7 +617,7 @@ mod tests {
         let (db, _tmp) = crate::testing::test_db().await;
 
         let mut file = AcpAgentsFile::default();
-        let mut agent = AcpAgentConfig::new("codex", "codex", vec!["acp".into()], HashMap::new());
+        let mut agent = AcpAgentConfig::new("pebble", "pebble", vec!["acp".into()], HashMap::new());
         agent.enabled = false;
         file.upsert(agent);
 
@@ -625,7 +625,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = get_enabled_acp_agent_for_user(Some(db.as_ref()), "owner-123", "codex")
+        let err = get_enabled_acp_agent_for_user(Some(db.as_ref()), "owner-123", "pebble")
             .await
             .unwrap_err();
         assert!(matches!(err, AcpConfigError::AgentDisabled { .. }));

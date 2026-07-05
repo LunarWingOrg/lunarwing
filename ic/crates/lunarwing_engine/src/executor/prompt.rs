@@ -42,7 +42,7 @@ impl PlatformInfo {
     pub fn to_prompt_section(&self) -> String {
         let mut lines = Vec::new();
 
-        lines.push("You are **IronClaw**, a secure autonomous AI assistant platform.".into());
+        lines.push("You are **LunarWing**, a secure autonomous AI assistant platform.".into());
         if let Some(ref v) = self.version {
             lines.push(format!("- Version: {v}"));
         }
@@ -294,18 +294,18 @@ mod tests {
             database_backend: Some("libsql".into()),
             active_channels: vec!["telegram".into(), "cli".into()],
             owner_id: Some("alice.near".into()),
-            repo_url: Some("https://github.com/nearai/ironclaw".into()),
+            repo_url: Some("https://github.com/LunarWingOrg/lunarwing".into()),
         };
         let prompt =
             build_codeact_system_prompt(&[], None, ProjectId(uuid::Uuid::nil()), Some(&info)).await;
-        assert!(prompt.contains("IronClaw"));
+        assert!(prompt.contains("LunarWing"));
         assert!(prompt.contains("1.2.3"));
         assert!(prompt.contains("nearai"));
         assert!(prompt.contains("qwen3-235b"));
         assert!(prompt.contains("libsql"));
         assert!(prompt.contains("telegram"));
         assert!(prompt.contains("alice.near"));
-        assert!(prompt.contains("github.com/nearai/ironclaw"));
+        assert!(prompt.contains("github.com/LunarWingOrg/lunarwing"));
     }
 
     #[tokio::test]

@@ -551,7 +551,8 @@ impl ExtensionManager {
     /// instead of calling `open::that()` on the server.
     ///
     /// `base_url` is the gateway's own public URL (e.g. `https://my-gateway.example.com`),
-    /// used to build OAuth redirect URIs when `IRONCLAW_OAUTH_CALLBACK_URL` is not set.
+    /// used to build OAuth redirect URIs when `LUNARWING_OAUTH_CALLBACK_URL` (legacy
+    /// `IRONCLAW_OAUTH_CALLBACK_URL`) is not set.
     pub async fn enable_gateway_mode(&self, base_url: String) {
         self.gateway_mode
             .store(true, std::sync::atomic::Ordering::Release);
@@ -563,7 +564,7 @@ impl ExtensionManager {
     ///
     /// Gateway mode is active when any of:
     /// - `enable_gateway_mode()` was called (web gateway is running), OR
-    /// - `IRONCLAW_OAUTH_CALLBACK_URL` is set to a non-loopback URL, OR
+    /// - `LUNARWING_OAUTH_CALLBACK_URL` (legacy `IRONCLAW_OAUTH_CALLBACK_URL`) is set to a non-loopback URL, OR
     /// - `self.tunnel_url` is set to a non-loopback URL
     pub fn should_use_gateway_mode(&self) -> bool {
         if self.gateway_mode.load(std::sync::atomic::Ordering::Acquire) {
@@ -584,7 +585,7 @@ impl ExtensionManager {
     /// Returns the OAuth redirect URI for gateway mode, or `None` for local mode.
     ///
     /// Priority:
-    /// 1. `IRONCLAW_OAUTH_CALLBACK_URL` env var (via `callback_url()`)
+    /// 1. `LUNARWING_OAUTH_CALLBACK_URL` env var (legacy `IRONCLAW_OAUTH_CALLBACK_URL`; via `callback_url()`)
     /// 2. `gateway_base_url` (set by `enable_gateway_mode()`)
     /// 3. `tunnel_url` (from config)
     /// 4. `None` (local/CLI mode)

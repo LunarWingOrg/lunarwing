@@ -1,7 +1,7 @@
 //! OpenClaw migration and import functionality.
 //!
 //! Provides tools to migrate existing OpenClaw installations (memory, history,
-//! settings, and credentials) into IronClaw without data loss.
+//! settings, and credentials) into LunarWing without data loss.
 
 #[cfg(feature = "import")]
 pub mod openclaw;

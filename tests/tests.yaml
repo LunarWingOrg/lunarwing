@@ -3,38 +3,6 @@
 version: "1.0"
 
 workers:
-  codex:
-    deploy: codex_worker
-    health_port: 8443
-    ws_port: 8443    # codex WS is on 8443 in server mode
-    auth_token: test-token
-    scenarios:
-      - name: health
-        type: http
-        method: GET
-        path: /health
-        expect:
-          status_code: 200
-          body_contains: status
-      - name: ready
-        type: http
-        method: GET
-        path: /ready
-        expect:
-          status_code: 200
-          body_contains: ready
-      - name: ws_handshake
-        type: ws_handshake
-        expect:
-          first_message: ready
-          payload_has: [worker_id, version, mode]
-      - name: invalid_auth
-        type: ws_connect
-        chaos: true
-        auth_token: bad-bearer-horse
-        expect:
-          error_code: 4001
-
   nanocode:
     deploy: nanocode_worker
     health_port: 8444

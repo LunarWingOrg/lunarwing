@@ -276,7 +276,7 @@ async def _stream_tool_call(request: web.Request, cid: str, tc: dict) -> web.Str
 async def oauth_exchange(request: web.Request) -> web.Response:
     """Mock OAuth token exchange proxy for E2E tests.
 
-    Accepts the generic hosted OAuth proxy contract used by IronClaw and
+    Accepts the generic hosted OAuth proxy contract used by LunarWing and
     returns a fake token response. MCP callback tests assert that provider-
     specific token params such as RFC 8707 `resource` are forwarded here.
     """
@@ -451,7 +451,7 @@ async def mcp_oauth_register(request: web.Request) -> web.Response:
     body = await request.json()
     return web.json_response({
         "client_id": "mock-mcp-client-id",
-        "client_name": body.get("client_name", "IronClaw"),
+        "client_name": body.get("client_name", "LunarWing"),
         "redirect_uris": body.get("redirect_uris", []),
     })
 

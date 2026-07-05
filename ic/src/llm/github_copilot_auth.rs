@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 //
 // **Known risks:**
 //   • GitHub may rotate or revoke this client ID at any time, which would
-//     break authentication for all IronClaw users until the constant is
+//     break authentication for all LunarWing users until the constant is
 //     updated and a new release is shipped.
 //   • Using another product's client ID may violate GitHub's Terms of
 //     Service.  Maintainers should seek explicit guidance from GitHub

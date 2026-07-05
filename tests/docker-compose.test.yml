@@ -1,12 +1,11 @@
 # Worker Test Harness — Docker Compose
-# Brings up all 4 worker types + mock services in isolation
+# Brings up all worker types + mock services in isolation
 
 networks:
   test_harness:
     driver: bridge
 
 volumes:
-  codex_logs:
   nanocode_logs:
   orchestrator_data:
 
@@ -50,29 +49,6 @@ services:
       interval: 5s
       timeout: 2s
       retries: 6
-
-  # ── Codex Worker ───────────────────────
-  codex_worker:
-    build:
-      context: ../codex4lunarwing
-      dockerfile: Dockerfile
-    environment:
-      - CODEX_MODE=websocket
-      - WS_ROLE=client
-      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
-      - OPENAI_API_KEY=${MOCK_API_KEY:-test-key}
-      - WS_URL=ws://ws_hub:9000
-    ports: ["8443:8443"]
-    networks: [test_harness]
-    depends_on:
-      ws_hub:
-        condition: service_healthy
-    volumes: [codex_logs:/logs]
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8443/ready"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
 
   # ── Nanocode Worker ────────────────────
   nanocode_worker:

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 Worker Test Harness Runner
-Matrix-driven test suite for all 4 LunarWing worker types.
+Matrix-driven test suite for LunarWing worker types.
 
 Usage:
     python runner.py                # smoke (happy paths)
     python runner.py --mode full    # all scenarios + chaos
-    python runner.py --worker codex # single worker
+    python runner.py --worker nanocode # single worker
 """
 from __future__ import annotations
 

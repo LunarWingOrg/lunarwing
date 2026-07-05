@@ -13,7 +13,7 @@ LunarWing WASM channel
 
 Each tenant gets its own daemon, adapter, ports, config, datastore, logs, and adapter secret. The daemon is not shared across tenants because DarkIRC DM encryption depends on per-identity ChaCha key material.
 
-For adapter architecture and QA scenarios, see [DarkIRC Multitenant Adapter](../guides/darkirc_channel_for_ironclaw/DARKIRC_MT_ADAPTER.md). For general multi-tenant operations, see [Production Multi-Tenant Deployment](MULTITENANCY-PRODUCTION.md).
+For adapter architecture and QA scenarios, see [DarkIRC Multitenant Adapter](../guides/darkirc_channel_for_lunarwing/DARKIRC_MT_ADAPTER.md). For general multi-tenant operations, see [Production Multi-Tenant Deployment](MULTITENANCY-PRODUCTION.md).
 
 ## Prerequisites
 

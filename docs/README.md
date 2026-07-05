@@ -45,15 +45,15 @@ How-to guides, build instructions, and setup walkthroughs.
 | [`MULTICA_DEPLOYMENT.md`](guides/MULTICA_DEPLOYMENT.md) | Multica/Lunartica deployment guide |
 | [`human-delay-mode.md`](guides/human-delay-mode.md) | Human-delay mode overview |
 | [`DEBUG_LOG.md`](guides/DEBUG_LOG.md) | Catalog of debug/info log points by `file:line` |
-| [`darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_ironclaw/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
-| [`darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_ironclaw/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
-| [`ironclaw_weechat_wss/README.md`](guides/ironclaw_weechat_wss/README.md) | WeeChat WSS channel overview |
-| [`ironclaw_weechat_wss/weechat_relay/INSTALL.md`](guides/ironclaw_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
-| [`ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/ironclaw_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
+| [`darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
+| [`darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
+| [`lunarwing_weechat_wss/README.md`](guides/lunarwing_weechat_wss/README.md) | WeeChat WSS channel overview |
+| [`lunarwing_weechat_wss/weechat_relay/INSTALL.md`](guides/lunarwing_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
+| [`lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
 | [`gotify-wasm/README.md`](guides/gotify-wasm/README.md) | Gotify WASM tool |
 | [`ic_sm/README.md`](guides/ic_sm/README.md) | Secret manager (`ic_sm`) |
 | [`tensorzero-proxy-configurations/README.md`](guides/tensorzero-proxy-configurations/README.md) | TensorZero proxy configuration |
-| [`git-ironclaw-unix-socket-repl-server-repo/README.md`](guides/git-ironclaw-unix-socket-repl-server-repo/README.md) | REPLv2 Unix-socket REPL server |
+| [`git-lunarwing-unix-socket-repl-server-repo/README.md`](guides/git-lunarwing-unix-socket-repl-server-repo/README.md) | REPLv2 Unix-socket REPL server |
 | [`nanocode-config/README.md`](guides/nanocode-config/README.md) | Nanocode custom-config overview |
 | [`nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md`](guides/nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md) | Point nanocode at the TensorZero gateway |
 
@@ -68,10 +68,12 @@ Deployment, operations, multitenancy, and production guides.
 | [`MULTITENANCY-PRODUCTION.md`](ops/MULTITENANCY-PRODUCTION.md) | Production multi-tenancy walkthrough |
 | [`DARKIRC-MULTITENANT.md`](ops/DARKIRC-MULTITENANT.md) | DarkIRC multitenant operations: port migration, provisioning, lifecycle, health, troubleshooting |
 | [`TENANT-CONFIGURATION.md`](ops/TENANT-CONFIGURATION.md) | Per-tenant configuration reference (env, LLM, XMPP, ports) |
+| [`TENANT-RENAME-MIGRATION-1.1.9.md`](ops/TENANT-RENAME-MIGRATION-1.1.9.md) | Upgrading 1.1.7/1.1.8 tenants across the 1.1.9 directory renames (render-units flow, compat-symlink window, v1.2.0 deadline) |
+| [`TEST-PLAN-UPGRADED-TENANT-1.1.9.md`](ops/TEST-PLAN-UPGRADED-TENANT-1.1.9.md) | Validated test plan for the upgraded-tenant path: synthesize a v1.1.8 tenant, upgrade, assert compat symlinks/protocol/render-units (OpenRC) |
 | [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multi-tenant test harness guide |
 | [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant test harness guide |
 | [`SSH-HARNESS-SETUP.md`](ops/SSH-HARNESS-SETUP.md) | SSH harness setup & ops: config, key provisioning (mt-admin + manual), verifying in a worker, troubleshooting |
-| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (LunarWing, Codex, Nanocode, Pebble, Opencode) |
+| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (LunarWing, Nanocode, Pebble, Opencode) |
 | [`PEBBLE-WORKER.md`](ops/PEBBLE-WORKER.md) | Pebble external worker operational guide |
 | [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode external worker, multi-tenant setup |
 | [`WEECHAT-SERVICES.md`](ops/WEECHAT-SERVICES.md) | WeeChat services, ports, env vars, day-to-day ops |
@@ -132,7 +134,7 @@ the reorg.
 | [`MULTICA_INTEGRATION_PLAN.md`](proposals/MULTICA_INTEGRATION_PLAN.md) | Multica/Lunartica integration plan |
 | [`CHAOS_FOLLOWUP_TESTS.md`](proposals/CHAOS_FOLLOWUP_TESTS.md) | Follow-up chaos / self-heal test scenarios |
 | [`RENDER_UNITS_SMALL_BUG.md`](proposals/RENDER_UNITS_SMALL_BUG.md) | `render-units` small-bug note |
-| [`RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`](proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER) | TODO: rename the WeeChat channel/adapter in code + references |
+| [`RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`](proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER) | Rename the WeeChat channel/adapter in code + references (implemented in 1.1.9, item #2) |
 | [`human-delay-mode-phase2-plan.md`](proposals/human-delay-mode-phase2-plan.md) | Human-delay mode phase 2 plan |
 | [`human-delay-mode-phase1-test-checklist.md`](proposals/human-delay-mode-phase1-test-checklist.md) | Human-delay mode phase 1 test checklist |
 | [`human-delay-mode-phase1-verification-handoff.md`](proposals/human-delay-mode-phase1-verification-handoff.md) | Human-delay mode phase 1 verification handoff |
@@ -178,9 +180,6 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 | [`nanocode-config/KAGEHO_QUESTIONS.md`](internal/nanocode-config/KAGEHO_QUESTIONS.md) | Agnostic coding-worker container design notes |
 | [`nanocode-config/NextSteps.md`](internal/nanocode-config/NextSteps.md) | Nanocode + TensorZero setup next steps |
 | [`COMPONENT_SOURCES.md`](internal/COMPONENT_SOURCES.md) | Where each custom component's upstream source repo lives |
-| [`codex4ironclaw/kageho_other_ideas/draft2.md`](internal/codex4ironclaw/kageho_other_ideas/draft2.md) | Codex-worker Dockerfile draft + security-hardening checklist |
-| [`codex4ironclaw/PASSING_SECRETS.md`](internal/codex4ironclaw/PASSING_SECRETS.md) | Options for passing secrets to the Codex worker |
-| [`codex4ironclaw/whatajsonshouldlookliken.md`](internal/codex4ironclaw/whatajsonshouldlookliken.md) | Codex-worker task-envelope JSON format |
 
 **Archives** (kept for provenance, not active docs):
 
@@ -193,7 +192,6 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 
 | File | Description |
 |------|-------------|
-| [`DOCS_AUDIT.md`](DOCS_AUDIT.md) | Documentation audit (M/L items): stale IronClaw references, naming inconsistencies, and their current status |
 | [`DOCS_REORG_CHECKLIST.md`](DOCS_REORG_CHECKLIST.md) | Progress tracker + work log for the 2026-06 `docs/` reorganization |
 
 ---
@@ -206,7 +204,7 @@ The following are **not** in this directory and should remain where they are:
 - **`CLAUDE.md` / `AGENTS.md` / `CODEX.md`** — AI agent context files (kept at their respective locations)
 - **`ic/`** — all documentation within the `ic/` tree stays in place (workspace templates, crate docs, skill definitions, etc.)
 - **`projects/`** — satellite service documentation stays with its source (e.g., `projects/ocr-sidecar/README.md`)
-- **`codex4lunarwing/` / `lunarcode4lunarwing/` / `pebble4lunarwing/` / `opencode4lunarwing/`** — worker-container docs stay with their container source
+- **`lunarcode4lunarwing/` / `pebble4lunarwing/` / `opencode4lunarwing/`** — worker-container docs stay with their container source
 - **`.claude/`** — Claude command and rule files
 
 ---

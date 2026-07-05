@@ -1233,7 +1233,7 @@ mod tests {
     async fn test_env_scrubbing_hides_secrets() {
         // Set a fake secret in the current process environment.
         // SAFETY: test-only, single-threaded tokio runtime, no concurrent env access.
-        let secret_var = "IRONCLAW_TEST_SECRET_KEY";
+        let secret_var = "LUNARWING_TEST_SECRET_KEY";
         unsafe { std::env::set_var(secret_var, "super_secret_value_12345") };
 
         let tool = ShellTool::new();
@@ -1439,7 +1439,7 @@ mod tests {
         let ctx = JobContext::default();
 
         // Set a fake secret in the parent process env
-        unsafe { std::env::set_var("IRONCLAW_QA_TEST_SECRET", "supersecret123") };
+        unsafe { std::env::set_var("LUNARWING_QA_TEST_SECRET", "supersecret123") };
 
         let result = tool
             .execute(serde_json::json!({"command": "env"}), &ctx)
@@ -1448,7 +1448,7 @@ mod tests {
 
         let output = result.result.get("output").unwrap().as_str().unwrap();
         assert!(
-            !output.contains("IRONCLAW_QA_TEST_SECRET"),
+            !output.contains("LUNARWING_QA_TEST_SECRET"),
             "env scrubbing must hide non-safe vars from child processes"
         );
         assert!(
@@ -1457,7 +1457,7 @@ mod tests {
         );
 
         // Clean up
-        unsafe { std::env::remove_var("IRONCLAW_QA_TEST_SECRET") };
+        unsafe { std::env::remove_var("LUNARWING_QA_TEST_SECRET") };
     }
 
     #[tokio::test]

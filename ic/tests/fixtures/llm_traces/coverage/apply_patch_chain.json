@@ -15,7 +15,7 @@
             "id": "call_write_original",
             "name": "write_file",
             "arguments": {
-              "path": "/tmp/ironclaw_coverage_test_apply_patch/patch_target.txt",
+              "path": "/tmp/lunarwing_coverage_test_apply_patch/patch_target.txt",
               "content": "Hello World\nThis is the original content.\nGoodbye World"
             }
           }
@@ -32,7 +32,7 @@
             "id": "call_apply_patch",
             "name": "apply_patch",
             "arguments": {
-              "path": "/tmp/ironclaw_coverage_test_apply_patch/patch_target.txt",
+              "path": "/tmp/lunarwing_coverage_test_apply_patch/patch_target.txt",
               "old_string": "This is the original content.",
               "new_string": "This is the PATCHED content."
             }
@@ -50,7 +50,7 @@
             "id": "call_read_patched",
             "name": "read_file",
             "arguments": {
-              "path": "/tmp/ironclaw_coverage_test_apply_patch/patch_target.txt"
+              "path": "/tmp/lunarwing_coverage_test_apply_patch/patch_target.txt"
             }
           }
         ],

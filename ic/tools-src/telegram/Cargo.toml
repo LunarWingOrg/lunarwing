@@ -2,7 +2,7 @@
 name = "telegram-tool"
 version = "0.2.0"
 edition = "2021"
-description = "Telegram user-mode integration tool for IronClaw (WASM component)"
+description = "Telegram user-mode integration tool for LunarWing (WASM component)"
 license = "MIT OR Apache-2.0"
 publish = false
 

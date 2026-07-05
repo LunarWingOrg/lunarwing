@@ -79,8 +79,9 @@ Edit the generated env files, not the examples.
 The generated `env/lunarwing.env` is already seeded for the common private-lab
 stack used by this harness:
 
-- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/ironclaw.sock`
 - `LUNARWING_SOCKET=$LUNARWING_TEST_ROOT/run/lunarwing.sock`
+- `IRONCLAW_SOCKET=$LUNARWING_TEST_ROOT/run/lunarwing.sock` (legacy alias, set
+  alongside the new name)
 - `DATABASE_BACKEND=postgres`
 - `DATABASE_SSLMODE=disable`
 - `PGSSLMODE=disable`
@@ -217,11 +218,11 @@ scripts/lunarwing-xmpp-test-env.sh verify
 `build` also compiles the actual REPLv2 client with `cargo build --release`
 from:
 
-- `$LUNARWING_ROOT/replv2git/git-ironclaw-unix-socket-client-repo`
+- `$LUNARWING_ROOT/replv2git/git-lunarwing-unix-socket-client-repo`
 
 The expected binary is:
 
-- `$LUNARWING_ROOT/replv2git/git-ironclaw-unix-socket-client-repo/target/release/unix-socket-client-v2`
+- `$LUNARWING_ROOT/replv2git/git-lunarwing-unix-socket-client-repo/target/release/unix-socket-client-v2`
 
 To target the active harness daemon cleanly:
 
@@ -485,8 +486,8 @@ The live override resets when `xmpp-bridge` restarts.
 
 If you only need bridge testing, skip this section.
 
-The harness starts LunarWing with the isolated `IRONCLAW_BASE_DIR` from
-`env/lunarwing.env`:
+The harness starts LunarWing with the isolated `LUNARWING_BASE_DIR` (legacy
+alias `IRONCLAW_BASE_DIR`) from `env/lunarwing.env`:
 
 ```bash
 scripts/lunarwing-xmpp-test-env.sh start-lunarwing

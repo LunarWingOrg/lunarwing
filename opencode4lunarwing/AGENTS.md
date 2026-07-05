@@ -14,7 +14,7 @@ Persistent container worker for upstream opencode, following the same pattern as
 
 ## Protocol Compatibility
 
-The `ironclaw-agent-v1` WebSocket subprotocol is shared with nanocode and pebble workers. Changes to `agent_comm_protocol.json` or envelope format must stay backward-compatible or be coordinated across all workers.
+The `lunarwing-agent-v1` WebSocket subprotocol (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle) is shared with nanocode and pebble workers. Changes to `agent_comm_protocol.json` or envelope format must stay backward-compatible or be coordinated across all workers.
 
 ## Build Notes
 
@@ -22,7 +22,7 @@ The Dockerfile clones the sst/opencode repo at build time. For reproducible buil
 
 ## Do Not
 
-- Break the `ironclaw-agent-v1` envelope format
+- Break the `lunarwing-agent-v1` envelope format
 - Expose the internal opencode serve port (4096) externally
 - Store secrets in config files (use env vars with `{env:VAR}` syntax)
 - Remove the health server — orchestration depends on it

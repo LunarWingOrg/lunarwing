@@ -1,4 +1,4 @@
-//! Configuration for IronClaw.
+//! Configuration for LunarWing.
 //!
 //! Settings are loaded with priority: env var > database > default.
 //! `DATABASE_URL` lives in `~/.lunarwing/.env` (loaded via dotenvy early

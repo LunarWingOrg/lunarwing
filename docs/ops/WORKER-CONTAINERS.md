@@ -15,22 +15,6 @@ docker build -f Dockerfile.worker -t lunarwing-worker:latest .
 
 Runs as non-root user `sandbox` (UID 1000) in `/workspace`. Entrypoint is the `lunarwing` binary — the orchestrator passes the full command via Docker cmd.
 
-## Codex Worker
-
-Node.js-based Codex agent with WebSocket protocol bridge. Health endpoint on port 8443, WebSocket server on port 9090.
-
-**Dockerfile:** `codex4lunarwing/Dockerfile`
-
-```bash
-cd codex4lunarwing
-docker build -t lunarwing-codex-worker:latest .
-
-# Or via docker-compose
-docker compose up --build
-```
-
-Modes: `--mode cli` (one-shot) or `--mode websocket` (persistent). Requires `OPENAI_API_KEY` or TensorZero proxy config. See `codex4lunarwing/CLAUDE.md` for full env var reference.
-
 ## Nanocode Worker
 
 Bun-based Nanocode agent. Runs nanocode headless server internally (port 4096) with a TypeScript bridge to the WebSocket protocol. Health on 8443, WebSocket on 9090.
@@ -68,7 +52,7 @@ Persistent worker mode (`PEBBLE_MODE=websocket`). Requires `AGENT_AUTH_TOKEN` fo
 
 ## Opencode Worker
 
-[opencode](https://opencode.ai) (sst/opencode) integrated as a persistent LunarWing external worker. A Bun/TypeScript bridge wraps the `@opencode-ai/sdk` and translates between the opencode session/event model and the `ironclaw-agent-v1` WebSocket protocol. The opencode headless server runs internally on `127.0.0.1:4096` (not exposed). Health on 8443, WebSocket on 9090.
+[opencode](https://opencode.ai) (sst/opencode) integrated as a persistent LunarWing external worker. A Bun/TypeScript bridge wraps the `@opencode-ai/sdk` and translates between the opencode session/event model and the `lunarwing-agent-v1` WebSocket protocol. The opencode headless server runs internally on `127.0.0.1:4096` (not exposed). Health on 8443, WebSocket on 9090.
 
 **Dockerfile:** `opencode4lunarwing/Dockerfile`
 
@@ -104,7 +88,7 @@ Modes: `--mode websocket` (default, persistent), `--mode cli` (one-shot), `--mod
 
 ## Shared Protocol
 
-All worker images use the `ironclaw-agent-v1` WebSocket subprotocol. Messages are JSON envelopes with `id`, `type`, `timestamp`, `payload`. The worker sends `ready` on connect, receives `task_request`, streams `task_progress`, and sends a final `task_result`.
+All worker images use the `lunarwing-agent-v1` WebSocket subprotocol; the legacy `ironclaw-agent-v1` name is still accepted as an alias for one release. Messages are JSON envelopes with `id`, `type`, `timestamp`, `payload`. The worker sends `ready` on connect, receives `task_request`, streams `task_progress`, and sends a final `task_result`.
 
 ## Proxy Note
 

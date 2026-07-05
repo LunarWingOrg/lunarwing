@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#
+# Branch Test Loop — custom override file
+#
+#放置
+
+# When this file is sourced, the following variables are available:
+#   $branch       — current branch name
+#   $gateway      — gateway port
+#   $http_port    — HTTP webhook/agent port
+#   $token        — gateway auth token
+#   $results_file — path to write JSON results
+#   $tenant       — current tenant name
+
+# Override custom_tests to replace the default suite entirely,
+# or add functions prefixed with test_ to extend it.
+
+# Example: test SSH built-in tool by sending a chat message via the gateway API
+test_ssh_builtin() {
+  local resp http_code
+  resp="$(curl -s -w '\n%{http_code}' \
+    -X POST "http://127.0.0.1:${gateway}/api/chat/send" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d '{"message":"Use the ssh tool to connect to 127.0.0.1 as user '"${tenant}"' and run \"hostname && whoami\". Show me the output."}')"
+  http_code="$(echo "$resp" | tail -1)"
+  [[ "$http_code" == "200" || "$http_code" == "202" ]]
+}
+
+# Example: test WASM ssh tool
+test_ssh_wasm() {
+  local resp http_code
+  resp="$(curl -s -w '\n%{http_code}' \
+    -X POST "http://127.0.0.1:${gateway}/api/chat/send" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d '{"message":"Use the WASM ssh tool to connect to 127.0.0.1 as user '"${tenant}"' and run \"uname -a\". Show me the output."}')"
+  http_code="$(echo "$resp" | tail -1)"
+  [[ "$http_code" == "200" || "$http_code" == "202" ]]
+}
+
+# Example: test ssh_git by cloning a test repo
+test_ssh_git() {
+  local resp http_code
+  resp="$(curl -s -w '\n%{http_code}' \
+    -X POST "http://127.0.0.1:${gateway}/api/chat/send" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json" \
+    -d '{"message":"Use the ssh_git tool with parameters: operation=clone, host=127.0.0.1, repo=lunarwing/test-repo.git, path=tatara-clone, ref=main. Report the result."}')"
+  http_code="$(echo "$resp" | tail -1)"
+  [[ "$http_code" == "200" || "$http_code" == "202" ]]
+}
+
+# Example: full custom test suite (uncomment to replace defaults entirely)
+# custom_tests() {
+#   local branch="$1" gateway="$2" http_port="$3" token="$4" results_file="$5"
+#   local pass_count=0 fail_count=0
+#   local -a results=()
+#   mkdir -p "$(dirname "$results_file")"
+#   
+#   for test_fn in test_gateway_health test_agent_status test_ssh_builtin test_ssh_wasm test_ssh_git; do
+#     local result="PASS"
+#     $test_fn 2>/dev/null || { result="FAIL"; fail_count=$((fail_count + 1)); }
+#     [[ "$result" == "PASS" ]] && pass_count=$((pass_count + 1))
+#     results+=("{\"test\":\"${test_fn}\",\"result\":\"${result}\"}")
+#     say "  ${result} ${test_fn}"
+#   done
+#   
+#   local json_results
+#   json_results="$(printf '%s\n' "${results[@]}" | paste -sd,)"
+#   cat >"$results_file" <<EOF
+# {
+#   "branch": "${branch}",
+#   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+#   "passed": ${pass_count},
+#   "failed": ${fail_count},
+#   "overall": "$([[ $fail_count -eq 0 ]] && echo PASS || echo FAIL)",
+#   "tests": [${json_results}]
+# }
+# EOF
+# }

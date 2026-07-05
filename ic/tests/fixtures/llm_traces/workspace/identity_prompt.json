@@ -7,7 +7,7 @@
     {
       "response": {
         "type": "text",
-        "content": "I am IronClaw, your personal AI assistant. I can help you with various tasks.",
+        "content": "I am LunarWing, your personal AI assistant. I can help you with various tasks.",
         "input_tokens": 200,
         "output_tokens": 20
       }

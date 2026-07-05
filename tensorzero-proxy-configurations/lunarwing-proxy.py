@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-IronClaw → TensorZero Proxy
+LunarWing → TensorZero Proxy
 
-Sits between IronClaw and TensorZero, cleaning responses to be
+Sits between LunarWing and TensorZero, cleaning responses to be
 strictly OpenAI-compatible by removing TensorZero-specific fields
-that IronClaw's Rust parser can't handle (episode_id, tensorzero_cost, etc.).
+that LunarWing's Rust parser can't handle (episode_id, tensorzero_cost, etc.).
 
 Also forces tool_choice=none on all requests to prevent tool_calls responses.
 
 Usage:
-    python3 ironclaw-proxy.py --port 3002 --tensorzero http://192.168.1.157:3000
+    python3 lunarwing-proxy.py --port 3002 --tensorzero http://192.168.1.157:3000
     
-Then point IronClaw at http://192.168.1.157:3002 instead of :3000
+Then point LunarWing at http://192.168.1.157:3002 instead of :3000
 """
 
 import json
@@ -81,9 +81,9 @@ def clean_response(data: dict) -> dict:
     return cleaned
 
 
-class IronClawProxyHandler(http.server.BaseHTTPRequestHandler):
+class LunarWingProxyHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        sys.stderr.write(f"[ironclaw-proxy] {format % args}\n")
+        sys.stderr.write(f"[lunarwing-proxy] {format % args}\n")
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -184,7 +184,7 @@ class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 def main():
     global TENSORZERO_URL, PROXY_PORT
 
-    parser = argparse.ArgumentParser(description="IronClaw → TensorZero Proxy")
+    parser = argparse.ArgumentParser(description="LunarWing → TensorZero Proxy")
     parser.add_argument("--port", "-p", type=int, default=PROXY_PORT)
     parser.add_argument("--tensorzero", "-t", type=str, default=TENSORZERO_URL)
     parser.add_argument("--bind", "-b", type=str, default="0.0.0.0")
@@ -193,14 +193,14 @@ def main():
     TENSORZERO_URL = args.tensorzero.rstrip("/")
     PROXY_PORT = args.port
 
-    print(f"🔧 IronClaw Proxy")
+    print(f"🔧 LunarWing Proxy")
     print(f"   Listen:     {args.bind}:{PROXY_PORT}")
     print(f"   Forward to: {TENSORZERO_URL}")
     print(f"   Cleans TZ-specific fields from responses")
     print(f"   Forces tool_choice=none on all requests")
     print()
 
-    with ThreadedServer((args.bind, PROXY_PORT), IronClawProxyHandler) as httpd:
+    with ThreadedServer((args.bind, PROXY_PORT), LunarWingProxyHandler) as httpd:
         print(f"🔊 Running on {args.bind}:{PROXY_PORT}")
         try:
             httpd.serve_forever()

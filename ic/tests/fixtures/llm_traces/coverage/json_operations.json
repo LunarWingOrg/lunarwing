@@ -16,7 +16,7 @@
             "name": "json",
             "arguments": {
               "operation": "parse",
-              "data": "{\"name\": \"ironclaw\", \"version\": 2, \"features\": [\"tools\", \"memory\"]}"
+              "data": "{\"name\": \"lunarwing\", \"version\": 2, \"features\": [\"tools\", \"memory\"]}"
             }
           }
         ],
@@ -33,7 +33,7 @@
             "name": "json",
             "arguments": {
               "operation": "query",
-              "data": "{\"name\": \"ironclaw\", \"version\": 2, \"features\": [\"tools\", \"memory\"]}",
+              "data": "{\"name\": \"lunarwing\", \"version\": 2, \"features\": [\"tools\", \"memory\"]}",
               "path": "features[0]"
             }
           }

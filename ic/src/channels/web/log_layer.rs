@@ -179,14 +179,14 @@ pub fn init_tracing(log_broadcaster: Arc<LogBroadcaster>) -> Arc<LogLevelHandle>
         std::env::var("RUST_LOG").unwrap_or_else(|_| "lunarwing=info,tower_http=warn".to_string());
 
     // Split into the lunarwing directive and "everything else" (base_filter).
-    let mut ironclaw_level = String::from("info");
+    let mut lunarwing_level = String::from("info");
     let mut base_parts: Vec<&str> = Vec::new();
 
     for part in raw_filter.split(',') {
         let trimmed = part.trim();
         if trimmed.starts_with("lunarwing=") {
             if let Some(lvl) = trimmed.strip_prefix("lunarwing=") {
-                ironclaw_level = lvl.to_string();
+                lunarwing_level = lvl.to_string();
             }
         } else if !trimmed.is_empty() {
             base_parts.push(trimmed);
@@ -199,7 +199,7 @@ pub fn init_tracing(log_broadcaster: Arc<LogBroadcaster>) -> Arc<LogLevelHandle>
 
     let handle = Arc::new(LogLevelHandle::new(
         reload_handle,
-        ironclaw_level,
+        lunarwing_level,
         base_filter,
     ));
 

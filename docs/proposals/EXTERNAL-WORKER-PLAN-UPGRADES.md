@@ -12,6 +12,7 @@
 > - Multi-instance `ExternalWorkerConfig` with round-robin load balancing
 > - `ExternalTaskStatus` enum replacing stringly-typed status
 > - Worker container updates (codex, nanocode, pebble) to accept extended context
+>   *(Note: codex worker removed in v1.1.9; nanocode/pebble remain)*
 >
 > **Estimated Effort**: Large
 > **Parallel Execution**: YES - 4 waves
@@ -24,6 +25,8 @@
 ### Original Request
 User asked to find improvement opportunities for the external worker systems (nanocode, pebble, codex). After research and discussion, user selected three improvements: context passing, connection pooling, and multi-instance load balancing.
 
+> **Note**: The Codex worker was removed in v1.1.9. References to it throughout this plan are retained for historical reference; the orchestrator-side improvements (Tasks 1–8) apply to all remaining workers.
+
 ### Interview Summary
 **Key Discussions**:
 - Focus areas: Protocol enhancements + Scalability (pooling/load-balancing)
@@ -31,12 +34,12 @@ User asked to find improvement opportunities for the external worker systems (na
 - Boundary: Both orchestrator-side AND worker container repos can be touched
 
 **Research Findings**:
-- `ExternalWorkerManager` (`src/orchestrator/external_worker.rs`) manages WebSocket connections via `ironclaw-agent-v1` protocol
+- `ExternalWorkerManager` (`src/orchestrator/external_worker.rs`) manages WebSocket connections via the `lunarwing-agent-v1` protocol (legacy alias `ironclaw-agent-v1`)
 - Each task opens a new WebSocket — no reuse despite "persistent" worker label
 - `task_request` sends `"context": {}` — no workspace, conversation, or credential data
 - `ExternalWorkerConfig` (name, url, auth_token, timeout_ms) — single endpoint per name
 - `ExternalTaskResult.status` is `String` compared with `== "success"`
-- Worker containers in `codex4lunarwing/`, `lunarcode4lunarwing/`, `pebble4lunarwing/`
+- Worker containers in `lunarcode4lunarwing/`, `pebble4lunarwing/` (codex4lunarwing/ removed in v1.1.9)
 - `ContainerJobManager` supports `CredentialGrant` env injection; external workers do not
 
 ### Self-Review Gaps (addressed)
@@ -54,7 +57,7 @@ User asked to find improvement opportunities for the external worker systems (na
 Transform external workers from stateless one-shot WebSocket callers into efficient persistent work delegation with real context and scalable routing.
 
 ### Concrete Deliverables
-- Extended `ironclaw-agent-v1` protocol (backward compatible)
+- Extended `lunarwing-agent-v1` protocol (backward compatible)
 - `WorkerConnectionPool` struct with connection reuse
 - Multi-instance `ExternalWorkerConfig` with load balancer
 - `ExternalTaskStatus` enum
@@ -67,7 +70,7 @@ Transform external workers from stateless one-shot WebSocket callers into effici
 - [ ] External worker with extended context fields works against an unmodified worker (backward compat)
 - [ ] Connection pool reuses connections for sequential tasks to same worker
 - [ ] Multi-instance config routes tasks round-robin across endpoints
-- [ ] All three worker containers updated to use extended context
+- [ ] All three worker containers updated to use extended context *(codex removed v1.1.9; applies to nanocode + pebble)*
 
 ### Must Have
 - Backward compatibility: unmodified workers must still function with updated orchestrator
@@ -126,7 +129,7 @@ Wave 3 (After Wave 2 - integration):
 └── Task 8: Update CreateJobTool to pass project_dir + context (depends: 5, 7) [unspecified-high]
 
 Wave 4 (After Wave 3 - worker container updates, MAX PARALLEL):
-├── Task 9: Update codex worker for extended context (depends: 7) [unspecified-high]
+├── Task 9: ~~Update codex worker for extended context~~ (depends: 7) [unspecified-high] — N/A, removed v1.1.9
 ├── Task 10: Update nanocode worker for extended context (depends: 7) [unspecified-high]
 └── Task 11: Update pebble worker for extended context (depends: 7) [unspecified-high]
 
@@ -840,7 +843,11 @@ Max Concurrent: 3 (Waves 1, 2, 4)
   - Message: `feat(orchestrator): wire pool + context into worker manager`
   - Files: `src/tools/builtin/job.rs`, `src/orchestrator/external_worker.rs`
 
-- [x] 9. Update codex worker for extended context
+- [x] 9. ~~Update codex worker for extended context~~ — **N/A: Codex worker removed in v1.1.9**
+
+  > **Note**: The Codex worker (`codex4lunarwing/`) was removed in v1.1.9. The following task
+  > description is retained for historical reference. The orchestrator-side context passing
+  > (Tasks 1–8) applies to all remaining workers (nanocode, pebble, opencode).
 
   **What to do**:
   - Update `codex4lunarwing/agent_comm_protocol.json` to document extended `context` fields:
@@ -1121,7 +1128,7 @@ Max Concurrent: 3 (Waves 1, 2, 4)
 - **Wave 1**: `feat(orchestrator): extend external worker protocol types` - external_worker.rs, config/sandbox.rs
 - **Wave 2**: `feat(orchestrator): add connection pool and load balancer` - external_worker.rs, config/sandbox.rs
 - **Wave 3**: `feat(orchestrator): wire pool + context into worker manager` - external_worker.rs, tools/builtin/job.rs
-- **Wave 4**: `feat(workers): accept extended context in worker containers` - codex4lunarwing/, lunarcode4lunarwing/, pebble4lunarwing/
+- **Wave 4**: `feat(workers): accept extended context in worker containers` - ~~codex4lunarwing/~~ *(removed v1.1.9)*, lunarcode4lunarwing/, pebble4lunarwing/
 
 ---
 

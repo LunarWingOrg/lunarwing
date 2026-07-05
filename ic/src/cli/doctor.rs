@@ -638,7 +638,7 @@ mod tests {
 
     #[test]
     fn check_binary_skips_nonexistent() {
-        match check_binary("__ironclaw_nonexistent_binary__", &["--version"]) {
+        match check_binary("__lunarwing_nonexistent_binary__", &["--version"]) {
             CheckResult::Skip(_) => {}
             other => panic!(
                 "expected Skip for nonexistent binary, got: {}",

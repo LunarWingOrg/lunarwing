@@ -68,7 +68,7 @@ jobs:
             "src/agent/self_repair.rs"
             "src/agent/agentic_loop.rs"
             "src/tools/execute.rs"
-            "crates/ironclaw_safety/src/"
+            "crates/lunarwing_safety/src/"
           )
 
           for pattern in "${HIGH_RISK_PATTERNS[@]}"; do

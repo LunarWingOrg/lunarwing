@@ -17,7 +17,7 @@
             "id": "call_write_file_1",
             "name": "write_file",
             "arguments": {
-              "path": "/tmp/ironclaw_e2e_test/hello.txt",
+              "path": "/tmp/lunarwing_e2e_test/hello.txt",
               "content": "Hello, E2E test!"
             }
           }
@@ -34,7 +34,7 @@
             "id": "call_read_file_1",
             "name": "read_file",
             "arguments": {
-              "path": "/tmp/ironclaw_e2e_test/hello.txt"
+              "path": "/tmp/lunarwing_e2e_test/hello.txt"
             }
           }
         ],

@@ -16,7 +16,7 @@
 The WASM weechat channel's `relay_url` and `ws_adapter_url` come **only** from the static `config` block in `weechat.capabilities.json`:
 
 ```json
-// ironclaw_weechat_wss/weechat_relay/weechat.capabilities.json:105-107
+// lunarwing_weechat_wss/weechat_relay/weechat.capabilities.json:105-107
 "config": {
     "relay_url": "http://127.0.0.1:9001",
     "ws_adapter_url": "http://127.0.0.1:6681",
@@ -24,7 +24,7 @@ The WASM weechat channel's `relay_url` and `ws_adapter_url` come **only** from t
 }
 ```
 
-These defaults are loaded via `cap_file.config_json()` (`ic/src/channels/wasm/loader.rs:119`) and persisted to the workspace by `on_start` (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:295-298`). They are **never** overridden with per-tenant values.
+These defaults are loaded via `cap_file.config_json()` (`ic/src/channels/wasm/loader.rs:119`) and persisted to the workspace by `on_start` (`lunarwing_weechat_wss/weechat_relay/src/lib.rs:295-298`). They are **never** overridden with per-tenant values.
 
 ### Why the adapter side looks healthy
 
@@ -81,7 +81,7 @@ Per-tenant port allocation (from `WEECHAT-SERVICES.md`):
 
 The original analysis called the password a "red herring." That is only true *while the port bug dominates*. Once the port is corrected, the password becomes the next hard failure for every mt-admin tenant.
 
-Here is why. Nothing in the host injects `relay_password` into the WASM config, so it deserializes to `""`. The WASM builds its adapter auth header itself — `make_auth_headers` produces `Authorization: Basic base64("plain:" + relay_password)` (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:1323`). With an empty password it sends `Basic base64("plain:")`.
+Here is why. Nothing in the host injects `relay_password` into the WASM config, so it deserializes to `""`. The WASM builds its adapter auth header itself — `make_auth_headers` produces `Authorization: Basic base64("plain:" + relay_password)` (`lunarwing_weechat_wss/weechat_relay/src/lib.rs:1323`). With an empty password it sends `Basic base64("plain:")`.
 
 The adapter uses **one** password (`RELAY_PASSWORD`) for two purposes:
 
@@ -179,7 +179,7 @@ The setting would contain:
 
 ### Option C: Have the WASM read its own adapter URL from the adapter
 
-The WASM already pulls `dm_policy`, `group_policy`, `allow_from`, and `networks` from the adapter's `/api/config` endpoint on each poll (`ironclaw_weechat_wss/weechat_relay/src/lib.rs:644-675`). In theory, `ws_adapter_url` could also be discovered this way.
+The WASM already pulls `dm_policy`, `group_policy`, `allow_from`, and `networks` from the adapter's `/api/config` endpoint on each poll (`lunarwing_weechat_wss/weechat_relay/src/lib.rs:644-675`). In theory, `ws_adapter_url` could also be discovered this way.
 
 **Pros**:
 - Self-configuring; no external injection needed.

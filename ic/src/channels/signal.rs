@@ -770,12 +770,10 @@ impl SignalChannel {
                         }
                     }
                 }
-                "allowlist" => {
-                    // Default: check allow_from list
-                    if !self.is_sender_allowed(&sender) {
-                        tracing::debug!(sender = %sender, "Signal: sender not in allow_from, dropping");
-                        return None;
-                    }
+                // Default: check allow_from list
+                "allowlist" if !self.is_sender_allowed(&sender) => {
+                    tracing::debug!(sender = %sender, "Signal: sender not in allow_from, dropping");
+                    return None;
                 }
                 _ => {}
             }

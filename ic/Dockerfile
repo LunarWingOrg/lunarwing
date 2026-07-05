@@ -1,10 +1,10 @@
-# Multi-stage Dockerfile for the IronClaw agent (cloud deployment).
+# Multi-stage Dockerfile for the LunarWing agent (cloud deployment).
 #
 # Build:
-#   docker build --platform linux/amd64 -t ironclaw:latest .
+#   docker build --platform linux/amd64 -t lunarwing:latest .
 #
 # Run:
-#   docker run --env-file .env -p 3000:3000 ironclaw:latest
+#   docker run --env-file .env -p 3000:3000 lunarwing:latest
 
 # Stage 1: Build
 FROM rust:1.92-slim-bookworm AS builder
@@ -33,7 +33,7 @@ COPY providers.json providers.json
 # [[bench]] entries in Cargo.toml require bench sources to exist for cargo to parse the manifest
 COPY benches/ benches/
 
-RUN cargo build --release --bin ironclaw
+RUN cargo build --release --bin lunarwing
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -42,15 +42,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/ironclaw /usr/local/bin/ironclaw
+COPY --from=builder /app/target/release/lunarwing /usr/local/bin/lunarwing
 COPY --from=builder /app/migrations /app/migrations
 
 # Non-root user
-RUN useradd -m -u 1000 -s /bin/bash ironclaw
-USER ironclaw
+RUN useradd -m -u 1000 -s /bin/bash lunarwing
+USER lunarwing
 
 EXPOSE 3000
 
-ENV RUST_LOG=ironclaw=info
+ENV RUST_LOG=lunarwing=info
 
-ENTRYPOINT ["ironclaw"]
+ENTRYPOINT ["lunarwing"]

@@ -183,7 +183,7 @@ bridge_bin() {
 }
 
 replv2_client_dir() {
-  printf '%s/replv2git/git-ironclaw-unix-socket-client-repo' "$LUNARWING_ROOT"
+  printf '%s/replv2git/git-lunarwing-unix-socket-client-repo' "$LUNARWING_ROOT"
 }
 
 replv2_client_bin() {
@@ -379,6 +379,9 @@ ensure_lunarwing_env_defaults() {
   append_env_if_missing "$path" "XMPP_RESOURCE" "lunarwing-test"
   append_env_if_missing "$path" "GATEWAY_PORT" "$GATEWAY_PORT"
   append_env_if_missing "$path" "HTTP_PORT" "$HTTP_PORT"
+  # LUNARWING_BASE_DIR is primary; IRONCLAW_BASE_DIR kept as legacy alias.
+  append_env_if_missing "$path" "LUNARWING_BASE_DIR" "$STATE_DIR"
+  append_env_if_missing "$path" "IRONCLAW_BASE_DIR" "$STATE_DIR"
   append_env_if_missing "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
   append_env_if_missing "$path" "LUNARWING_SOCKET" "$(harness_socket_path)"
   replace_env_value "$path" "IRONCLAW_SOCKET" "$(harness_socket_path)"
@@ -388,6 +391,8 @@ ensure_lunarwing_env_defaults() {
 
 ensure_bridge_env_defaults() {
   local path="$1"
+  # LUNARWING_BASE_DIR is primary; IRONCLAW_BASE_DIR kept as legacy alias.
+  append_env_if_missing "$path" "LUNARWING_BASE_DIR" "$STATE_DIR"
   append_env_if_missing "$path" "IRONCLAW_BASE_DIR" "$STATE_DIR"
   append_env_if_missing "$path" "XMPP_BRIDGE_BIND" "$BRIDGE_BIND"
   append_env_if_missing "$path" "XMPP_BRIDGE_TOKEN" "$(shared_xmpp_bridge_token)"
@@ -419,6 +424,7 @@ write_lunarwing_env_if_missing() {
   (
     umask 077
     {
+      printf 'LUNARWING_BASE_DIR=%s\n' "$STATE_DIR"
       printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
       printf 'IRONCLAW_SOCKET=%s\n' "$(harness_socket_path)"
       printf 'LUNARWING_SOCKET=%s\n' "$(harness_socket_path)"
@@ -512,6 +518,7 @@ write_bridge_env_if_missing() {
   (
     umask 077
     {
+      printf 'LUNARWING_BASE_DIR=%s\n' "$STATE_DIR"
       printf 'IRONCLAW_BASE_DIR=%s\n' "$STATE_DIR"
       printf 'XMPP_BRIDGE_BIND=%s\n' "$BRIDGE_BIND"
       printf 'XMPP_BRIDGE_TOKEN=%s\n' "$(shared_xmpp_bridge_token)"
@@ -1408,7 +1415,7 @@ start_lunarwing() {
     args=("$@")
   fi
 
-  say "starting LunarWing with isolated IRONCLAW_BASE_DIR=$IRONCLAW_BASE_DIR"
+  say "starting LunarWing with isolated LUNARWING_BASE_DIR=${LUNARWING_BASE_DIR:-${IRONCLAW_BASE_DIR:-}}"
   (
     cd "$REPO_ROOT"
     "$bin" "${args[@]}"

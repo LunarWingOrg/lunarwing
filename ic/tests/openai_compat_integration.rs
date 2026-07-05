@@ -384,13 +384,20 @@ async fn test_chat_completions_streaming() {
 
     assert_eq!(resp.status(), 200);
 
-    // Check simulated streaming header
+    // Check simulated streaming header (canonical + legacy alias)
+    assert_eq!(
+        resp.headers()
+            .get("x-lunarwing-streaming")
+            .and_then(|v| v.to_str().ok()),
+        Some("simulated"),
+        "Expected x-lunarwing-streaming: simulated header"
+    );
     assert_eq!(
         resp.headers()
             .get("x-ironclaw-streaming")
             .and_then(|v| v.to_str().ok()),
         Some("simulated"),
-        "Expected x-ironclaw-streaming: simulated header"
+        "Expected legacy x-ironclaw-streaming: simulated header"
     );
 
     let text = resp.text().await.unwrap();

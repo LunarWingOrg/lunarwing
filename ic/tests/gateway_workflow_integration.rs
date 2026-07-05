@@ -38,7 +38,7 @@ mod tests {
                         "trigger_type": "system_event",
                         "event_source": "github",
                         "event_type": "issue.opened",
-                        "event_filters": {"repository": "nearai/ironclaw"},
+                        "event_filters": {"repository": "LunarWingOrg/lunarwing"},
                         "action_type": "lightweight",
                         "prompt": "Summarize webhook and report issue number"
                     }),
@@ -53,7 +53,7 @@ mod tests {
                         "source": "github",
                         "event_type": "issue.opened",
                         "payload": {
-                            "repository": "nearai/ironclaw",
+                            "repository": "LunarWingOrg/lunarwing",
                             "issue": {"number": 777, "title": "Infra test"}
                         }
                     }),
@@ -114,7 +114,7 @@ mod tests {
                 "issues",
                 serde_json::json!({
                     "action": "opened",
-                    "repository": {"full_name": "nearai/ironclaw"},
+                    "repository": {"full_name": "LunarWingOrg/lunarwing"},
                     "issue": {"number": 778, "title": "Webhook endpoint test"}
                 }),
             )

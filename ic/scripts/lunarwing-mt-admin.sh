@@ -175,6 +175,13 @@ tenant_darkirc_enabled() {
   [[ "$val" == "true" ]]
 }
 
+tenant_proxy_enabled() {
+  local name="$1"
+  local val
+  val="$(jq -r ".tenants[\"$name\"].enable_proxy // false" "$PORTS_REGISTRY" 2>/dev/null)"
+  [[ "$val" == "true" ]]
+}
+
 # Per-tenant PostgreSQL password. The source of truth is a 0600, tenant-owned
 # secret file, generated once (hex → URL-safe inside DATABASE_URL) and reused so
 # it stays STABLE across restarts/reconfigures — POSTGRES_PASSWORD only
@@ -273,6 +280,7 @@ Commands:
 
   build-opencode-worker            Build the opencode worker Docker image
     --no-cache                     Force a full rebuild without Docker cache
+    --with-toolchains              Include Rust/Go/C++ toolchains (default: slim)
 
   build-vision-sidecar             Build the LunarVision OCR sidecar Docker image
 
@@ -287,6 +295,15 @@ Commands:
   restart-tenant <name>           Stop then start
   render-units <name>             Re-render a tenant's service units from the current
                                   generator (no restart; applies init-script changes)
+  upgrade-tenant <name> --target <ref>
+                                  In-place upgrade: backup, stop, git fetch + checkout
+                                  <ref> (as the tenant user), rebuild with WASM,
+                                  re-render units, patch env, start. Long-running —
+                                  run inside tmux.
+    --source-repo <path>           Point the tenant's git origin at this repo first
+    --no-backup                    Skip the pre-upgrade Postgres backup
+    --skip-render                  Keep existing unit files (run render-units later;
+                                   must happen before v1.2.0 for pre-1.1.9 tenants)
   rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
@@ -1164,6 +1181,7 @@ ports_migrate_v11() {
 ports_allocate() {
   local name="$1"
   local enable_darkirc="${2:-false}"
+  local enable_proxy="${3:-false}"
   require_cmd jq
 
   # Resumable (F4): if this tenant already has a block, reuse it (echo its
@@ -1182,6 +1200,7 @@ ports_allocate() {
     # One-directional (false -> true): disabling darkirc post-provision is a
     # manual teardown (see docs/ops/DARKIRC-MULTITENANT.md).
     [[ "$enable_darkirc" == "true" ]] && ports_enable_darkirc "$name"
+    [[ "$enable_proxy" == "true" ]] && ports_enable_proxy "$name"
     printf '%s' "$existing"
     return 0
   fi
@@ -1201,7 +1220,9 @@ ports_allocate() {
   tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
   local darkirc_json="false"
   [[ "$enable_darkirc" == "true" ]] && darkirc_json="true"
-  jq --arg name "$name" --argjson base "$base" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson darkirc "$darkirc_json" '
+  local proxy_json="false"
+  [[ "$enable_proxy" == "true" ]] && proxy_json="true"
+  jq --arg name "$name" --argjson base "$base" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson darkirc "$darkirc_json" --argjson proxy "$proxy_json" '
     ( .range.start // 10000 ) as $rstart
     | ( .extended_range.start // 20000 ) as $estart
     | ( .extended_block_size // 10 ) as $ebs
@@ -1211,6 +1232,7 @@ ports_allocate() {
         user: $name,
         created_at: $ts,
         enable_darkirc: $darkirc,
+        enable_proxy: $proxy,
         ports: {
           gateway:          ($base + 0),
           http:             ($base + 1),
@@ -1268,6 +1290,27 @@ ports_enable_darkirc() {
   chmod 0644 "$tmp"
   mv "$tmp" "$PORTS_REGISTRY"
   say "darkirc for tenant '$name': disabled -> enabled" >&2
+}
+
+# Mark proxy enabled for a tenant in the registry (one-directional: false -> true).
+# Idempotent. Used by ports_allocate()'s resume path and by the --enable-proxy flag.
+ports_enable_proxy() {
+  local name="$1"
+  require_cmd jq
+  local current
+  current="$(jq -r ".tenants[\"$name\"].enable_proxy // false" "$PORTS_REGISTRY" 2>/dev/null || true)"
+  [[ "$current" == "true" ]] && return 0
+
+  local tmp
+  tmp="$(mktemp "$PORTS_REGISTRY.tmp.XXXXXX")"
+  if ! jq --arg name "$name" '.tenants[$name].enable_proxy = true' \
+      "$PORTS_REGISTRY" >"$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    die "failed to enable proxy flag for tenant '$name'"
+  fi
+  chmod 0644 "$tmp"
+  mv "$tmp" "$PORTS_REGISTRY"
+  say "proxy for tenant '$name': disabled -> enabled" >&2
 }
 
 ports_deallocate() {
@@ -1618,6 +1661,7 @@ build_tenant() {
   local with_nanocode="${3:-false}"
   local with_pebble="${4:-false}"
   local with_opencode="${5:-false}"
+  local with_toolchains="${6:-false}"
   local repo
   repo="$(tenant_repo "$name")"
 
@@ -1671,7 +1715,7 @@ build_tenant() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   # After a rebuild, the tenant will be restarted with the new binary. If the
@@ -1756,6 +1800,7 @@ build_all() {
   local with_nanocode="${2:-false}"
   local with_pebble="${3:-false}"
   local with_opencode="${4:-false}"
+  local with_toolchains="${5:-false}"
   local names
   names="$(all_tenant_names)"
 
@@ -1779,7 +1824,7 @@ build_all() {
   if [[ "$with_opencode" == "true" ]]; then
     say ""
     say "=== Building opencode worker image ==="
-    build_opencode_worker "false"
+    build_opencode_worker "false" "$with_toolchains"
   fi
 
   while IFS= read -r name; do
@@ -1864,32 +1909,32 @@ build_pebble_worker() {
 
 build_opencode_worker() {
   local no_cache="${1:-false}"
+  local with_toolchains="${2:-false}"
   local opencode_dir="${LUNARWING_ROOT}/opencode4lunarwing"
 
   [[ -d "$opencode_dir" ]] || die "opencode worker dir not found at $opencode_dir"
 
   ensure_container_runtime
 
-  say "building opencode worker Docker image ..."
+  local toolchain_desc="slim (no toolchains)"
+  [[ "$with_toolchains" == "true" ]] && toolchain_desc="fat (with Rust/Go/C++ toolchains)"
+  say "building opencode worker Docker image [$toolchain_desc] ..."
+
   local cache_flag=""
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
 
+  local toolchain_arg=""
+  [[ "$with_toolchains" == "true" ]] && toolchain_arg="--build-arg WITH_TOOLCHAINS=true"
+
   if [[ "$CONTAINER_RT" == "podman" ]]; then
-    # --network=host (F8): see build_nanocode_worker — podman build's default network
-    # can't reach the internet for RUN steps (apt/bun) on hosts where the bridge/pasta
-    # path is broken or IPv6 is preferred-but-unrouted; the host netns has working IPv4.
-    # --format docker (O4): podman defaults to OCI, which drops the Dockerfile
-    # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
-    # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct if
-    # the image is ever run directly / under a healthcheck-honouring runtime).
-    podman build $cache_flag --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    podman build $cache_flag $toolchain_arg --network=host --format docker -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   else
-    docker build $cache_flag -t lunarwing-worker-opencode:latest "$opencode_dir" \
+    docker build $cache_flag $toolchain_arg -t lunarwing-worker-opencode:latest "$opencode_dir" \
       || die "opencode worker image build failed"
   fi
 
-  say "opencode worker image built: lunarwing-worker-opencode:latest"
+  say "opencode worker image built: lunarwing-worker-opencode:latest [$toolchain_desc]"
 }
 
 # ── WASM install ─────────────────────────────────────────────────────────────
@@ -2153,11 +2198,16 @@ write_tenant_lunarwing_env() {
   # existing DATABASE_URL (preserving an already-initialised DB's password).
   pg_password="$(tenant_pg_password "$name")"
 
-  # LLM endpoint the daemon's OpenAI-compatible client dials. Defaults to this
-  # tenant's local TensorZero proxy; an explicit value (from --llm-base-url or
-  # LUNARWING_MT_LLM_BASE_URL) overrides it — e.g. to point straight at a shared
-  # gateway or upstream OpenAI-compatible endpoint as the proxy is phased out.
-  local llm_base_url_effective="${llm_base_url:-http://127.0.0.1:${proxy_port}/v1}"
+  # LLM endpoint the daemon's OpenAI-compatible client dials. When the proxy is
+  # enabled, defaults to this tenant's local TensorZero proxy. When disabled,
+  # defaults to the upstream TENSORZERO_URL directly. An explicit value (from
+  # --llm-base-url or LUNARWING_MT_LLM_BASE_URL) always overrides.
+  local llm_base_url_effective
+  if tenant_proxy_enabled "$name"; then
+    llm_base_url_effective="${llm_base_url:-http://127.0.0.1:${proxy_port}/v1}"
+  else
+    llm_base_url_effective="${llm_base_url:-$tensorzero_url}"
+  fi
 
   # Idempotent overrides for the configurable flags (--llm-model,
   # --gateway-host, --xmpp-allow-from). An explicit flag value wins; else an
@@ -2341,6 +2391,7 @@ write_tenant_bridge_env() {
   (
     umask 077
     cat >"$path" <<ENVEOF
+LUNARWING_BASE_DIR=$state_dir
 IRONCLAW_BASE_DIR=$state_dir
 XMPP_BRIDGE_BIND=127.0.0.1:${bridge_port}
 XMPP_BRIDGE_TOKEN=$bridge_token
@@ -2469,8 +2520,9 @@ generate_darkirc_config() {
 
 # ── External-worker config.toml generation ────────────────────────────────────
 #
-# External workers (nanocode, pebble, …) speak the ironclaw-agent-v1 WebSocket
-# protocol and are routed by the agent's `create_job(mode: "<worker>")` tool.
+# External workers (nanocode, pebble, …) speak the lunarwing-agent-v1 WebSocket
+# protocol (legacy alias ironclaw-agent-v1 is still accepted for back-compat)
+# and are routed by the agent's `create_job(mode: "<worker>")` tool.
 # The daemon discovers them from `[[sandbox.external_workers]]` blocks in
 # `config.toml` under the tenant's LUNARWING_BASE_DIR (the state dir). Without
 # this block the agent has nothing to route `create_job(mode: "<worker>")` to
@@ -4544,9 +4596,10 @@ render_tenant_systemd_units() {
   proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/lunarwing_weechat_wss/weechat_relay/ws_adapter.py"
 
-  # Proxy unit
+  # Proxy unit (only when enabled)
+  if tenant_proxy_enabled "$name"; then
   cat >"$user_unit_dir/lunarwing-proxy-${name}.service" <<EOF
 [Unit]
 Description=LunarWing TensorZero proxy ($name)
@@ -4563,6 +4616,7 @@ NoNewPrivileges=true
 [Install]
 WantedBy=default.target
 EOF
+  fi
 
   # WeeChat unit (runs in tmux so you can attach: tmux -L weechat-${name} attach)
   local weechat_home
@@ -4609,7 +4663,7 @@ EOF
 
   if tenant_darkirc_enabled "$name"; then
     local darkirc_adapter_path
-    darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+    darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_lunarwing/darkirc/adapter/darkirc_adapter.py"
 
     cat >"$user_unit_dir/lunarwing-darkirc-adapter-${name}.service" <<EOF
 [Unit]
@@ -4684,12 +4738,18 @@ EOF
     darkirc_sd_wants=" lunarwing-darkirc-adapter-${name}.service"
   fi
 
+  local proxy_sd_after="" proxy_sd_wants=""
+  if tenant_proxy_enabled "$name"; then
+    proxy_sd_after=" lunarwing-proxy-${name}.service"
+    proxy_sd_wants=" lunarwing-proxy-${name}.service"
+  fi
+
   # Main daemon unit
   cat >"$user_unit_dir/lunarwing-${name}.service" <<EOF
 [Unit]
 Description=LunarWing AI assistant ($name)
-After=network.target ${pg_dep_after}xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service${darkirc_sd_after}
-Wants=xmpp-bridge-${name}.service lunarwing-proxy-${name}.service lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service${darkirc_sd_wants}
+After=network.target ${pg_dep_after}xmpp-bridge-${name}.service${proxy_sd_after} lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service${darkirc_sd_after}
+  Wants=xmpp-bridge-${name}.service${proxy_sd_wants} lunarwing-weechat-${name}.service lunarwing-weechat-adapter-${name}.service${darkirc_sd_wants}
 ${pg_dep_requires}
 
 [Service]
@@ -4753,7 +4813,10 @@ start_tenant_systemd() {
   # started by its own start_tenant_* function (which renders the quadlet,
   # reloads the daemon, and starts the unit). The imperative `start` below
   # is belt-and-suspenders for the vision unit (harmless if already running).
-  local enable_list=("lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-proxy-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-weechat-adapter-${name}.service")
+  local enable_list=("lunarwing-${name}.service" "xmpp-bridge-${name}.service" "lunarwing-weechat-${name}.service" "lunarwing-weechat-adapter-${name}.service")
+  if tenant_proxy_enabled "$name"; then
+    enable_list+=("lunarwing-proxy-${name}.service")
+  fi
   if tenant_darkirc_enabled "$name"; then
     enable_list+=("lunarwing-darkirc-${name}.service" "lunarwing-darkirc-adapter-${name}.service")
   fi
@@ -4839,13 +4902,18 @@ render_tenant_openrc_units() {
   proxy_bin="$(tenant_lw_root "$name")/tensorzero-proxy-configurations/lunarwing-proxy.py"
 
   local ws_adapter_path
-  ws_adapter_path="$(tenant_lw_root "$name")/ironclaw_weechat_wss/weechat_relay/ws_adapter.py"
+  ws_adapter_path="$(tenant_lw_root "$name")/lunarwing_weechat_wss/weechat_relay/ws_adapter.py"
   local ws_adapter_dir
   ws_adapter_dir="$(dirname "$ws_adapter_path")"
 
   local darkirc_rc_after=""
   if tenant_darkirc_enabled "$name"; then
     darkirc_rc_after=" lunarwing-darkirc-adapter-${name}"
+  fi
+
+  local proxy_rc_after=""
+  if tenant_proxy_enabled "$name"; then
+    proxy_rc_after=" lunarwing-proxy-${name}"
   fi
 
   local weechat_home
@@ -4976,7 +5044,7 @@ required_files="\${command}"
 depend() {
     need net localmount lunarwing-pg-${name}
     use dns logger
-    after firewall lunarwing-pg-${name} xmpp-bridge-${name} lunarwing-proxy-${name} weechat-${name} lunarwing-weechat-adapter-${name}${darkirc_rc_after}
+    after firewall lunarwing-pg-${name} xmpp-bridge-${name}${proxy_rc_after} weechat-${name} lunarwing-weechat-adapter-${name}${darkirc_rc_after}
 }
 
 load_env() {
@@ -5121,7 +5189,8 @@ INITEOF
   chmod 0755 "/etc/init.d/lunarwing-darkirc-${name}"
   fi
 
-  # ── TensorZero proxy init script ──
+  # ── TensorZero proxy init script (only when enabled) ──
+  if tenant_proxy_enabled "$name"; then
   cat >"/etc/init.d/lunarwing-proxy-${name}" <<INITEOF
 #!/sbin/openrc-run
 
@@ -5180,6 +5249,7 @@ start_pre() {
 }
 INITEOF
   chmod 0755 "/etc/init.d/lunarwing-proxy-${name}"
+  fi
 
   # ── WeeChat init script (tmux-based) ──
   cat >"/etc/init.d/lunarwing-weechat-${name}" <<INITEOF
@@ -5289,7 +5359,7 @@ INITEOF
   # DarkIRC adapter init script (only when enabled)
   if tenant_darkirc_enabled "$name"; then
   local darkirc_adapter_path darkirc_adapter_dir
-  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_ironclaw/darkirc/adapter/darkirc_adapter.py"
+  darkirc_adapter_path="$(tenant_lw_root "$name")/darkirc_channel_for_lunarwing/darkirc/adapter/darkirc_adapter.py"
   darkirc_adapter_dir="$(dirname "$darkirc_adapter_path")"
 
   cat >"/etc/init.d/lunarwing-darkirc-adapter-${name}" <<INITEOF
@@ -5358,9 +5428,13 @@ INITEOF
   if tenant_darkirc_enabled "$name"; then
     darkirc_rc_need=" lunarwing-darkirc-adapter-${name}"
   fi
+  local proxy_rc_need=""
+  if tenant_proxy_enabled "$name"; then
+    proxy_rc_need=" lunarwing-proxy-${name}"
+  fi
   cat >"/etc/conf.d/lunarwing-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
-lunarwing_rc_need="xmpp-bridge-${name} lunarwing-proxy-${name} lunarwing-weechat-${name} lunarwing-weechat-adapter-${name}${darkirc_rc_need}"
+lunarwing_rc_need="xmpp-bridge-${name}${proxy_rc_need} lunarwing-weechat-${name} lunarwing-weechat-adapter-${name}${darkirc_rc_need}"
 CONFD
 
   cat >"/etc/conf.d/xmpp-bridge-${name}" <<CONFD
@@ -5368,9 +5442,11 @@ CONFD
 xmpp_bridge_rc_before="lunarwing-${name}"
 CONFD
 
-  cat >"/etc/conf.d/lunarwing-proxy-${name}" <<CONFD
+  if tenant_proxy_enabled "$name"; then
+    cat >"/etc/conf.d/lunarwing-proxy-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
 CONFD
+  fi
 
   cat >"/etc/conf.d/lunarwing-weechat-${name}" <<CONFD
 # Auto-generated by lunarwing-mt-admin.sh for tenant: $name
@@ -5412,7 +5488,9 @@ start_tenant_openrc() {
     rc-service "lunarwing-darkirc-${name}" start 2>/dev/null || say "  (lunarwing-darkirc-${name} skipped — optional)"
     rc-service "lunarwing-darkirc-adapter-${name}" start 2>/dev/null || say "  (lunarwing-darkirc-adapter-${name} skipped — optional)"
   fi
-  rc-service "lunarwing-proxy-${name}" start
+  if tenant_proxy_enabled "$name"; then
+    rc-service "lunarwing-proxy-${name}" start
+  fi
   rc-service "xmpp-bridge-${name}" start
   rc-service "lunarwing-${name}" start
   # Start worker babysitters (if workers are configured)
@@ -5423,7 +5501,10 @@ start_tenant_openrc() {
 
   # Auto-enable on boot whatever is actually running (idempotent, OpenRC only).
   local svc
-  local boot_svcs=("lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "lunarwing-proxy-${name}" "xmpp-bridge-${name}" "lunarwing-${name}" "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-vision-${name}")
+  local boot_svcs=("lunarwing-pg-${name}" "lunarwing-pg-${name}-sup" "xmpp-bridge-${name}" "lunarwing-${name}" "lunarwing-weechat-${name}" "lunarwing-weechat-adapter-${name}" "lunarwing-vision-${name}")
+  if tenant_proxy_enabled "$name"; then
+    boot_svcs+=("lunarwing-proxy-${name}")
+  fi
   if tenant_darkirc_enabled "$name"; then
     boot_svcs+=("lunarwing-darkirc-${name}" "lunarwing-darkirc-adapter-${name}")
   fi
@@ -5699,13 +5780,14 @@ add_tenant() {
   local llm_api_key="${8:-}"
   local llm_base_url="${9:-$DEFAULT_LLM_BASE_URL}"
   local enable_darkirc="${10:-false}"
-  local nanocode_model="${11:-}"
-  local nanocode_base_url="${12:-}"
-  local llm_model="${13:-}"
-  local gateway_host="${14:-}"
-  local xmpp_allow_from="${15:-}"
-  local opencode_model="${16:-}"
-  local opencode_base_url="${17:-}"
+  local enable_proxy="${11:-false}"
+  local nanocode_model="${12:-}"
+  local nanocode_base_url="${13:-}"
+  local llm_model="${14:-}"
+  local gateway_host="${15:-}"
+  local xmpp_allow_from="${16:-}"
+  local opencode_model="${17:-}"
+  local opencode_base_url="${18:-}"
 
   name="$(sanitize_name "$name")"
   [[ -n "$name" ]] || die "invalid tenant name"
@@ -5726,7 +5808,7 @@ add_tenant() {
 
   ports_registry_init
   local base_port
-  base_port="$(ports_allocate "$name" "$enable_darkirc")"
+  base_port="$(ports_allocate "$name" "$enable_darkirc" "$enable_proxy")"
   say ""
 
   create_tenant_user "$name" "$docker_group"
@@ -5741,7 +5823,9 @@ add_tenant() {
   write_tenant_vision_env "$name" >/dev/null
   write_tenant_lunarwing_env "$name" "$xmpp_jid" "$xmpp_password" "$tensorzero_url" "$llm_api_key" "$llm_base_url" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
   write_tenant_bridge_env "$name" "$xmpp_jid" "$xmpp_password" "$xmpp_allow_from"
-  write_tenant_proxy_env "$name" "$tensorzero_url"
+  if [[ "$enable_proxy" == "true" ]]; then
+    write_tenant_proxy_env "$name" "$tensorzero_url"
+  fi
   if [[ "$enable_darkirc" == "true" ]]; then
     write_tenant_darkirc_adapter_env "$name"
     generate_darkirc_config "$name"
@@ -5803,6 +5887,7 @@ add_tenant() {
   say "  opencode_wss:     $(ports_get "$name" opencode_wss)"
   say "  weechat_adapter:  $(ports_get "$name" weechat_adapter)"
   say "  darkirc:          $( [[ "$enable_darkirc" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-darkirc to enable)" )"
+  say "  proxy:            $( [[ "$enable_proxy" == "true" ]] && echo "enabled" || echo "disabled (pass --enable-proxy to enable)" )"
   say "  ssh:              $( [[ "$DEFAULT_SSH_ENABLED" == "true" && "$SSH_OPT_OUT" != "true" ]] && echo "enabled (key upload + activation handled by start-tenant)" || echo "disabled (pass --no-ssh)" )"
   say ""
   say "Next steps:"
@@ -6040,6 +6125,84 @@ restart_tenant() {
   local name="$1"
   stop_tenant "$name"
   start_tenant "$name"
+}
+
+# In-place tenant upgrade: composes the verified sequence (backup -> stop ->
+# fetch/checkout as the tenant user -> rebuild with WASM -> re-render units ->
+# patch env -> start). The verbs it calls dispatch OpenRC/systemd themselves,
+# so this works on any supported init system. See
+# docs/ops/TENANT-RENAME-MIGRATION-1.1.9.md for the 1.1.9 rename specifics.
+upgrade_tenant() {
+  local name="$1" target="$2" source_repo="$3" do_backup="$4" do_render="$5"
+  local lw_root repo
+  lw_root="$(tenant_lw_root "$name")"
+  repo="$(tenant_repo "$name")"
+
+  [[ -d "$lw_root/.git" ]] || die "no git checkout at $lw_root; run add-tenant first"
+
+  local tgit=(sudo -u "$name" git -c safe.directory="$lw_root" -C "$lw_root")
+
+  if [[ -n "$source_repo" ]]; then
+    [[ -d "$source_repo/.git" || -f "$source_repo/HEAD" ]] || die "--source-repo $source_repo is not a git repository"
+    say "pointing origin at $source_repo ..."
+    "${tgit[@]}" remote set-url origin "$source_repo" || die "failed to retarget origin"
+  fi
+
+  local before
+  before="$("${tgit[@]}" describe --tags --always 2>/dev/null || echo unknown)"
+  say "upgrading tenant '$name': $before -> $target"
+
+  if [[ "$do_backup" == "true" ]]; then
+    backup_tenant_postgres "$name"
+  else
+    say "skipping pre-upgrade backup (--no-backup)"
+  fi
+
+  say "fetching tags + refs from origin (as $name) ..."
+  "${tgit[@]}" fetch --tags --prune origin || die "git fetch failed"
+  "${tgit[@]}" rev-parse --verify --quiet "${target}^{commit}" >/dev/null 2>&1 \
+    || "${tgit[@]}" rev-parse --verify --quiet "origin/${target}^{commit}" >/dev/null 2>&1 \
+    || die "target ref '$target' not found after fetch (need a branch, tag, or commit reachable from origin)"
+
+  stop_tenant "$name"
+
+  say "checking out $target (as $name) ..."
+  if "${tgit[@]}" rev-parse --verify --quiet "refs/remotes/origin/$target" >/dev/null 2>&1; then
+    # Branch on origin: (re)create the local branch on it so repeat upgrades
+    # of the same branch move forward instead of reusing a stale local tip.
+    "${tgit[@]}" checkout -B "$target" "origin/$target" || die "git checkout $target failed"
+  else
+    "${tgit[@]}" checkout "$target" || die "git checkout $target failed"
+  fi
+  [[ -d "$repo/migrations" ]] || die "ic/migrations missing after checkout — wrong ref? Aborting before build."
+  say "  now at: $("${tgit[@]}" describe --tags --always 2>/dev/null)"
+
+  build_tenant "$name" "true"
+  install_wasm_tenant "$name"
+
+  if [[ "$do_render" == "true" ]]; then
+    render_tenant_units "$name"
+  else
+    say "skipping render-units (--skip-render); unit files keep their embedded paths"
+  fi
+
+  patch_tenant_env "$name"
+  start_tenant "$name"
+
+  # Pre-1.1.9 units embed renamed adapter paths that only keep working through
+  # the 1.1.9-only compat symlinks — warn (don't fail) if any remain.
+  local stale
+  stale="$(grep -rlE 'ironclaw_weechat_wss|darkirc_channel_for_ironclaw' \
+    /etc/init.d /etc/conf.d "$(tenant_home "$name")/.config/systemd/user" 2>/dev/null \
+    | grep -F -- "$name" || true)"
+  if [[ -n "$stale" ]]; then
+    say "WARNING: these units still embed pre-rename paths (run render-units before v1.2.0):"
+    say "$stale"
+  fi
+
+  say ""
+  say "tenant '$name' upgraded: $before -> $("${tgit[@]}" describe --tags --always 2>/dev/null)"
+  say "verify with: $0 status $name"
 }
 
 status_tenant() {
@@ -6343,7 +6506,7 @@ main() {
   case "$command_name" in
     add-tenant)
       require_root
-      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
+      local name="" docker_group="false" xmpp_jid="" xmpp_password="" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" enable_proxy="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -6351,6 +6514,7 @@ main() {
           --no-health)       HEALTH_OPT_OUT=true; shift ;;
           --no-ssh)          SSH_OPT_OUT=true; shift ;;
           --enable-darkirc)  enable_darkirc="true"; shift ;;
+          --enable-proxy)    enable_proxy="true"; shift ;;
           --xmpp-password)   xmpp_password="$2"; shift 2 ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
           --llm-base-url)    llm_base_url="$2"; shift 2 ;;
@@ -6374,12 +6538,12 @@ main() {
       done
       [[ -n "$name" ]] || die "usage: add-tenant <name> [--docker-group] [--xmpp-jid <jid>]"
       [[ -n "$xmpp_jid" ]] || xmpp_jid="$(sanitize_name "$name")@xmpp.localhost"
-      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
+      add_tenant "$name" "$docker_group" "$xmpp_jid" "$xmpp_password" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$enable_proxy" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
       ;;
 
     add-tenants)
       require_root
-      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
+      local names_csv="" docker_group="false" xmpp_domain="xmpp.localhost" tz_url="$DEFAULT_TENSORZERO_URL" gotify_url="$DEFAULT_GOTIFY_URL" gotify_title="$DEFAULT_GOTIFY_TITLE" llm_api_key="" llm_base_url="$DEFAULT_LLM_BASE_URL" enable_darkirc="false" enable_proxy="false" nanocode_model="" nanocode_base_url="" llm_model="" gateway_host="" xmpp_allow_from="" opencode_model="" opencode_base_url=""
       while [[ $# -gt 0 ]]; do
         case "$1" in
           --docker-group)    docker_group="true"; shift ;;
@@ -6387,6 +6551,7 @@ main() {
           --no-health)       HEALTH_OPT_OUT=true; shift ;;
           --no-ssh)          SSH_OPT_OUT=true; shift ;;
           --enable-darkirc)  enable_darkirc="true"; shift ;;
+          --enable-proxy)    enable_proxy="true"; shift ;;
           --llm-api-key)     llm_api_key="$2"; shift 2 ;;
           --llm-base-url)    llm_base_url="$2"; shift 2 ;;
           --tensorzero-url)  tz_url="$2"; shift 2 ;;
@@ -6417,7 +6582,7 @@ main() {
         sname="$(sanitize_name "$(echo "$raw_name" | xargs)")"
         [[ -n "$sname" ]] || continue
         say ""
-        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
+        add_tenant "$sname" "$docker_group" "${sname}@${xmpp_domain}" "" "$tz_url" "$gotify_url" "$gotify_title" "$llm_api_key" "$llm_base_url" "$enable_darkirc" "$enable_proxy" "$nanocode_model" "$nanocode_base_url" "$llm_model" "$gateway_host" "$xmpp_allow_from" "$opencode_model" "$opencode_base_url"
       done
       ;;
 
@@ -6441,14 +6606,15 @@ main() {
 
     build-tenant)
       require_root
-      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local name="" with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
           *)
             if [[ -z "$name" ]]; then name="$1"; shift
             else die "unexpected argument: $1"
@@ -6456,24 +6622,25 @@ main() {
             ;;
         esac
       done
-      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode]"
-      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      [[ -n "$name" ]] || die "usage: build-tenant <name> [--with-wasm] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]"
+      build_tenant "$(sanitize_name "$name")" "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-all)
       require_root
-      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false"
+      local with_wasm="false" with_nanocode="false" with_pebble="false" with_opencode="false" with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --with-wasm)      with_wasm="true"; shift ;;
-          --with-nanocode)  with_nanocode="true"; shift ;;
-          --with-pebble)    with_pebble="true"; shift ;;
-          --with-opencode)  with_opencode="true"; shift ;;
-          -*)               die "unknown flag: $1" ;;
-          *)                die "unexpected argument: $1" ;;
+          --with-wasm)       with_wasm="true"; shift ;;
+          --with-nanocode)   with_nanocode="true"; shift ;;
+          --with-pebble)     with_pebble="true"; shift ;;
+          --with-opencode)   with_opencode="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          -*)                die "unknown flag: $1" ;;
+          *)                 die "unexpected argument: $1" ;;
         esac
       done
-      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode"
+      build_all "$with_wasm" "$with_nanocode" "$with_pebble" "$with_opencode" "$with_toolchains"
       ;;
 
     build-darkirc)
@@ -6518,14 +6685,16 @@ main() {
     build-opencode-worker)
       require_root
       local no_cache="false"
+      local with_toolchains="false"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --no-cache) no_cache="true"; shift ;;
-          -*)         die "unknown flag: $1" ;;
-          *)          die "unexpected argument: $1" ;;
+          --no-cache)         no_cache="true"; shift ;;
+          --with-toolchains)  with_toolchains="true"; shift ;;
+          -*)                 die "unknown flag: $1" ;;
+          *)                  die "unexpected argument: $1" ;;
         esac
       done
-      build_opencode_worker "$no_cache"
+      build_opencode_worker "$no_cache" "$with_toolchains"
       ;;
 
     build-vision-sidecar)
@@ -6567,6 +6736,31 @@ main() {
       [[ -n "${1:-}" ]] || die "usage: render-units <name>"
       ports_registry_init
       render_tenant_units "$1"
+      ;;
+
+    upgrade-tenant)
+      require_root
+      local name="" target="" source_repo="" do_backup="true" do_render="true"
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --target)      target="$2"; shift 2 ;;
+          --source-repo) source_repo="$2"; shift 2 ;;
+          --no-backup)   do_backup="false"; shift ;;
+          --skip-render) do_render="false"; shift ;;
+          -*)            die "unknown flag: $1" ;;
+          *)
+            if [[ -z "$name" ]]; then name="$1"; shift
+            else die "unexpected argument: $1"
+            fi
+            ;;
+        esac
+      done
+      [[ -n "$name" ]] || die "usage: upgrade-tenant <name> --target <ref> [--source-repo <path>] [--no-backup] [--skip-render]"
+      [[ -n "$target" ]] || die "upgrade-tenant requires an explicit --target <ref> (no implicit default)"
+      name="$(sanitize_name "$name")"
+      ports_registry_init
+      tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+      upgrade_tenant "$name" "$target" "$source_repo" "$do_backup" "$do_render"
       ;;
 
     rotate-pg-password)

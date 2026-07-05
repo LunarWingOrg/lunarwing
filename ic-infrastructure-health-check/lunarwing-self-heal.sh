@@ -166,7 +166,8 @@ log "detected service manager: $SERVICE_MANAGER"
 # ── Multi-tenant helpers ────────────────────────────────────────────────────
 #
 # Per-tenant units are named lunarwing-<tenant>, xmpp-bridge-<tenant>,
-# ironclaw-proxy-<tenant>. On systemd they are USER units owned by the tenant
+# lunarwing-proxy-<tenant> (legacy ironclaw-proxy-<tenant> units are still
+# matched). On systemd they are USER units owned by the tenant
 # OS user; on OpenRC they are system services. We only treat a unit as
 # per-tenant when its tenant resolves to a real user in the registry, so base
 # units (lunarwing, xmpp-bridge, lunarwing-watchdog, ...) fall through safely.

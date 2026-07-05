@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Architecture boundary checks for IronClaw.
+# Architecture boundary checks for LunarWing.
 # Run as: bash scripts/check-boundaries.sh
 # Returns non-zero if hard violations are found.
 

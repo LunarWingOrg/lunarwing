@@ -30,14 +30,21 @@ pub struct OAuthCredentials {
 }
 
 /// Google OAuth "Desktop App" credentials, shared across all Google tools.
-/// Compile-time env vars override the hardcoded defaults below.
-const GOOGLE_CLIENT_ID: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_ID") {
+/// Compile-time env vars override the hardcoded defaults below
+/// (`LUNARWING_*` preferred; legacy `IRONCLAW_*` still accepted).
+const GOOGLE_CLIENT_ID: &str = match option_env!("LUNARWING_GOOGLE_CLIENT_ID") {
     Some(v) => v,
-    None => "564604149681-efo25d43rs85v0tibdepsmdv5dsrhhr0.apps.googleusercontent.com",
+    None => match option_env!("IRONCLAW_GOOGLE_CLIENT_ID") {
+        Some(v) => v,
+        None => "564604149681-efo25d43rs85v0tibdepsmdv5dsrhhr0.apps.googleusercontent.com",
+    },
 };
-const GOOGLE_CLIENT_SECRET: &str = match option_env!("IRONCLAW_GOOGLE_CLIENT_SECRET") {
+const GOOGLE_CLIENT_SECRET: &str = match option_env!("LUNARWING_GOOGLE_CLIENT_SECRET") {
     Some(v) => v,
-    None => "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",
+    None => match option_env!("IRONCLAW_GOOGLE_CLIENT_SECRET") {
+        Some(v) => v,
+        None => "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",
+    },
 };
 
 /// Returns built-in OAuth credentials for a provider, keyed by secret_name.
@@ -57,14 +64,14 @@ pub fn builtin_credentials(secret_name: &str) -> Option<OAuthCredentials> {
 /// Returns the compile-time override env var name, if this provider supports one.
 pub fn builtin_client_id_override_env(secret_name: &str) -> Option<&'static str> {
     match secret_name {
-        "google_oauth_token" => Some("IRONCLAW_GOOGLE_CLIENT_ID"),
+        "google_oauth_token" => Some("LUNARWING_GOOGLE_CLIENT_ID"),
         _ => None,
     }
 }
 
 /// Suppress the baked-in desktop OAuth client secret when a hosted proxy is configured.
 ///
-/// In hosted deployments, IronClaw may resolve the platform Google client ID from
+/// In hosted deployments, LunarWing may resolve the platform Google client ID from
 /// environment variables while still falling back to the baked-in desktop secret.
 /// That client_id/client_secret mismatch breaks Google token exchange and refresh.
 ///
@@ -604,7 +611,7 @@ fn hosted_state_checksum(payload_bytes: &[u8]) -> String {
 /// Build a versioned hosted OAuth state envelope.
 ///
 /// The encoded value is opaque to providers and can be decoded by both
-/// IronClaw and the external auth proxy for routing and callback lookup.
+/// LunarWing and the external auth proxy for routing and callback lookup.
 pub fn encode_hosted_oauth_state(flow_id: &str, instance_name: Option<&str>) -> String {
     let payload = HostedOAuthStatePayload {
         flow_id: flow_id.to_string(),

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent label bootstrap for IronClaw PR automation.
+# Idempotent label bootstrap for LunarWing PR automation.
 # Uses `gh label create --force` so it can be re-run safely.
 #
 # Usage: bash .github/scripts/create-labels.sh

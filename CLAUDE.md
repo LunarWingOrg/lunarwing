@@ -31,20 +31,22 @@ The binary, Cargo package, and all four internal crates have been renamed from `
 | Socket file | `ironclaw.sock` | `lunarwing.sock` |
 | Service units | `ExecStart=.../ironclaw` | `ExecStart=.../lunarwing` |
 | RUST_LOG filter | `ironclaw=info` | `lunarwing=info` |
+| WebSocket subprotocol | `ironclaw-agent-v1` | `lunarwing-agent-v1` |
+| Shell completions | `ironclaw.{bash,fish,zsh}` | `lunarwing.{bash,fish,zsh}` |
 
 **Preserved for backward compatibility:**
 - `IRONCLAW_BASE_DIR` env var — still accepted as legacy alias for `LUNARWING_BASE_DIR`
 - `IRONCLAW_SOCKET` env var — still accepted as legacy alias
 - Watchdog cleanup markers (detect old `ironclaw-watchdog` installations)
+- WebSocket subprotocol `ironclaw-agent-v1` — still accepted and offered as legacy alias of `lunarwing-agent-v1` for this release (daemon offers both, new name first; workers echo whichever offered name matches)
+- Repo-root symlinks `ironclaw_weechat_wss` → `lunarwing_weechat_wss` and `darkirc_channel_for_ironclaw` → `darkirc_channel_for_lunarwing`, kept for 1.1.9 only (deployed tenant units embed the old adapter paths)
 
 **Intentionally NOT renamed:**
-- `codex4ironclaw/` and `nanocode-config/` directory names
-- WebSocket subprotocol `ironclaw-agent-v1` (shared external protocol)
+- `nanocode-config/` directory name
 - Keyring service identifiers in `ic_sm/`
 - `tensorzero::function_name::ironclaw` TensorZero function name
 - GCP resource names in `ic/deploy/cloud-sql-proxy.service`
 - `ic/CHANGELOG.md` historical entries
-- Shell completion scripts: `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh`
 
 ## Code Style
 
@@ -143,8 +145,6 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   testing/lunarwing-xmpp/   # Full-stack test harness docs
   systemd/                  # Systemd units, OpenRC init scripts (.openrc, .confd), launchd plists
   scripts/                  # Operational + build scripts
-codex4lunarwing/             # OpenAI Codex worker container — see codex4lunarwing/CLAUDE.md
-codex4ironclaw/             # Codex worker container (deprecated) — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
 lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
 pebble4lunarwing/           # Pebble worker container — see pebble4lunarwing/CLAUDE.md
@@ -153,17 +153,19 @@ tensorzero-proxy-configurations/ # TensorZero HTTP proxy routing config
 replv2git/                  # REPLv2 related tooling
 xmpp_bridge/                # XMPP bridge support resources
 ic_sm/                      # Supporting service resources
-darkirc_channel_for_ironclaw/    # DarkIRC WASM channel source
+darkirc_channel_for_lunarwing/   # DarkIRC WASM channel source
 gotify-wasm/                # Gotify WASM tool source
-ironclaw-gotify-tool/       # Gotify tool (legacy standalone)
-ironclaw_weechat_wss/       # WeeChat WSS channel source
-git-ironclaw-unix-socket-client-repo/  # REPLv2 Unix socket client
-git-ironclaw-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
+lunarwing-gotify-tool/      # Gotify tool (legacy standalone)
+lunarwing_weechat_wss/      # WeeChat WSS channel source
+git-lunarwing-unix-socket-client-repo/  # REPLv2 Unix socket client
+git-lunarwing-unix-socket-repl-server-repo/  # REPLv2 Unix socket REPL server
 projects/                   # Satellite services
   ocr-sidecar/              # Vision/OCR sidecar service (Rust/Warp, Tesseract + VL) — see projects/ocr-sidecar/README.md
 tests/                      # Worker test harness (Docker Compose matrix suite for all 4 worker types)
 docs/                       # Documentation (architecture/, guides/, ops/, reference/, internal/, proposals/, bugs/)
 ```
+
+Back-compat symlinks `ironclaw_weechat_wss` and `darkirc_channel_for_ironclaw` exist at the repo root, kept for the 1.1.9 release only.
 
 ## Key Guidance Docs
 
@@ -193,7 +195,6 @@ Before modifying complex areas, read the relevant spec. Specs are authoritative.
 | Multi-tenancy (production) | `docs/ops/MULTITENANCY-PRODUCTION.md` |
 | Single-tenant test harness | `docs/ops/HARNESS-SINGLE-TENANT.md` |
 | Multi-tenant test harness | `docs/ops/MULTITENANCY-HARNESS.md` |
-| Documentation audit | `docs/DOCS_AUDIT.md` |
 | Docs organization | `docs/README.md` |
 | Testing guide | `docs/guides/TESTING_GUIDE.md` |
 
@@ -241,7 +242,7 @@ The `openai_compatible` provider allows connecting to any OpenAI-compatible embe
 
 ## External Workers
 
-External workers are persistent containers that speak the `ironclaw-agent-v1` WebSocket protocol. Unlike Docker sandbox jobs (created/destroyed per task), external workers stay running and accept tasks on demand.
+External workers are persistent containers that speak the `lunarwing-agent-v1` WebSocket protocol (legacy alias `ironclaw-agent-v1` still accepted). Unlike Docker sandbox jobs (created/destroyed per task), external workers stay running and accept tasks on demand.
 
 ### Configuration
 
@@ -276,7 +277,6 @@ create_job(title: "...", description: "...", mode: "nanocode")
 | Worker | Container | Docs |
 |--------|-----------|------|
 | `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
-| `codex` | `codex4lunarwing/` | `codex4lunarwing/CLAUDE.md` |
 | `pebble` | `pebble4lunarwing/` | `pebble4lunarwing/CLAUDE.md` |
 
 ## Protected Runtime Behavior

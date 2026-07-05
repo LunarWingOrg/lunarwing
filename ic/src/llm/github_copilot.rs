@@ -501,7 +501,7 @@ struct OpenAiUsage {
     completion_tokens: u32,
 }
 
-/// Convert IronClaw messages to OpenAI Chat Completions format.
+/// Convert LunarWing messages to OpenAI Chat Completions format.
 fn convert_messages(messages: Vec<ChatMessage>) -> Vec<OpenAiMessage> {
     messages
         .into_iter()

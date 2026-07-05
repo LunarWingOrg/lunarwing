@@ -12,8 +12,8 @@ mod tests {
     use crate::support::test_rig::TestRigBuilder;
     use crate::support::trace_llm::LlmTrace;
 
-    const TEST_DIR: &str = "/tmp/ironclaw_e2e_test";
-    const TEST_FILE: &str = "/tmp/ironclaw_e2e_test/hello.txt";
+    const TEST_DIR: &str = "/tmp/lunarwing_e2e_test";
+    const TEST_FILE: &str = "/tmp/lunarwing_e2e_test/hello.txt";
     const EXPECTED_CONTENT: &str = "Hello, E2E test!";
 
     fn setup_test_dir() {

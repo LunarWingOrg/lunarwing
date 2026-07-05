@@ -52,12 +52,12 @@ mod tests {
     #[ignore] // requires pre-compiled WASM binary
     async fn wasm_github_list_issues_coerces_string_limit() {
         let expected_url =
-            "https://api.github.com/repos/nearai/ironclaw/issues?state=open&per_page=50";
+            "https://api.github.com/repos/LunarWingOrg/lunarwing/issues?state=open&per_page=50";
 
         let trace = LlmTrace {
             model_name: "test-wasm-coercion-list-issues".to_string(),
             turns: vec![crate::support::trace_llm::TraceTurn {
-                user_input: "List issues in nearai/ironclaw with limit 50".to_string(),
+                user_input: "List issues in LunarWingOrg/lunarwing with limit 50".to_string(),
                 steps: vec![
                     TraceStep {
                         request_hint: None,
@@ -67,8 +67,8 @@ mod tests {
                                 name: "github".to_string(),
                                 arguments: json!({
                                     "action": "list_issues",
-                                    "owner": "nearai",
-                                    "repo": "ironclaw",
+                                    "owner": "LunarWingOrg",
+                                    "repo": "lunarwing",
                                     "state": "open",
                                     "limit": "50"
                                 }),
@@ -116,7 +116,7 @@ mod tests {
             .build()
             .await;
 
-        rig.send_message("List issues in nearai/ironclaw with limit 50")
+        rig.send_message("List issues in LunarWingOrg/lunarwing with limit 50")
             .await;
         let responses = rig.wait_for_responses(1, Duration::from_secs(15)).await;
         rig.verify_trace_expects(&trace, &responses);
@@ -129,12 +129,12 @@ mod tests {
     #[tokio::test]
     #[ignore] // requires pre-compiled WASM binary
     async fn wasm_github_get_issue_coerces_string_issue_number() {
-        let expected_url = "https://api.github.com/repos/nearai/ironclaw/issues/42";
+        let expected_url = "https://api.github.com/repos/LunarWingOrg/lunarwing/issues/42";
 
         let trace = LlmTrace {
             model_name: "test-wasm-coercion-get-issue".to_string(),
             turns: vec![crate::support::trace_llm::TraceTurn {
-                user_input: "Get issue 42 from nearai/ironclaw".to_string(),
+                user_input: "Get issue 42 from LunarWingOrg/lunarwing".to_string(),
                 steps: vec![
                     TraceStep {
                         request_hint: None,
@@ -144,8 +144,8 @@ mod tests {
                                 name: "github".to_string(),
                                 arguments: json!({
                                     "action": "get_issue",
-                                    "owner": "nearai",
-                                    "repo": "ironclaw",
+                                    "owner": "LunarWingOrg",
+                                    "repo": "lunarwing",
                                     "issue_number": "42"
                                 }),
                             }],
@@ -192,7 +192,8 @@ mod tests {
             .build()
             .await;
 
-        rig.send_message("Get issue 42 from nearai/ironclaw").await;
+        rig.send_message("Get issue 42 from LunarWingOrg/lunarwing")
+            .await;
         let responses = rig.wait_for_responses(1, Duration::from_secs(15)).await;
         rig.verify_trace_expects(&trace, &responses);
 
@@ -205,12 +206,12 @@ mod tests {
     #[ignore] // requires pre-compiled WASM binary
     async fn wasm_github_list_prs_coerces_string_limit() {
         let expected_url =
-            "https://api.github.com/repos/nearai/ironclaw/pulls?state=open&per_page=25";
+            "https://api.github.com/repos/LunarWingOrg/lunarwing/pulls?state=open&per_page=25";
 
         let trace = LlmTrace {
             model_name: "test-wasm-coercion-list-prs".to_string(),
             turns: vec![crate::support::trace_llm::TraceTurn {
-                user_input: "List PRs in nearai/ironclaw".to_string(),
+                user_input: "List PRs in LunarWingOrg/lunarwing".to_string(),
                 steps: vec![
                     TraceStep {
                         request_hint: None,
@@ -220,8 +221,8 @@ mod tests {
                                 name: "github".to_string(),
                                 arguments: json!({
                                     "action": "list_pull_requests",
-                                    "owner": "nearai",
-                                    "repo": "ironclaw",
+                                    "owner": "LunarWingOrg",
+                                    "repo": "lunarwing",
                                     "limit": "25"
                                 }),
                             }],
@@ -268,7 +269,7 @@ mod tests {
             .build()
             .await;
 
-        rig.send_message("List PRs in nearai/ironclaw").await;
+        rig.send_message("List PRs in LunarWingOrg/lunarwing").await;
         let responses = rig.wait_for_responses(1, Duration::from_secs(15)).await;
         rig.verify_trace_expects(&trace, &responses);
 

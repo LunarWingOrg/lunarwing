@@ -13,7 +13,7 @@
 //! Until `resolve()` falls back to settings (or the CLI writes `.env`),
 //! an `enable`/`disable` command would silently fail to take effect.
 //!
-//! `status` (runtime health) requires connecting to a running IronClaw instance
+//! `status` (runtime health) requires connecting to a running LunarWing instance
 //! via IPC or HTTP, which does not exist yet as a CLI control plane.
 
 use std::path::Path;

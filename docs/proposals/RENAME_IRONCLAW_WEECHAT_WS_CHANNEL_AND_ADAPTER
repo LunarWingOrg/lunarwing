@@ -1,3 +1,5 @@
 # channel renaming in code and reference
 
 * weechat channel, ws_adapter, directory names, associated scripts. pass thru repo to see what can be renamed
+
+* Implemented in 1.1.9 (GOALS_1.1.9 item #2): `ironclaw_weechat_wss/` renamed to `lunarwing_weechat_wss/` (back-compat symlink kept for one release), docs/paths updated repo-wide.

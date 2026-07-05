@@ -1787,7 +1787,7 @@ impl GeminiOauthProvider {
         // Budget cap of 8192 prevents runaway thinking loops.
         //
         // NOTE: We do NOT set includeThoughts=true. The original Gemini CLI
-        // sets it because it displays thoughts to the user. IronClaw's reasoning
+        // sets it because it displays thoughts to the user. LunarWing's reasoning
         // layer (reasoning.rs) strips all <thinking> tags from responses, so
         // including thoughts just adds text that gets stripped, potentially
         // leaving an empty response.

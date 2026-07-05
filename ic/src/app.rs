@@ -1,4 +1,4 @@
-//! Application builder for initializing core IronClaw components.
+//! Application builder for initializing core LunarWing components.
 //!
 //! Extracts the mechanical initialization phases from `main.rs` into a
 //! reusable builder so that:
@@ -965,7 +965,7 @@ impl AppBuilder {
             // in the database — never overwrites user edits.
             //
             // If WORKSPACE_IMPORT_DIR is unset, fall back to
-            // $IRONCLAW_BASE_DIR/workspace-template/ when it exists.
+            // $LUNARWING_BASE_DIR/workspace-template/ when it exists.
             //
             // Runs before seed_if_empty() so that custom templates take priority
             // over generic seeds. seed_if_empty() then fills any remaining gaps.

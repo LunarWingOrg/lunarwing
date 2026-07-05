@@ -1,6 +1,7 @@
 /**
  * lunarwing_bridge.ts — WebSocket bridge between LunarWing agents and the
- * opencode headless server. Implements the ironclaw-agent-v1 subprotocol.
+ * opencode headless server. Implements the lunarwing-agent-v1 subprotocol
+ * (legacy alias ironclaw-agent-v1 still accepted for one deprecation cycle).
  *
  * Supports two roles:
  *   server — listens for inbound agent connections (default)
@@ -12,6 +13,7 @@ import {
   parseEnvelope,
   writeWsState,
   SUBPROTOCOL,
+  LEGACY_SUBPROTOCOL,
   WORKER_ID,
   WORKER_VERSION,
   type Envelope,
@@ -179,13 +181,24 @@ function startServer(): void {
         }
       }
 
-      const protocols = req.headers.get("sec-websocket-protocol") || ""
-      if (!protocols.split(",").map((p) => p.trim()).includes(SUBPROTOCOL)) {
+      // Validate subprotocol: accept the primary name or the legacy alias, and
+      // echo back the matched offered value (preferring the primary). Old
+      // daemons offer only the legacy name and reject an echo they never
+      // offered, so a static echo of the new name would break them.
+      const offered = (req.headers.get("sec-websocket-protocol") || "")
+        .split(",")
+        .map((p) => p.trim())
+      const matched = offered.includes(SUBPROTOCOL)
+        ? SUBPROTOCOL
+        : offered.includes(LEGACY_SUBPROTOCOL)
+          ? LEGACY_SUBPROTOCOL
+          : null
+      if (!matched) {
         return new Response(`Subprotocol ${SUBPROTOCOL} required`, { status: 400 })
       }
 
       const upgraded = server.upgrade(req, {
-        headers: { "sec-websocket-protocol": SUBPROTOCOL },
+        headers: { "sec-websocket-protocol": matched },
       })
       if (!upgraded) {
         return new Response("WebSocket upgrade failed", { status: 500 })
@@ -213,7 +226,7 @@ function startServer(): void {
 
   updateState(true)
   console.log(`[bridge] server listening on ws://${WS_BIND_HOST}:${WS_PORT}${WS_PATH}`)
-  console.log(`[bridge] subprotocol: ${SUBPROTOCOL}`)
+  console.log(`[bridge] subprotocol: ${SUBPROTOCOL} (legacy alias accepted: ${LEGACY_SUBPROTOCOL})`)
   console.log(`[bridge] auth: ${AGENT_AUTH_TOKEN ? "enabled" : "disabled (dev mode)"}`)
 }
 
@@ -239,7 +252,8 @@ async function startClient(): Promise<void> {
     if (AGENT_AUTH_TOKEN) {
       headers["Authorization"] = `Bearer ${AGENT_AUTH_TOKEN}`
     }
-    headers["Sec-WebSocket-Protocol"] = SUBPROTOCOL
+    // Offer both names, new first, so hubs on either side of the rename match.
+    headers["Sec-WebSocket-Protocol"] = `${SUBPROTOCOL}, ${LEGACY_SUBPROTOCOL}`
 
     try {
       const ws = new WebSocket(uri, {

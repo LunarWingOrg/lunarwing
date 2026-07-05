@@ -1,4 +1,4 @@
-//! Skill types, parsing, selection, and management for IronClaw.
+//! Skill types, parsing, selection, and management for LunarWing.
 //!
 //! Skills are SKILL.md files (YAML frontmatter + markdown prompt) that extend the
 //! agent's behavior through prompt-level instructions. This crate provides the core

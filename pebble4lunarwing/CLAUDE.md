@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-**LunarWing Pebble Worker** — a Rust binary that wraps the Pebble agentic coding harness as a persistent managed worker. It speaks the `ironclaw-agent-v1` WebSocket protocol and spawns `pebble prompt --output-format ndjson` per task, streaming NDJSON events back as `task_progress` messages.
+**LunarWing Pebble Worker** — a Rust binary that wraps the Pebble agentic coding harness as a persistent managed worker. It speaks the `lunarwing-agent-v1` WebSocket protocol (legacy alias `ironclaw-agent-v1` still accepted) and spawns `pebble prompt --output-format ndjson` per task, streaming NDJSON events back as `task_progress` messages.
 
 ## Build & Run
 
@@ -51,7 +51,7 @@ Then use `create_job(mode: "pebble", description: "...")` to dispatch tasks.
 - `src/main.rs` — Entry point, starts health server + bridge
 - `src/bridge.rs` — WebSocket server, connection handling, message dispatch
 - `src/executor.rs` — Spawns pebble subprocess, parses NDJSON, forwards events
-- `src/protocol.rs` — ironclaw-agent-v1 envelope types and helpers
+- `src/protocol.rs` — lunarwing-agent-v1 envelope types and helpers
 - `src/health.rs` — HTTP health/ready endpoints
 
 ## Protocol Flow

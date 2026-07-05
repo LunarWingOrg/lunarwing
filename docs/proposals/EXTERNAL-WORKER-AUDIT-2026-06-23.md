@@ -89,6 +89,9 @@ let task_context = build_task_context(
 - **Risk**: Low
 
 #### 2. Codex Worker (`codex4lunarwing/scripts/codex_task_executor.ts`)
+
+> **Note**: The Codex worker was removed in v1.1.9. This section is retained for historical reference.
+
 **Cleanup**: ✅ **Adequate**
 ```typescript
 proc = spawn(["codex", ...args], {
@@ -126,13 +129,13 @@ for (key, value) in &request.context.environment {
 | Worker | Cleanup Mechanism | Risk Level | Notes |
 |--------|-------------------|------------|-------|
 | Nanocode | Explicit delete/restore in finally block | Low | Best practice |
-| Codex | Subprocess termination | Low-medium | Acceptable for single-use subprocess |
+| Codex | Subprocess termination | Low-medium | Acceptable for single-use subprocess *(worker removed v1.1.9)* |
 | Pebble | Subprocess drop (kill_on_drop) | Low-medium | Acceptable for short-lived tasks |
 | Orchestrator | No logging | Low | Secure |
 
 ### Potential Improvements
 
-1. **Codex worker**: Add explicit cleanup for belt-and-suspenders:
+1. **Codex worker** *(removed in v1.1.9 — N/A)*: Add explicit cleanup for belt-and-suspenders:
    ```typescript
    // After proc.killed check
    for (const key of Object.keys(extraEnv)) {
@@ -169,7 +172,7 @@ for (key, value) in &request.context.environment {
 ### Future
 1. **Thread history plumbing**: Pass actual conversation history via `SessionHandle` or `ContextManager`
 2. **Health checks**: Implement LoadBalancer circuit breaker with endpoint health monitoring
-3. **Defensive cleanup**: Add explicit env var deletion to Codex worker
+3. **Defensive cleanup**: ~~Add explicit env var deletion to Codex worker~~ *(N/A — Codex worker removed in v1.1.9)*
 4. **Integration tests**: Add chaos tests for credential cleanup scenarios
 
 ## Conclusion

@@ -10,7 +10,8 @@
 //! - **Steps**: user inputs, LLM responses (text/tool_calls), and expected tool
 //!   results for verifying tool output during replay
 //!
-//! Enable by setting `IRONCLAW_RECORD_TRACE=1` at runtime.
+//! Enable by setting `LUNARWING_RECORD_TRACE=1` at runtime
+//! (legacy alias `IRONCLAW_RECORD_TRACE` still accepted).
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -486,16 +487,20 @@ impl RecordingLlm {
 
     /// Create from environment variables if recording is enabled.
     ///
-    /// - `IRONCLAW_RECORD_TRACE` — any non-empty value enables recording
-    /// - `IRONCLAW_TRACE_OUTPUT` — file path (default: `./trace_{timestamp}.json`)
-    /// - `IRONCLAW_TRACE_MODEL_NAME` — model_name field (default: `recorded-{inner.model_name()}`)
+    /// - `LUNARWING_RECORD_TRACE` — any non-empty value enables recording
+    /// - `LUNARWING_TRACE_OUTPUT` — file path (default: `./trace_{timestamp}.json`)
+    /// - `LUNARWING_TRACE_MODEL_NAME` — model_name field (default: `recorded-{inner.model_name()}`)
+    ///
+    /// Legacy `IRONCLAW_*` aliases are still accepted as fallbacks.
     pub fn from_env(inner: Arc<dyn LlmProvider>) -> Option<Arc<Self>> {
-        let enabled = std::env::var("IRONCLAW_RECORD_TRACE")
+        let enabled = std::env::var("LUNARWING_RECORD_TRACE")
+            .or_else(|_| std::env::var("IRONCLAW_RECORD_TRACE"))
             .ok()
             .filter(|v| !v.is_empty());
         enabled?;
 
-        let output_path = std::env::var("IRONCLAW_TRACE_OUTPUT")
+        let output_path = std::env::var("LUNARWING_TRACE_OUTPUT")
+            .or_else(|_| std::env::var("IRONCLAW_TRACE_OUTPUT"))
             .ok()
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
@@ -504,7 +509,8 @@ impl RecordingLlm {
                 PathBuf::from(format!("trace_{ts}.json"))
             });
 
-        let model_name = std::env::var("IRONCLAW_TRACE_MODEL_NAME")
+        let model_name = std::env::var("LUNARWING_TRACE_MODEL_NAME")
+            .or_else(|_| std::env::var("IRONCLAW_TRACE_MODEL_NAME"))
             .ok()
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| format!("recorded-{}", inner.model_name()));
@@ -972,6 +978,7 @@ mod tests {
     #[test]
     fn from_env_returns_none_when_unset() {
         // SAFETY: This test is single-threaded and no other thread reads this var.
+        unsafe { std::env::remove_var("LUNARWING_RECORD_TRACE") };
         unsafe { std::env::remove_var("IRONCLAW_RECORD_TRACE") };
         let stub = Arc::new(StubLlm::new("response"));
         let result = RecordingLlm::from_env(stub);

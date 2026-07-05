@@ -56,3 +56,4 @@ tests/fixtures/llm_traces/live/github_dev_workflow_full_loop.log
 .pebble/sessions/
 .pebble/agents/
 .pebble/mcp/
+.codegraph

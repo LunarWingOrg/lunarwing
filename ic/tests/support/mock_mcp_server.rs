@@ -191,7 +191,7 @@ async fn handle_auth_server_metadata(State(state): State<Arc<MockState>>) -> imp
 async fn handle_register() -> impl IntoResponse {
     Json(serde_json::json!({
         "client_id": "mock-client-id",
-        "client_name": "ironclaw-test",
+        "client_name": "lunarwing-test",
         "redirect_uris": [],
         "grant_types": ["authorization_code"],
         "response_types": ["code"],

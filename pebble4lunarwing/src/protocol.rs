@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const SUBPROTOCOL: &str = "ironclaw-agent-v1";
+pub const SUBPROTOCOL: &str = "lunarwing-agent-v1";
+/// Legacy alias still accepted for one deprecation cycle: old daemons offer
+/// only this value in their Sec-WebSocket-Protocol header.
+pub const LEGACY_SUBPROTOCOL: &str = "ironclaw-agent-v1";
 pub const WORKER_VERSION: &str = "pebble-worker-0.1.0";
 pub const DEFAULT_TIMEOUT_MS: u64 = 300_000;
 

@@ -198,7 +198,7 @@ fn bootstrap_env_preserves_existing_values() {
         ("DATABASE_BACKEND", "postgres"),
         (
             "DATABASE_URL",
-            "postgres://user:pass@localhost:5432/ironclaw",
+            "postgres://user:pass@localhost:5432/lunarwing",
         ),
         ("LLM_BACKEND", "nearai"),
         ("NEARAI_API_KEY", "key_abc123"),
@@ -252,7 +252,7 @@ fn bootstrap_env_preserves_existing_values() {
     );
     assert_eq!(
         map3.get("DATABASE_URL").map(String::as_str),
-        Some("postgres://user:pass@localhost:5432/ironclaw"),
+        Some("postgres://user:pass@localhost:5432/lunarwing"),
         "DATABASE_URL must be preserved after upsert of different key"
     );
     assert_eq!(
@@ -271,7 +271,7 @@ fn bootstrap_env_handles_special_characters() {
 
     let test_cases: &[(&str, &str)] = &[
         // Spaces in values
-        ("AGENT_NAME", "my ironclaw agent"),
+        ("AGENT_NAME", "my lunarwing agent"),
         // Equals signs in values (e.g., base64 tokens)
         ("API_TOKEN", "dGVzdA=="),
         // Hash characters (common in URL-encoded passwords, treated as comments without quoting)
@@ -281,7 +281,7 @@ fn bootstrap_env_handles_special_characters() {
         // Double quotes (must be escaped)
         ("QUOTED_VAL", r#"say "hello" world"#),
         // Backslashes (must be escaped)
-        ("WIN_PATH", r"C:\Users\ironclaw\data"),
+        ("WIN_PATH", r"C:\Users\lunarwing\data"),
         // Mixed special characters
         ("COMPLEX", r#"key=val with "quotes" & back\slash #hash"#),
         // Empty-ish but non-empty value (single space)

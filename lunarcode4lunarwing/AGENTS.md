@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Persistent container worker for nanocode, following the same pattern as `codex4ironclaw`. The WebSocket bridge is TypeScript/Bun (not Python) because nanocode has an SDK that can be used in-process.
+Persistent container worker for nanocode, following the same pattern as the other LunarWing workers (pebble, opencode). The WebSocket bridge is TypeScript/Bun (not Python) because nanocode has an SDK that can be used in-process.
 
 ## Key Files
 
@@ -14,7 +14,7 @@ Persistent container worker for nanocode, following the same pattern as `codex4i
 
 ## Protocol Compatibility
 
-The `ironclaw-agent-v1` WebSocket subprotocol is shared with `codex4ironclaw`. Changes to `agent_comm_protocol.json` or envelope format must stay backward-compatible or be coordinated across both workers.
+The `lunarwing-agent-v1` WebSocket subprotocol (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle) is shared with the pebble and opencode workers. Changes to `agent_comm_protocol.json` or envelope format must stay backward-compatible or be coordinated across all workers.
 
 ## Build Notes
 
@@ -30,7 +30,7 @@ cp -r ../nanocode-config/nanocode ./nanocode
 
 ## Do Not
 
-- Break the `ironclaw-agent-v1` envelope format
+- Break the `lunarwing-agent-v1` envelope format
 - Expose the internal nanocode serve port (4096) externally
 - Store secrets in config files (use env vars with `{env:VAR}` syntax)
 - Remove the health server — orchestration depends on it

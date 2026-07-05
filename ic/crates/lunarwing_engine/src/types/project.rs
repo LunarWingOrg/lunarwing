@@ -1,7 +1,7 @@
 //! Project — the unit of context.
 //!
 //! A project is a persistent domain of work that scopes memory documents,
-//! threads, and missions. Examples: "IronClaw architecture", "deployment system".
+//! threads, and missions. Examples: "LunarWing architecture", "deployment system".
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

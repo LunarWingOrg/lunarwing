@@ -805,15 +805,15 @@ pub struct SandboxSettings {
     #[serde(default)]
     pub acp_enabled: bool,
 
-    /// External worker endpoints (persistent containers speaking ironclaw-agent-v1).
+    /// External worker endpoints (persistent containers speaking lunarwing-agent-v1).
     #[serde(default)]
     pub external_workers: Vec<ExternalWorkerSettings>,
 }
 
-/// A named external worker endpoint (persistent container speaking ironclaw-agent-v1).
+/// A named external worker endpoint (persistent container speaking lunarwing-agent-v1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalWorkerSettings {
-    /// Unique name for this worker (e.g., "nanocode", "codex").
+    /// Unique name for this worker (e.g., "nanocode", "pebble").
     pub name: String,
     /// WebSocket URL (e.g., "ws://localhost:9090/ws/agent").
     pub url: String,
@@ -1249,7 +1249,7 @@ impl Settings {
              # Uncomment and edit values to override defaults.\n\
              # Run `lunarwing config init` to regenerate this file.\n\
              #\n\
-             # Documentation: https://github.com/nearai/ironclaw\n\
+             # Documentation: https://github.com/LunarWingOrg/lunarwing\n\
              \n\
              {raw}"
         );
@@ -1307,10 +1307,9 @@ impl Settings {
                 }
                 for self_ep in &mut self_ew.endpoints {
                     if let Some(other_ep) = other_ew.endpoints.iter().find(|o| o.url == self_ep.url)
+                        && self_ep.auth_token.is_none()
                     {
-                        if self_ep.auth_token.is_none() {
-                            self_ep.auth_token = other_ep.auth_token.clone();
-                        }
+                        self_ep.auth_token = other_ep.auth_token.clone();
                     }
                 }
             }
@@ -2069,7 +2068,7 @@ timeout_ms = 300000
         // Step 1 of the new wizard run: user enters a NEW database_url
         let step1_settings = Settings {
             database_backend: Some("postgres".to_string()),
-            database_url: Some("postgres://new-host/ironclaw".to_string()),
+            database_url: Some("postgres://new-host/lunarwing".to_string()),
             ..Settings::default()
         };
 
@@ -2083,7 +2082,7 @@ timeout_ms = 300000
         // Step 1's fresh database_url wins over stale DB value
         assert_eq!(
             current.database_url,
-            Some("postgres://new-host/ironclaw".to_string()),
+            Some("postgres://new-host/lunarwing".to_string()),
             "Step 1 fresh choice must override stale DB value"
         );
 
@@ -2382,7 +2381,7 @@ timeout_ms = 300000
         let prior = Settings {
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
             llm_backend: Some("openai".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             embeddings: EmbeddingsSettings {
@@ -2505,7 +2504,7 @@ timeout_ms = 300000
         let prior = Settings {
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
             llm_backend: Some("openai".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             channels: ChannelSettings {
@@ -2535,7 +2534,7 @@ timeout_ms = 300000
         // 1. auto_setup_database sets DB fields
         let step1 = Settings {
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
             ..Default::default()
         };
 
@@ -2757,7 +2756,7 @@ timeout_ms = 300000
         // User picks libsql this time, wizard clears stale postgres settings
         let step1 = Settings {
             database_backend: Some("libsql".to_string()),
-            libsql_path: Some("/home/user/.lunarwing/ironclaw.db".to_string()),
+            libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
             database_url: None, // explicitly not set for libsql
             ..Default::default()
         };
@@ -2770,7 +2769,7 @@ timeout_ms = 300000
         assert_eq!(current.database_backend.as_deref(), Some("libsql"));
         assert_eq!(
             current.libsql_path.as_deref(),
-            Some("/home/user/.lunarwing/ironclaw.db")
+            Some("/home/user/.lunarwing/lunarwing.db")
         );
 
         // Prior provider/model should survive (unrelated to DB switch)

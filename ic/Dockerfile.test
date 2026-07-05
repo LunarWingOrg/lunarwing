@@ -1,12 +1,12 @@
-# Lightweight test Dockerfile for IronClaw web gateway testing.
+# Lightweight test Dockerfile for LunarWing web gateway testing.
 #
 # Build:
-#   docker build --platform linux/amd64 -f Dockerfile.test -t ironclaw-test .
+#   docker build --platform linux/amd64 -f Dockerfile.test -t lunarwing-test .
 #
 # Run (each on a different port):
-#   docker run --rm -p 3003:3003 ironclaw-test
-#   docker run --rm -p 3004:3003 ironclaw-test
-#   docker run --rm -p 3005:3003 ironclaw-test
+#   docker run --rm -p 3003:3003 lunarwing-test
+#   docker run --rm -p 3004:3003 lunarwing-test
+#   docker run --rm -p 3005:3003 lunarwing-test
 
 # Stage 1: Build (libsql only — no PostgreSQL dependency)
 FROM rust:1.92-slim-bookworm AS builder
@@ -29,7 +29,7 @@ COPY registry/ registry/
 COPY channels-src/ channels-src/
 COPY wit/ wit/
 
-RUN cargo build --release --no-default-features --features libsql --bin ironclaw
+RUN cargo build --release --no-default-features --features libsql --bin lunarwing
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -38,21 +38,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/ironclaw /usr/local/bin/ironclaw
+COPY --from=builder /app/target/release/lunarwing /usr/local/bin/lunarwing
 
-RUN useradd -m -u 1000 -s /bin/bash ironclaw
-USER ironclaw
-WORKDIR /home/ironclaw
+RUN useradd -m -u 1000 -s /bin/bash lunarwing
+USER lunarwing
+WORKDIR /home/lunarwing
 
 EXPOSE 3003
 
-ENV RUST_LOG=ironclaw=info \
+ENV RUST_LOG=lunarwing=info \
     GATEWAY_ENABLED=true \
     GATEWAY_HOST=0.0.0.0 \
     GATEWAY_PORT=3003 \
     GATEWAY_AUTH_TOKEN=test \
     DATABASE_BACKEND=libsql \
-    LIBSQL_PATH=/home/ironclaw/test.db \
+    LIBSQL_PATH=/home/lunarwing/test.db \
     SANDBOX_ENABLED=false
 
-ENTRYPOINT ["ironclaw", "--no-onboard"]
+ENTRYPOINT ["lunarwing", "--no-onboard"]

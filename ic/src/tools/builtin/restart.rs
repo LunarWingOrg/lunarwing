@@ -2,7 +2,7 @@
 //!
 //! ## Architecture
 //!
-//! IronClaw runs inside a Docker container with an entrypoint loop that monitors exit codes:
+//! LunarWing runs inside a Docker container with an entrypoint loop that monitors exit codes:
 //! - **Exit code 0** (clean): Reset failure counter, wait `LUNARWING_RESTART_DELAY`
 //!   (legacy `IRONCLAW_RESTART_DELAY`) and restart
 //! - **Exit code ≠ 0** (failure): Increment failure counter, exit after

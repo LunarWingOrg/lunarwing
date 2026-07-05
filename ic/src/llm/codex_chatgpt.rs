@@ -199,7 +199,7 @@ impl CodexChatGptProvider {
             .unwrap_or_default()
     }
 
-    /// Convert IronClaw messages to Responses API request JSON.
+    /// Convert LunarWing messages to Responses API request JSON.
     fn build_request_body(
         &self,
         model: &str,
@@ -640,7 +640,7 @@ impl CodexChatGptProvider {
     /// Remove keys with empty-string values from a JSON object.
     ///
     /// gpt-5.2-codex fills optional tool parameters with `""` (e.g.
-    /// `"timestamp": ""`). IronClaw's tool validation treats these as
+    /// `"timestamp": ""`). LunarWing's tool validation treats these as
     /// invalid "non-empty input expected". Stripping them makes the
     /// tool see only the actually-provided values.
     fn strip_empty_string_values(value: Value) -> Value {
@@ -725,7 +725,7 @@ impl LlmProvider for CodexChatGptProvider {
                 let args: Value =
                     serde_json::from_str(&tc.arguments).unwrap_or_else(|_| json!(tc.arguments));
                 // gpt-5.2-codex fills optional parameters with empty strings (e.g.
-                // `"timestamp": ""`), which IronClaw's tool validation rejects.
+                // `"timestamp": ""`), which LunarWing's tool validation rejects.
                 // Strip them so only actually-provided values reach the tool.
                 let args = Self::strip_empty_string_values(args);
                 ToolCall {

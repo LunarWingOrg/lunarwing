@@ -58,4 +58,4 @@ See `.env.example` for the full list with descriptions.
 
 ## Protocol
 
-Speaks `ironclaw-agent-v1` WebSocket subprotocol. See `../codex4lunarwing/agent_comm_protocol.json` for the full spec.
+Speaks `lunarwing-agent-v1` WebSocket subprotocol (legacy alias `ironclaw-agent-v1` still accepted for one deprecation cycle). See `../opencode4lunarwing/agent_comm_protocol.json` for the full spec.

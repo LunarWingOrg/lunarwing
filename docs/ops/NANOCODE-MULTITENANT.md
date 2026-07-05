@@ -136,7 +136,7 @@ Expected bridge output:
 
 ```
 [bridge] server listening on ws://0.0.0.0:<WSS_PORT>/ws/agent
-[bridge] subprotocol: ironclaw-agent-v1
+[bridge] subprotocol: lunarwing-agent-v1 (legacy alias accepted: ironclaw-agent-v1)
 ```
 
 ## Step 6: Test

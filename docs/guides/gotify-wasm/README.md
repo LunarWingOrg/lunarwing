@@ -5,7 +5,7 @@ A WASM tool for LunarWing that sends push notifications to a self-hosted Gotify 
 ## Build
 
 ```bash
-cd ironclaw-gotify-tool
+cd lunarwing-gotify-tool
 cargo build --release --target wasm32-wasip2
 cp target/wasm32-wasip2/release/gotify_tool.wasm ~/.lunarwing/tools/gotify.wasm
 ```

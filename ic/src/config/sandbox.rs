@@ -654,7 +654,7 @@ auth_token = "tok-2"
     fn external_worker_config_legacy_fallback() {
         let toml_str = r#"
 [[sandbox.external_workers]]
-name = "codex"
+name = "pebble"
 url = "ws://127.0.0.1:8443/ws/agent"
 auth_token = "tok-legacy"
 timeout_ms = 300000

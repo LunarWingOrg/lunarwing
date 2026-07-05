@@ -1,6 +1,7 @@
 /**
  * lunarwing_runtime.ts — Shared types, envelope helpers, and state file management
- * for the LunarWing WebSocket protocol (ironclaw-agent-v1).
+ * for the LunarWing WebSocket protocol (lunarwing-agent-v1, with the legacy
+ * ironclaw-agent-v1 alias still accepted for one deprecation cycle).
  *
  * Adapted for the opencode worker (upstream sst/opencode).
  */
@@ -110,7 +111,10 @@ export function readWsState(): WsState | null {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const SUBPROTOCOL = "ironclaw-agent-v1"
+export const SUBPROTOCOL = "lunarwing-agent-v1"
+// Legacy alias still accepted for one deprecation cycle: old daemons offer
+// only this value in their Sec-WebSocket-Protocol header.
+export const LEGACY_SUBPROTOCOL = "ironclaw-agent-v1"
 export const DEFAULT_TIMEOUT_MS = 300_000
 export const WORKER_ID = process.env.LUNARWING_WORKER_ID || "worker-opencode-01"
 export const WORKER_VERSION = "opencode-worker-1.0.0"
