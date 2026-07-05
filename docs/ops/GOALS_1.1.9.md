@@ -4,15 +4,16 @@
 See Issue: 
 https://github.com/LunarWingOrg/lunarwing/issues/140
 
+#### colgate-1 working branch
 
 ### Helps to do items in order (generally)
 
 1. [x] Finalize goals
 2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing (item#7); nearai provider refs for item #8 or item #10; experimental TZ proxy (#10) - Ensure all is documented
-3. [ ] test a fresh tenant on systemd machine with all the bells and whistles (darkirc, all external workers, etc). document any failures/issues
-4. [ ] re-test 1.1.9-renames-test branch changes with fresh tenant on openrc machine with all the bells and whistles. document any failures/issues
-5. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on systemd machine using in-place upgrade feature of mt-admin-setup. document any failures/issues
-6. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on openrc machine using in-place upgrade feature of mt-admin-setup. document any failures/issues
+3. [ ] test a fresh tenant on systemd machine with all the bells and whistles (darkirc, all external workers, etc). document any failures/issues (do some of the other stuff first, do this multiple times)
+4. [ ] re-test changes with fresh tenant on openrc machine with all the bells and whistles. document any failures/issues (do some of the other stuff first, do this multiple times)
+5. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on systemd machine using in-place upgrade feature of mt-admin-setup. document any failures/issues (do some of the other stuff first, do this multiple times)
+6. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on openrc machine using in-place upgrade feature of mt-admin-setup. document any failures/issues (do some of the other stuff first, do this multiple times)
 7. [x] Remove deprecated Codex external worker from project
 8. [x] Remove support for all (or at least, some of) the other random unsupported LLM providers
 9. [x] Remove the following non-LunarWing third party skills from default installation: linear, github
