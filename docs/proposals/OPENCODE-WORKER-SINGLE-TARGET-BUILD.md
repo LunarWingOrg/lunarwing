@@ -173,5 +173,5 @@ After the change:
 
 - `opencode4lunarwing/Dockerfile` — the file under change.
 - `opencode4lunarwing/CLAUDE.md` — build caveats for the worker.
-- `docs/proposals/DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md` — the
+- `docs/proposals/OPENCODE-WORKER-SINGLE-TARGET-BUILD.md` — accepted stub for this build-time cost.
   live round-trip validation that surfaced this build-time cost.
