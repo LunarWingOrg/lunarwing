@@ -172,7 +172,7 @@ grep 'differ; using' /home/tiger/lunarwing/logs/lunarwing.err     # expect empty
 grep "External worker" /home/tiger/lunarwing/logs/lunarwing.err | tail -5   # 'ready', no 'connection failed'/'protocol error'
 ```
 
-**Optional A10 — v1.2.0 rehearsal (destructive-ish, tiger only, pre-render):**
+**Optional A10 — v2.0.0 rehearsal (destructive-ish, tiger only, pre-render):**
 move `ironclaw_weechat_wss` symlink aside → adapter restart must FAIL →
 restore symlink → restart recovers. Validates the migration doc's deadline
 claim. Never run against lion.

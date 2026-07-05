@@ -157,7 +157,7 @@ Self-healing work documented in `docs/proposals/SELF_HEALING_IMPROVEMENTS_1.md`,
 
 ## Features and changes deferred to future releases
 
-Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and the next major (v1.2.0) carries one very large change.
+Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and the next major (v2.0.0) carries one very large change.
 
 | Feature | Target |
 |---------|--------|
@@ -179,12 +179,12 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Upgrade version of tensorzero, plus optional tighter integration across deployments | v1.1.8 |
 | Proprietary channel removal continuation (Telegram) | v1.1.9 |
 | Decision to remove Github extension | v1.1.9 |
-| v2 engine route | v1.2.0 |
+| v2 engine route | v2.0.0 |
 | Better githooks for repo | v1.2.1 |
 | LunarWing developer CI/CD Pipeline | v1.2.1 |
 | LunarWing decision on switching to Codeberg or Self-hosted Gitlab rather than Github to host monorepo (GH can still be used as a mirror) | v1.2.1 |
 | LunarVoice (Further planning required) | v1.2.2 |
-| Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 1.2.0-1.2.2) | v1.2.3 |
+| Stabilization & polish buffer — reserved for v2 engine and LunarVoice fallout (no new features planned; fill from bugs found across 2.0.0-2.0.2) | v2.0.3 |
 | Character Lorebook support / Agent Profile enhancements / Workspace Seeding Improvements / Agent Profile switching / User Profile switching (Further planning required) | v1.2.4 |
 | New suite of planned features with concepts adopted from Hermes Agent. Human Delay mode concept from there has been added already in a previous release. Will also create comprehensive documentation for each of the new features | v1.2.4 |
 

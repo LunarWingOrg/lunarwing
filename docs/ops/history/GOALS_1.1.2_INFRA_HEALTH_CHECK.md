@@ -8,7 +8,7 @@ Two parallel implementations of the 5-part resilience proposal were built and
 compared: `1.1.2-888-self-healing-improvements-8-sun` (claude) and
 `1.1.2-999-self-healing-improvements-9-kumogakure` (kumogakure). This branch
 (`1.1.2-333-self-healing-improvements-3`) is the **merge of the strongest parts
-of each**, in `ic-infrastructure-health-check/lunarwing-self-heal.sh` (v1.2.0,
+of each**, in `ic-infrastructure-health-check/lunarwing-self-heal.sh` (v2.0.0,
 verified by `tests/test-self-heal.sh` — 28 dry-run/state assertions, all green).
 
 **From the 888 implementation:** all five items incl. **multi-tenant** (host-level

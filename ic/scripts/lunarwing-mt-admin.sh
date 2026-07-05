@@ -303,7 +303,7 @@ Commands:
     --source-repo <path>           Point the tenant's git origin at this repo first
     --no-backup                    Skip the pre-upgrade Postgres backup
     --skip-render                  Keep existing unit files (run render-units later;
-                                   must happen before v1.2.0 for pre-1.1.9 tenants)
+                                   must happen before v2.0.0 for pre-1.1.9 tenants)
   rotate-pg-password <name>       Generate a new random PG password (ALTER ROLE + env update)
 
   configure-gotify <name> <url>    Set custom Gotify URL for a tenant
@@ -6196,7 +6196,7 @@ upgrade_tenant() {
     /etc/init.d /etc/conf.d "$(tenant_home "$name")/.config/systemd/user" 2>/dev/null \
     | grep -F -- "$name" || true)"
   if [[ -n "$stale" ]]; then
-    say "WARNING: these units still embed pre-rename paths (run render-units before v1.2.0):"
+    say "WARNING: these units still embed pre-rename paths (run render-units before v2.0.0):"
     say "$stale"
   fi
 

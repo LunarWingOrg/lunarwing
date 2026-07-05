@@ -25,7 +25,7 @@ Unit files are static: `git pull` never rewrites them. To bridge the gap,
 1.1.9 ships **repo-root compat symlinks** (`ironclaw_weechat_wss` →
 `lunarwing_weechat_wss`, `darkirc_channel_for_ironclaw` →
 `darkirc_channel_for_lunarwing`). These exist **for the 1.1.9 release
-only** and are removed in v1.2.0 (see `ROADMAP_2026.md`). The WebSocket
+only** and are removed in v2.0.0 (see `ROADMAP_2026.md`). The WebSocket
 subprotocol has a parallel transition (daemon offers both
 `lunarwing-agent-v1` and legacy `ironclaw-agent-v1` in 1.1.9) that needs
 no operator action — workers and daemon negotiate automatically.
@@ -80,8 +80,8 @@ no operator action — workers and daemon negotiate automatically.
 
 ## Deadline
 
-**Before upgrading a tenant to v1.2.0.** The compat symlinks are removed
-there; a tenant reaching 1.2.0 with un-rerendered units will have adapter
+**Before upgrading a tenant to v2.0.0.** The compat symlinks are removed
+there; a tenant reaching 2.0.0 with un-rerendered units will have adapter
 services pointing at paths that no longer exist.
 
 ## Caveat: render-units footgun (fix scheduled v1.2.3)
@@ -89,7 +89,7 @@ services pointing at paths that no longer exist.
 A per-tenant WeeChat health-glob gate / service-flap footgun exists
 around `render-units` (writeup: `docs/proposals/RENDER_UNITS_SMALL_BUG.md`;
 carried as a known issue since v1.1.4). The fix is scheduled for
-**v1.2.3** (`ROADMAP_2026.md`), so it will NOT land in 1.1.9: when doing
+**v2.0.3** (`ROADMAP_2026.md`), so it will NOT land in 1.1.9: when doing
 the tenant-by-tenant `render-units` sweep, watch the weechat/adapter
 services for a flap after restart (`supervise-daemon` respawn limit is
 5 per 60s) and expect possible transient health-pipeline noise. See

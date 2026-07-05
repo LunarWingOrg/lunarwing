@@ -7,7 +7,7 @@
 Per the release cadence (`docs/ops/RELEASE_CADENCE.md`), even-numbered releases are feature releases. v1.1.2 carries two headline feature efforts alongside a substantial round of hardening, cleanup, and fixes built on the v1.1.1 foundation:
 
 1. **XMPP inbound file-transfer hardening** — XEP-0030/0115 capability advertisement (so capability-checking clients will actually offer to send files), XEP-0454 `aesgcm://` encrypted-media download + AES-256-GCM decryption, bounded-concurrency downloads, and streamed size enforcement.
-2. **Infrastructure self-healing + a chaos engineering test suite** — the `lunarwing-self-heal.sh` watchdog gains cross-tick exponential backoff with jitter, a grace period / flapping guard, post-restart health verification, and state pruning; a new four-layer bash test suite exercises the entire health-check → self-heal pipeline. This is the "healthcheck/self-healing enhancements" item that was *in progress* at the last draft — **it has now landed.** (It is groundwork for the larger self-healing epic targeted at v1.2.0.)
+2. **Infrastructure self-healing + a chaos engineering test suite** — the `lunarwing-self-heal.sh` watchdog gains cross-tick exponential backoff with jitter, a grace period / flapping guard, post-restart health verification, and state pruning; a new four-layer bash test suite exercises the entire health-check → self-heal pipeline. This is the "healthcheck/self-healing enhancements" item that was *in progress* at the last draft — **it has now landed.** (It is groundwork for the larger self-healing epic targeted at v2.0.0.)
 
 Supporting changes round out the release: a **more robust fix for the empty-response "lapse" bug** (now recovering tool calls that GLM/Qwen-style models emit in the `<function=NAME>…</function>` XML dialect instead of misreporting them as empty responses), a **clippy zero-warning gate cleanup** across the workspace and vendored libsignal, **removal of the remaining Google tool extensions** (Gmail, Calendar, Drive, Docs, Sheets, Slides) as part of LunarWing's proprietary-extension cleanup, a **WeeChat duplicate-reply fix**, **UTF-8-safe DarkIRC message splitting**, a native **Raspberry Pi build script**, and release-process tooling/documentation plus the usual housekeeping.
 
@@ -76,7 +76,7 @@ The previously *in-progress* "healthcheck and self-healing enhancements" have la
 - **Escalation & locking.** After max retries (or on flap detection) the service is marked escalated, an escalation JSON report is written, and `send-notification.sh` fires a Gotify alert. A `flock` guard prevents concurrent self-heal instances.
 - **New CLI flags:** `--backoff-base` / `--backoff-max` / `--backoff-strategy`, `--grace-checks`, `--prune-ttl`, `--verify-health`, `--dry-run`, `--report`, `--help`.
 
-> Scope note: the script and chaos suite are internally versioned toward the larger v1.2.0 self-healing epic, but the code ships in v1.1.2. Self-healing remains a **host-level, manually installed and scheduled** facility — it is not wired into tenant provisioning. See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` and **.
+> Scope note: the script and chaos suite are internally versioned toward the larger v2.0.0 self-healing epic, but the code ships in v1.1.2. Self-healing remains a **host-level, manually installed and scheduled** facility — it is not wired into tenant provisioning. See `docs/architecture/SELF_HEAL_DEPLOYMENT_WIRING.md` and **.
 
 ### Chaos Engineering Test Suite (Self-Healing)
 
@@ -215,7 +215,7 @@ The remaining-Google-extension removal also landed (see *Removal of Google Tool 
 
 ## Features and changes deferred to future releases
 
-The full, canonical list now lives in **`docs/ops/ROADMAP_2026.MD`**. Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 1.2.0 or 1.3.0 will typically include massive overhauls of existing systems. Near-term highlights:
+The full, canonical list now lives in **`docs/ops/ROADMAP_2026.MD`**. Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`): odd-numbered releases focus on bug fixes / security / polish / cleanup, even-numbered releases focus on features, and major versions such as 2.0.0 or 2.1.0 will typically include massive overhauls of existing systems. Near-term highlights:
 
 | Feature | Target |
 |---------|--------|
@@ -224,7 +224,7 @@ The full, canonical list now lives in **`docs/ops/ROADMAP_2026.MD`**. Items are 
 | XMPP file transfer remaining polish (live e2e, optional SSRF guard, more hardening); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 |
 | Weechat channel, adapter, env config, capabilites.json remaining polish (live e2e, optional SSRF guard, more hardening); XMPP OMEMO MUC fallback fix; drop the custom TensorZero proxy | v1.1.5 or earlier |
 | Further development and ironing out of the new Self Healing infrastructure | v1.1.6 |
-| Self-healing epic (first-class, wired-in) | v1.2.0 |
+| Self-healing epic (first-class, wired-in) | v2.0.0 |
 
 ## Release Cadence
 
