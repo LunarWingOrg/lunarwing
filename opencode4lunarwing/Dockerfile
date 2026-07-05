@@ -115,14 +115,15 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Rust toolchain (only with WITH_TOOLCHAINS=true) ───────────────────────────
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
 RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain 1.92.0 \
       && chmod -R a+r /usr/local/rustup /usr/local/cargo; \
     fi
-ENV RUSTUP_HOME=/usr/local/rustup \
-    CARGO_HOME=/usr/local/cargo \
-    PATH=/usr/local/cargo/bin:$PATH
 
 # ── Go toolchain (only with WITH_TOOLCHAINS=true) ──────────────────────────────
 RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
