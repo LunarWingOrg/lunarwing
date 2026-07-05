@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum ProviderProtocol {
     /// OpenAI Chat Completions API (`/v1/chat/completions`).
-    /// Used by: OpenAI, Tinfoil, Groq, NVIDIA NIM, OpenRouter, etc.
+    /// Used by: OpenAI, Tinfoil, Groq, OpenRouter, etc.
     OpenAiCompletions,
     /// Anthropic Messages API.
     Anthropic,
@@ -149,7 +149,7 @@ mod unsupported_params_de {
 pub struct ProviderDefinition {
     /// Unique identifier used in `LLM_BACKEND` (e.g., "groq", "tinfoil").
     pub id: String,
-    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["nvidia_nim", "nim"]).
+    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["open_ai", "claude"]).
     #[serde(default)]
     pub aliases: Vec<String>,
     /// Which API protocol to use.
@@ -486,8 +486,6 @@ mod tests {
             if def.protocol == ProviderProtocol::OpenAiCompletions
                 && def.id != "openai"
                 && def.id != "openai_compatible"
-                && def.id != "bedrock"
-                && def.id != "cloudflare"
             {
                 assert!(
                     def.default_base_url.is_some(),
