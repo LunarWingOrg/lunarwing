@@ -10,7 +10,7 @@
 5. [x] Agent SSH Rust Tool
 6. [x] Agent SSH WASM TOOL
 7. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
-8. [x] Add new external worker, opencode. Landed: `opencode4lunarwing/` (Bun/TypeScript bridge + `@opencode-ai/sdk`, `ironclaw-agent-v1` protocol), port registry v10→v11 migration (`opencode_wss`/`opencode_health`), full mt-admin lifecycle (build/configure/start/stop/doctor/status/list), `--with-opencode`, `--opencode-model`/`--opencode-base-url`. Optional Paseo MCP integration wired behind `PASEO_URL`/`PASEO_TOKEN`. Polish follow-ups and repo-doc updates tracked in DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md
+8. [x] Add new external worker, opencode. Landed: `opencode4lunarwing/` (Bun/TypeScript bridge + `@opencode-ai/sdk`, `ironclaw-agent-v1` protocol), port registry v10→v11 migration (`opencode_wss`/`opencode_health`), full mt-admin lifecycle (build/configure/start/stop/doctor/status/list), `--with-opencode`, `--opencode-model`/`--opencode-base-url`. Optional Paseo MCP integration wired behind `PASEO_URL`/`PASEO_TOKEN`. Polish follow-ups and repo-doc updates tracked in archived `DEFERRED-2026-07-02-OPENCODE-EXTERNAL-WORKER.md` (now in `docs/internal/history/archive/proposals/`).
 9. [x] Test Opencode external worker properly (might help to update some of the old test scripts too) 
 10. [x] test add-tenant and add-tenants enhancements. xmpp_jid_from, llm_model, gateway-host. also interactive onboarding in 1.1.8 or 1.1.9 - make note of decision later
 11. [x] see what else we can do from roadmap planned for 1.1.9 a little earlier
