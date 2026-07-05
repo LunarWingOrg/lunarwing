@@ -10,7 +10,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 1. [ ] Finalize goals
 2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories (WeeChat channel/adapter, DarkIRC, Gotify tool, connection protocol names) — Done in `501f9c92`+`031b1f78`: dirs renamed with 1.1.9-only compat symlinks (`ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw`); subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 1.2.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. Deferred pending org decisions: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path. codex4lunarwing (item#7); nearai provider refs for item #8 or item #10; experimental TZ proxy (#10) - Ensure all is documented
 3. [ ] test 1.1.9-renames-test branch changes with fresh tenant on systemd machine
-4. [ ] test 1.1.9-renames-test branch changes with fresh tenant on openrc machine
+4. [x] test 1.1.9-renames-test branch changes with fresh tenant on openrc machine
 5. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on systemd machine
 6. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on openrc machine
 7. [ ] Remove deprecated Codex external worker from project
