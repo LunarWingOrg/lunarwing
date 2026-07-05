@@ -6,7 +6,7 @@ This repository is a flat configuration workspace rather than an application. Th
 - `opencode.json` for the primary nanocode configuration, including theme, plugins, and MCP servers
 - `optionalprovider.json` and `newoptionalprovider.json` for OpenAI-compatible provider definitions
 - `tensorzero.toml` for TensorZero gateway, model, and routing configuration
-- `README.md`, `SETUP_NANOCODE_FOR_TENSORZERO.md`, `NextSteps.md`, `CLAUDE.md`, `NOTES.md` for setup notes and operational context
+- `README.md`, `NextSteps.md`, `CLAUDE.md`, `NOTES.md` for setup notes and operational context
 - `.opencode/package.json` for plugin dependency pinning
 - `.gitignore` excludes `.env` and `.key` files (secrets go there, never in tracked files)
 - `.envexample` is a placeholder for documenting required env vars

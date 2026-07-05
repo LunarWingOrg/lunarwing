@@ -52,10 +52,8 @@ How-to guides, build instructions, and setup walkthroughs.
 | [`lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
 | [`gotify-wasm/README.md`](guides/gotify-wasm/README.md) | Gotify WASM tool |
 | [`ic_sm/README.md`](guides/ic_sm/README.md) | Secret manager (`ic_sm`) |
-| [`tensorzero-proxy-configurations/README.md`](guides/tensorzero-proxy-configurations/README.md) | TensorZero proxy configuration |
 | [`git-lunarwing-unix-socket-repl-server-repo/README.md`](guides/git-lunarwing-unix-socket-repl-server-repo/README.md) | REPLv2 Unix-socket REPL server |
 | [`nanocode-config/README.md`](guides/nanocode-config/README.md) | Nanocode custom-config overview |
-| [`nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md`](guides/nanocode-config/SETUP_NANOCODE_FOR_TENSORZERO.md) | Point nanocode at the TensorZero gateway |
 
 ---
 
@@ -77,22 +75,16 @@ Deployment, operations, multitenancy, and production guides.
 | [`PEBBLE-WORKER.md`](ops/PEBBLE-WORKER.md) | Pebble external worker operational guide |
 | [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode external worker, multi-tenant setup |
 | [`WEECHAT-SERVICES.md`](ops/WEECHAT-SERVICES.md) | WeeChat services, ports, env vars, day-to-day ops |
-| [`WEECHAT-MULTITENANT-PORT-BUG.md`](ops/WEECHAT-MULTITENANT-PORT-BUG.md) | Per-tenant WeeChat port/password fix |
 | [`XMPP_KNOWN_ISSUES.md`](ops/XMPP_KNOWN_ISSUES.md) | XMPP/OMEMO known issues |
 | [`XMPP_TRANSFERS.md`](ops/XMPP_TRANSFERS.md) | XMPP file-transfer methods quick-reference |
 | [`RELEASE-COMMANDS.md`](ops/RELEASE-COMMANDS.md) | Release git/GitHub command template |
 | [`RELEASE_CADENCE.md`](ops/RELEASE_CADENCE.md) | Release cadence policy |
 | [`PRE-RELEASE-TESTING.md`](ops/PRE-RELEASE-TESTING.md) | Pre-release test status + test landscape |
 | [`MT-MACHINE-MIGRATION.md`](ops/MT-MACHINE-MIGRATION.md) | Migrating a multi-tenant host to a new machine |
-| [`MT-MACHINE-MIGRATION-REVIEW-NOTES.md`](ops/MT-MACHINE-MIGRATION-REVIEW-NOTES.md) | Review notes for the machine-migration tooling |
 | [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](ops/MT-GENTOO-SETUP-AND-CHANGES-MADE.md) | Gentoo/OpenRC multi-tenant setup notes |
-| [`MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md`](ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md) | Review notes for the 1.1.4 MT upgrade tooling |
 | [`MT-LEGACY-UPGRADE-NOTES.md`](ops/MT-LEGACY-UPGRADE-NOTES.md) | Legacy same-host version upgrade runbook (v1.0.3–v1.0.8 → v1.1.x) |
 | [`SELF_REPAIR_IMPROVEMENTS_GENTOO.md`](ops/SELF_REPAIR_IMPROVEMENTS_GENTOO.md) | Self-heal fd-leak fix found on a live OpenRC MT host |
 | [`ROADMAP_2026.MD`](ops/ROADMAP_2026.MD) | 2026 roadmap |
-| [`FUTURE_RELEASE_ITEMS.md`](ops/FUTURE_RELEASE_ITEMS.md) | Longer-horizon / unscheduled ideas |
-| [`PENDING_CLEANUP.md`](ops/PENDING_CLEANUP.md) | Forward-looking cleanup checklist |
-| [`KNOWN_ISSUES_TO_ADDRESS.md`](ops/KNOWN_ISSUES_TO_ADDRESS.md) | Ops known-issues scratchpad |
 | [`IMPORT_EXPORT_EXAMPLE.txt`](ops/IMPORT_EXPORT_EXAMPLE.txt) | Worker import/export example |
 | [`KUMOGAKURE_INSTRUCT.md`](ops/KUMOGAKURE_INSTRUCT.md) | Pointer to the external Notes vault |
 
@@ -120,7 +112,6 @@ the reorg.
 | File | Description |
 |------|-------------|
 | [`COOL_THINGS_THAT_HERMES_AGENT_HAS.md`](proposals/COOL_THINGS_THAT_HERMES_AGENT_HAS.md) | Roadmap/wishlist of agent capabilities to add |
-| [`FUTURE_OF_ICHC.md`](proposals/FUTURE_OF_ICHC.md) | Infra health-check roadmap (v1.1.6+) |
 | [`GITWASM/README.md`](proposals/GITWASM/README.md) | Git WASM tool proposal |
 | [`SSH_HARNESS_DELIVERY_OPTIONS.md`](proposals/SSH_HARNESS_DELIVERY_OPTIONS.md) | SSH harness delivery options: worker socket (shipped) / built-in Rust / WASM |
 | [`SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md`](proposals/SSH_HARNESS_OPTION_2_3_IMPLEMENTATION.md) | Implementation plans for SSH harness Option 2 (built-in Rust tool) & Option 3 (WASM tool) |
@@ -134,7 +125,6 @@ the reorg.
 | [`MULTICA_INTEGRATION_PLAN.md`](proposals/MULTICA_INTEGRATION_PLAN.md) | Multica/Lunartica integration plan |
 | [`CHAOS_FOLLOWUP_TESTS.md`](proposals/CHAOS_FOLLOWUP_TESTS.md) | Follow-up chaos / self-heal test scenarios |
 | [`RENDER_UNITS_SMALL_BUG.md`](proposals/RENDER_UNITS_SMALL_BUG.md) | `render-units` small-bug note |
-| [`RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER`](proposals/RENAME_IRONCLAW_WEECHAT_WS_CHANNEL_AND_ADAPTER) | Rename the WeeChat channel/adapter in code + references (implemented in 1.1.9, item #2) |
 | [`human-delay-mode-phase2-plan.md`](proposals/human-delay-mode-phase2-plan.md) | Human-delay mode phase 2 plan |
 | [`human-delay-mode-phase1-test-checklist.md`](proposals/human-delay-mode-phase1-test-checklist.md) | Human-delay mode phase 1 test checklist |
 | [`human-delay-mode-phase1-verification-handoff.md`](proposals/human-delay-mode-phase1-verification-handoff.md) | Human-delay mode phase 1 verification handoff |
@@ -147,7 +137,6 @@ the reorg.
 | [`LOREBOOKS.md`](proposals/LOREBOOKS.md) | Character lorebooks for agents (idea) |
 | [`Profiles.md`](proposals/Profiles.md) | Agent profiles (idea) |
 | [`LUNARVISION_POLISHING.md`](proposals/LUNARVISION_POLISHING.md) | LunarVision polish + health-check wiring (idea) |
-| [`FUNDING.JSON.MD`](proposals/FUNDING.JSON.MD) | Add a `funding.json` (idea) |
 | [`REFINE_LIBSQL_MIGRATION_GUIDE.md`](proposals/REFINE_LIBSQL_MIGRATION_GUIDE.md) | Refine the libSQL migration guide (TODO) |
 | [`CARGO_TESTS_FIX.md`](proposals/CARGO_TESTS_FIX.md) | Revisit the few failing cargo tests (TODO) |
 | [`OLDPROJECT_PORT_ANALYSES/`](proposals/OLDPROJECT_PORT_ANALYSES/) | Pre-fork IronClaw 0.28–0.29 port analyses (5 docs; kept for reference) |
