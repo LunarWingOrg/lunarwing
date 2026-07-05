@@ -262,7 +262,7 @@ Then restart the daemon so `on_start` re-resolves.
 | **`poll_interval_ms` ignored** | Configuring the interval did nothing | Caps `config` key was `poll_interval_ms` but the struct field is `poll_interval_seconds` — different name ⇒ value dropped, struct default (3) used. | **Fixed** — caps key renamed to `poll_interval_seconds`. |
 | **First DM in a new buffer swallowed** | First message after a query buffer is created never reaches the agent; the *second* does | A DM/query buffer is created *by* the first message. The **adapter** resolves a line's buffer by `buffer_id` against a cached `buffer_list` that doesn't include the new buffer yet, so it **dropped the first line entirely** — never recorded to `line_buffer` *or* the event log. Nothing downstream (neither the long-poll cursor nor the poll path) can deliver a line the adapter never recorded. (The poll path additionally seed-skipped a new buffer's first batch.) | **Fixed** — the adapter now refreshes its buffer list **synchronously and retries** before recording, so a new buffer's first line is captured (`record_event`); the long-poll global cursor then delivers it immediately (§3). `/api/wait` also replays the post-restart backlog so a DM right after an adapter restart isn't skipped. The poll fallback still emits the first batch for new **DM/query** buffers (`is_dm_buffer`). |
 | **Mirror loop (long-poll mode)** | Agent answers its own messages endlessly; `event_cursor` climbs steadily with no human input | The `irc_privmsg`/`self_msg`/`no_log` tag filter lived **only** in `poll_buffer`. `do_longpoll` feeds events straight to `handle_inbound_line`, which had no tag check — so in long-poll mode the agent's own `self_msg` replies were ingested and re-answered, each reply becoming the next event. Shipped in the original long-poll commit; not the adapter work. | **Fixed** — tag filter moved into `handle_inbound_line` (`tags_allow_ingest`), the single choke point **both** ingest paths share; `poll_buffer` keeps its pre-filter. Regression test `test_tags_allow_ingest`. |
-| **Password is the *second* blocker** | After ports are fixed, the adapter returns 401 | The adapter authenticates incoming WASM requests against the per-tenant `RELAY_PASSWORD` (`check_auth`); the WASM must send it. | Handled by the port fix (relay_password injection) — see `WEECHAT-MULTITENANT-PORT-BUG.md`. |
+| **Password is the *second* blocker** | After ports are fixed, the adapter returns 401 | The adapter authenticates incoming WASM requests against the per-tenant `RELAY_PASSWORD` (`check_auth`); the WASM must send it. | Handled by the port fix (relay_password injection) — see archived `WEECHAT-MULTITENANT-PORT-BUG.md` in `docs/internal/history/archive/ops/`. |
 | **Stale `setup_fields` shadowing** | Caps/env edits "don't take" | Highest-precedence DB layer (§4). | Documented (§4); see §6 for the proposed precedence redesign. |
 
 ### How to actually see what's happening
@@ -339,8 +339,8 @@ The adapter and WASM must update **together** (the WASM probes `/api/health` for
 ## Cross-references
 
 - `docs/ops/WEECHAT-SERVICES.md` — services, ports, env vars, day-to-day ops.
-- `docs/ops/WEECHAT-MULTITENANT-PORT-BUG.md` — the per-tenant port/password fix and the
-  env-sourced-fields mechanism.
+- `WEECHAT-MULTITENANT-PORT-BUG.md` — the per-tenant port/password fix and the
+  env-sourced-fields mechanism (archived to `docs/internal/history/archive/ops/`).
 - `docs/proposals/WEECHAT_WS_ADAPTER_SYNC_PROTOCOL.md`,
   `docs/proposals/WEECHAT_LOCAL_WS_ADAPTER_ISSUE.md` — the adapter sync protocol and adapter
   port history.

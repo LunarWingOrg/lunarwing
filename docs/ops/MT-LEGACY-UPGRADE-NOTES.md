@@ -17,7 +17,7 @@ same-host path (source v1.0.3–v1.0.8, explicit `--target` required).
   rootless-flip proposal. This runbook does **not** cover that path; read it
   only if your source is already v1.1.0-ish and you intend to adopt rootless
   Quadlet.
-- `docs/ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md` — adversarial review notes
+- `docs/ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md` — adversarial review notes (archived to `docs/internal/history/archive/ops/`)
   for the v1.1.0 → v1.1.4 tooling (some of the lessons there informed how the
   legacy path guards backups and env handling).
 - `ic/scripts/upgrade-tenant.sh` — the rootless-flip tool for v1.1.0-era

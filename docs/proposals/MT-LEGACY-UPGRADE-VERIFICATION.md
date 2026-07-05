@@ -391,7 +391,7 @@ with a real tenant.
 | `ic/scripts/rehearse-legacy-upgrade.sh` | Throwaway v1.0.3-era tenant fixture (`up` / `verify` / `--cleanup`) |
 | `docs/ops/MT-LEGACY-UPGRADE-NOTES.md` | Operator-facing runbook for the legacy upgrade path |
 | `docs/proposals/MT-1.1.0-TO-1.1.4-UPGRADE.md` | v1.1.0 → v1.1.4 rootless-flip proposal (separate path) |
-| `docs/ops/MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md` | Adversarial review notes for v1.1.4 upgrade tooling |
+| `MT-1.1.4-UPGRADE-TOOLING-REVIEW-NOTES.md` | Adversarial review notes for v1.1.4 upgrade tooling (archived to `internal/history/archive/ops/`) |
 
 ---
 

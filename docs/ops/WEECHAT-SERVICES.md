@@ -68,7 +68,7 @@ The following are written to `lunarwing.env` by the MT admin script:
 > `ws_adapter_url`, and `relay_password` from `RELAY_URL`, `WS_ADAPTER_URL`, and
 > `RELAY_PASSWORD` at startup. Without these the channel falls back to the
 > hardcoded `:9001`/`:6681` defaults and silently fails for every tenant whose
-> ports differ. See [WEECHAT-MULTITENANT-PORT-BUG.md](WEECHAT-MULTITENANT-PORT-BUG.md).
+> ports differ. See the archived `WEECHAT-MULTITENANT-PORT-BUG.md` in `docs/internal/history/archive/ops/`.
 > Existing tenants need `WS_ADAPTER_URL` backfilled — run `mt-admin patch-env <name>`.
 
 ## Generated Service Units
