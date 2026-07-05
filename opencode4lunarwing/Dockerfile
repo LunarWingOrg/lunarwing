@@ -1,6 +1,6 @@
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 # Stage 1: build opencode from source
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 FROM docker.io/oven/bun:debian AS builder
 
 # Pin opencode to a release tag for reproducible builds.
@@ -10,9 +10,18 @@ ARG OPENCODE_REF=v1.17.13
 
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git python3 make g++ ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Snapshot fallback helper — tries live mirror first, falls back to
+# snapshot.debian.org if live mirror has an invalid signature (e.g. pre-staged
+# trixie-security signatures not yet valid for the current UTC window).
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends \
+      git python3 make g++ ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 --branch "${OPENCODE_REF}" https://github.com/sst/opencode.git /build/opencode
 
@@ -39,9 +48,9 @@ WORKDIR /build/opencode/packages/opencode
 # See docs/proposals/OPENCODE-WORKER-SINGLE-TARGET-BUILD.md for full rationale.
 RUN bun run build -- --single 2>/dev/null || true
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 # Stage 2: runtime image
-# ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────
 FROM docker.io/oven/bun:debian AS runtime
 
 LABEL org.opencontainers.image.title="LunarWing OpenCode Worker" \
@@ -57,7 +66,13 @@ LABEL org.opencontainers.image.title="LunarWing OpenCode Worker" \
 ARG WITH_TOOLCHAINS=false
 
 # Runtime packages: always installed (needed by the worker itself).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -e; \
+    (apt-get update 2>/dev/null || { \
+      echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+      sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+      apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+    }) && \
+    apt-get install -y --no-install-recommends \
       tini \
       python3 \
       python3-pip \
@@ -74,7 +89,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Toolchain packages: only when WITH_TOOLCHAINS=true.
 RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends \
+      set -e; \
+      (apt-get update 2>/dev/null || { \
+        echo "apt-get update failed — switching to snapshot.debian.org fallback mirror" >&2; \
+        sed -i 's|debian\.org|snapshot.debian.org/archive|g' /etc/apt/sources.list; \
+        apt-get update 2>/dev/null || apt-get update -o Acquire::AllowInsecureRepositories=true; \
+      }) && \
+      apt-get install -y --no-install-recommends \
         python3-dev \
         build-essential \
         gcc \
@@ -105,7 +126,7 @@ RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
       && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# ── GitHub CLI ─────────────────────────────────────────────────────────────────
+# ── GitHub CLI ─────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -114,7 +135,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Rust toolchain (only with WITH_TOOLCHAINS=true) ───────────────────────────
+# ── Rust toolchain (only with WITH_TOOLCHAINS=true) ───────────────────
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
@@ -125,7 +146,7 @@ RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
       && chmod -R a+r /usr/local/rustup /usr/local/cargo; \
     fi
 
-# ── Go toolchain (only with WITH_TOOLCHAINS=true) ──────────────────────────────
+# ── Go toolchain (only with WITH_TOOLCHAINS=true) ──────────────────────
 RUN if [ "${WITH_TOOLCHAINS}" = "true" ]; then \
       ARCH=$(dpkg --print-architecture) \
       && curl -fsSL "https://go.dev/dl/go1.24.3.linux-${ARCH}.tar.gz" \
@@ -135,10 +156,10 @@ ENV GOROOT=/usr/local/go \
     GOPATH=/home/opencode/go \
     PATH=/usr/local/go/bin:/home/opencode/go/bin:$PATH
 
-# ── non-root user ──────────────────────────────────────────────────────────────
+# ── non-root user ──────────────────────
 RUN groupadd -r opencode && useradd -r -g opencode -m -d /home/opencode opencode
 
-# ── app layout ─────────────────────────────────────────────────────────────────
+# ── app layout ─────────────────
 WORKDIR /app
 
 COPY --from=builder /build/opencode /app/opencode
@@ -158,7 +179,7 @@ RUN ln -s /app/opencode/node_modules /app/node_modules
 # starts inside the running container.
 RUN cd /app && bun -e 'import("@opencode-ai/sdk/v2").then(m => { if (typeof m.createOpencodeClient !== "function") { console.error("FATAL: @opencode-ai/sdk/v2 resolved but is missing createOpencodeClient"); process.exit(1) } }).catch(e => { console.error("FATAL: cannot import @opencode-ai/sdk/v2 —", e.message); process.exit(1) })'
 
-# ── XDG directories for opencode state ────────────────────────────────────────
+# ── XDG directories for opencode state ────────────────────────
 RUN mkdir -p /home/opencode/.local/share/opencode \
              /home/opencode/.config/opencode \
              /workspace \
@@ -166,11 +187,11 @@ RUN mkdir -p /home/opencode/.local/share/opencode \
              /app/results \
     && chown -R opencode:opencode /home/opencode /workspace /var/log/lunarwing /app/results
 
-# ── ports ──────────────────────────────────────────────────────────────────────
+# ── ports ──────────────────────
 EXPOSE 8443
 EXPOSE 9090
 
-# ── health check ───────────────────────────────────────────────────────────────
+# ── health check ───────────────────────
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -sf http://127.0.0.1:8443/health || exit 1
 
