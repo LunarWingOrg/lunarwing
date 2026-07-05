@@ -2,7 +2,7 @@
 //! protocol (legacy alias `ironclaw-agent-v1` is still offered for workers
 //! built before the rename).
 //!
-//! External workers are persistent containers (nanocode, codex, etc.) that the
+//! External workers are persistent containers (nanocode, pebble, opencode, etc.) that the
 //! orchestrator connects to on demand rather than creating per-job.
 
 use std::collections::HashMap;
@@ -1216,7 +1216,7 @@ mod tests {
                 load_balance: LoadBalanceStrategy::default(),
             },
             ExternalWorkerConfig {
-                name: "codex".to_string(),
+                name: "pebble".to_string(),
                 url: "ws://localhost:8443".to_string(),
                 auth_token: None,
                 timeout_ms: 600_000,
@@ -1226,7 +1226,7 @@ mod tests {
         ]);
         assert!(!mgr.is_empty());
         assert!(mgr.get_worker("nanocode").is_some());
-        assert!(mgr.get_worker("codex").is_some());
+        assert!(mgr.get_worker("pebble").is_some());
         assert!(mgr.get_worker("unknown").is_none());
         assert_eq!(mgr.worker_names().len(), 2);
     }

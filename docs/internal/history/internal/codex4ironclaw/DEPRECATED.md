@@ -1,1 +1,0 @@
-# Will be depreacted upon release since NEW codex worker with better security features as well as NEW Nanocode worker with better security features will be added to the official build as optional params

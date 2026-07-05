@@ -13,7 +13,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 4. [x] test 1.1.9-renames-test branch changes with fresh tenant on openrc machine
 5. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on systemd machine
 6. [ ] test 1.1.9-renames-test branch changes with 1.1.7/1.1.8 (or lower) tenant -> upgrade on openrc machine
-7. [ ] Remove deprecated Codex external worker from project
+7. [x] Remove deprecated Codex external worker from project
 8. [ ] Remove support for all (or at least, some of) the other random unsupported LLM providers
 9. [ ] Remove rest of non-LunarWing third party extensions/tools/skills from default installation
 10. [ ] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)

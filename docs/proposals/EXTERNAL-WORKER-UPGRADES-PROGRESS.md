@@ -74,11 +74,12 @@
 
 ## Wave 4 — COMPLETE
 
-- [x] **Task 9**: Update codex worker for extended context
+- [x] **Task 9**: ~~Update codex worker for extended context~~ — **Removed in v1.1.9**
   - `TaskContext` interface added to `scripts/lunarwing_runtime.ts`
   - `codex_task_executor.ts` uses `context.project_dir` for working dir, injects `context.environment` into subprocess env
   - `agent_comm_protocol.json` updated with extended context fields
   - Backward compatible: empty/missing context fields default gracefully
+  - *(Historical: the `codex4lunarwing/` directory was deleted in v1.1.9)*
 
 - [x] **Task 10**: Update nanocode worker for extended context
   - `TaskContext` interface added to `scripts/lunarwing_runtime.ts`
@@ -99,7 +100,7 @@
 
 - [x] **F1**: Plan compliance audit — all 11 tasks verified complete, code matches plan deliverables
 - [x] **F2**: Code quality review — `cargo check` clean, 18/18 external_worker tests pass, 0 new clippy warnings on changed files
-- [x] **F3**: Real manual QA — live `mars` tenant on Gentoo/OpenRC with all 3 worker types (nanocode:10007, pebble:10008, codex:10010), gateway HTTP 200, daemon log confirms "External workers configured: codex, pebble, nanocode"
+- [x] **F3**: Real manual QA — live `mars` tenant on Gentoo/OpenRC with all 3 worker types (nanocode:10007, pebble:10008, ~~codex:10010~~ *(removed v1.1.9)*), gateway HTTP 200, daemon log confirms "External workers configured: codex, pebble, nanocode"
 - [x] **F4**: Scope fidelity check — changes scoped to `external_worker.rs`, `job.rs`, `catalog.rs` (clippy), test fixtures, codex Dockerfile; no Docker sandbox, ACP bridge, or other guardrailed paths touched
 
 ## Files Modified
@@ -109,7 +110,7 @@
 | 1 | `ic/src/orchestrator/external_worker.rs`, `ic/src/tools/builtin/job.rs`, `ic/src/config/sandbox.rs`, `ic/src/config/mod.rs`, `ic/src/settings.rs` |
 | 2+7 | `ic/src/orchestrator/external_worker.rs`, `ic/src/tools/builtin/job.rs` |
 | 3 | `ic/src/tools/builtin/job.rs` |
-| 4 | `codex4lunarwing/scripts/lunarwing_runtime.ts`, `codex4lunarwing/scripts/codex_task_executor.ts`, `codex4lunarwing/agent_comm_protocol.json`, `lunarcode4lunarwing/scripts/lunarwing_runtime.ts`, `lunarcode4lunarwing/scripts/nanocode_task_executor.ts`, `lunarcode4lunarwing/agent_comm_protocol.json`, `pebble4lunarwing/src/protocol.rs`, `pebble4lunarwing/src/executor.rs` |
+| 4 | `codex4lunarwing/scripts/lunarwing_runtime.ts` *(removed v1.1.9)*, `codex4lunarwing/scripts/codex_task_executor.ts` *(removed v1.1.9)*, `codex4lunarwing/agent_comm_protocol.json` *(removed v1.1.9)*, `lunarcode4lunarwing/scripts/lunarwing_runtime.ts`, `lunarcode4lunarwing/scripts/nanocode_task_executor.ts`, `lunarcode4lunarwing/agent_comm_protocol.json`, `pebble4lunarwing/src/protocol.rs`, `pebble4lunarwing/src/executor.rs` |
 
 ## Verification
 

@@ -42,7 +42,7 @@ The binary, Cargo package, and all four internal crates have been renamed from `
 - Repo-root symlinks `ironclaw_weechat_wss` → `lunarwing_weechat_wss` and `darkirc_channel_for_ironclaw` → `darkirc_channel_for_lunarwing`, kept for 1.1.9 only (deployed tenant units embed the old adapter paths)
 
 **Intentionally NOT renamed:**
-- `codex4ironclaw/` and `nanocode-config/` directory names
+- `nanocode-config/` directory name
 - Keyring service identifiers in `ic_sm/`
 - `tensorzero::function_name::ironclaw` TensorZero function name
 - GCP resource names in `ic/deploy/cloud-sql-proxy.service`
@@ -145,8 +145,6 @@ ic/                         # Main daemon (Rust) — see ic/CLAUDE.md
   testing/lunarwing-xmpp/   # Full-stack test harness docs
   systemd/                  # Systemd units, OpenRC init scripts (.openrc, .confd), launchd plists
   scripts/                  # Operational + build scripts
-codex4lunarwing/             # OpenAI Codex worker container — see codex4lunarwing/CLAUDE.md
-codex4ironclaw/             # Codex worker container (deprecated) — see codex4ironclaw/CLAUDE.md
 nanocode-config/            # Nanocode worker container config — see nanocode-config/CLAUDE.md
 lunarcode4lunarwing/        # Nanocode worker container — see lunarcode4lunarwing/CLAUDE.md
 pebble4lunarwing/           # Pebble worker container — see pebble4lunarwing/CLAUDE.md
@@ -279,7 +277,6 @@ create_job(title: "...", description: "...", mode: "nanocode")
 | Worker | Container | Docs |
 |--------|-----------|------|
 | `nanocode` | `lunarcode4lunarwing/` | `lunarcode4lunarwing/CLAUDE.md` |
-| `codex` | `codex4lunarwing/` | `codex4lunarwing/CLAUDE.md` |
 | `pebble` | `pebble4lunarwing/` | `pebble4lunarwing/CLAUDE.md` |
 
 ## Protected Runtime Behavior

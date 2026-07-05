@@ -813,7 +813,7 @@ pub struct SandboxSettings {
 /// A named external worker endpoint (persistent container speaking lunarwing-agent-v1).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalWorkerSettings {
-    /// Unique name for this worker (e.g., "nanocode", "codex").
+    /// Unique name for this worker (e.g., "nanocode", "pebble").
     pub name: String,
     /// WebSocket URL (e.g., "ws://localhost:9090/ws/agent").
     pub url: String,

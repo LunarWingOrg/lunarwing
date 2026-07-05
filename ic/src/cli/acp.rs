@@ -14,7 +14,7 @@ use crate::db::Database;
 /// Arguments for the `acp add` subcommand.
 #[derive(Args, Debug, Clone)]
 pub struct AcpAddArgs {
-    /// Agent name (e.g., "goose", "codex", "gemini")
+    /// Agent name (e.g., "goose", "pebble", "gemini")
     pub name: String,
 
     /// Command to spawn the agent

@@ -12,6 +12,5 @@ scattered `custom_*` notes that previously lived in `docs/internal/`.
 | enjin | external script | custom WeeChat plugin for E2E with state-of-the-art crypto *(no repo URL recorded)* |
 | Secret Manager (`ic_sm`) | external script | `git.sobe.world/cmc/ic_sm.git` |
 | Infra health check | healthcheck / timers | `git.sobe.world/cmc/ic-infrastructure-health-check.git` |
-| codex4ironclaw *(deprecated → codex4lunarwing)* | worker | `git.sobe.world/cmc/codex4ironclaw.git` |
 | git-md (`ironclaw-md-git`) | tool | `git.sobe.world/starforce/ironclaw-md-git.git` |
 | Gotify | tool | `git.sobe.world/cmc/gotify-wasm.git` |

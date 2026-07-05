@@ -76,7 +76,7 @@ podman build --network=host --format docker -t lunarwing-worker-pebble:latest \
 sudo ic/scripts/lunarwing-mt-admin.sh configure-pebble luna1 --nanogpt-api-key <key>   # optional: --model openai/gpt-5.2
 ```
 
-> **Gap:** the `codex` worker is not wired into mt-admin — it's manual-only from `codex4lunarwing/` (`docker build -t lunarwing-worker-codex:latest .` or `docker compose up --build`) and not part of this OpenRC/podman path.
+> **Workers** are nanocode, pebble, and opencode only. The codex worker has been removed; `codex4lunarwing/` no longer exists.
 
 ## 3. Start + enable services (OpenRC)
 

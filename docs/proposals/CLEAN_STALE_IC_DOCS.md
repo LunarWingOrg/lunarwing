@@ -41,7 +41,7 @@ These references stem from the `ironclaw_weechat_wss/` directory name, which is 
 | `docs/proposals/WEECHAT_WS_ADAPTER_SYNC_PROTOCOL.md` | `ironclaw-sync` request ID in adapter log output |
 | `docs/proposals/DOCUMENTATION_UPDATING_STATUS.md` | References removed `docs/plans/` directory and stale `~/ironclaw` paths |
 | `docs/proposals/PODMAN_WAIT_BABYSITTER_REVIEW.md` | References removed `docs/plans/` directory |
-| `docs/internal/COMPONENT_SOURCES.md` | Source repo URLs: `darkirc_channel_for_ironclaw`, `ironclaw_weechat_wss`, `codex4ironclaw`, `ironclaw-md-git` |
+| `docs/internal/COMPONENT_SOURCES.md` | Source repo URLs: `darkirc_channel_for_ironclaw`, `ironclaw_weechat_wss`, `codex4ironclaw` *(dirs deleted v1.1.9)*, `ironclaw-md-git` |
 | `docs/internal/FORK_CONTEXT.md` | `~/.ironclaw/.env` path reference |
 | `docs/guides/darkirc_channel_for_ironclaw/DARKIRC_MT_ADAPTER.md` | `darkirc_channel_for_ironclaw/` directory path references (blocked on directory rename) |
 | `docs/ops/DARKIRC-MULTITENANT.md` | Links to `darkirc_channel_for_ironclaw/` path (blocked on directory rename) |
@@ -96,7 +96,7 @@ Explicitly documented as kept per `CLAUDE.md` and `docs/ops/history/PENDING_CLEA
 
 - ~~`ironclaw-agent-v1` WebSocket subprotocol (shared external protocol)~~ — renamed in 1.1.9 to `lunarwing-agent-v1` with `ironclaw-agent-v1` kept as an accepted legacy alias for one release
 - `tensorzero::function_name::ironclaw` TensorZero function name
-- `codex4ironclaw/`, `nanocode-config/` directory names (deprecated but kept)
+- `codex4ironclaw/`, `nanocode-config/` directory names (deprecated but kept) *(note: `codex4ironclaw/` and `codex4lunarwing/` dirs deleted in v1.1.9)*
 - `ironclaw.bash`, `ironclaw.fish`, `ironclaw.zsh` shell completions
 - `IRONCLAW_BASE_DIR`, `IRONCLAW_SOCKET` legacy env aliases
 - Keyring service identifiers in `ic_sm/`

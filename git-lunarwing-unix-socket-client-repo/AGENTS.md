@@ -24,4 +24,4 @@ There are no committed tests yet. Add unit tests next to the code they exercise 
 The existing history uses short subjects (`initial`, `changes`) plus automated setup commits. Keep new commits imperative and more descriptive, such as `Add pong reply for server ping`. Pull requests should explain the behavior change, list local verification steps, and link any related issue. Include terminal output or screenshots only when the change affects user-visible CLI behavior.
 
 ## Next
-codex integration
+REPLv2 integration

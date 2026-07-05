@@ -111,12 +111,6 @@ Same protocol as the other LunarWing workers (pebble, opencode): JSON envelope w
 ### Health server (`health_server.py`)
 Python stdlib HTTP server. `/ready` reads `/tmp/lunarwing_ws_state.json` written by the bridge to report WebSocket readiness.
 
-### Key difference from the codex worker (`codex4lunarwing/`)
-- TypeScript/Bun bridge instead of Python (uses nanocode SDK natively)
-- In-process SDK calls instead of subprocess spawning
-- Stateful sessions (nanocode keeps session history in SQLite)
-- Bun runtime instead of Node.js
-
 ## Known issues
 
 ### Nanocode schema validation bug (v1.2.28)

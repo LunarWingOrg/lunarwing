@@ -2,11 +2,10 @@
 
 ## Overview
 
-Matrix test suite for all 4 LunarWing worker types:
+Matrix test suite for LunarWing worker types:
 
 | Worker | Source | Docker Service | Description |
 |--------|--------|----------------|-------------|
-| **Codex** | `codex4lunarwing/` | `codex_worker` | OpenAI Codex persistent worker container (**deprecated**) |
 | **Nanocode** | `lunarcode4lunarwing/` | `nanocode_worker` | NanoGPT community Nanocode worker container |
 | **Built-in** | `ic/src/worker/` | `builtin_worker` | Native worker inside the LunarWing daemon |
 | **Sandbox** | `ic/src/sandbox/` | `sandbox_worker` | Docker-isolated execution sandbox |
@@ -25,7 +24,7 @@ cd tests
 pip install -r requirements.txt
 python runner.py --mode smoke     # happy paths only (CI)
 python runner.py --mode full      # + chaos scenarios (nightly)
-python runner.py --worker codex   # single worker type (codex deprecated)
+python runner.py --worker nanocode   # single worker type
 ```
 
 ### Prerequisites
@@ -86,10 +85,10 @@ The matrix is YAML-driven. Each worker has a `deploy` service name, port configu
 
 ```yaml
 workers:
-  codex:
-    deploy: codex_worker        # docker-compose service name
-    health_port: 8443           # port for health/ready checks
-    ws_port: 8443               # port for WebSocket tests
+  nanocode:
+    deploy: nanocode_worker     # docker-compose service name
+    health_port: 8444           # port for health/ready checks
+    ws_port: 9090               # port for WebSocket tests
     auth_token: test-token      # bearer token for auth
     scenarios:
       - name: health
@@ -98,7 +97,6 @@ workers:
         path: /health
         expect:
           status_code: 200
-          body_contains: status
 ```
 
 ### Scenario Types
@@ -130,7 +128,6 @@ Scenarios with `chaos: true` only run in `--mode full`. These test error paths l
 |---------|-------|-------|---------|---------|
 | `orchestrator` | `python:3.12-slim` | 8080 | default | Mock HTTP API |
 | `ws_hub` | `python:3.12-slim` | 9000 | default | Mock WebSocket hub |
-| `codex_worker` | Built from `codex4lunarwing/` | 8443 | default | Codex worker under test (**deprecated**) |
 | `nanocode_worker` | Built from `lunarcode4lunarwing/` | 8444, 9090 | default | Nanocode worker under test |
 | `builtin_worker` | `lunarwing:latest` | -- | `full` | Built-in worker (requires binary) |
 | `sandbox_worker` | `lunarwing:latest` | -- | `full` | Sandbox worker (requires binary + Docker socket) |

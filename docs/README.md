@@ -73,7 +73,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`MULTITENANCY-HARNESS.md`](ops/MULTITENANCY-HARNESS.md) | Multi-tenant test harness guide |
 | [`HARNESS-SINGLE-TENANT.md`](ops/HARNESS-SINGLE-TENANT.md) | Single-tenant test harness guide |
 | [`SSH-HARNESS-SETUP.md`](ops/SSH-HARNESS-SETUP.md) | SSH harness setup & ops: config, key provisioning (mt-admin + manual), verifying in a worker, troubleshooting |
-| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (LunarWing, Codex, Nanocode, Pebble, Opencode) |
+| [`WORKER-CONTAINERS.md`](ops/WORKER-CONTAINERS.md) | Worker container images (LunarWing, Nanocode, Pebble, Opencode) |
 | [`PEBBLE-WORKER.md`](ops/PEBBLE-WORKER.md) | Pebble external worker operational guide |
 | [`NANOCODE-MULTITENANT.md`](ops/NANOCODE-MULTITENANT.md) | Nanocode external worker, multi-tenant setup |
 | [`WEECHAT-SERVICES.md`](ops/WEECHAT-SERVICES.md) | WeeChat services, ports, env vars, day-to-day ops |
@@ -180,9 +180,6 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 | [`nanocode-config/KAGEHO_QUESTIONS.md`](internal/nanocode-config/KAGEHO_QUESTIONS.md) | Agnostic coding-worker container design notes |
 | [`nanocode-config/NextSteps.md`](internal/nanocode-config/NextSteps.md) | Nanocode + TensorZero setup next steps |
 | [`COMPONENT_SOURCES.md`](internal/COMPONENT_SOURCES.md) | Where each custom component's upstream source repo lives |
-| [`codex4ironclaw/kageho_other_ideas/draft2.md`](internal/codex4ironclaw/kageho_other_ideas/draft2.md) | Codex-worker Dockerfile draft + security-hardening checklist |
-| [`codex4ironclaw/PASSING_SECRETS.md`](internal/codex4ironclaw/PASSING_SECRETS.md) | Options for passing secrets to the Codex worker |
-| [`codex4ironclaw/whatajsonshouldlookliken.md`](internal/codex4ironclaw/whatajsonshouldlookliken.md) | Codex-worker task-envelope JSON format |
 
 **Archives** (kept for provenance, not active docs):
 
@@ -207,7 +204,7 @@ The following are **not** in this directory and should remain where they are:
 - **`CLAUDE.md` / `AGENTS.md` / `CODEX.md`** — AI agent context files (kept at their respective locations)
 - **`ic/`** — all documentation within the `ic/` tree stays in place (workspace templates, crate docs, skill definitions, etc.)
 - **`projects/`** — satellite service documentation stays with its source (e.g., `projects/ocr-sidecar/README.md`)
-- **`codex4lunarwing/` / `lunarcode4lunarwing/` / `pebble4lunarwing/` / `opencode4lunarwing/`** — worker-container docs stay with their container source
+- **`lunarcode4lunarwing/` / `pebble4lunarwing/` / `opencode4lunarwing/`** — worker-container docs stay with their container source
 - **`.claude/`** — Claude command and rule files
 
 ---

@@ -15,22 +15,6 @@ docker build -f Dockerfile.worker -t lunarwing-worker:latest .
 
 Runs as non-root user `sandbox` (UID 1000) in `/workspace`. Entrypoint is the `lunarwing` binary — the orchestrator passes the full command via Docker cmd.
 
-## Codex Worker
-
-Node.js-based Codex agent with WebSocket protocol bridge. Health endpoint on port 8443, WebSocket server on port 9090.
-
-**Dockerfile:** `codex4lunarwing/Dockerfile`
-
-```bash
-cd codex4lunarwing
-docker build -t lunarwing-codex-worker:latest .
-
-# Or via docker-compose
-docker compose up --build
-```
-
-Modes: `--mode cli` (one-shot) or `--mode websocket` (persistent). Requires `OPENAI_API_KEY` or TensorZero proxy config. See `codex4lunarwing/CLAUDE.md` for full env var reference.
-
 ## Nanocode Worker
 
 Bun-based Nanocode agent. Runs nanocode headless server internally (port 4096) with a TypeScript bridge to the WebSocket protocol. Health on 8443, WebSocket on 9090.
