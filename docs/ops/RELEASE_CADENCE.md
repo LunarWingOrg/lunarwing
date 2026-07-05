@@ -10,4 +10,4 @@
 ## Major Releases
 * Contain very large changes or a very large amount of changes
 ### An example of a MAJOR RELEASE is 1.1.0
-#### The next MAJOR RELEASE will be 1.2.0
+#### The next MAJOR RELEASE will be 2.0.0
