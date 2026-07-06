@@ -45,7 +45,6 @@ The binary, Cargo package, and all four internal crates have been renamed from `
 - `nanocode-config/` directory name
 - Keyring service identifiers in `ic_sm/`
 - `tensorzero::function_name::ironclaw` TensorZero function name
-- GCP resource names in `ic/deploy/cloud-sql-proxy.service`
 - `ic/CHANGELOG.md` historical entries
 
 ## Code Style
