@@ -48,32 +48,32 @@ Start with these deeper docs as needed (keep in mind most of these are outdated 
 - Extension registry catalog: `src/registry/`
 - OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
 
-## Build Constraints (Fedora Dev Machine)
+## Build Constraints (Gentoo Dev VM)
 
 This dev/test machine has limited resources. **All cargo commands must follow these rules:**
 
-- **16 threads max**: prefix every cargo command with `taskset -c 0-15`
+- **6 threads max**: prefix every cargo command with `taskset -c 0-5`
 - **Use `cargo check` for compile verification, NOT `cargo build`** — full debug builds are wasteful and should be avoided. Reserve release builds (`cargo build --release`) for deploying to a new tenant or upgrading an existing tenant's release binary.
-- **Use `taskset -c 0-15` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
+- **Use `taskset -c 0-5` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
 
 ```bash
-taskset -c 0-15 cargo check -j16                              # compile check
-taskset -c 0-15 cargo check -j16 --no-default-features --features postgres  # postgres-only
-taskset -c 0-15 cargo check -j16 --no-default-features --features libsql    # libsql-only
-taskset -c 0-15 cargo check -j16 --all-features               # all features
-taskset -c 0-15 cargo test -j16 -- --test-threads=16            # unit tests
-taskset -c 0-15 cargo clippy -j16 --all --benches --tests --examples -- -D warnings  # lint
-taskset -c 0-15 cargo clippy -j16 --all --benches --tests --examples --all-features -- -D warnings
+taskset -c 0-5 cargo check -j6                              # compile check
+taskset -c 0-5 cargo check -j6 --no-default-features --features postgres  # postgres-only
+taskset -c 0-5 cargo check -j6 --no-default-features --features libsql    # libsql-only
+taskset -c 0-5 cargo check -j6 --all-features               # all features
+taskset -c 0-5 cargo test -j6 -- --test-threads=16            # unit tests
+taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples -- -D warnings  # lint
+taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples --all-features -- -D warnings
 ```
 
 Long-running commands (5–20+ minutes) **must use tmux**:
 ```bash
-tmux new-session -d -s build "taskset -c 0-15 cargo build --release -j16 2>&1 | tee /tmp/build.log"
+tmux new-session -d -s build "taskset -c 0-5 cargo build --release -j6 2>&1 | tee /tmp/build.log"
 ```
 
 ## Build, Test, and Lint Commands
 
-Run these from the `ic/` directory. Apply `taskset -c 0-15` and `-j16` per the build constraints above.
+Run these from the `ic/` directory. Apply `taskset -c 0-5` and `-j6` per the build constraints above.
 
 ```bash
 # Compile check (preferred over cargo build for verification)
