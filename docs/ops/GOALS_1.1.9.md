@@ -24,7 +24,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 15. [x] Further updating and re-organization of repository documentation
 16. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
 17. [x] Bump crate versions to 1.1.9
-18. [ ] Ensure all relevant crates are bumped to 1.1.9 and build works properly
+18. [x] Ensure all relevant crates are bumped to 1.1.9 and build works properly
 19. [ ] Update repo root-level README.md
 20. [ ] Update ROADMAP file to reflect accuracy
 21. [ ] Run all cargo tests — full`--all-features --no-fail-fast` run: lib 4087 passed/0 failed/4 ignored; all integration binaries + doctests pass except the 6 known-deferred (4`multi_tenant_system_prompt` architectural, e2e_advanced_traces` bootstrap-greeting). See`docs/proposals/CARGO_TESTS_FIX.md`.
