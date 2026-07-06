@@ -26,7 +26,8 @@
 #
 # Usage (run as root on the new host):
 #   sudo ic/scripts/import-tenant.sh <bundle.tar> [--name <t>] [--start] [--old-stopped]
-#        [--with-nanocode] [--with-pebble] [--dry-run] [--yes] [--force]
+#        [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]
+#        [--dry-run] [--yes] [--force]
 set -euo pipefail
 
 BUNDLE=""
@@ -35,6 +36,8 @@ DO_START=false
 OLD_STOPPED=false
 WITH_NANOCODE=false
 WITH_PEBBLE=false
+WITH_OPENCODE=false
+WITH_TOOLCHAINS=false
 DRY_RUN=false
 AUTO_YES=false
 FORCE=false
@@ -46,6 +49,8 @@ while [[ $# -gt 0 ]]; do
     --old-stopped)   OLD_STOPPED=true; shift ;;
     --with-nanocode) WITH_NANOCODE=true; shift ;;
     --with-pebble)   WITH_PEBBLE=true; shift ;;
+    --with-opencode)   WITH_OPENCODE=true; shift ;;
+    --with-toolchains) WITH_TOOLCHAINS=true; shift ;;
     --dry-run)       DRY_RUN=true; shift ;;
     --yes|-y)        AUTO_YES=true; shift ;;
     --force)         FORCE=true; shift ;;
@@ -83,7 +88,7 @@ inject_keys() {  # <manifest> <live_env>
   done < "$man"
 }
 
-[[ -n "$BUNDLE" ]] || die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--dry-run]"
+[[ -n "$BUNDLE" ]] || die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains] [--dry-run] [--yes] [--force]"
 [[ -f "$BUNDLE" ]] || die "bundle not found: $BUNDLE"
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo) — mt-admin needs root"
 command -v jq  >/dev/null 2>&1 || die "jq required"
@@ -100,6 +105,11 @@ tar xf "$BUNDLE" -C "$WORK" || die "failed to unpack bundle $BUNDLE"
 [[ -f "$WORK/meta.txt" ]] || die "bundle missing meta.txt — not an export-tenant.sh bundle?"
 
 meta() { sed -n "s/^$1=//p" "$WORK/meta.txt" | head -1; }
+manifest_value() {
+  local key="$1" file="${2:-$WORK/manifest-lunarwing.env}" value
+  value="$(sed -n "s/^${key}=//p" "$file" 2>/dev/null | head -1)"
+  printf '%s' "${value%$'\r'}"
+}
 # Sanitize the tenant name the same way mt-admin does ([a-z0-9-]), so our own
 # path/getent/chown use exactly the name mt-admin will use internally.
 RAW_NAME="${NAME_OVERRIDE:-$(meta tenant)}"
@@ -121,6 +131,14 @@ if jq -e ".tenants[\"$TENANT\"]" "$PORTS_REGISTRY" >/dev/null 2>&1; then
   say "WARNING: tenant '$TENANT' already exists — proceeding due to --force"
 fi
 XMPP_JID="$(sed -n 's/^XMPP_JID=//p' "$WORK/manifest-lunarwing.env" | head -1)"; XMPP_JID="${XMPP_JID%$'\r'}"
+XMPP_ALLOW_FROM="$(manifest_value XMPP_ALLOW_FROM)"
+GATEWAY_HOST="$(manifest_value GATEWAY_HOST)"
+[[ -n "$GATEWAY_HOST" ]] || GATEWAY_HOST="$(manifest_value HTTP_HOST)"
+LLM_MODEL="$(manifest_value LLM_MODEL)"
+LLM_BASE_URL="$(manifest_value LLM_BASE_URL)"
+OPENCODE_MODEL="$(manifest_value OPENCODE_MODEL)"
+OPENCODE_BASE_URL="$(manifest_value OPENCODE_BASE_URL)"
+GOTIFY_URL="$(manifest_value GOTIFY_URL)"
 
 confirm "Stage tenant '$TENANT' on THIS host from the bundle?" || die "aborted by user"
 
@@ -128,6 +146,13 @@ confirm "Stage tenant '$TENANT' on THIS host from the bundle?" || die "aborted b
 banner "1/6  Provision (add-tenant --no-health)"
 add_args=(add-tenant "$TENANT" --no-health)
 [[ -n "$XMPP_JID" ]] && add_args+=(--xmpp-jid "$XMPP_JID")
+[[ -n "$XMPP_ALLOW_FROM" ]] && add_args+=(--xmpp-allow-from "$XMPP_ALLOW_FROM")
+[[ -n "$GATEWAY_HOST" ]] && add_args+=(--gateway-host "$GATEWAY_HOST")
+[[ -n "$LLM_MODEL" ]] && add_args+=(--llm-model "$LLM_MODEL")
+[[ -n "$LLM_BASE_URL" ]] && add_args+=(--llm-base-url "$LLM_BASE_URL")
+[[ -n "$OPENCODE_MODEL" ]] && add_args+=(--opencode-model "$OPENCODE_MODEL")
+[[ -n "$OPENCODE_BASE_URL" ]] && add_args+=(--opencode-base-url "$OPENCODE_BASE_URL")
+[[ -n "$GOTIFY_URL" ]] && add_args+=(--gotify-url "$GOTIFY_URL")
 run "$MT" "${add_args[@]}"
 
 HOME_T="$(getent passwd "$TENANT" | cut -d: -f6 2>/dev/null || echo "/home/$TENANT")"
@@ -140,6 +165,8 @@ banner "2/6  Build"
 build_args=(build-tenant "$TENANT" --with-wasm)
 $WITH_NANOCODE && build_args+=(--with-nanocode)
 $WITH_PEBBLE  && build_args+=(--with-pebble)
+$WITH_OPENCODE && build_args+=(--with-opencode)
+$WITH_TOOLCHAINS && build_args+=(--with-toolchains)
 run "$MT" "${build_args[@]}"
 
 # ---- 3. inject carried secrets + config (CRITICAL: SECRETS_MASTER_KEY) -------
@@ -210,7 +237,7 @@ if ! $OLD_STOPPED; then
 fi
 run "$MT" start-tenant "$TENANT"
 if ! $DRY_RUN; then
-  run "$MT" status-tenant "$TENANT"
+  run "$MT" status "$TENANT"
   note "Smoke-test: a message round-trips, history present, routines + channels load, OMEMO decrypts."
 fi
 say ""
