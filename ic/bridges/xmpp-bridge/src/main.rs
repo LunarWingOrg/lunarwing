@@ -45,24 +45,13 @@ struct QueuedMessage {
     payload: BridgeMessage,
 }
 
+#[derive(Default)]
 struct BridgeInner {
     configured: Option<NormalizedConfig>,
     jid: Option<String>,
     channel: Option<Arc<XmppChannel>>,
     current_cursor: u64,
     messages: VecDeque<QueuedMessage>,
-}
-
-impl Default for BridgeInner {
-    fn default() -> Self {
-        Self {
-            configured: None,
-            jid: None,
-            channel: None,
-            current_cursor: 0,
-            messages: VecDeque::new(),
-        }
-    }
 }
 
 #[derive(Clone)]
