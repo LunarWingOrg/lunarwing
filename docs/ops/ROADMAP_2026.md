@@ -4,8 +4,9 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 
 | Feature | Target |
 |---------|--------|
-| Drop legacy `ironclaw-agent-v1` subprotocol offer from the daemon (delete the `SUBPROTOCOL_LEGACY` offer in `ic/src/orchestrator/external_worker.rs`) and `git rm` the 1.1.9-only repo-root compat symlinks `ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw` (deployed tenants must have re-run mt-admin unit regen by then) — deferred from 1.1.9 item #2 | v2.0.0 |
-| LunarWing UI performance overhaul | v2.0.0 |
+| Drop legacy `ironclaw-agent-v1` subprotocol offer from the daemon (delete the `SUBPROTOCOL_LEGACY` offer in `ic/src/orchestrator/external_worker.rs`) and `git rm` the 1.1.9-only repo-root compat symlinks `ironclaw_weechat_wss`, `darkirc_channel_for_ironclaw` (deployed tenants must have re-run mt-admin unit regen by then) | v2.0.0 |
+| LunarWing Web UI performance overhaul | v2.0.0 |
+| LunarWing Web MT admin setup integration (part 2 of earlier plan discussed) | v2.0.0 |
 | Several large proposals to ship | v2.0.0 |
 | Engine crate Refactor | v2.0.0 |
 | XMPP file transfer — remaining polish (further hardening) | v2.0.1 |

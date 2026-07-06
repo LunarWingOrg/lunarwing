@@ -4277,7 +4277,7 @@ dependencies = [
 
 [[package]]
 name = "lunarwing_common"
-version = "1.1.8"
+version = "1.1.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -4285,7 +4285,7 @@ dependencies = [
 
 [[package]]
 name = "lunarwing_engine"
-version = "1.1.8"
+version = "1.1.9"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4302,7 +4302,7 @@ dependencies = [
 
 [[package]]
 name = "lunarwing_safety"
-version = "1.1.8"
+version = "1.1.9"
 dependencies = [
  "aho-corasick",
  "regex",
@@ -4314,7 +4314,7 @@ dependencies = [
 
 [[package]]
 name = "lunarwing_skills"
-version = "1.1.8"
+version = "1.1.9"
 dependencies = [
  "chrono",
  "futures",
