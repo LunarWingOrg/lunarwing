@@ -203,7 +203,7 @@ def gather_config(config: TenantConfig) -> TenantConfig:
             border_style="green",
         )
     )
-    name = _q_text("Tenant name (lowercase, e.g. 'ruffles')")
+    name = _q_text("Tenant name (lowercase, e.g. 'sphinx')")
     err = TenantConfig.validate_name(name)
     while err:
         console.print(f"[red]{err}[/]")

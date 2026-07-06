@@ -47,7 +47,7 @@ class TenantConfig:
     workers: list[WorkerType] = field(default_factory=list)
     toolchains: bool = False
     tensorzero_url: str = "http://192.168.1.157:3000/openai/v1"
-    llm_model: str = "tensorzero::function_name::FrontierCODE"
+    llm_model: str = "tensorzero::function_name::lunarwing"
     llm_api_key: str = ""
     secrets_master_key: str = ""
     no_ssh: bool = False
@@ -112,7 +112,7 @@ class TenantConfig:
                 "tensorzero_url", "http://192.168.1.157:3000/openai/v1"
             ),
             llm_model=data.get(
-                "llm_model", "tensorzero::function_name::FrontierCODE"
+                "llm_model", "tensorzero::function_name::lunarwing"
             ),
             llm_api_key=data.get("llm_api_key", ""),
             secrets_master_key=data.get("secrets_master_key", ""),
