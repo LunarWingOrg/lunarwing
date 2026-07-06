@@ -13,7 +13,7 @@ on:
         type: string
 
 env:
-  IMAGE_NAME: nearaidev/ironclaw
+  IMAGE_NAME: ggmethos/lunarwing
 
 jobs:
   build:
@@ -72,7 +72,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ vars.DOCKER_REGISTRY_USER }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
           password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
 
       - name: Detect runtime stage

@@ -22,8 +22,8 @@ on:
     - cron: '0 * * * *'
 
 env:
-  IMAGE_NAME: nearaidev/lunarwing
-  WORKER_IMAGE_NAME: nearaidev/lunarwing-worker
+  IMAGE_NAME: ggmethos/lunarwing
+  WORKER_IMAGE_NAME: ggmethos/lunarwing-worker
 
 jobs:
   build:
@@ -103,7 +103,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ vars.DOCKER_REGISTRY_USER }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER }}
           password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
 
       - name: Check if current staging commit is already built
@@ -116,10 +116,10 @@ jobs:
           WORKER_BUILT_SHA=""
 
           if docker pull "${IMAGE_NAME}:staging" > /dev/null 2>&1; then
-            CURRENT_BUILT_SHA=$(docker inspect --format='{{index .Config.Labels "ironclaw.git.sha"}}' "${IMAGE_NAME}:staging" 2>/dev/null || echo "")
+            CURRENT_BUILT_SHA=$(docker inspect --format='{{index .Config.Labels "lunarwing.git.sha"}}' "${IMAGE_NAME}:staging" 2>/dev/null || echo "")
           fi
           if docker pull "${WORKER_IMAGE_NAME}:staging" > /dev/null 2>&1; then
-            WORKER_BUILT_SHA=$(docker inspect --format='{{index .Config.Labels "ironclaw.git.sha"}}' "${WORKER_IMAGE_NAME}:staging" 2>/dev/null || echo "")
+            WORKER_BUILT_SHA=$(docker inspect --format='{{index .Config.Labels "lunarwing.git.sha"}}' "${WORKER_IMAGE_NAME}:staging" 2>/dev/null || echo "")
           fi
 
           echo "Current built commit (lunarwing): ${CURRENT_BUILT_SHA:-<none>}"
@@ -138,7 +138,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Build and push (ironclaw)
+      - name: Build and push (lunarwing)
         if: steps.check.outputs.skip != 'true'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -147,7 +147,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           target: ${{ steps.tags.outputs.target }}
           labels: |
-            ironclaw.git.sha=${{ steps.source_sha.outputs.sha }}
+            lunarwing.git.sha=${{ steps.source_sha.outputs.sha }}
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -161,41 +161,10 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.worker_tags }}
           labels: |
-            ironclaw.git.sha=${{ steps.source_sha.outputs.sha }}
+            lunarwing.git.sha=${{ steps.source_sha.outputs.sha }}
           platforms: linux/amd64
           cache-from: type=gha,scope=worker
           cache-to: type=gha,mode=max,scope=worker
-
-      - name: Create releases-manager app token
-        id: app-token
-        if: steps.check.outputs.skip != 'true'
-        continue-on-error: true
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
-        with:
-          app-id: ${{ secrets.GH_RELEASES_MANAGER_APP_ID }}
-          private-key: ${{ secrets.GH_RELEASES_MANAGER_APP_PRIVATE_KEY }}
-          owner: nearai
-          repositories: ironclaw-dind
-
-      - name: Trigger ironclaw-dind Build & Push
-        if: steps.app-token.outcome == 'success' && steps.check.outputs.skip != 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_TAG: ${{ inputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          if [[ "${EVENT_NAME}" == "workflow_call" && -n "${VERSION}" ]]; then
-            gh api repos/nearai/ironclaw-dind/dispatches \
-              --method POST \
-              -f event_type="ironclaw_image_published" \
-              -f client_payload[version]="${VERSION}"
-          elif [[ "${EVENT_NAME}" == "schedule" ]] || [[ "${INPUT_TAG}" == "staging" ]]; then
-            gh api repos/nearai/ironclaw-dind/dispatches \
-              --method POST \
-              -f event_type="ironclaw_image_published"
-          fi
 
       - name: Summary
         if: steps.check.outputs.skip != 'true'
@@ -203,7 +172,7 @@ jobs:
           {
             echo "## Docker Images"
             echo ""
-            echo "**ironclaw:**"
+            echo "**lunarwing:**"
             echo '```'
             echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n'
             echo '```'
