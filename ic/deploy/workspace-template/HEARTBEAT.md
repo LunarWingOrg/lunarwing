@@ -15,4 +15,6 @@
      - Organize and curate MEMORY.md (remove stale, consolidate dupes)
      - Update daily logs with session summaries
      - Clean up context/ documents that are outdated
+
+     LunarWing has a heartbeat function but you can also use routines for reliability
 -->
