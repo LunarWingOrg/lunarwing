@@ -221,21 +221,30 @@ def gather_config(config: TenantConfig) -> TenantConfig:
 
 
 def _configure_network(config: TenantConfig) -> None:
-    idx = _q_select(
-        "Gateway bind host",
-        ["127.0.0.1", "0.0.0.0"],
-        default=0,
+    config.gateway_host = _q_text(
+        "Gateway bind host/IP",
+        default=config.gateway_host,
     )
-    config.gateway_host = ["127.0.0.1", "0.0.0.0"][idx]
     config.docker_group = _q_confirm(
         "Add tenant user to docker/podman group?", default=config.docker_group
     )
 
 
 def _configure_channels(config: TenantConfig) -> None:
+    config.enable_darkirc = _q_confirm(
+        "Enable DarkIRC services?", default=config.enable_darkirc
+    )
+
     config.xmpp_enabled = _q_confirm("Enable XMPP bridge?")
     if config.xmpp_enabled:
-        config.xmpp_jid = _q_text("XMPP JID", default=f"{config.name}@xmpp.localhost")
+        default_xmpp_domain = "xmpp.localhost"
+        if "@" in config.xmpp_jid:
+            default_xmpp_domain = config.xmpp_jid.split("@", 1)[1]
+        xmpp_domain = _q_text("XMPP domain/host", default=default_xmpp_domain)
+        config.xmpp_jid = _q_text(
+            "XMPP JID",
+            default=config.xmpp_jid or f"{config.name}@{xmpp_domain}",
+        )
         config.xmpp_password = _q_password("XMPP password (leave blank to auto-generate)")
         allow = _q_text("Extra allowed DM senders (comma-separated, optional)")
         config.xmpp_allow_from = [
@@ -277,10 +286,18 @@ def _configure_llm(config: TenantConfig) -> None:
     )
     idx = _q_select(
         "LLM model",
-        ["tensorzero::function_name::FrontierCODE", "Custom..."],
-        default=0,
+        [
+            "tensorzero::function_name::FrontierCODE",
+            "tensorzero::function_name::lunarwing",
+            "Custom...",
+        ],
+        default=1,
     )
-    if idx == 1:
+    if idx == 0:
+        config.llm_model = "tensorzero::function_name::FrontierCODE"
+    elif idx == 1:
+        config.llm_model = "tensorzero::function_name::lunarwing"
+    else:
         config.llm_model = _q_text("Custom LLM model ID")
     config.llm_api_key = _q_password(
         "LLM API key (leave blank for unneeded/default)"
