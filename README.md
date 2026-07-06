@@ -15,7 +15,7 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 - **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
 - **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
 - **Self-healing infrastructure** — advanced healthchecks and automatic recovery for LunarWing, channel bridges, adapters, daemons, and even scheduled routines.
-- **TensorZero integration** — Integrates with TensorZero. The optional HTTP proxy with optimized tool_choice routing is disabled by default as of v1.1.9; enable it via configuration if needed.
+- **TensorZero integration** — Native TensorZero model routing support for local and remote providers. (The optional custom HTTP proxy was removed in v1.1.9; use a standalone TensorZero gateway instead.)
 - **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 
 <p align="center">
@@ -82,7 +82,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
 * Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry (v11 schema — dedicated per-tenant ports for workers, DarkIRC, and the LunarVision sidecar), and support for systemd, macOS (launchd), and OpenRC
-* TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops (disabled by default as of v1.1.9; enable via configuration)
+* TensorZero model routing support (the optional custom HTTP proxy was removed in v1.1.9; use a standalone TensorZero gateway)
 * Support for embedded memory search models
 * Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
 * Supervised mode (`--supervised`) for human-gated tool execution — all tool actions require explicit approval regardless of tier
@@ -172,7 +172,7 @@ LunarWing supports a preseeded workspace layout: you can give an agent a custom 
 
 ### Config defaults
 
-The shipped runtime config template is [ic/deploy/config.toml](ic/deploy/config.toml). Defaults: `llm_backend = "openai_compatible"`, `selected_model = "tensorzero::function_name::lunarwing"`, `agent.name = "lunarwing"`. The default `openai_compatible_base_url` in the template points at a TensorZero proxy; override it via env or `config.toml` for your environment.
+The shipped runtime config template is [ic/deploy/config.toml](ic/deploy/config.toml). Defaults: `llm_backend = "openai_compatible"`, `selected_model = "tensorzero::function_name::lunarwing"`, `agent.name = "lunarwing"`, `openai_compatible_base_url = "http://127.0.0.1:3000/openai/v1"`. Override any of these via env vars or `config.toml` for your environment.
 
 `SECRETS_MASTER_KEY` (a 64-char hex value) enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this automatically when missing; in multi-tenant setups `lunarwing-mt-admin.sh` provisions it per tenant.
 
@@ -263,6 +263,8 @@ See the documented recipe in [ic/testing/lunarwing-xmpp/README.md](ic/testing/lu
 
 ### libSQL with Custom Gateway Token
 
+> **Note:** `setup-instance.sh` is deprecated as of v1.1.9 and not actively maintained. For single instances use `lunarwing onboard --quick`; for production use the multi-tenant path. The recipe below is kept for reference.
+
 ```bash
 cd ic
 
@@ -321,12 +323,15 @@ Full documentation index: [docs/README.md](docs/README.md)
 
 ### By topic
 
-- **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
+- **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, SSH harness, self-heal wiring
 - **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
 - **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
 - **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.8 (latest: [RELEASE-v1.1.8.md](docs/releases/RELEASE-v1.1.8.md))
 - **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
 - **Active proposals:** [docs/proposals/](docs/proposals/)
+- **Specs:** [docs/specs/](docs/specs/) — standalone subsystem specifications
+- **Reviews:** [docs/reviews/](docs/reviews/) — architecture and code reviews
+- **Superpowers:** [docs/superpowers/](docs/superpowers/) — agent-driven plans and design specs
 - **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
 - **Testing guide:** [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
 
