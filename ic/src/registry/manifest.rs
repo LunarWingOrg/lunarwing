@@ -410,7 +410,7 @@ mod tests {
             },
             "artifacts": {
                 "wasm32-wasip2": {
-                    "url": "https://github.com/nearai/ironclaw/releases/latest/download/gmail-wasm32-wasip2.tar.gz",
+                    "url": "https://github.com/LunarWingOrg/lunarwing/releases/download/v0.1.0/example-wasm32-wasip2.tar.gz",
                     "sha256": null
                 }
             },
@@ -478,6 +478,53 @@ mod tests {
             entry.fallback_source.is_none(),
             "Should have no fallback when already using WasmBuildable"
         );
+    }
+
+    #[test]
+    fn test_legacy_artifact_manifests_are_source_build_only() {
+        for (name, json) in [
+            (
+                "tools/web-search",
+                include_str!("../../registry/tools/web-search.json"),
+            ),
+            (
+                "tools/telegram",
+                include_str!("../../registry/tools/telegram.json"),
+            ),
+            (
+                "tools/llm-context",
+                include_str!("../../registry/tools/llm-context.json"),
+            ),
+            (
+                "channels/telegram",
+                include_str!("../../registry/channels/telegram.json"),
+            ),
+        ] {
+            let manifest: ExtensionManifest = serde_json::from_str(json).expect(name);
+            let artifact = manifest
+                .artifacts
+                .get("wasm32-wasip2")
+                .expect("source-build-only manifests still declare target support");
+
+            assert!(
+                artifact.url.is_none(),
+                "{name} should not download artifacts"
+            );
+            assert!(
+                artifact.sha256.is_none(),
+                "{name} should not pin removed artifacts"
+            );
+
+            let entry = manifest.to_registry_entry().expect(name);
+            assert!(
+                matches!(entry.source, ExtensionSource::WasmBuildable { .. }),
+                "{name} should build from source"
+            );
+            assert!(
+                entry.fallback_source.is_none(),
+                "{name} should not have a fallback when source build is primary"
+            );
+        }
     }
 
     /// When a manifest has no artifacts section, should use WasmBuildable with no fallback.
