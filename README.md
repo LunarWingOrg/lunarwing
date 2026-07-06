@@ -15,7 +15,7 @@ It's a hard fork of NearAI's IronClaw, diverging significantly since February 20
 - **WASM plugin system** — extend agents with tools and channel adapters compiled to WebAssembly.
 - **Built-in secret management** — specialized wrappers for Postgres and LibSQL credential handling.
 - **Self-healing infrastructure** — advanced healthchecks and automatic recovery for LunarWing, channel bridges, adapters, daemons, and even scheduled routines.
-- **TensorZero integration** — Integrates with Tensorzero as well as offering an additional, optional HTTP proxy with optimized tool_choice routing for local and remote model providers.
+- **TensorZero integration** — Native TensorZero model routing support for local and remote providers. (The optional custom HTTP proxy was removed in v1.1.9; use a standalone TensorZero gateway instead.)
 - **Lunarpunk values** — AGPLv3 forever. Free software, free infrastructure, no compromises.
 
 <p align="center">
@@ -82,7 +82,7 @@ LunarWing adds real privacy-respecting tools and channels, with full secret supp
 * Improved scheduling system with native retry and exponential backoff for transient failures, stuck-run recovery, configurable lightweight execution timeouts, and automatic sweeping of orphaned routine runs
 * Self-healing healthchecks for channel bridge services, the daemon, and the routines system. Infrastructure health checks auto-detect init system (systemd, OpenRC, launchd)
 * Production multi-tenant deployment via `scripts/lunarwing-mt-admin.sh` with per-user OS isolation, port registry (v11 schema — dedicated per-tenant ports for workers, DarkIRC, and the LunarVision sidecar), and support for systemd, macOS (launchd), and OpenRC
-* TensorZero HTTP proxy support for model routing, function-call routing, and training feedback loops
+* TensorZero model routing support (the optional custom HTTP proxy was removed in v1.1.9; use a standalone TensorZero gateway)
 * Support for embedded memory search models
 * Reflex compiler for LLM-free fast-path execution of recurring prompts with exact, fuzzy (Jaro-Winkler), and semantic matching, auto-promotion, and stale pattern eviction
 * Supervised mode (`--supervised`) for human-gated tool execution — all tool actions require explicit approval regardless of tier
@@ -107,7 +107,7 @@ Our core team uses a self-hosted Vikunja kanban board to track tasks. Additional
 
 ## Instance Setup
 
-There are two ways to run LunarWing: a **single local instance** (the fastest way to try it) and **multi-tenant production** (the way it is deployed for real, with per-tenant OS isolation). The multi-tenant path is the maintained, primary deployment model.
+There are two ways to run LunarWing: a **single local instance** (the fastest way to try it) and **multi-tenant production** (the way it is deployed for real, with per-tenant OS isolation). The multi-tenant path is the maintained, primary deployment model. As of v1.1.9, the interactive `lunarwing_mt_onboard` CLI can automate the full multi-tenant provisioning lifecycle.
 
 ### Quick local instance (We strongly recommend the multi-tenant approach below as this method is not currently maintained and probably does not work at the moment)
 
@@ -160,15 +160,19 @@ The gateway binds `127.0.0.1` by default; for remote access, tunnel the HTTP por
 
 Additional worker containers (nanocode, pebble, opencode) can be attached at build time with `--with-nanocode` / `--with-pebble` / `--with-opencode`. DarkIRC is opt-in (`--enable-darkirc` + `build-darkirc`). See the quickstart for the full flag reference.
 
+### Interactive MT Onboarding CLI (new in v1.1.9)
+
+For a guided, end-to-end tenant provisioning experience, the repo ships `lunarwing_mt_onboard/` — an interactive CLI that walks through the full lifecycle (tenant identity, port allocation, secrets generation, LLM and channel configuration, worker selection, build, and start/verify) and wraps `lunarwing-mt-admin.sh` under the hood. See [docs/proposals/MT-ONBOARDING-CLI.md](docs/proposals/MT-ONBOARDING-CLI.md) for the design proposal.
+
 ### Preseeding persona files before first run (optional)
 
 LunarWing supports a preseeded workspace layout: you can give an agent a custom identity and memories *before* its first interaction. At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before the generic built-in seeds, so the persona and memory files under [ic/deploy/workspace-template/](ic/deploy/workspace-template/) can be customized per instance: `SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, `USER.md`, `MEMORY.md`, `HEARTBEAT.md`.
 
-`ic/scripts/setup-instance.sh` is a legacy helper that writes `config.toml`, `.env`, and copies the workspace template, then invokes onboarding. It still functions, but is **not actively maintained** — the maintained paths are the onboarding wizard (single instance) and `lunarwing-mt-admin.sh` (multi-tenant). If you only need to preseed persona files, copy them into `$LUNARWING_BASE_DIR/workspace-template/` manually and run `lunarwing onboard --quick`.
+`ic/scripts/setup-instance.sh` is a legacy helper that writes `config.toml`, `.env`, and copies the workspace template, then invokes onboarding. It still functions, but is **not actively maintained** — the maintained paths are the onboarding wizard (single instance), `lunarwing-mt-admin.sh` (multi-tenant), and the new interactive `lunarwing_mt_onboard` CLI (v1.1.9+; see above). If you only need to preseed persona files, copy them into `$LUNARWING_BASE_DIR/workspace-template/` manually and run `lunarwing onboard --quick`.
 
 ### Config defaults
 
-The shipped runtime config template is [ic/deploy/config.toml](ic/deploy/config.toml). Defaults: `llm_backend = "openai_compatible"`, `selected_model = "tensorzero::function_name::lunarwing"`, `agent.name = "lunarwing"`. The default `openai_compatible_base_url` in the template points at a TensorZero proxy; override it via env or `config.toml` for your environment.
+The shipped runtime config template is [ic/deploy/config.toml](ic/deploy/config.toml). Defaults: `llm_backend = "openai_compatible"`, `selected_model = "tensorzero::function_name::lunarwing"`, `agent.name = "lunarwing"`, `openai_compatible_base_url = "http://127.0.0.1:3000/openai/v1"`. Override any of these via env vars or `config.toml` for your environment.
 
 `SECRETS_MASTER_KEY` (a 64-char hex value) enables the encrypted secrets store without depending on the OS keychain. On Linux, `lunarwing onboard --quick` generates and persists this automatically when missing; in multi-tenant setups `lunarwing-mt-admin.sh` provisions it per tenant.
 
@@ -259,6 +263,8 @@ See the documented recipe in [ic/testing/lunarwing-xmpp/README.md](ic/testing/lu
 
 ### libSQL with Custom Gateway Token
 
+> **Note:** `setup-instance.sh` is deprecated as of v1.1.9 and not actively maintained. For single instances use `lunarwing onboard --quick`; for production use the multi-tenant path. The recipe below is kept for reference.
+
 ```bash
 cd ic
 
@@ -317,12 +323,15 @@ Full documentation index: [docs/README.md](docs/README.md)
 
 ### By topic
 
-- **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, self-heal wiring
+- **Architecture & design:** [docs/architecture/](docs/architecture/) — Engine V2, semantic memory, WeeChat, XMPP file transfers, SSH harness, self-heal wiring
 - **How-to guides:** [docs/guides/](docs/guides/) — setup, migration, embeddings, vision/OCR sidecar, TensorZero, REPLv2
 - **Operations & multi-tenancy:** [docs/ops/](docs/ops/) — production MT, per-tenant config, harness guides, worker containers, release cadence
 - **Release notes:** [docs/releases/](docs/releases/) — v1.0.7 → v1.1.8 (latest: [RELEASE-v1.1.8.md](docs/releases/RELEASE-v1.1.8.md))
 - **Bug tracker:** [docs/bugs/README.md](docs/bugs/README.md)
 - **Active proposals:** [docs/proposals/](docs/proposals/)
+- **Specs:** [docs/specs/](docs/specs/) — standalone subsystem specifications
+- **Reviews:** [docs/reviews/](docs/reviews/) — architecture and code reviews
+- **Superpowers:** [docs/superpowers/](docs/superpowers/) — agent-driven plans and design specs
 - **Vision service:** [projects/ocr-sidecar/README.md](projects/ocr-sidecar/README.md)
 - **Testing guide:** [docs/guides/TESTING_GUIDE.md](docs/guides/TESTING_GUIDE.md)
 
