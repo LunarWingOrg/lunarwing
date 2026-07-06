@@ -165,6 +165,11 @@ def build_build_tenant_args(config: "TenantConfig") -> list[str]:
     return args
 
 
+def build_darkirc_args(config: "TenantConfig") -> list[str]:
+    script = ensure_mt_admin()
+    return [script, "build-darkirc", "--tenant", config.name]
+
+
 def build_start_tenant_args(config: "TenantConfig") -> list[str]:
     """Construct the argv list for ``mt-admin start-tenant``."""
     script = ensure_mt_admin()
@@ -203,6 +208,11 @@ def provision(
         result.phases.append(_run(build_args, on_output=on_output))
         if not result.phases[-1].ok:
             return result
+        if config.enable_darkirc:
+            darkirc_args = build_darkirc_args(config)
+            result.phases.append(_run(darkirc_args, on_output=on_output))
+            if not result.phases[-1].ok:
+                return result
 
     if not skip_start:
         start_args = build_start_tenant_args(config)
