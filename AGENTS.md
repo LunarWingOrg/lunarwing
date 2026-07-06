@@ -47,21 +47,23 @@ Start with these deeper docs as needed (keep in mind most of these are outdated 
 - Observability: `src/observability/`
 - Extension registry catalog: `src/registry/`
 - OpenClaw port staging work: `ic/openclaw-ports/`. For OpenClaw port tasks, keep edits inside `ic/openclaw-ports/` unless the user explicitly approves touching core LunarWing files.
+- DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS
 
 ## Build Constraints (Gentoo Dev VM)
 
 This dev/test machine has limited resources. **All cargo commands must follow these rules:**
 
 - **6 threads max**: prefix every cargo command with `taskset -c 0-5`
-- **Use `cargo check` for compile verification, NOT `cargo build`** — full debug builds are wasteful and should be avoided. Reserve release builds (`cargo build --release`) for deploying to a new tenant or upgrading an existing tenant's release binary.
+- **Use `cargo check` for compile verification, NOT `cargo build`** — DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS. Reserve release builds (`cargo build --release`) for deploying to a new tenant or upgrading an existing tenant's release binary.
 - **Use `taskset -c 0-5` for every cargo command**, not just `cargo build`. This applies to `cargo check`, `cargo test`, `cargo clippy`, `cargo doc`, etc.
+- DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS
 
 ```bash
 taskset -c 0-5 cargo check -j6                              # compile check
 taskset -c 0-5 cargo check -j6 --no-default-features --features postgres  # postgres-only
 taskset -c 0-5 cargo check -j6 --no-default-features --features libsql    # libsql-only
 taskset -c 0-5 cargo check -j6 --all-features               # all features
-taskset -c 0-5 cargo test -j6 -- --test-threads=16            # unit tests
+taskset -c 0-5 cargo test -j6 -- --test-threads=6            # unit tests
 taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples -- -D warnings  # lint
 taskset -c 0-5 cargo clippy -j6 --all --benches --tests --examples --all-features -- -D warnings
 ```
@@ -115,6 +117,8 @@ cargo bench --all-features --no-run
 ./scripts/build-wasm-extensions.sh --channels  # channels only
 ```
 
+*DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS*
+
 ## Ownership and Composition Rules
 
 - Keep `src/main.rs` and `src/app.rs` orchestration-focused. Do not move module-owned logic into entrypoints.
@@ -151,6 +155,7 @@ cargo bench --all-features --no-run
 - Session/thread/turn state matters. Submission parsing happens before normal chat handling.
 - Skills are selected deterministically. Tool approval and auth flows are special paths and must not be mixed into normal chat history carelessly.
 - Persistent memory is the workspace system, not just transcript storage; preserve file-like semantics, chunking/search behavior, and identity/system-prompt loading.
+- *DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS*
 
 ## Tools, Channels, and Extensions
 
@@ -178,6 +183,7 @@ cargo bench --all-features --no-run
 - If you change implementation status for any feature tracked in `FEATURE_PARITY.md`, update that file in the same branch.
 - Do not open a PR that changes feature behavior without checking `FEATURE_PARITY.md` for needed status updates (`❌`, `🚧`, `✅`, notes, and priorities).
 - Add the narrowest tests that validate the change: unit tests for local logic, integration tests for runtime/DB/routing behavior, and E2E or trace coverage for gateway, approvals, extensions, or other user-visible flows.
+- *DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS*
 
 ## Risk and Change Discipline
 
@@ -186,6 +192,7 @@ cargo bench --all-features --no-run
 - Preserve existing defaults unless the task explicitly changes them.
 - Avoid unrelated file churn and generated-file edits unless required.
 - Respect a dirty worktree and never revert user changes you did not make.
+- *DO NOT USE FULL DEBUG BUILDS DO NOT USE FULL DEBUG BUILDS. WASTEFUL AND TO BE AVOIDED AT ALL COSTS*
 
 ## Before Finishing
 
