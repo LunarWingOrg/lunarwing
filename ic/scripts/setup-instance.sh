@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Deprecated as of v1.1.9 (GOALS_1.1.9.md item #12) in favor of
+# `python3 -m lunarwing_mt_onboard`. Set LUNARWING_ONBOARD_LEGACY_OK=1 to bypass.
+if [[ "${LUNARWING_ONBOARD_LEGACY_OK:-}" != "1" ]]; then
+  cat >&2 <<'BANNER'
+--------------------------------------------------------------------
+DEPRECATED: setup-instance.sh is deprecated as of v1.1.9.
+
+Please migrate to the new interactive onboarding CLI:
+  sudo python3 -m lunarwing_mt_onboard
+
+Or for single-instance onboarding:
+  lunarwing onboard --quick
+
+See docs/proposals/MT-ONBOARDING-CLI.md for migration notes.
+To silence this banner and run the legacy script anyway:
+  LUNARWING_ONBOARD_LEGACY_OK=1 scripts/setup-instance.sh ...
+--------------------------------------------------------------------
+BANNER
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEPLOY_DIR="$REPO_ROOT/deploy"
