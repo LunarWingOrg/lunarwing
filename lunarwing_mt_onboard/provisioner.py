@@ -234,6 +234,10 @@ def _inject_secrets(config: "TenantConfig") -> None:
     if not secrets:
         return
 
+    def _fmt(key: str, val: str) -> str:
+        escaped = val.replace("\\", "\\\\").replace("'", "\\'")
+        return f"{key}='{escaped}'\n"
+
     seen = set()
     new_lines = []
     for line in lines:
@@ -243,14 +247,14 @@ def _inject_secrets(config: "TenantConfig") -> None:
             continue
         key = stripped.split("=", 1)[0]
         if key in secrets:
-            new_lines.append(f"{key}={secrets[key]}\n")
+            new_lines.append(_fmt(key, secrets[key]))
             seen.add(key)
         else:
             new_lines.append(line)
 
     for key, val in secrets.items():
         if key not in seen:
-            new_lines.append(f"{key}={val}\n")
+            new_lines.append(_fmt(key, val))
 
     with open(env_file, "w") as f:
         f.writelines(new_lines)
