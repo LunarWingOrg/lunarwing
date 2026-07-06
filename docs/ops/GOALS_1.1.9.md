@@ -21,7 +21,7 @@
 16. [x] Self-Healing capability expansion, decided to defer this to 2.0.0 (find the missing mysterious 1.1.8 self healing expansion doc first)
 17. [x] Refine defaults of new mt admin interactive program 
 18. [x] Refine deploy workspace defaults for agents
-19. [ ] fix warnings in clippy and cargo. So: cargo warnings look fixed for cargo check, but the clippy warnings not fixed (in progress; needs verification)
+19. [ ] fix warnings in clippy and cargo. So: cargo warnings look fixed for cargo check, but the clippy warnings not fixed. the branch rarity/item-19-20260706-2000 with PR: https://github.com/LunarWingOrg/lunarwing/pull/186 still has the same 5 clippy warnings.
 20. [x] Bump crate versions to 1.1.9
 21. [x] Ensure all relevant crates are bumped to 1.1.9 and build works properly
 22. [x] Update repo root-level README.md
