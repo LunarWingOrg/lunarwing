@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Edit these
-LIBSQL_DB="/home/user/.ironclaw/ironclaw.db"
-EXPORT_DIR="/tmp/ironclaw-export"
+LIBSQL_DB="/home/user/.lunarwing/lunarwing.db"
+EXPORT_DIR="/tmp/lunarwing-export"
 
 mkdir -p "$EXPORT_DIR"
 
