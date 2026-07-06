@@ -5282,7 +5282,7 @@ start() {
     ebegin "Starting WeeChat ($name)"
     checkpath -d -m 0750 -o "\${weechat_user}:\${weechat_group}" "\${weechat_home}"
     checkpath -d -m 0750 -o "\${weechat_user}:\${weechat_group}" "\${weechat_runtime_dir}"
-    start-stop-daemon --start --user "\${weechat_user}" \\
+    start-stop-daemon --start --background --user "\${weechat_user}" \\
         --exec $(command -v tmux) -- -L weechat-${name} new-session -d -s weechat "$(command -v weechat) --dir \${weechat_home}"
     eend \$?
 }
