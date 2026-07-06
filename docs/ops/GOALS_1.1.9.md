@@ -17,8 +17,8 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 8. [x] Remove support for all (or at least, some of) the other random unsupported LLM providers
 9. [x] Remove the following non-LunarWing third party skills from default installation: linear, github
 10. [x] Drop support for the custom TensorZero proxy (toggle off existing, default-disabled on new)
-11. [ ] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup (still kind of an in-planning stage thing but want local http web gui and/or interactive cli application for this - Current plan is at docs/proposals/MT-ONBOARDING-CLI.md ) — **CLI scaffold shipped in `lunarwing_mt_onboard/`**: interactive questionary+rich flow, `TenantConfig` JSON save/resume, thin wrapper over `mt-admin.sh` (add→build→start), post-start verify, 19 unit tests, smoke-test script (`ic/scripts/test-mt-onboard.sh`), `setup-instance.sh` deprecation banner (item #12). Phase 2 web UI still deferred.
-12. [ ] Related to the above, deprecate or update legacy setup scripts
+11. [x] Enhance Onboarding Process for new users and fresh tenants with an interactive version of multi admin setup (still kind of an in-planning stage thing but want local http web gui and/or interactive cli application for this - Current plan is at docs/proposals/MT-ONBOARDING-CLI.md ) — **CLI scaffold shipped in `lunarwing_mt_onboard/`**: interactive questionary+rich flow, `TenantConfig` JSON save/resume, thin wrapper over `mt-admin.sh` (add→build→start), post-start verify, 19 unit tests, smoke-test script (`ic/scripts/test-mt-onboard.sh`), `setup-instance.sh` deprecation banner (item #12). Phase 2 web UI still deferred.
+12. [x] Related to the above, deprecate or update legacy setup scripts
 13. [x] Remove/archive stale documentation
 14. [x] Ensure that references in documentation which refer to 1.2.0 correctly mention 2.0.0 - 1.2.0 will be 2.0.0 from now on
 15. [x] Further updating and re-organization of repository documentation
