@@ -8,7 +8,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 ### Helps to do items in order (generally)
 
 1. [x] Finalize goals
-2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories; subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 2.0.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. RENAMES REMAINING: nearai artifact URLs/installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path; nearai provider refs for item #8 - Ensure all is documented
+2. [ ] Some remaining IC->LW renames for commands, documentation, and repository directories; subprotocol now `lunarwing-agent-v1` with dual-accept legacy alias (drop offer in 2.0.0); completions regenerated; internal env vars dual-write LUNARWING_*/IRONCLAW_*. RENAMES REMAINING: installer allowlist, nearaidev Docker Hub CI images, release-plz owner guard, GCP deploy path; nearai provider refs for item #8. Artifact URLs in registry manifests removed; affected extensions are source-build-only. Ensure all is documented
 3. [ ] test a fresh tenant on systemd machine with all the bells and whistles (darkirc, all external workers, etc). document any failures/issues (do some of the other stuff first, do this multiple times)
 4. [ ] re-test changes with fresh tenant on openrc machine with all the bells and whistles. document any failures/issues (do some of the other stuff first, do this multiple times)
 5. [ ] test with 1.1.7/1.1.8 (or lower) tenant -> in place upgrade on systemd machine using in-place upgrade feature of mt-admin-setup. document any failures/issues (do some of the other stuff first, do this multiple times)
@@ -42,4 +42,3 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 33. [ ] Maintain 1.1.9.X going forward as stable supported build. Backport easy high priority bug fixes to it. The next release after 1.1.9 is the 2.0.0 release which will overhaul several systems
 
 ---
-
