@@ -265,7 +265,6 @@ impl AcpModeConfig {
 #[cfg(test)]
 mod tests {
     use crate::config::sandbox::*;
-    use crate::testing::credentials::*;
     use secrecy::ExposeSecret;
 
     // ── SandboxModeConfig defaults ──────────────────────────────────
