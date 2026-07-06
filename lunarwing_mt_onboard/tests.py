@@ -7,6 +7,7 @@ import os
 import tempfile
 import unittest
 
+from lunarwing_mt_onboard import provisioner
 from lunarwing_mt_onboard.config import TenantConfig, WorkerType
 from lunarwing_mt_onboard.secrets import (
     generate_master_key,
@@ -95,6 +96,103 @@ class TestConfigSerialization(unittest.TestCase):
                 data = json.loads(f.read())
             self.assertIn("name", data)
             self.assertEqual(data["name"], "json-check")
+
+
+class TestProvisionerArgs(unittest.TestCase):
+    def test_custom_gateway_host_is_forwarded_to_mt_admin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "lunarwing-mt-admin.sh")
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o700)
+
+            previous = provisioner.MT_ADMIN_SCRIPT
+            provisioner.MT_ADMIN_SCRIPT = script
+            try:
+                config = TenantConfig(name="alpha", gateway_host="10.0.0.25")
+                args = provisioner.build_add_tenant_args(config)
+            finally:
+                provisioner.MT_ADMIN_SCRIPT = previous
+
+        self.assertIn("--gateway-host", args)
+        self.assertIn("10.0.0.25", args)
+
+    def test_custom_xmpp_jid_is_forwarded_to_mt_admin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "lunarwing-mt-admin.sh")
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o700)
+
+            previous = provisioner.MT_ADMIN_SCRIPT
+            provisioner.MT_ADMIN_SCRIPT = script
+            try:
+                config = TenantConfig(
+                    name="alpha",
+                    xmpp_enabled=True,
+                    xmpp_jid="alpha@chat.example.net",
+                )
+                args = provisioner.build_add_tenant_args(config)
+            finally:
+                provisioner.MT_ADMIN_SCRIPT = previous
+
+        self.assertIn("--xmpp-jid", args)
+        self.assertIn("alpha@chat.example.net", args)
+
+    def test_darkirc_flag_is_forwarded_to_mt_admin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "lunarwing-mt-admin.sh")
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o700)
+
+            previous = provisioner.MT_ADMIN_SCRIPT
+            provisioner.MT_ADMIN_SCRIPT = script
+            try:
+                config = TenantConfig(name="alpha", enable_darkirc=True)
+                args = provisioner.build_add_tenant_args(config)
+            finally:
+                provisioner.MT_ADMIN_SCRIPT = previous
+
+        self.assertIn("--enable-darkirc", args)
+
+    def test_build_darkirc_uses_tenant_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "lunarwing-mt-admin.sh")
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o700)
+
+            previous = provisioner.MT_ADMIN_SCRIPT
+            provisioner.MT_ADMIN_SCRIPT = script
+            try:
+                config = TenantConfig(name="alpha", enable_darkirc=True)
+                args = provisioner.build_darkirc_args(config)
+            finally:
+                provisioner.MT_ADMIN_SCRIPT = previous
+
+        self.assertEqual(args, [script, "build-darkirc", "--tenant", "alpha"])
+
+    def test_lunarwing_model_is_forwarded_to_mt_admin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "lunarwing-mt-admin.sh")
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o700)
+
+            previous = provisioner.MT_ADMIN_SCRIPT
+            provisioner.MT_ADMIN_SCRIPT = script
+            try:
+                config = TenantConfig(
+                    name="alpha",
+                    llm_model="tensorzero::function_name::lunarwing",
+                )
+                args = provisioner.build_add_tenant_args(config)
+            finally:
+                provisioner.MT_ADMIN_SCRIPT = previous
+
+        self.assertIn("--llm-model", args)
+        self.assertIn("tensorzero::function_name::lunarwing", args)
 
 
 class TestSecretsHelpers(unittest.TestCase):
