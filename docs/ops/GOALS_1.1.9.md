@@ -21,7 +21,7 @@ https://github.com/LunarWingOrg/lunarwing/issues/140
 12. [ ] Related to the above, deprecate or update legacy setup scripts
 13. [x] Remove/archive stale documentation
 14. [x] Ensure that references in documentation which refer to 1.2.0 correctly mention 2.0.0 - 1.2.0 will be 2.0.0 from now on
-15. [ ] Further updating and re-organization of repository documentation
+15. [x] Further updating and re-organization of repository documentation
 16. [x] Self-Healing capability expansion, decided to defer this (find the missing mysterious 1.1.8 self healing expansion doc first)
 17. [x] Bump crate versions to 1.1.9
 18. [ ] Ensure all relevant crates are bumped to 1.1.9 and build works properly

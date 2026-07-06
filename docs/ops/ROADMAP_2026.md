@@ -12,7 +12,7 @@ Items are grouped to respect the release cadence (`docs/ops/RELEASE_CADENCE.md`)
 | Drop legacy `ironclaw-agent-v1` acceptance from external workers (pebble/lunarcode/opencode `LEGACY_SUBPROTOCOL` constants + negotiation fallback), one release after the daemon stops offering it | v2.0.1 |
 | Org/registry decisions deferred from 1.1.9 item #2: re-host registry WASM artifacts or make them source-build-only (nearai/ironclaw release URLs in `ic/registry/*.json` + `installer.rs` allowlist), replace `nearaidev/*` Docker Hub images in `docker.yml`/`rebuild-release-image.yml`, fix or delete the `release-plz.yml` `repository_owner == 'nearai'` guard, keep-or-drop the GCP deploy path (`ic/deploy/`) — fits alongside the Forgejo/CI migration | v2.0.1 |
 | Further polishing of Lunarvision AND XMPP file sharing integration - see XMPP_LUNARVISION_INTEGRATION.md in docs/proposals for some information | v2.0.1 |
-| In-place Upgrade Harness v3/v4 to cover ALL version upgrades, rather than seperate legacy and non-legacy upgrade scripts | v2.0.1 |
+| In-place Upgrade Harness v3/v4 to cover ALL version upgrades, rather than separate legacy and non-legacy upgrade scripts | v2.0.1 |
 | Migrate from Github to Forgejo. Multi-arch CI/CD pipeline for development | v2.0.1 |
 | Better githooks for repo | v2.0.1 |
 | Lorebook support / Agent Profile enhancements / Workspace Seeding improvements / Agent Profile switching / User Profile switching (further planning required) | v2.0.2 |
