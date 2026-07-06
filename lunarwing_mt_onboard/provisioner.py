@@ -192,7 +192,11 @@ def provision(
     if not result.phases[-1].ok:
         return result
 
-    _inject_secrets(config)
+    try:
+        _inject_secrets(config)
+    except Exception as exc:
+        result.phases.append(PhaseResult(name="inject-secrets", returncode=1, stderr=str(exc)))
+        return result
 
     if not skip_build:
         build_args = build_build_tenant_args(config)
@@ -211,7 +215,9 @@ def _inject_secrets(config: "TenantConfig") -> None:
     env_dir = os.path.join("/home", config.name, "lunarwing", "env")
     env_file = os.path.join(env_dir, "lunarwing.env")
     if not os.path.isfile(env_file):
-        return
+        raise FileNotFoundError(
+            f"lunarwing.env not found at {env_file} — add-tenant may have failed"
+        )
 
     lines = []
     with open(env_file, "r") as f:
