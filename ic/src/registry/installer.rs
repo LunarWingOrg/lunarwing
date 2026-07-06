@@ -9,7 +9,7 @@ use crate::bootstrap::lunarwing_base_dir;
 use crate::registry::catalog::RegistryError;
 use crate::registry::manifest::{BundleDefinition, ExtensionManifest, ManifestKind, SourceSpec};
 
-// GitHub-only by design. New trusted hosts (e.g. a NEAR AI CDN) must be
+// GitHub-only by design. New trusted artifact hosts must be
 // explicitly added here; unknown hosts fall back to source build with a
 // warning rather than surfacing a clear "host not allowed" error.
 const ALLOWED_ARTIFACT_HOSTS: &[&str] = &[
@@ -21,16 +21,9 @@ const ALLOWED_ARTIFACT_HOSTS: &[&str] = &[
 
 fn should_attempt_source_fallback(err: &RegistryError) -> bool {
     match err {
-        // `releases/latest` is a moving target: every new release rebuilds WASM
-        // extensions, so a mismatch against a `latest` URL just means the binary
-        // was compiled against an older release's checksum. Not a security concern
-        // — fall back to building from source.
-        //
-        // Version-pinned URLs (`releases/download/vX.Y.Z/`) point to an immutable
-        // asset; a mismatch there is genuinely suspicious and remains a hard block.
-        RegistryError::ChecksumMismatch { url, .. } => {
-            url.contains("github.com/nearai/ironclaw/releases/latest/")
-        }
+        // A checksum mismatch on any URL signals a stale manifest or corrupt
+        // artifact, not a transient download problem.
+        RegistryError::ChecksumMismatch { .. } => false,
         // Never fall back for these — they signal a structural problem or a
         // deliberate "already done" state, not a transient artifact issue.
         RegistryError::AlreadyInstalled { .. } | RegistryError::InvalidManifest { .. } => false,
@@ -915,7 +908,8 @@ mod tests {
             "demo",
             "tools-src/demo",
             Some(
-                "http://github.com/nearai/ironclaw/releases/latest/download/demo.wasm".to_string(),
+                "http://github.com/LunarWingOrg/lunarwing/releases/latest/download/demo.wasm"
+                    .to_string(),
             ),
             None,
         );
@@ -968,7 +962,7 @@ mod tests {
             "demo",
             "tools-src/demo",
             Some(
-                "https://github.com/nearai/ironclaw/releases/latest/download/demo-wasm32-wasip2.tar.gz".to_string(),
+                "https://github.com/LunarWingOrg/lunarwing/releases/latest/download/demo-wasm32-wasip2.tar.gz".to_string(),
             ),
             None, // sha256 = null
         );
@@ -985,7 +979,7 @@ mod tests {
     #[test]
     fn test_should_attempt_source_fallback_policy() {
         let download = RegistryError::DownloadFailed {
-            url: "https://github.com/nearai/ironclaw/releases/latest/download/demo.wasm"
+            url: "https://github.com/LunarWingOrg/lunarwing/releases/latest/download/demo.wasm"
                 .to_string(),
             reason: "http status 404".to_string(),
         };
@@ -1147,23 +1141,22 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // Regression test for issue #439: ChecksumMismatch on a `releases/latest` URL
-    // must allow source-build fallback (moving-target URL, not a security concern),
-    // while a mismatch on a version-pinned URL must remain a hard block.
+    // ChecksumMismatch always remains a hard block. Source fallback is only for
+    // transient download/build bootstrap failures, not integrity failures.
     #[test]
     fn test_source_fallback_on_latest_url_mismatch() {
         let latest_mismatch = RegistryError::ChecksumMismatch {
-            url: "https://github.com/nearai/ironclaw/releases/latest/download/github-wasm32-wasip2.tar.gz".to_string(),
+            url: "https://github.com/LunarWingOrg/lunarwing/releases/latest/download/github-wasm32-wasip2.tar.gz".to_string(),
             expected_sha256: "aaa".to_string(),
             actual_sha256: "bbb".to_string(),
         };
         assert!(
-            should_attempt_source_fallback(&latest_mismatch),
-            "ChecksumMismatch on releases/latest URL should allow source fallback"
+            !should_attempt_source_fallback(&latest_mismatch),
+            "ChecksumMismatch on releases/latest URL must remain a hard block"
         );
 
         let pinned_mismatch = RegistryError::ChecksumMismatch {
-            url: "https://github.com/nearai/ironclaw/releases/download/v0.7.0/github-0.2.0-wasm32-wasip2.tar.gz".to_string(),
+            url: "https://github.com/LunarWingOrg/lunarwing/releases/download/v0.7.0/github-0.2.0-wasm32-wasip2.tar.gz".to_string(),
             expected_sha256: "aaa".to_string(),
             actual_sha256: "bbb".to_string(),
         };
