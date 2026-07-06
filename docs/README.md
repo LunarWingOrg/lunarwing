@@ -1,8 +1,8 @@
 # LunarWing Documentation
 
-All project documentation, organized by category. This index reflects the tree after the
-2026-06 documentation reorganization — every **active** file is listed below. Archived material
-lives under [`internal/history/`](internal/history/) (superseded LunarWing docs) and
+All project documentation, organized by category. This index reflects the current tree —
+every **active** file is listed below. Archived material lives under
+[`internal/history/`](internal/history/) (superseded LunarWing docs) and
 [`internal/vendored/`](internal/vendored/) (third-party upstream copies).
 
 * Original Author: Starforce Nebula *
@@ -45,8 +45,12 @@ How-to guides, build instructions, and setup walkthroughs.
 | [`MULTICA_DEPLOYMENT.md`](guides/MULTICA_DEPLOYMENT.md) | Multica/Lunartica deployment guide |
 | [`human-delay-mode.md`](guides/human-delay-mode.md) | Human-delay mode overview |
 | [`DEBUG_LOG.md`](guides/DEBUG_LOG.md) | Catalog of debug/info log points by `file:line` |
+| [`ENABLING_DEV_TOOLS.md`](guides/ENABLING_DEV_TOOLS.md) | Enabling filesystem/shell developer tools for a tenant |
+| [`SSH-TOOL-TESTING.md`](guides/SSH-TOOL-TESTING.md) | Test prompts for validating the three SSH delivery mechanisms |
+| [`AI-CODE-CONTRIBUTION-POLICY.md`](guides/AI-CODE-CONTRIBUTION-POLICY.md) | AI code contribution policy (effective July 7th, 2026) |
 | [`darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md`](guides/darkirc_channel_for_lunarwing/BUILD_INSTRUCTIONS.md) | DarkIRC channel build instructions |
 | [`darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md`](guides/darkirc_channel_for_lunarwing/DARKIRC_BUILD_GUIDE.md) | Full DarkIRC build guide |
+| [`darkirc_channel_for_lunarwing/DARKIRC_MT_ADAPTER.md`](guides/darkirc_channel_for_lunarwing/DARKIRC_MT_ADAPTER.md) | DarkIRC multi-tenant adapter |
 | [`lunarwing_weechat_wss/README.md`](guides/lunarwing_weechat_wss/README.md) | WeeChat WSS channel overview |
 | [`lunarwing_weechat_wss/weechat_relay/INSTALL.md`](guides/lunarwing_weechat_wss/weechat_relay/INSTALL.md) | WeeChat relay installation |
 | [`lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md`](guides/lunarwing_weechat_wss/weechat_relay/TROUBLESHOOTING.md) | WeeChat relay troubleshooting |
@@ -65,6 +69,7 @@ Deployment, operations, multitenancy, and production guides.
 |------|-------------|
 | [`MULTITENANCY-PRODUCTION.md`](ops/MULTITENANCY-PRODUCTION.md) | Production multi-tenancy walkthrough |
 | [`DARKIRC-MULTITENANT.md`](ops/DARKIRC-MULTITENANT.md) | DarkIRC multitenant operations: port migration, provisioning, lifecycle, health, troubleshooting |
+| [`DARKIRC-MULTITENANT-CHANGES-JUN23-FLAG-INFO.md`](ops/DARKIRC-MULTITENANT-CHANGES-JUN23-FLAG-INFO.md) | `--enable-darkirc` flag changes for mt-admin (June 2023 snapshot) |
 | [`TENANT-CONFIGURATION.md`](ops/TENANT-CONFIGURATION.md) | Per-tenant configuration reference (env, LLM, XMPP, ports) |
 | [`TENANT-RENAME-MIGRATION-1.1.9.md`](ops/TENANT-RENAME-MIGRATION-1.1.9.md) | Upgrading 1.1.7/1.1.8 tenants across the 1.1.9 directory renames (render-units flow, compat-symlink window, v2.0.0 deadline) |
 | [`TEST-PLAN-UPGRADED-TENANT-1.1.9.md`](ops/TEST-PLAN-UPGRADED-TENANT-1.1.9.md) | Validated test plan for the upgraded-tenant path: synthesize a v1.1.8 tenant, upgrade, assert compat symlinks/protocol/render-units (OpenRC) |
@@ -80,11 +85,15 @@ Deployment, operations, multitenancy, and production guides.
 | [`RELEASE-COMMANDS.md`](ops/RELEASE-COMMANDS.md) | Release git/GitHub command template |
 | [`RELEASE_CADENCE.md`](ops/RELEASE_CADENCE.md) | Release cadence policy |
 | [`PRE-RELEASE-TESTING.md`](ops/PRE-RELEASE-TESTING.md) | Pre-release test status + test landscape |
+| [`GOALS_1.1.9.md`](ops/GOALS_1.1.9.md) | Pre-release checklist for 1.1.9 (`Kiyome きよめ`) |
+| [`ROADMAP_2026.MD`](ops/ROADMAP_2026.MD) | 2026 roadmap |
 | [`MT-MACHINE-MIGRATION.md`](ops/MT-MACHINE-MIGRATION.md) | Migrating a multi-tenant host to a new machine |
 | [`MT-GENTOO-SETUP-AND-CHANGES-MADE.md`](ops/MT-GENTOO-SETUP-AND-CHANGES-MADE.md) | Gentoo/OpenRC multi-tenant setup notes |
+| [`guide-for-spin-up-gentoo-tenants.md`](ops/guide-for-spin-up-gentoo-tenants.md) | Step-by-step guide for spinning up a Gentoo/OpenRC tenant |
 | [`MT-LEGACY-UPGRADE-NOTES.md`](ops/MT-LEGACY-UPGRADE-NOTES.md) | Legacy same-host version upgrade runbook (v1.0.3–v1.0.8 → v1.1.x) |
 | [`SELF_REPAIR_IMPROVEMENTS_GENTOO.md`](ops/SELF_REPAIR_IMPROVEMENTS_GENTOO.md) | Self-heal fd-leak fix found on a live OpenRC MT host |
 | [`ROADMAP_2026.md`](ops/ROADMAP_2026.md) | 2026 roadmap |
+| [`GITHOOKS_HOW_TO.md`](ops/GITHOOKS_HOW_TO.md) | How to install githooks |
 | [`IMPORT_EXPORT_EXAMPLE.txt`](ops/IMPORT_EXPORT_EXAMPLE.txt) | Worker import/export example |
 | [`KUMOGAKURE_INSTRUCT.md`](ops/KUMOGAKURE_INSTRUCT.md) | Pointer to the external Notes vault |
 
@@ -100,6 +109,37 @@ Protocol specs, contract definitions, and API references.
 | File | Description |
 |------|-------------|
 | [`custom_bridges/XMPP.md`](reference/custom_bridges/XMPP.md) | XMPP custom-bridge reference: architecture, loopback HTTP API, env vars, deployment |
+
+---
+
+### 📐 [`specs/`](specs/)
+
+Standalone specifications for specific features or patterns.
+
+| File | Description |
+|------|-------------|
+| [`podman-wait-babysitter.md`](specs/podman-wait-babysitter.md) | Podman wait-babysitter pattern spec |
+
+---
+
+### 🔍 [`reviews/`](reviews/)
+
+Architecture and code reviews.
+
+| File | Description |
+|------|-------------|
+| [`SWEETIE-ARCH-REVIEW.md`](reviews/SWEETIE-ARCH-REVIEW.md) | Full codebase architecture review by SweetieBot |
+
+---
+
+### 🚀 [`superpowers/`](superpowers/)
+
+Agent-driven plan and spec documents produced by the superpowers workflow.
+
+| Subdirectory | Description |
+|--------------|-------------|
+| [`plans/`](superpowers/plans/) | Implementation plans (LunarVision VL wiring, vision-analyze tool, mt-admin SSH, mt-admin runtime persistence) |
+| [`specs/`](superpowers/specs/) | Design specs corresponding to the plans |
 
 ---
 
@@ -119,6 +159,7 @@ the reorg.
 | [`MT-1.1.0-TO-1.1.4-UPGRADE.md`](proposals/MT-1.1.0-TO-1.1.4-UPGRADE.md) | Multi-tenant v1.1.0 → v1.1.4 upgrade plan + tooling |
 | [`MT-LEGACY-UPGRADE-VERIFICATION.md`](proposals/MT-LEGACY-UPGRADE-VERIFICATION.md) | Live validation plan for the v1.0.3-era same-host upgrade harness |
 | [`MT-LEGACY-UPGRADE-QA-PLAN.md`](proposals/MT-LEGACY-UPGRADE-QA-PLAN.md) | Operator one-page live-validation checklist for legacy upgrades (v1.0.3-era → v1.1.2/3) |
+| [`MT-LEGACY-UPGRADE-CHERRYPICK-PLAN.md`](proposals/MT-LEGACY-UPGRADE-CHERRYPICK-PLAN.md) | Cherry-pick & fix plan for legacy upgrades (v1.0.3 → v1.1.2) |
 | [`MT-WEECHAT-CONSISTENCY-AND-CHANNEL-PRUNING.md`](proposals/MT-WEECHAT-CONSISTENCY-AND-CHANNEL-PRUNING.md) | WeeChat multi-tenant consistency + channel pruning |
 | [`OPENRC_ACCURATE_REPORT_16_JUNE_2026.md`](proposals/OPENRC_ACCURATE_REPORT_16_JUNE_2026.md) | OpenRC multi-tenant accurate report (2026-06-16) |
 | [`ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md`](proposals/ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md) | Rootless-podman container supervision gap analysis |
@@ -139,6 +180,29 @@ the reorg.
 | [`LUNARVISION_POLISHING.md`](proposals/LUNARVISION_POLISHING.md) | LunarVision polish + health-check wiring (idea) |
 | [`REFINE_LIBSQL_MIGRATION_GUIDE.md`](proposals/REFINE_LIBSQL_MIGRATION_GUIDE.md) | Refine the libSQL migration guide (TODO) |
 | [`CARGO_TESTS_FIX.md`](proposals/CARGO_TESTS_FIX.md) | Revisit the few failing cargo tests (TODO) |
+| [`HTTP_TOOL_SSRF_PROTECTIONS.md`](proposals/HTTP_TOOL_SSRF_PROTECTIONS.md) | Agent HTTP tool SSRF protections investigation |
+| [`JINGLE_IBB_FEASIBILITY.md`](proposals/JINGLE_IBB_FEASIBILITY.md) | Jingle/IBB file transfer feasibility investigation |
+| [`XMPP_INCOMING_ATTACHMENT.md`](proposals/XMPP_INCOMING_ATTACHMENT.md) | XMPP incoming attachment handling investigation |
+| [`XMPP_LUNARVISION_INTEGRATION.md`](proposals/XMPP_LUNARVISION_INTEGRATION.md) | XMPP + LunarVision integration proposal |
+| [`XMPP_OMEMO_AESGCM_URL_LEAK_FIX.md`](proposals/XMPP_OMEMO_AESGCM_URL_LEAK_FIX.md) | OMEMO `aesgcm://` URL leak fix proposal |
+| [`XMPP_WASM_ATTACHMENT_TRAP.md`](proposals/XMPP_WASM_ATTACHMENT_TRAP.md) | XMPP WASM attachment trap investigation |
+| [`KAWARIMI-OWNER-SCOPE-CONTINUITY.md`](proposals/KAWARIMI-OWNER-SCOPE-CONTINUITY.md) | Kawarimi owner-scope continuity implementation proposal |
+| [`APP_BUILDER_DIRECTION.md`](proposals/APP_BUILDER_DIRECTION.md) | App Builder (enhanced) direction proposal |
+| [`AGENT_SSH_DEV_HARNESS.md`](proposals/AGENT_SSH_DEV_HARNESS.md) | Agent SSH dev test process and tool |
+| [`DARKIRC_THINGS_TO_ADD.md`](proposals/DARKIRC_THINGS_TO_ADD.md) | DarkIRC future enhancements (Tor transport, seed availability) |
+| [`ADD-TENANTS-ADDITIONS.md`](proposals/ADD-TENANTS-ADDITIONS.md) | Additional flags to make configurable for `add-tenants` |
+| [`OH-MY-OPENAGENT.md`](proposals/OH-MY-OPENAGENT.md) | Add `oh-my-openagent.jsonc` equivalent for opencode worker |
+| [`EXTERNAL-WORKER-AUDIT-2026-06-23.md`](proposals/EXTERNAL-WORKER-AUDIT-2026-06-23.md) | External worker security audit (2026-06-23) |
+| [`EXTERNAL-WORKER-PLAN-UPGRADES.md`](proposals/EXTERNAL-WORKER-PLAN-UPGRADES.md) | External worker system upgrades plan |
+| [`EXTERNAL-WORKER-UPGRADES-PROGRESS.md`](proposals/EXTERNAL-WORKER-UPGRADES-PROGRESS.md) | External worker upgrades progress checklist |
+| [`OPENCODE-WORKER-SINGLE-TARGET-BUILD.md`](proposals/OPENCODE-WORKER-SINGLE-TARGET-BUILD.md) | Build only the native target in the opencode worker image |
+| [`PODMAN_WAIT_BABYSITTER.md`](proposals/PODMAN_WAIT_BABYSITTER.md) | Podman wait babysitter pattern proposal |
+| [`PODMAN_WAIT_BABYSITTER_REVIEW.md`](proposals/PODMAN_WAIT_BABYSITTER_REVIEW.md) | Review of the podman-wait babysitter branch |
+| [`rootless-podman-babysitter.md`](proposals/rootless-podman-babysitter.md) | Rootless podman babysitter plan |
+| [`qwen3vl-ocr-podman.md`](proposals/qwen3vl-ocr-podman.md) | Qwen3-VL + Tesseract OCR on rootless Podman (quadlets) |
+| [`ROUTINE_ENGINE_IMPROVEMENTS.md`](proposals/ROUTINE_ENGINE_IMPROVEMENTS.md) | Routine engine improvements proposal |
+| [`SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md`](proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md) | Session audit: MT admin, DarkIRC, external worker (2026-06-23) |
+| [`UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md`](proposals/UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md) | Upgrade/migrate issues found |
 | [`OLDPROJECT_PORT_ANALYSES/`](proposals/OLDPROJECT_PORT_ANALYSES/) | Pre-fork IronClaw 0.28–0.29 port analyses (5 docs; kept for reference) |
 
 ---
@@ -197,6 +261,9 @@ Release notes and changelogs (immutable historical records). See [`releases/READ
 
 A maintained Open/Fixed bug tracker. The full index is **[`bugs/README.md`](bugs/README.md)**.
 Open bugs live in `bugs/`; resolved bugs are retained under [`bugs/history/`](bugs/history/).
+A maintained Open/Fixed bug tracker. The full index is **[`bugs/README.md`](bugs/README.md)** —
+it lists bug docs (Open + Fixed-retained-for-history) plus the two 1.1.4 multi-tenant
+pre-release issue logs (`SYSTEMD-MT-1.1.4-ISSUES.md`, `OPENRC-MT-1.1.4-ISSUES.md`).
 
 ---
 
@@ -208,6 +275,7 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 |------|-------------|
 | [`FORK_CONTEXT.md`](internal/FORK_CONTEXT.md) | Fork history and context (authoritative; linked from `CLAUDE.md`) |
 | [`.github/pull_request_template.md`](internal/.github/pull_request_template.md) | LunarWing PR template (review tracks, validation checklist) |
+| [`CHANGELOG-AGENTS.md`](internal/CHANGELOG-AGENTS.md) | Internal changelog of `AGENTS.md` updates |
 | [`ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md`](internal/ic-infrastructure-health-check/draft-ic-infrastructure-health-check-analysis-report.md) | Health-check analysis draft |
 | [`nanocode-config/KAGEHO_QUESTIONS.md`](internal/nanocode-config/KAGEHO_QUESTIONS.md) | Agnostic coding-worker container design notes |
 | [`nanocode-config/NextSteps.md`](internal/nanocode-config/NextSteps.md) | Nanocode + TensorZero setup next steps |
@@ -223,6 +291,7 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 ### 📝 Top-level docs
 
 There are currently no top-level files in `docs/` outside the subdirectories above.
+- [`history/`](internal/history/) — superseded LunarWing docs relocated here during the reorg, by source area: `architecture/`, `guides/`, `internal/`, `proposals/`, `archive/`. See [`history/README.md`](internal/history/README.md).
 
 ---
 
@@ -246,10 +315,12 @@ When adding new documentation, place it in the appropriate subdirectory:
 1. **`architecture/`** — if it describes *why* the system is designed a certain way
 2. **`guides/`** — if it tells someone *how to do* something
 3. **`ops/`** — if it covers *deployment or operations*
-4. **`reference/`** — if it's a *spec, contract, or API doc*
-5. **`proposals/`** — if it's a *proposal or design for not-yet-shipped work*
-6. **`bugs/`** — if it's a *bug report* (and add it to [`bugs/README.md`](bugs/README.md))
-7. **`internal/`** — if it's a *draft, note, or working document*
+4. **`reference/`** — if it's a *protocol spec, contract, or API doc*
+5. **`specs/`** — if it's a *standalone feature specification*
+6. **`proposals/`** — if it's a *proposal or design for not-yet-shipped work*
+7. **`bugs/`** — if it's a *bug report* (and add it to [`bugs/README.md`](bugs/README.md))
+8. **`reviews/`** — if it's a *codebase or architecture review*
+9. **`internal/`** — if it's a *draft, note, or working document*
 
 Superseded or shipped docs are archived under `internal/history/` (LunarWing-authored) or
 `internal/vendored/` (third-party). Update this index when adding or moving files.
