@@ -5,6 +5,9 @@ every **active** file is listed below. Archived material lives under
 [`internal/history/`](internal/history/) (superseded LunarWing docs) and
 [`internal/vendored/`](internal/vendored/) (third-party upstream copies).
 
+* Original Author: Starforce Nebula *
+* Updated on July 6th by Rarity to reflect recent changes to the documentation tree: added missing entries for reviews/, specs/, superpowers/; fixed broken links (ROADMAP_2026, DOCS_REORG_CHECKLIST); added READMEs to previously undocumentated subdirectories.*
+
 ## Directory Structure
 
 ### 📐 [`architecture/`](architecture/)
@@ -89,6 +92,7 @@ Deployment, operations, multitenancy, and production guides.
 | [`guide-for-spin-up-gentoo-tenants.md`](ops/guide-for-spin-up-gentoo-tenants.md) | Step-by-step guide for spinning up a Gentoo/OpenRC tenant |
 | [`MT-LEGACY-UPGRADE-NOTES.md`](ops/MT-LEGACY-UPGRADE-NOTES.md) | Legacy same-host version upgrade runbook (v1.0.3–v1.0.8 → v1.1.x) |
 | [`SELF_REPAIR_IMPROVEMENTS_GENTOO.md`](ops/SELF_REPAIR_IMPROVEMENTS_GENTOO.md) | Self-heal fd-leak fix found on a live OpenRC MT host |
+| [`ROADMAP_2026.md`](ops/ROADMAP_2026.md) | 2026 roadmap |
 | [`GITHOOKS_HOW_TO.md`](ops/GITHOOKS_HOW_TO.md) | How to install githooks |
 | [`IMPORT_EXPORT_EXAMPLE.txt`](ops/IMPORT_EXPORT_EXAMPLE.txt) | Worker import/export example |
 | [`KUMOGAKURE_INSTRUCT.md`](ops/KUMOGAKURE_INSTRUCT.md) | Pointer to the external Notes vault |
@@ -203,14 +207,60 @@ the reorg.
 
 ---
 
+### 🔍 [`reviews/`](reviews/)
+
+Third-party and internal architecture reviews of the LunarWing codebase.
+
+| File | Description |
+|------|-------------|
+| [`SWEETIE-ARCH-REVIEW.md`](reviews/SWEETIE-ARCH-REVIEW.md) | Full codebase architecture review by SweetieBot (system overview, agent loop, session/thread model, tool system, channels, orchestration, workspace/memory) |
+
+---
+
+### 📐 [`specs/`](specs/)
+
+Technical specifications for specific subsystems and patterns.
+
+| File | Description |
+|------|-------------|
+| [`podman-wait-babysitter.md`](specs/podman-wait-babysitter.md) | Podman wait babysitter pattern: OpenRC crash recovery for rootless Podman containers via `supervise-daemon` |
+
+---
+
+### 🦸 [`superpowers/`](superpowers/)
+
+Dated implementation plans and design specs produced by the superpowers agentic workflow.
+
+#### Plans
+
+| File | Description |
+|------|-------------|
+| [`plans/2026-06-29-lunarvision-vl-wiring.md`](superpowers/plans/2026-06-29-lunarvision-vl-wiring.md) | LunarVision VL wiring: connect GPU-backed Qwen3-VL server to OCR sidecars via `VL_URL`, persist as systemd unit |
+| [`plans/2026-06-30-vision-analyze-tool-wiring.md`](superpowers/plans/2026-06-30-vision-analyze-tool-wiring.md) | Vision-analyze WASM tool wiring: re-register with WASM toolset, end-to-end integration |
+| [`plans/2026-07-01-mt-admin-ssh-streamlining.md`](superpowers/plans/2026-07-01-mt-admin-ssh-streamlining.md) | `mt-admin` SSH streamlining: key upload, daemon bounce, worker startup ordering |
+| [`plans/2026-07-02-mt-admin-runtime-persistence.md`](superpowers/plans/2026-07-02-mt-admin-runtime-persistence.md) | `mt-admin` runtime persistence: state file management, idempotent operations |
+
+#### Design Specs
+
+| File | Description |
+|------|-------------|
+| [`specs/2026-06-29-lunarvision-vl-wiring-design.md`](superpowers/specs/2026-06-29-lunarvision-vl-wiring-design.md) | Design spec for LunarVision VL wiring |
+| [`specs/2026-06-30-vision-analyze-tool-wiring-design.md`](superpowers/specs/2026-06-30-vision-analyze-tool-wiring-design.md) | Design spec for vision-analyze tool wiring |
+| [`specs/2026-07-01-mt-admin-ssh-streamlining-design.md`](superpowers/specs/2026-07-01-mt-admin-ssh-streamlining-design.md) | Design spec for mt-admin SSH streamlining |
+| [`specs/2026-07-02-mt-admin-runtime-persistence-design.md`](superpowers/specs/2026-07-02-mt-admin-runtime-persistence-design.md) | Design spec for mt-admin runtime persistence |
+
+---
+
 ### 📦 [`releases/`](releases/)
 
-Release notes and changelogs (immutable historical records).
+Release notes and changelogs (immutable historical records). See [`releases/README.md`](releases/README.md) for the full index (v1.0.7 → v1.1.8, latest: RELEASE-v1.1.8.md).
 
 ---
 
 ### 🐛 [`bugs/`](bugs/)
 
+A maintained Open/Fixed bug tracker. The full index is **[`bugs/README.md`](bugs/README.md)**.
+Open bugs live in `bugs/`; resolved bugs are retained under [`bugs/history/`](bugs/history/).
 A maintained Open/Fixed bug tracker. The full index is **[`bugs/README.md`](bugs/README.md)** —
 it lists bug docs (Open + Fixed-retained-for-history) plus the two 1.1.4 multi-tenant
 pre-release issue logs (`SYSTEMD-MT-1.1.4-ISSUES.md`, `OPENRC-MT-1.1.4-ISSUES.md`).
@@ -234,6 +284,13 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 **Archives** (kept for provenance, not active docs):
 
 - [`vendored/`](internal/vendored/) — third-party upstream copies (nanocode/opencode) swept into `docs/` by an earlier bulk commit. See [`vendored/README.md`](internal/vendored/README.md).
+- [`history/`](internal/history/) — superseded LunarWing docs relocated here during the reorg, by source area: `architecture/`, `guides/`, `internal/`, `proposals/`. See [`history/README.md`](internal/history/README.md).
+
+---
+
+### 📝 Top-level docs
+
+There are currently no top-level files in `docs/` outside the subdirectories above.
 - [`history/`](internal/history/) — superseded LunarWing docs relocated here during the reorg, by source area: `architecture/`, `guides/`, `internal/`, `proposals/`, `archive/`. See [`history/README.md`](internal/history/README.md).
 
 ---
