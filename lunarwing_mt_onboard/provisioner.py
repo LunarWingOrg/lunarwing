@@ -115,7 +115,13 @@ def ensure_mt_admin() -> str:
 
 
 def build_add_tenant_args(config: "TenantConfig") -> list[str]:
-    """Construct the argv list for ``mt-admin add-tenant``."""
+    """Construct the argv list for ``mt-admin add-tenant``.
+
+    Secret values (XMPP password, LLM API key) are intentionally NOT placed
+    on the argv — they would be visible in ``/proc/<pid>/cmdline``. Instead,
+    ``add-tenant`` auto-generates throwaway values, and the secrets module
+    overwrites them in ``lunarwing.env`` before ``start-tenant`` runs.
+    """
     script = ensure_mt_admin()
     args: list[str] = [script, "add-tenant", config.name]
 
@@ -125,8 +131,6 @@ def build_add_tenant_args(config: "TenantConfig") -> list[str]:
         args.extend(["--gateway-host", config.gateway_host])
     if config.xmpp_enabled and config.xmpp_jid:
         args.extend(["--xmpp-jid", config.xmpp_jid])
-        if config.xmpp_password:
-            args.extend(["--xmpp-password", config.xmpp_password])
         if config.xmpp_allow_from:
             args.extend(["--xmpp-allow-from", ",".join(config.xmpp_allow_from)])
     if config.gotify_enabled and config.gotify_url:
@@ -135,8 +139,6 @@ def build_add_tenant_args(config: "TenantConfig") -> list[str]:
             args.extend(["--gotify-title", config.gotify_title])
     if config.tensorzero_url:
         args.extend(["--tensorzero-url", config.tensorzero_url])
-    if config.llm_api_key:
-        args.extend(["--llm-api-key", config.llm_api_key])
     if config.llm_model:
         args.extend(["--llm-model", config.llm_model])
     if config.enable_darkirc:
@@ -190,6 +192,8 @@ def provision(
     if not result.phases[-1].ok:
         return result
 
+    _inject_secrets(config)
+
     if not skip_build:
         build_args = build_build_tenant_args(config)
         result.phases.append(_run(build_args, on_output=on_output))
@@ -201,6 +205,49 @@ def provision(
         result.phases.append(_run(start_args, on_output=on_output))
 
     return result
+
+
+def _inject_secrets(config: "TenantConfig") -> None:
+    env_dir = os.path.join("/home", config.name, "lunarwing", "env")
+    env_file = os.path.join(env_dir, "lunarwing.env")
+    if not os.path.isfile(env_file):
+        return
+
+    lines = []
+    with open(env_file, "r") as f:
+        lines = f.readlines()
+
+    secrets: dict[str, str] = {}
+    if config.xmpp_password:
+        secrets["XMPP_PASSWORD"] = config.xmpp_password
+    if config.llm_api_key:
+        secrets["LLM_API_KEY"] = config.llm_api_key
+    if config.secrets_master_key:
+        secrets["SECRETS_MASTER_KEY"] = config.secrets_master_key
+
+    if not secrets:
+        return
+
+    seen = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        key = stripped.split("=", 1)[0]
+        if key in secrets:
+            new_lines.append(f"{key}={secrets[key]}\n")
+            seen.add(key)
+        else:
+            new_lines.append(line)
+
+    for key, val in secrets.items():
+        if key not in seen:
+            new_lines.append(f"{key}={val}\n")
+
+    with open(env_file, "w") as f:
+        f.writelines(new_lines)
 
 
 # Late import to avoid circular dependency at module load time

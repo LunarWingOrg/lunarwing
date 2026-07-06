@@ -93,7 +93,12 @@ def _q_text(label: str, *, default: str = "") -> str:
     try:
         import questionary
 
-        return questionary.text(label, default=default).ask() or default
+        result = questionary.text(label, default=default).ask()
+        if result is None:
+            raise KeyboardInterrupt
+        return result
+    except KeyboardInterrupt:
+        raise
     except Exception:
         prompt = f"{label}: " if not default else f"{label} [{default}]: "
         raw = input(prompt).strip()
@@ -105,7 +110,11 @@ def _q_select(label: str, choices: list[str], *, default: int = 0) -> int:
         import questionary
 
         answer = questionary.select(label, choices=choices).ask()
+        if answer is None:
+            raise KeyboardInterrupt
         return choices.index(answer) if answer in choices else default
+    except KeyboardInterrupt:
+        raise
     except Exception:
         for i, c in enumerate(choices, 1):
             marker = "*" if i - 1 == default else " "
@@ -121,7 +130,12 @@ def _q_confirm(label: str, *, default: bool = False) -> bool:
     try:
         import questionary
 
-        return questionary.confirm(label, default=default).ask()
+        answer = questionary.confirm(label, default=default).ask()
+        if answer is None:
+            raise KeyboardInterrupt
+        return answer
+    except KeyboardInterrupt:
+        raise
     except Exception:
         suffix = " [Y/n]" if default else " [y/N]"
         raw = input(f"{label}{suffix}: ").strip().lower()
@@ -134,7 +148,12 @@ def _q_checkbox(label: str, choices: list[str]) -> list[str]:
     try:
         import questionary
 
-        return questionary.checkbox(label, choices=choices).ask() or []
+        result = questionary.checkbox(label, choices=choices).ask()
+        if result is None:
+            raise KeyboardInterrupt
+        return result or []
+    except KeyboardInterrupt:
+        raise
     except Exception:
         print(f"{label} (comma-separated indices):")
         for i, c in enumerate(choices, 1):
@@ -153,7 +172,11 @@ def _q_password(label: str, *, validate=None) -> str:
         result = questionary.password(
             label, validate=validate or (lambda _: True)
         ).ask()
-        return result or ""
+        if result is None:
+            raise KeyboardInterrupt
+        return result
+    except KeyboardInterrupt:
+        raise
     except Exception:
         import getpass
 
@@ -228,23 +251,18 @@ def _configure_channels(config: TenantConfig) -> None:
 
 
 def _configure_workers(config: TenantConfig) -> None:
-    idx = _q_select(
-        "External workers",
-        [
-            "none",
-            "nanocode (NanoGPT)",
-            "pebble (Rust harness)",
-            "opencode (sst/opencode)",
-        ],
-        default=0,
-    )
-    mapping = [
-        [],
-        [WorkerType.NANOCODE],
-        [WorkerType.PEBBLE],
-        [WorkerType.OPENCODE],
+    labels = [
+        WORKER_LABELS[WorkerType.NANOCODE],
+        WORKER_LABELS[WorkerType.PEBBLE],
+        WORKER_LABELS[WorkerType.OPENCODE],
     ]
-    config.workers = mapping[idx]
+    selected = _q_checkbox("External workers (space to toggle, enter to confirm)", labels)
+    config.workers = []
+    for label in selected:
+        for wt, wl in WORKER_LABELS.items():
+            if label == wl:
+                config.workers.append(wt)
+                break
     if config.workers:
         config.toolchains = _q_confirm(
             "Include Rust/Go/C++ toolchains in workers? (increases image size ~5GB)",
@@ -340,9 +358,9 @@ def _display_results(result) -> None:  # result: ProvisionResult
     )
 
 
-def _show_verify(tenant: str, host: str = "127.0.0.1") -> None:
+def _show_verify(tenant: str, host: str = "127.0.0.1", port: int = 0) -> None:
     console.print("Post-start verification...", style="bold")
-    results = verify_tenant(tenant, host)
+    results = verify_tenant(tenant, host, port)
     table = Table(title="Verification")
     table.add_column("Check", style="bold cyan")
     table.add_column("Status", justify="center")
@@ -407,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         _display_results(result)
         if result.ok and not args.skip_start:
-            _show_verify(config.name, host=config.gateway_host)
+            _show_verify(config.name, host=config.gateway_host, port=config.gateway_port)
         return 0 if result.ok else 2
     else:
         console.print("Aborted.")

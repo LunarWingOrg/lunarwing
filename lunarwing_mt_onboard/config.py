@@ -8,6 +8,7 @@ resumed later via ``--resume <file>``.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -33,6 +34,7 @@ class TenantConfig:
 
     name: str = ""
     gateway_host: str = "127.0.0.1"
+    gateway_port: int = 0
     docker_group: bool = True
     enable_darkirc: bool = False
     xmpp_enabled: bool = False
@@ -80,10 +82,11 @@ class TenantConfig:
         return d
 
     def to_json(self, path: str | Path) -> None:
-        """Write this config to *path* as JSON (0600 permissions)."""
+        """Write this config to *path* as JSON with 0600 at creation time."""
         p = Path(path)
-        p.write_text(json.dumps(self.to_dict(), indent=2) + "\n")
-        p.chmod(0o600)
+        fd = os.open(str(p), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(self.to_dict(), indent=2) + "\n")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TenantConfig":
@@ -93,6 +96,7 @@ class TenantConfig:
         return cls(
             name=data.get("name", ""),
             gateway_host=data.get("gateway_host", "127.0.0.1"),
+            gateway_port=data.get("gateway_port", 0),
             docker_group=data.get("docker_group", True),
             enable_darkirc=data.get("enable_darkirc", False),
             xmpp_enabled=data.get("xmpp_enabled", False),
