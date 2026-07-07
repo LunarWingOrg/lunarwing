@@ -28,19 +28,20 @@
 23. [x] Update ROADMAP file to reflect accuracy
 24. [ ] Purge other unecessary code from repo _thr
 25. [ ] Run all cargo tests — full `--all-features --no-fail-fast` run: lib 4087 passed/0 failed/4 ignored; all integration binaries + doctests pass except the 6 known-deferred `multi_tenant_system_prompt` architectural, e2e_advanced_traces `bootstrap-greeting` See `docs/proposals/CARGO_TESTS_FIX.md`. Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure — Fixed the 3 stale `lib` failures this cycle: `registry::embedded::tests::test_load_embedded_parses` (github→ssh sentinel), `cli::tests::test_help_output` + `test_long_help_output` (accepted rebranded insta snapshots). Lib re-run: 4087 passed/0 failed. The 6 remaining failures are documented known-deferred (architectural / harness), not regressions.
-26. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v4
-27. [ ] Fix these issues with kawarimi: https://github.com/LunarWingOrg/lunarwing/issues/161
-28. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
-29. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/140
-30. [ ] Run automated testing scripts if still relevant. If not, bring them up to speed and document properly
-31. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
-32. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests, i.e. a 1.1.8 or 1.1.7 tenant or even lower version kawarimi'd to 1.1.9 pre-release build)
-33. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
-34. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9 explaining all changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`
-35. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated 
-36. [ ] Update release date in release notes prior to last two steps below
-37. [ ] Create new branch to correspond with releases
-38. [ ] Create GH release tag and add release notes to it like other releases already have
-39. [ ] Maintain 1.1.9.X going forward as stable supported build. Backport easy high priority bug fixes to it. The next release after 1.1.9 is the 2.0.0 release which will overhaul several systems
+26. [ ] Cherrypick rarity/item-25-20260707-0500
+27. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v4
+28. [ ] Fix these issues with kawarimi: https://github.com/LunarWingOrg/lunarwing/issues/161
+29. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
+30. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/140
+31. [ ] Run automated testing scripts if still relevant. If not, bring them up to speed and document properly
+32. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
+33. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests, i.e. a 1.1.8 or 1.1.7 tenant or even lower version kawarimi'd to 1.1.9 pre-release build)
+34. [ ] Full integrated testing (makes it easier to use kawarimi tenant for this item actually)
+35. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9 explaining all changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`
+36. [ ] Go over every single section of first draft of release notes (at root of repo) to correct all sections since information is now outdated 
+37. [ ] Update release date in release notes prior to last two steps below
+38. [ ] Create new branch to correspond with releases
+39. [ ] Create GH release tag and add release notes to it like other releases already have
+40. [ ] Maintain 1.1.9.X going forward as stable supported build. Backport easy high priority bug fixes to it. The next release after 1.1.9 is the 2.0.0 release which will overhaul several systems
 
 ---
