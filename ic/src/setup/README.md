@@ -46,7 +46,7 @@ The `--no-onboard` CLI flag suppresses auto-detection.
    b. check_onboard_needed() → run wizard if needed
    c. Config::from_env()     → build config from env vars
    d. Create SessionManager  → load session token
-   e. ensure_authenticated() → validate session (NEAR AI only)
+   e. ensure_authenticated() → validate session (LunarWing Cloud only)
    f. ... rest of agent startup
 ```
 
@@ -307,8 +307,8 @@ env-var mode or skipped secrets.
 
 | Provider | Auth Method | Secret Name | Env Var |
 |----------|-------------|-------------|---------|
-| NEAR AI Chat | Browser OAuth or session token | - | `NEARAI_SESSION_TOKEN` |
-| NEAR AI Cloud | API key | `llm_nearai_api_key` | `NEARAI_API_KEY` |
+| LunarWing Cloud Chat | Browser OAuth or session token | - | `LUNARWING_CLOUD_SESSION_TOKEN` |
+| LunarWing Cloud API | API key | `llm_lunarwing_cloud_api_key` | `LUNARWING_CLOUD_API_KEY` |
 | Anthropic | API key | `llm_anthropic_api_key` | `ANTHROPIC_API_KEY` |
 | OpenAI | API key | `llm_openai_api_key` | `OPENAI_API_KEY` |
 | Ollama | None | - | - |
@@ -333,17 +333,17 @@ with its own secret name and env var. It is **not** stored as `openai_compatible
 5. Preserve `selected_model` on a same-backend re-run; clear it only when
    switching to a different backend
 
-**NEAR AI** (`setup_nearai`):
+**LunarWing Cloud** (`setup_lunarwing_cloud`):
 - Calls `session_manager.ensure_authenticated()` which shows the auth menu:
-  - Options 1-2 (GitHub/Google): browser OAuth → **NEAR AI Chat** mode
+  - Options 1-2 (GitHub/Google): browser OAuth → **LunarWing Cloud Chat** mode
     (Responses API at `private.near.ai`, session token auth)
-  - Option 4: NEAR AI Cloud API key → **NEAR AI Cloud** mode
+  - Option 4: LunarWing Cloud API key → **LunarWing Cloud API** mode
     (Chat Completions API at `cloud-api.near.ai`, API key auth)
-- **NEAR AI Chat** path: session token saved to `~/.lunarwing/session.json`.
-  Hosting providers can set `NEARAI_SESSION_TOKEN` env var directly (takes
+- **LunarWing Cloud Chat** path: session token saved to `~/.lunarwing/session.json`.
+  Hosting providers can set `LUNARWING_CLOUD_SESSION_TOKEN` env var directly (takes
   precedence over file-based tokens).
-- **NEAR AI Cloud** path: `NEARAI_API_KEY` saved to `~/.lunarwing/.env`
-  (bootstrap) and encrypted secrets store (`llm_nearai_api_key`).
+- **LunarWing Cloud API** path: `LUNARWING_CLOUD_API_KEY` saved to `~/.lunarwing/.env`
+  (bootstrap) and encrypted secrets store (`llm_lunarwing_cloud_api_key`).
   `LlmConfig::resolve()` auto-selects `ChatCompletions` mode when the
   API key is present.
 
@@ -387,7 +387,7 @@ key first, then falls back to the standard env var.
 **Flow:**
 1. Ask "Enable semantic search?" (default: yes)
 2. Detect available providers:
-   - NEAR AI: if backend is `nearai` OR valid session exists
+   - LunarWing Cloud: if backend is `lunarwing_cloud` OR valid session exists
    - OpenAI: if `OPENAI_API_KEY` in env OR (backend is `openai` AND cached key)
 3. If both available → let user choose
 4. If only one → use it
@@ -538,10 +538,10 @@ keyed by `(user_id, key)`. Written by `set_all_settings()`.
 Settings are serialized via `Settings::to_db_map()` as dotted paths:
 ```
 database_backend = "libsql"
-llm_backend = "nearai"
+llm_backend = "lunarwing_cloud"
 selected_model = "anthropic/claude-sonnet-4-5"
 embeddings.enabled = "true"
-embeddings.provider = "nearai"
+embeddings.provider = "lunarwing_cloud"
 channels.http_enabled = "true"
 heartbeat.enabled = "true"
 heartbeat.interval_secs = "300"
@@ -635,7 +635,7 @@ pub struct Settings {
     pub secrets_master_key_source: KeySource, // Keychain | Env | None
 
     // Step 3: Inference
-    pub llm_backend: Option<String>,         // "nearai" | "anthropic" | "openai" | "ollama" | "openai_compatible" | "bedrock"
+    pub llm_backend: Option<String>,         // "lunarwing_cloud" | "anthropic" | "openai" | "ollama" | "openai_compatible" | "bedrock"
     pub ollama_base_url: Option<String>,
     pub openai_compatible_base_url: Option<String>,
 
@@ -739,13 +739,13 @@ Must properly restore terminal state on all exit paths.
 
 ### Remote Server Authentication
 
-On remote/VPS servers, the browser-based OAuth flow for NEAR AI may not
+On remote/VPS servers, the browser-based OAuth flow for LunarWing Cloud may not
 work because `http://127.0.0.1:9876` is unreachable from the user's
 local browser.
 
 **Solutions:**
 
-1. **NEAR AI Cloud API key (option 4 in auth menu):** Get an API key
+1. **LunarWing Cloud API key (option 4 in auth menu):** Get an API key
    from `https://cloud.near.ai` and paste it into the terminal. No
    local listener is needed. The key is saved to `~/.lunarwing/.env`
    and the encrypted secrets store. Uses the OpenAI-compatible
