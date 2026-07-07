@@ -16,9 +16,13 @@ export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 echo "── Python unit tests ──"
 PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -c "
 import unittest
-from lunarwing_mt_onboard import tests
+from lunarwing_mt_onboard import tests, upgrade_runtime_tests, upgrade_tests
 loader = unittest.TestLoader()
-suite = loader.loadTestsFromModule(tests)
+suite = unittest.TestSuite([
+    loader.loadTestsFromModule(tests),
+    loader.loadTestsFromModule(upgrade_tests),
+    loader.loadTestsFromModule(upgrade_runtime_tests),
+])
 runner = unittest.TextTestRunner(verbosity=2)
 result = runner.run(suite)
 import sys
@@ -34,6 +38,7 @@ from lunarwing_mt_onboard.provisioner import (
     PhaseResult, ProvisionResult, ensure_mt_admin,
     build_add_tenant_args, build_build_tenant_args,
 )
+from lunarwing_mt_onboard.upgrade import UpgradeConfig, build_upgrade_args
 print('All modules imported successfully')
 "
 
@@ -45,6 +50,18 @@ python3 -c "
 from lunarwing_mt_onboard.cli import _build_parser
 p = _build_parser()
 args = p.parse_args(['--non-interactive', '--skip-build', '--skip-start'])
+print('Parsed:', args)
+"
+
+echo ""
+echo "── Upgrade dry-run parser check ──"
+python3 -c "
+from lunarwing_mt_onboard.cli import _build_parser
+p = _build_parser()
+args = p.parse_args([
+    'upgrade', '--tenant', 'alpha', '--target', 'v1.1.9',
+    '--non-interactive', '--no-preflight'
+])
 print('Parsed:', args)
 "
 
