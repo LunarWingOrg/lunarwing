@@ -101,6 +101,15 @@ def _run(
     )
 
 
+def run_command(
+    args: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    on_output: Callable[[str], None] | None = None,
+) -> PhaseResult:
+    return _run(args, env=env, on_output=on_output)
+
+
 def ensure_mt_admin() -> str:
     """Return the mt-admin.sh path, raising if not found."""
     if os.path.isfile(MT_ADMIN_SCRIPT) and os.access(MT_ADMIN_SCRIPT, os.X_OK):
