@@ -23,13 +23,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODEBERG_AUTH_USER: cmcsun
-          CODEBERG_USER: LunarWing
+          CODEBERG_OWNER: LunarWing
           CODEBERG_REPO: lunarwing
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
         run: |
           set -euo pipefail
 
           git clone --mirror "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo.git
+          
           cd repo.git
 
           git remote set-url --push origin "https://${CODEBERG_AUTH_USER}:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_OWNER}/${CODEBERG_REPO}.git"
