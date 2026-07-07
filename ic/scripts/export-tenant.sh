@@ -16,6 +16,7 @@
 #   db.dump                  pg_dump -Fc of the tenant DB
 #   manifest-lunarwing.env   carry-over keys for lunarwing.env (0600) — see CARRY below
 #   manifest-bridge.env      carry-over keys for xmpp-bridge.env (0600)
+#   manifest-vision.env      optional carry-over keys for vision.env (0600)
 #   state.tar.gz             state dir (OMEMO store + workspace + tool storage),
 #                            EXCLUDING sockets, host-specific config.toml, and *.wasm
 #
@@ -26,7 +27,8 @@
 # relay) are intentionally NOT carried — the new host mints fresh, self-consistent
 # ones (gateway UI / external webhook senders re-auth after cutover). Host-specific
 # LLM_BASE_URL and OPENCODE_BASE_URL local proxies are carried ONLY when they
-# point at non-local custom endpoints.
+# point at non-local custom endpoints. Vision sidecar ports are regenerated, but
+# a custom VL_URL/VL_MODEL and sidecar auth token are carried when vision.env exists.
 #
 # SECURITY: the bundle contains SECRETS_MASTER_KEY + the XMPP password. It is 0600,
 # root-owned, in a 0700 dir. Transfer over ssh; delete from both hosts after verify.
@@ -71,6 +73,7 @@ HOME_T="$(getent passwd "$TENANT" | cut -d: -f6)"
 LWROOT="$HOME_T/lunarwing"
 ENVF="$LWROOT/env/lunarwing.env"
 BRIDGE_ENVF="$LWROOT/env/xmpp-bridge.env"
+VISION_ENVF="$LWROOT/env/vision.env"
 STATE_DIR="$LWROOT/state"
 [[ -f "$ENVF" ]] || die "tenant env not found: $ENVF (is '$TENANT' a LunarWing tenant on this host?)"
 
@@ -158,6 +161,7 @@ LW_KEYS=(SECRETS_MASTER_KEY XMPP_JID XMPP_PASSWORD XMPP_DM_POLICY XMPP_ALLOW_FRO
 BRIDGE_KEYS=(XMPP_JID XMPP_PASSWORD XMPP_DM_POLICY XMPP_ALLOW_FROM_JSON
              XMPP_ALLOW_ROOMS_JSON XMPP_ENCRYPTED_ROOMS_JSON XMPP_DEVICE_ID
              XMPP_ALLOW_PLAINTEXT_FALLBACK)
+VISION_KEYS=(VL_URL VL_MODEL LUNARWING_AUTH_TOKEN)
 
 # Append KEY=line from <src> to <dest> if present (CR-stripped). The `if` form (not
 # `&& printf`) keeps a missing last key from making the function return non-zero
@@ -169,6 +173,11 @@ copy_key() {  # <src> <dest> <key>
 
 if $DRY_RUN; then
   note "[dry-run] would extract ${#LW_KEYS[@]}+ keys from lunarwing.env (incl. SECRETS_MASTER_KEY) and ${#BRIDGE_KEYS[@]} from xmpp-bridge.env; intra-host tokens are NOT carried"
+  if [[ -f "$VISION_ENVF" ]]; then
+    note "[dry-run] would extract ${#VISION_KEYS[@]} keys from vision.env (VL_URL, VL_MODEL, LUNARWING_AUTH_TOKEN)"
+  else
+    note "[dry-run] no vision.env at $VISION_ENVF — no vision manifest would be written"
+  fi
 else
   ( umask 077; : > "$WORK/manifest-lunarwing.env"; : > "$WORK/manifest-bridge.env" )
   for k in "${LW_KEYS[@]}"; do copy_key "$ENVF" "$WORK/manifest-lunarwing.env" "$k"; done
@@ -189,6 +198,18 @@ else
     note "OPENCODE_BASE_URL is local ($opencode_url) — NOT carried (new host sets its own)"
   fi
   for k in "${BRIDGE_KEYS[@]}"; do copy_key "$BRIDGE_ENVF" "$WORK/manifest-bridge.env" "$k"; done
+  if [[ -f "$VISION_ENVF" ]]; then
+    ( umask 077; : > "$WORK/manifest-vision.env" )
+    for k in "${VISION_KEYS[@]}"; do copy_key "$VISION_ENVF" "$WORK/manifest-vision.env" "$k"; done
+    if [[ -s "$WORK/manifest-vision.env" ]]; then
+      say "  manifest-vision.env:    $(grep -c '=' "$WORK/manifest-vision.env" 2>/dev/null || echo 0) keys"
+    else
+      rm -f "$WORK/manifest-vision.env"
+      note "vision.env had no carried keys — no vision manifest written"
+    fi
+  else
+    note "no vision.env at $VISION_ENVF — vision sidecar config not carried"
+  fi
   grep -q '^SECRETS_MASTER_KEY=' "$WORK/manifest-lunarwing.env" \
     || die "SECRETS_MASTER_KEY not found in $ENVF — refusing to export a bundle that can't decrypt the DB. Locate the key first."
   say "  manifest-lunarwing.env: $(grep -c '=' "$WORK/manifest-lunarwing.env") keys (incl. SECRETS_MASTER_KEY)"
