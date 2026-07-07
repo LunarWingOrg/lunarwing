@@ -34,7 +34,7 @@
 27. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v
 28. [ ] Fix rest of the issues with kawarimi and TEST them ALL: https://github.com/LunarWingOrg/lunarwing/issues/161
 29. [x] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
-30. [ ] Address any unaddressed items from any other open issues
+30. [x] Address any unaddressed items from any other open issues — Surveyed all 8 open GitHub issues. #161 addressed by item #28, #180 addressed by item #29 (items 1 & 3) plus this item (item 2: pruned 689 stale remote branches, 713→24). #50 (OMEMO gotify) already resolved via `HEALTH_OMEMO_ENABLED` toggle (commit c4da1c0b) and `HEALTHCHECK_NOTIFY=false`. #140 (codename) already decided (Kiyome きよめ). #5, #195, #196, #201 are stubs/deferred to 2.0.0.
 31. [ ] Run automated testing scripts if still relevant. If not, bring them up to speed and document properly
 32. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 33. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests, i.e. a 1.1.8 or 1.1.7 tenant or even lower version kawarimi'd to 1.1.9 pre-release build
