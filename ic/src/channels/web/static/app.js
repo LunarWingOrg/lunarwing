@@ -5038,7 +5038,7 @@ var INFERENCE_SETTINGS = [
     group: 'cfg.group.llm',
     settings: [
       { key: 'llm_backend', label: 'cfg.llm_backend.label', description: 'cfg.llm_backend.desc',
-        type: 'select', options: ['nearai', 'anthropic', 'openai', 'ollama', 'openai_compatible', 'tinfoil', 'bedrock'] },
+        type: 'select', options: ['lunarwing_cloud', 'openai', 'ollama', 'openai_compatible', 'bedrock'] },
       { key: 'selected_model', label: 'cfg.selected_model.label', description: 'cfg.selected_model.desc', type: 'text' },
       { key: 'ollama_base_url', label: 'cfg.ollama_base_url.label', description: 'cfg.ollama_base_url.desc', type: 'text',
         showWhen: { key: 'llm_backend', value: 'ollama' } },
@@ -5058,7 +5058,7 @@ var INFERENCE_SETTINGS = [
     settings: [
       { key: 'embeddings.enabled', label: 'cfg.embeddings_enabled.label', description: 'cfg.embeddings_enabled.desc', type: 'boolean' },
       { key: 'embeddings.provider', label: 'cfg.embeddings_provider.label', description: 'cfg.embeddings_provider.desc',
-        type: 'select', options: ['openai', 'nearai', 'openai_compatible'] },
+        type: 'select', options: ['openai', 'lunarwing_cloud', 'openai_compatible'] },
       { key: 'embeddings.base_url', label: 'cfg.embeddings_base_url.label', description: 'cfg.embeddings_base_url.desc', type: 'text',
         showWhen: { key: 'embeddings.provider', value: 'openai_compatible' } },
       { key: 'embeddings.model', label: 'cfg.embeddings_model.label', description: 'cfg.embeddings_model.desc', type: 'text' },
