@@ -31,7 +31,7 @@
 26. [x] Cherrypick item-25-20260707-0500
 27. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v4
 28. [ ] Fix rest of the issues with kawarimi and TEST them ALL: https://github.com/LunarWingOrg/lunarwing/issues/161
-29. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
+29. [x] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
 30. [ ] Address any unaddressed items from any other open issues
 31. [ ] Run automated testing scripts if still relevant. If not, bring them up to speed and document properly
 32. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
