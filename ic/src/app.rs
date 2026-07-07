@@ -365,10 +365,10 @@ impl AppBuilder {
         }
 
         // Create embeddings provider using the unified method
-        let embeddings = self
-            .config
-            .embeddings
-            .create_provider(&self.config.llm.nearai.base_url, self.session.clone());
+        let embeddings = self.config.embeddings.create_provider(
+            &self.config.llm.lunarwing_cloud.base_url,
+            self.session.clone(),
+        );
 
         // Register memory tools if database is available
         let workspace_user_id = self.config.owner_id.as_str();
@@ -440,8 +440,8 @@ impl AppBuilder {
                 )
             } else {
                 (
-                    self.config.llm.nearai.base_url.clone(),
-                    self.config.llm.nearai.api_key.as_ref().map(|s| {
+                    self.config.llm.lunarwing_cloud.base_url.clone(),
+                    self.config.llm.lunarwing_cloud.api_key.as_ref().map(|s| {
                         use secrecy::ExposeSecret;
                         s.expose_secret().to_string()
                     }),
@@ -456,7 +456,7 @@ impl AppBuilder {
                     .provider
                     .as_ref()
                     .map(|p| p.model.clone())
-                    .unwrap_or_else(|| self.config.llm.nearai.model.clone());
+                    .unwrap_or_else(|| self.config.llm.lunarwing_cloud.model.clone());
                 let models = vec![model_name.clone()];
                 let gen_model = crate::llm::image_models::suggest_image_model(&models)
                     .unwrap_or("flux-1.1-pro")
@@ -856,12 +856,12 @@ impl AppBuilder {
         self.init_database().await?;
         self.init_secrets().await?;
 
-        // Post-init validation: backends with dedicated config (nearai,
+        // Post-init validation: backends with dedicated config (lunarwing_cloud,
         // bedrock, openai_codex) handle their own credential resolution. For registry-based
         // backends, fail early if no provider config was resolved.
         if !matches!(
             self.config.llm.backend.as_str(),
-            "nearai" | "bedrock" | "openai_codex"
+            "lunarwing_cloud" | "bedrock" | "openai_codex"
         ) && self.config.llm.provider.is_none()
         {
             let backend = &self.config.llm.backend;

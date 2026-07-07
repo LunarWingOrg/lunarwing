@@ -1,8 +1,8 @@
-//! NEAR AI provider implementation (Chat Completions API).
+//! LunarWing Cloud provider implementation (Chat Completions API).
 //!
 //! This provider uses the OpenAI-compatible Chat Completions endpoint with
 //! dual auth support:
-//! - **API key auth**: When `NEARAI_API_KEY` is set, uses Bearer API key
+//! - **API key auth**: When `LUNARWING_CLOUD_API_KEY` is set, uses Bearer API key
 //! - **Session token auth**: Otherwise, uses `SessionManager` for Bearer session token
 //!   with automatic renewal on 401 errors
 
@@ -16,7 +16,7 @@ use rust_decimal::prelude::MathematicalOps;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::config::NearAiConfig;
+use crate::llm::config::LunarWingCloudConfig;
 use crate::llm::error::LlmError;
 use crate::llm::provider::{
     ChatMessage, CompletionRequest, CompletionResponse, FinishReason, LlmProvider, Role, ToolCall,
@@ -24,7 +24,7 @@ use crate::llm::provider::{
 };
 use crate::llm::{costs, session::SessionManager};
 
-/// Information about an available model from NEAR AI API.
+/// Information about an available model from LunarWing Cloud API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
     /// Model identifier.
@@ -35,7 +35,7 @@ pub struct ModelInfo {
     pub provider: Option<String>,
 }
 
-/// Default NEAR AI model used when no model is configured.
+/// Default LunarWing Cloud model used when no model is configured.
 pub const DEFAULT_MODEL: &str = "Qwen/Qwen3.5-122B-A10B";
 
 /// Fallback model list used by the setup wizard when the `/models` API is
@@ -50,21 +50,21 @@ pub fn default_models() -> Vec<(String, String)> {
     ]
 }
 
-/// NEAR AI provider (Chat Completions API, dual auth).
-pub struct NearAiChatProvider {
+/// LunarWing Cloud provider (Chat Completions API, dual auth).
+pub struct LunarWingCloudChatProvider {
     client: Client,
-    config: NearAiConfig,
+    config: LunarWingCloudConfig,
     /// Session manager for session token auth (used when no API key is set).
     session: Arc<SessionManager>,
     active_model: std::sync::RwLock<String>,
     flatten_tool_messages: bool,
-    /// Per-model pricing fetched from the NEAR AI `/v1/model/list` endpoint.
+    /// Per-model pricing fetched from the LunarWing Cloud `/v1/model/list` endpoint.
     /// Maps model ID → (input_cost_per_token, output_cost_per_token).
     pricing: Arc<std::sync::RwLock<HashMap<String, (Decimal, Decimal)>>>,
 }
 
-impl NearAiChatProvider {
-    /// Create a new NEAR AI Chat Completions provider.
+impl LunarWingCloudChatProvider {
+    /// Create a new LunarWing Cloud Chat Completions provider.
     ///
     /// Auth mode is determined by `config.api_key`:
     /// - If set, uses Bearer API key auth
@@ -72,13 +72,16 @@ impl NearAiChatProvider {
     ///
     /// By default this enables tool-message flattening for compatibility with
     /// providers that reject `role: "tool"` messages.
-    pub fn new(config: NearAiConfig, session: Arc<SessionManager>) -> Result<Self, LlmError> {
+    pub fn new(
+        config: LunarWingCloudConfig,
+        session: Arc<SessionManager>,
+    ) -> Result<Self, LlmError> {
         Self::new_with_options(config, session, true, 120)
     }
 
     /// Create a new provider with a custom request timeout.
     pub fn new_with_timeout(
-        config: NearAiConfig,
+        config: LunarWingCloudConfig,
         session: Arc<SessionManager>,
         request_timeout_secs: u64,
     ) -> Result<Self, LlmError> {
@@ -88,7 +91,7 @@ impl NearAiChatProvider {
     /// Create a chat completions provider with configurable tool-message flattening
     /// and request timeout.
     pub fn new_with_options(
-        config: NearAiConfig,
+        config: LunarWingCloudConfig,
         session: Arc<SessionManager>,
         flatten_tool_messages: bool,
         request_timeout_secs: u64,
@@ -97,7 +100,7 @@ impl NearAiChatProvider {
             .timeout(std::time::Duration::from_secs(request_timeout_secs))
             .build()
             .map_err(|e| LlmError::RequestFailed {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: format!("Failed to build HTTP client: {}", e),
             })?;
 
@@ -125,18 +128,23 @@ impl NearAiChatProvider {
             handle.spawn(async move {
                 match fetch_pricing(&client, &base_url, api_key.as_ref(), &session).await {
                     Ok(map) if !map.is_empty() => {
-                        tracing::debug!("Loaded NEAR AI pricing for {} model(s)", map.len());
+                        tracing::debug!(
+                            "Loaded LunarWing Cloud pricing for {} model(s)",
+                            map.len()
+                        );
                         match pricing.write() {
                             Ok(mut guard) => *guard = map,
                             Err(poisoned) => *poisoned.into_inner() = map,
                         }
                     }
                     Ok(_) => {
-                        tracing::debug!("NEAR AI pricing endpoint returned no pricing data");
+                        tracing::debug!(
+                            "LunarWing Cloud pricing endpoint returned no pricing data"
+                        );
                     }
                     Err(e) => {
                         tracing::debug!(
-                            "Could not fetch NEAR AI pricing (will use fallback): {}",
+                            "Could not fetch LunarWing Cloud pricing (will use fallback): {}",
                             e
                         );
                     }
@@ -168,7 +176,7 @@ impl NearAiChatProvider {
     /// Priority order:
     /// 1. `config.api_key` (set at construction from env/config)
     /// 2. Session token (OAuth flow)
-    /// 3. `NEARAI_API_KEY` env var (set by interactive `api_key_login()`)
+    /// 3. `LUNARWING_CLOUD_API_KEY` env var (set by interactive `api_key_login()`)
     ///
     /// The env var fallback (#3) only triggers after `ensure_authenticated()`
     /// runs, because `api_key_login()` sets the env var but not a session token.
@@ -193,15 +201,15 @@ impl NearAiChatProvider {
             return Ok(token.expose_secret().to_string());
         }
 
-        // 4. api_key_login() sets NEARAI_API_KEY env var but not a session token
-        if let Ok(key) = std::env::var("NEARAI_API_KEY")
+        // 4. api_key_login() sets LUNARWING_CLOUD_API_KEY env var but not a session token
+        if let Ok(key) = std::env::var("LUNARWING_CLOUD_API_KEY")
             && !key.is_empty()
         {
             return Ok(key);
         }
 
         Err(LlmError::AuthFailed {
-            provider: "nearai".to_string(),
+            provider: "lunarwing_cloud".to_string(),
         })
     }
 
@@ -235,12 +243,12 @@ impl NearAiChatProvider {
         let url = self.api_url("chat/completions");
         let token = self.resolve_bearer_token().await?;
 
-        tracing::debug!("Sending request to NEAR AI Chat: {}", url);
+        tracing::debug!("Sending request to LunarWing Cloud Chat: {}", url);
 
         if tracing::enabled!(tracing::Level::DEBUG)
             && let Ok(json) = serde_json::to_string(body)
         {
-            tracing::debug!("NEAR AI Chat request body: {}", json);
+            tracing::debug!("LunarWing Cloud Chat request body: {}", json);
         }
 
         let response = self
@@ -252,7 +260,7 @@ impl NearAiChatProvider {
             .send()
             .await
             .map_err(|e| LlmError::RequestFailed {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: e.to_string(),
             })?;
 
@@ -262,14 +270,14 @@ impl NearAiChatProvider {
             response.headers().get("retry-after"),
         ));
         let response_text = response.text().await.map_err(|e| LlmError::RequestFailed {
-            provider: "nearai_chat".to_string(),
+            provider: "lunarwing_cloud_chat".to_string(),
             reason: format!("Failed to read response body: {}", e),
         })?;
 
         // Log response body only at TRACE level to avoid exposing sensitive content
         // (user-generated data, tool outputs, leaked secrets) in DEBUG logs
         if tracing::enabled!(tracing::Level::TRACE) {
-            tracing::trace!("NEAR AI Chat response body: {}", response_text);
+            tracing::trace!("LunarWing Cloud Chat response body: {}", response_text);
         }
 
         if !status.is_success() {
@@ -283,25 +291,25 @@ impl NearAiChatProvider {
                         && (lower.contains("expired") || lower.contains("invalid"));
                     if is_session_expired {
                         return Err(LlmError::SessionExpired {
-                            provider: "nearai_chat".to_string(),
+                            provider: "lunarwing_cloud_chat".to_string(),
                         });
                     }
                 }
                 return Err(LlmError::AuthFailed {
-                    provider: "nearai_chat".to_string(),
+                    provider: "lunarwing_cloud_chat".to_string(),
                 });
             }
 
             if status_code == 429 {
                 return Err(LlmError::RateLimited {
-                    provider: "nearai_chat".to_string(),
+                    provider: "lunarwing_cloud_chat".to_string(),
                     retry_after: retry_after_header,
                 });
             }
 
             let truncated = crate::agent::truncate_for_preview(&response_text, 512);
             return Err(LlmError::RequestFailed {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: format!("HTTP {}: {}", status, truncated),
             });
         }
@@ -309,13 +317,13 @@ impl NearAiChatProvider {
         serde_json::from_str(&response_text).map_err(|e| {
             let truncated = crate::agent::truncate_for_preview(&response_text, 512);
             LlmError::InvalidResponse {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: format!("JSON parse error: {}. Raw: {}", e, truncated),
             }
         })
     }
 
-    /// Fetch available models from the NEAR AI API.
+    /// Fetch available models from the LunarWing Cloud API.
     ///
     /// Handles session renewal on 401 (same pattern as `send_request`).
     /// Supports multiple response formats: `{models: [...]}`, `{data: [...]}`, and plain array.
@@ -343,25 +351,25 @@ impl NearAiChatProvider {
             .send()
             .await
             .map_err(|e| LlmError::RequestFailed {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: format!("Failed to fetch models: {}", e),
             })?;
 
         let status = response.status();
         let response_text = response.text().await.map_err(|e| LlmError::RequestFailed {
-            provider: "nearai_chat".to_string(),
+            provider: "lunarwing_cloud_chat".to_string(),
             reason: format!("Failed to read response body: {}", e),
         })?;
 
         if !status.is_success() {
             if status.as_u16() == 401 && !self.uses_api_key() {
                 return Err(LlmError::SessionExpired {
-                    provider: "nearai_chat".to_string(),
+                    provider: "lunarwing_cloud_chat".to_string(),
                 });
             }
             let truncated = crate::agent::truncate_for_preview(&response_text, 512);
             return Err(LlmError::RequestFailed {
-                provider: "nearai_chat".to_string(),
+                provider: "lunarwing_cloud_chat".to_string(),
                 reason: format!("HTTP {}: {}", status, truncated),
             });
         }
@@ -448,7 +456,7 @@ impl NearAiChatProvider {
 
         // Couldn't find model names in response
         Err(LlmError::InvalidResponse {
-            provider: "nearai_chat".to_string(),
+            provider: "lunarwing_cloud_chat".to_string(),
             reason: format!(
                 "No model names found in response: {}",
                 &response_text[..response_text.len().min(300)]
@@ -458,7 +466,7 @@ impl NearAiChatProvider {
 }
 
 #[async_trait]
-impl LlmProvider for NearAiChatProvider {
+impl LlmProvider for LunarWingCloudChatProvider {
     async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         let model = req.model.unwrap_or_else(|| self.active_model_name());
         let mut raw_messages = req.messages;
@@ -484,7 +492,7 @@ impl LlmProvider for NearAiChatProvider {
                 .into_iter()
                 .next()
                 .ok_or_else(|| LlmError::InvalidResponse {
-                    provider: "nearai_chat".to_string(),
+                    provider: "lunarwing_cloud_chat".to_string(),
                     reason: "No choices in response".to_string(),
                 })?;
 
@@ -564,7 +572,7 @@ impl LlmProvider for NearAiChatProvider {
                 .into_iter()
                 .next()
                 .ok_or_else(|| LlmError::InvalidResponse {
-                    provider: "nearai_chat".to_string(),
+                    provider: "lunarwing_cloud_chat".to_string(),
                     reason: "No choices in response".to_string(),
                 })?;
 
@@ -758,7 +766,7 @@ struct ChatCompletionMessage {
 
 // -- Pricing fetch types and logic -----------------------------------------
 
-/// Cost amount from the NEAR AI `/v1/model/list` response.
+/// Cost amount from the LunarWing Cloud `/v1/model/list` response.
 ///
 /// Real cost per token = `amount * 10^(-scale)`.
 #[derive(Debug, Deserialize)]
@@ -807,7 +815,7 @@ fn model_cost_to_decimal(mc: &ModelCost) -> Option<Decimal> {
     base.checked_mul(factor)
 }
 
-/// Fetch pricing from the NEAR AI `/v1/model/list` endpoint.
+/// Fetch pricing from the LunarWing Cloud `/v1/model/list` endpoint.
 ///
 /// Returns a map of model_id → (input_cost_per_token, output_cost_per_token).
 /// Errors are non-fatal; callers should fall back to the static lookup table.
@@ -838,19 +846,19 @@ async fn fetch_pricing(
         .send()
         .await
         .map_err(|e| LlmError::RequestFailed {
-            provider: "nearai_chat".to_string(),
+            provider: "lunarwing_cloud_chat".to_string(),
             reason: format!("Failed to fetch pricing: {}", e),
         })?;
 
     if !response.status().is_success() {
         return Err(LlmError::RequestFailed {
-            provider: "nearai_chat".to_string(),
+            provider: "lunarwing_cloud_chat".to_string(),
             reason: format!("Pricing endpoint returned HTTP {}", response.status()),
         });
     }
 
     let body = response.text().await.map_err(|e| LlmError::RequestFailed {
-        provider: "nearai_chat".to_string(),
+        provider: "lunarwing_cloud_chat".to_string(),
         reason: format!("Failed to read pricing response: {}", e),
     })?;
 
@@ -895,7 +903,7 @@ async fn fetch_pricing(
 
 /// Rewrite tool-call / tool-result messages into plain assistant/user text.
 ///
-/// NEAR AI cloud-api does not support the OpenAI multi-turn tool-calling
+/// LunarWing Cloud cloud-api does not support the OpenAI multi-turn tool-calling
 /// protocol (`role: "tool"` messages). This function converts:
 ///   - Assistant messages with `tool_calls` → assistant text describing the calls
 ///   - Tool result messages (`role: "tool"`) → user messages with the result
@@ -907,7 +915,7 @@ fn flatten_tool_messages(messages: Vec<ChatCompletionMessage>) -> Vec<ChatComple
         return messages;
     }
 
-    tracing::debug!("Flattening tool messages for NEAR AI compatibility");
+    tracing::debug!("Flattening tool messages for LunarWing Cloud compatibility");
 
     messages
         .into_iter()
@@ -1093,8 +1101,8 @@ mod tests {
     use crate::llm::session::SessionConfig;
     use rust_decimal_macros::dec;
 
-    fn test_nearai_config(base_url: &str) -> NearAiConfig {
-        NearAiConfig {
+    fn test_lunarwing_cloud_config(base_url: &str) -> LunarWingCloudConfig {
+        LunarWingCloudConfig {
             model: "test-model".to_string(),
             base_url: base_url.to_string(),
             api_key: Some(secrecy::SecretString::from("test-key".to_string())),
@@ -1118,16 +1126,17 @@ mod tests {
 
     #[test]
     fn test_api_url_with_base_without_v1() {
-        let mut cfg = test_nearai_config("http://127.0.0.1:8318");
+        let mut cfg = test_lunarwing_cloud_config("http://127.0.0.1:8318");
 
-        let provider = NearAiChatProvider::new(cfg.clone(), test_session()).expect("provider");
+        let provider =
+            LunarWingCloudChatProvider::new(cfg.clone(), test_session()).expect("provider");
         assert_eq!(
             provider.api_url("chat/completions"),
             "http://127.0.0.1:8318/v1/chat/completions"
         );
 
         cfg.base_url = "http://127.0.0.1:8318/".to_string();
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
         assert_eq!(
             provider.api_url("/chat/completions"),
             "http://127.0.0.1:8318/v1/chat/completions"
@@ -1136,9 +1145,9 @@ mod tests {
 
     #[test]
     fn test_api_url_with_base_already_v1() {
-        let cfg = test_nearai_config("http://127.0.0.1:8318/v1");
+        let cfg = test_lunarwing_cloud_config("http://127.0.0.1:8318/v1");
 
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
         assert_eq!(
             provider.api_url("chat/completions"),
             "http://127.0.0.1:8318/v1/chat/completions"
@@ -1379,8 +1388,8 @@ mod tests {
 
     #[test]
     fn test_cost_per_token_uses_pricing_map() {
-        let cfg = test_nearai_config("http://127.0.0.1:8318");
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let cfg = test_lunarwing_cloud_config("http://127.0.0.1:8318");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
 
         // Inject pricing directly
         {
@@ -1395,9 +1404,9 @@ mod tests {
 
     #[test]
     fn test_cost_per_token_falls_back_to_static() {
-        let mut cfg = test_nearai_config("http://127.0.0.1:8318");
+        let mut cfg = test_lunarwing_cloud_config("http://127.0.0.1:8318");
         cfg.model = "gpt-4o".to_string();
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
 
         // No pricing in map, should fall back to static costs::model_cost
         let (input, output) = provider.cost_per_token();
@@ -1408,9 +1417,9 @@ mod tests {
 
     #[test]
     fn test_cost_per_token_falls_back_to_default() {
-        let mut cfg = test_nearai_config("http://127.0.0.1:8318");
-        cfg.model = "some-unknown-nearai-model".to_string();
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let mut cfg = test_lunarwing_cloud_config("http://127.0.0.1:8318");
+        cfg.model = "some-unknown-lunarwing_cloud-model".to_string();
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
 
         // No pricing in map, not in static table, should use default_cost
         let (input, output) = provider.cost_per_token();
@@ -1529,8 +1538,8 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_bearer_token_config_api_key() {
         // When config.api_key is set, it takes top priority.
-        let cfg = test_nearai_config("http://localhost:8318");
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let cfg = test_lunarwing_cloud_config("http://localhost:8318");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
         let token = provider
             .resolve_bearer_token()
             .await
@@ -1541,13 +1550,13 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_bearer_token_session_token() {
         // When config.api_key is None but session has a token, use session token.
-        let mut cfg = test_nearai_config("http://localhost:8318");
+        let mut cfg = test_lunarwing_cloud_config("http://localhost:8318");
         cfg.api_key = None;
         let session = test_session();
         session
             .set_token(secrecy::SecretString::from("session-tok-123".to_string()))
             .await;
-        let provider = NearAiChatProvider::new(cfg, session).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, session).expect("provider");
         let token = provider
             .resolve_bearer_token()
             .await
@@ -1557,9 +1566,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_bearer_token_session_beats_env_var() {
-        // Session token takes priority over NEARAI_API_KEY env var.
+        // Session token takes priority over LUNARWING_CLOUD_API_KEY env var.
         // This prevents unexpected auth mode switches mid-run.
-        let mut cfg = test_nearai_config("http://localhost:8318");
+        let mut cfg = test_lunarwing_cloud_config("http://localhost:8318");
         cfg.api_key = None;
         let session = test_session();
         session
@@ -1569,10 +1578,10 @@ mod tests {
         // Set env var that should NOT be used when session token exists
         #[allow(unused_unsafe)]
         unsafe {
-            std::env::set_var("NEARAI_API_KEY", "env-api-key-should-not-win");
+            std::env::set_var("LUNARWING_CLOUD_API_KEY", "env-api-key-should-not-win");
         }
 
-        let provider = NearAiChatProvider::new(cfg, session).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, session).expect("provider");
         let token = provider
             .resolve_bearer_token()
             .await
@@ -1584,14 +1593,14 @@ mod tests {
 
         #[allow(unused_unsafe)]
         unsafe {
-            std::env::remove_var("NEARAI_API_KEY");
+            std::env::remove_var("LUNARWING_CLOUD_API_KEY");
         }
     }
 
     #[tokio::test]
     async fn test_resolve_bearer_token_config_beats_session_and_env() {
         // Config API key should win even when session token AND env var are set.
-        let cfg = test_nearai_config("http://localhost:8318");
+        let cfg = test_lunarwing_cloud_config("http://localhost:8318");
         let session = test_session();
         session
             .set_token(secrecy::SecretString::from("session-tok".to_string()))
@@ -1599,10 +1608,10 @@ mod tests {
 
         #[allow(unused_unsafe)]
         unsafe {
-            std::env::set_var("NEARAI_API_KEY", "env-key");
+            std::env::set_var("LUNARWING_CLOUD_API_KEY", "env-key");
         }
 
-        let provider = NearAiChatProvider::new(cfg, session).expect("provider");
+        let provider = LunarWingCloudChatProvider::new(cfg, session).expect("provider");
         let token = provider
             .resolve_bearer_token()
             .await
@@ -1614,7 +1623,7 @@ mod tests {
 
         #[allow(unused_unsafe)]
         unsafe {
-            std::env::remove_var("NEARAI_API_KEY");
+            std::env::remove_var("LUNARWING_CLOUD_API_KEY");
         }
     }
 
@@ -1647,12 +1656,12 @@ mod tests {
     fn test_model_info_roundtrip_serializes_as_name() {
         let info = ModelInfo {
             name: "test-model".to_string(),
-            provider: Some("nearai".to_string()),
+            provider: Some("lunarwing_cloud".to_string()),
         };
         let json = serde_json::to_value(&info).unwrap();
         // Serialization always uses the field name "name", not the aliases
         assert_eq!(json["name"], "test-model");
-        assert_eq!(json["provider"], "nearai");
+        assert_eq!(json["provider"], "lunarwing_cloud");
         assert!(json.get("id").is_none());
         assert!(json.get("model").is_none());
     }
@@ -2204,16 +2213,16 @@ mod tests {
 
     #[test]
     fn test_api_url_with_trailing_v1_slash() {
-        let cfg = test_nearai_config("http://example.com/v1/");
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let cfg = test_lunarwing_cloud_config("http://example.com/v1/");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
         // Trailing slash gets trimmed, then /v1 is detected
         assert_eq!(provider.api_url("models"), "http://example.com/v1/models");
     }
 
     #[test]
     fn test_api_url_with_deep_base_path() {
-        let cfg = test_nearai_config("http://example.com/api/proxy");
-        let provider = NearAiChatProvider::new(cfg, test_session()).expect("provider");
+        let cfg = test_lunarwing_cloud_config("http://example.com/api/proxy");
+        let provider = LunarWingCloudChatProvider::new(cfg, test_session()).expect("provider");
         assert_eq!(
             provider.api_url("chat/completions"),
             "http://example.com/api/proxy/v1/chat/completions"

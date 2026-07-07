@@ -111,7 +111,7 @@ pub struct Settings {
     pub secrets_master_key_hex: Option<String>,
 
     // === Step 3: Inference Provider ===
-    /// LLM backend: "nearai", "openai", "ollama", "openai_compatible", "tinfoil", "openai_codex".
+    /// LLM backend: "lunarwing_cloud", "openai", "ollama", "openai_compatible", "tinfoil", "openai_codex".
     #[serde(default)]
     pub llm_backend: Option<String>,
 
@@ -240,7 +240,7 @@ pub struct EmbeddingsSettings {
     #[serde(default)]
     pub enabled: bool,
 
-    /// Provider to use: "openai", "nearai", or "openai_compatible".
+    /// Provider to use: "openai", "lunarwing_cloud", or "openai_compatible".
     #[serde(default = "default_embeddings_provider")]
     pub provider: String,
 
@@ -254,7 +254,7 @@ pub struct EmbeddingsSettings {
 }
 
 fn default_embeddings_provider() -> String {
-    "nearai".to_string()
+    "lunarwing_cloud".to_string()
 }
 
 fn default_embeddings_model() -> String {
@@ -1134,7 +1134,7 @@ impl Settings {
         // Start with defaults, then overlay each DB setting.
         //
         // The settings table stores both Settings struct fields and app-specific
-        // data (e.g. nearai.session_token). Skip keys that don't correspond to
+        // data (e.g. lunarwing_cloud.session_token). Skip keys that don't correspond to
         // a known Settings path.
         let mut settings = Self::default();
 
@@ -1155,7 +1155,7 @@ impl Settings {
             match settings.set(key, &value_str) {
                 Ok(()) => {}
                 // The settings table stores both Settings fields and app-specific
-                // data (e.g. nearai.session_token). Silently skip unknown paths.
+                // data (e.g. lunarwing_cloud.session_token). Silently skip unknown paths.
                 Err(e) if e.starts_with("Path not found") => {}
                 Err(e) => {
                     tracing::warn!(
@@ -1597,7 +1597,7 @@ mod tests {
     fn test_embeddings_defaults() {
         let settings = Settings::default();
         assert!(!settings.embeddings.enabled);
-        assert_eq!(settings.embeddings.provider, "nearai");
+        assert_eq!(settings.embeddings.provider, "lunarwing_cloud");
         assert_eq!(settings.embeddings.model, "text-embedding-3-small");
     }
 
@@ -1748,7 +1748,7 @@ timeout_ms = 300000
         // Step 1: Wizard writes full settings to DB (including selected_model
         // from initial setup).
         let wizard_settings = Settings {
-            llm_backend: Some("nearai".to_string()),
+            llm_backend: Some("lunarwing_cloud".to_string()),
             selected_model: Some("old-wizard-model".to_string()),
             ..Default::default()
         };
@@ -1804,7 +1804,7 @@ timeout_ms = 300000
     fn toml_overlay_preserves_matching_model() {
         // DB settings with new model from /model command.
         let mut db_settings = Settings {
-            llm_backend: Some("nearai".to_string()),
+            llm_backend: Some("lunarwing_cloud".to_string()),
             selected_model: Some("new-model".to_string()),
             ..Default::default()
         };
@@ -2145,7 +2145,7 @@ timeout_ms = 300000
             secrets_master_key_source: KeySource::Keychain,
             embeddings: EmbeddingsSettings {
                 enabled: true,
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 model: "text-embedding-3-large".to_string(),
                 base_url: None,
             },
@@ -2213,7 +2213,7 @@ timeout_ms = 300000
         );
         assert!(restored.embeddings.enabled, "embeddings.enabled lost");
         assert_eq!(
-            restored.embeddings.provider, "nearai",
+            restored.embeddings.provider, "lunarwing_cloud",
             "embeddings.provider lost"
         );
         assert_eq!(
@@ -2443,7 +2443,7 @@ timeout_ms = 300000
             selected_model: Some("claude-sonnet-4-5".to_string()),
             embeddings: EmbeddingsSettings {
                 enabled: true,
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 model: "text-embedding-3-large".to_string(),
                 base_url: None,
             },
@@ -2478,7 +2478,7 @@ timeout_ms = 300000
         assert_eq!(current.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(current.selected_model.as_deref(), Some("claude-sonnet-4-5"));
         assert!(current.embeddings.enabled);
-        assert_eq!(current.embeddings.provider, "nearai");
+        assert_eq!(current.embeddings.provider, "lunarwing_cloud");
         assert!(current.heartbeat.enabled);
         assert_eq!(current.heartbeat.interval_secs, 1800);
     }
@@ -2829,11 +2829,11 @@ timeout_ms = 300000
     fn embeddings_survive_rerun_that_skips_step5() {
         let prior = Settings {
             onboard_completed: true,
-            llm_backend: Some("nearai".to_string()),
+            llm_backend: Some("lunarwing_cloud".to_string()),
             selected_model: Some("qwen".to_string()),
             embeddings: EmbeddingsSettings {
                 enabled: true,
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 model: "text-embedding-3-large".to_string(),
                 base_url: None,
             },
@@ -2853,7 +2853,7 @@ timeout_ms = 300000
 
         // Before step 5 (embeddings) runs, check that prior values are present
         assert!(current.embeddings.enabled);
-        assert_eq!(current.embeddings.provider, "nearai");
+        assert_eq!(current.embeddings.provider, "lunarwing_cloud");
         assert_eq!(current.embeddings.model, "text-embedding-3-large");
     }
 }

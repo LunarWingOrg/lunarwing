@@ -101,7 +101,7 @@ pub fn set_runtime_env(key: &str, value: &str) {
 /// `optional_env()`.
 ///
 /// Use this instead of `std::env::var()` when the value might have been set
-/// via `set_runtime_env()` (e.g., `NEARAI_API_KEY` during interactive login).
+/// via `set_runtime_env()` (e.g., `LUNARWING_CLOUD_API_KEY` during interactive login).
 pub fn env_or_override(key: &str) -> Option<String> {
     let (preferred_key, legacy_key) = aliased_env_keys(key);
 
@@ -251,7 +251,7 @@ pub(crate) fn parse_string_env(
 /// - HTTP URLs pointing at anything other than localhost/127.0.0.1/::1
 ///
 /// This is intended for config-time validation of base URLs like
-/// `OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, `NEARAI_BASE_URL`, etc.
+/// `OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, `LUNARWING_CLOUD_BASE_URL`, etc.
 pub(crate) fn validate_base_url(url: &str, field_name: &str) -> Result<(), ConfigError> {
     if std::env::var("ALLOW_PRIVATE_IPS").ok().as_deref() == Some("1") {
         // Just validate it's a parseable http/https URL
@@ -286,7 +286,7 @@ pub(crate) fn validate_base_url(url: &str, field_name: &str) -> Result<(), Confi
     let host_lower = host.to_lowercase();
 
     // For HTTP (non-TLS), only allow localhost — remote HTTP endpoints
-    // risk credential leakage (e.g. NEAR AI bearer tokens sent over plaintext).
+    // risk credential leakage (e.g. LunarWing Cloud bearer tokens sent over plaintext).
     if scheme == "http" {
         let is_localhost = host_lower == "localhost"
             || host_lower == "127.0.0.1"

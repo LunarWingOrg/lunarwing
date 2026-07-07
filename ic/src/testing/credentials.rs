@@ -104,15 +104,15 @@ pub const TEST_REDACT_SECRET_123: &str = "sk-secret-123";
 /// Generic session token for persistence tests.
 pub const TEST_SESSION_TOKEN: &str = "test_token_123";
 
-/// NEAR AI session token variant A.
-pub const TEST_SESSION_NEARAI_ABC: &str = "sess_abc123";
+/// LunarWing Cloud session token variant A.
+pub const TEST_SESSION_LUNARWING_CLOUD_ABC: &str = "sess_abc123";
 
-/// NEAR AI session token variant B.
-pub const TEST_SESSION_NEARAI_XYZ: &str = "sess_xyz789";
+/// LunarWing Cloud session token variant B.
+pub const TEST_SESSION_LUNARWING_CLOUD_XYZ: &str = "sess_xyz789";
 
 // ── Generic ──────────────────────────────────────────────────────────────
 
-/// Generic test API key for LLM config, embedding config, nearai tests.
+/// Generic test API key for LLM config, embedding config, lunarwing_cloud tests.
 pub const TEST_API_KEY: &str = "test-key";
 
 /// Stored secret value for create-and-get tests.

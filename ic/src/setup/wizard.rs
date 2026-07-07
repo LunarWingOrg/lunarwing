@@ -3,7 +3,7 @@
 //! The wizard guides users through:
 //! 1. Database connection
 //! 2. Security (secrets master key)
-//! 3. Inference provider (NEAR AI, OpenAI, OpenAI Codex, Ollama, OpenAI-compatible)
+//! 3. Inference provider (LunarWing Cloud, OpenAI, OpenAI Codex, Ollama, OpenAI-compatible)
 //! 4. Model selection
 //! 5. Embeddings
 //! 6. Channel configuration
@@ -25,7 +25,7 @@ use crate::channels::wasm::{
     ChannelCapabilitiesFile, available_channel_names, install_bundled_channel,
 };
 use crate::llm::models::{
-    build_nearai_model_fetch_config, fetch_ollama_models, fetch_openai_compatible_models,
+    build_lunarwing_cloud_model_fetch_config, fetch_ollama_models, fetch_openai_compatible_models,
     fetch_openai_models,
 };
 #[cfg(test)]
@@ -414,8 +414,8 @@ impl SetupWizard {
             if self.settings.llm_backend.is_none() {
                 if let Ok(b) = std::env::var("LLM_BACKEND") {
                     self.settings.llm_backend = Some(b);
-                } else if std::env::var("NEARAI_API_KEY").is_ok() {
-                    self.settings.llm_backend = Some("nearai".to_string());
+                } else if std::env::var("LUNARWING_CLOUD_API_KEY").is_ok() {
+                    self.settings.llm_backend = Some("lunarwing_cloud".to_string());
                 } else if std::env::var("OPENAI_API_KEY").is_ok() {
                     self.settings.llm_backend = Some("openai".to_string());
                 } else if std::env::var("OPENROUTER_API_KEY").is_ok() {
@@ -423,16 +423,19 @@ impl SetupWizard {
                 }
             }
 
-            if let Ok(api_key) = std::env::var("NEARAI_API_KEY")
+            if let Ok(api_key) = std::env::var("LUNARWING_CLOUD_API_KEY")
                 && !api_key.is_empty()
-                && self.settings.llm_backend.as_deref() == Some("nearai")
+                && self.settings.llm_backend.as_deref() == Some("lunarwing_cloud")
             {
-                // NEARAI_API_KEY is set and backend auto-detected — skip interactive prompts
-                print_info("NEARAI_API_KEY found — using NEAR AI provider");
+                // LUNARWING_CLOUD_API_KEY is set and backend auto-detected — skip interactive prompts
+                print_info("LUNARWING_CLOUD_API_KEY found — using LunarWing Cloud provider");
                 if let Ok(ctx) = self.init_secrets_context().await {
                     let key = SecretString::from(api_key.clone());
-                    if let Err(e) = ctx.save_secret("llm_nearai_api_key", &key).await {
-                        tracing::warn!("Failed to persist NEARAI_API_KEY to secrets: {}", e);
+                    if let Err(e) = ctx.save_secret("llm_lunarwing_cloud_api_key", &key).await {
+                        tracing::warn!(
+                            "Failed to persist LUNARWING_CLOUD_API_KEY to secrets: {}",
+                            e
+                        );
                     }
                 }
                 self.llm_api_key = Some(SecretString::from(api_key));
@@ -1355,15 +1358,15 @@ impl SetupWizard {
     /// Step 3: Inference provider selection.
     ///
     /// Uses the provider registry to dynamically build the selection menu.
-    /// NearAI is always first (special auth), then all registry providers
+    /// LunarWing Cloud is always first (special auth), then all registry providers
     /// that have setup hints.
     async fn step_inference_provider(&mut self) -> Result<(), SetupError> {
         let registry = crate::llm::ProviderRegistry::load();
 
         // Show current provider if already configured
         if let Some(current) = self.settings.llm_backend.clone() {
-            let display = if current == "nearai" {
-                "NEAR AI".to_string()
+            let display = if current == "lunarwing_cloud" {
+                "LunarWing Cloud".to_string()
             } else if let Some(def) = registry.find(&current) {
                 def.setup
                     .as_ref()
@@ -1371,7 +1374,7 @@ impl SetupWizard {
                     .unwrap_or_else(|| def.id.clone())
             } else {
                 match current.as_str() {
-                    "nearai" => "NEAR AI".to_string(),
+                    "lunarwing_cloud" => "LunarWing Cloud".to_string(),
                     _ => {
                         if let Some(def) = registry.find(&current) {
                             def.setup
@@ -1387,7 +1390,7 @@ impl SetupWizard {
             print_info(&format!("Current provider: {}", display));
             println!();
 
-            let is_known = current == "nearai"
+            let is_known = current == "lunarwing_cloud"
                 || current == "openai_codex"
                 || registry.is_known(&current);
 
@@ -1410,12 +1413,15 @@ impl SetupWizard {
         print_info("Select your inference provider:");
         println!();
 
-        // Build menu: NearAI first, then OpenAI Codex, then registry providers
+        // Build menu: LunarWing Cloud first, then OpenAI Codex, then registry providers
         let selectable = registry.selectable();
 
         // Detect which providers have API keys already set in the environment.
         let detected_env: HashMap<&str, bool> = [
-            ("nearai", std::env::var("NEARAI_API_KEY").is_ok()),
+            (
+                "lunarwing_cloud",
+                std::env::var("LUNARWING_CLOUD_API_KEY").is_ok(),
+            ),
             ("openai", std::env::var("OPENAI_API_KEY").is_ok()),
             ("openrouter", std::env::var("OPENROUTER_API_KEY").is_ok()),
         ]
@@ -1441,9 +1447,16 @@ impl SetupWizard {
         let mut entries: Vec<ProviderEntry> = Vec::with_capacity(2 + selectable.len());
 
         entries.push(ProviderEntry {
-            id: "nearai".to_string(),
-            label: make_label("nearai", "NEAR AI", "multi-model access via NEAR account"),
-            detected: detected_env.get("nearai").copied().unwrap_or(false),
+            id: "lunarwing_cloud".to_string(),
+            label: make_label(
+                "lunarwing_cloud",
+                "LunarWing Cloud",
+                "multi-model access via NEAR account",
+            ),
+            detected: detected_env
+                .get("lunarwing_cloud")
+                .copied()
+                .unwrap_or(false),
         });
 
         entries.push(ProviderEntry {
@@ -1490,15 +1503,15 @@ impl SetupWizard {
 
     /// Run the setup flow for a specific provider.
     ///
-    /// NearAI has its own special flow. Registry providers dispatch
+    /// LunarWing Cloud has its own special flow. Registry providers dispatch
     /// based on their `SetupHint` kind.
     async fn run_provider_setup(
         &mut self,
         provider_id: &str,
         registry: &crate::llm::ProviderRegistry,
     ) -> Result<(), SetupError> {
-        if provider_id == "nearai" {
-            return self.setup_nearai().await;
+        if provider_id == "lunarwing_cloud" {
+            return self.setup_lunarwing_cloud().await;
         }
 
         if provider_id == "openai_codex" {
@@ -1576,27 +1589,30 @@ impl SetupWizard {
         }
     }
 
-    /// NEAR AI provider setup (extracted from the old step_authentication).
-    async fn setup_nearai(&mut self) -> Result<(), SetupError> {
-        self.set_llm_backend_preserving_model("nearai");
+    /// LunarWing Cloud provider setup (extracted from the old step_authentication).
+    async fn setup_lunarwing_cloud(&mut self) -> Result<(), SetupError> {
+        self.set_llm_backend_preserving_model("lunarwing_cloud");
 
-        // Check if NEARAI_API_KEY is already provided via environment or runtime overlay
-        if let Some(existing) = crate::config::helpers::env_or_override("NEARAI_API_KEY")
+        // Check if LUNARWING_CLOUD_API_KEY is already provided via environment or runtime overlay
+        if let Some(existing) = crate::config::helpers::env_or_override("LUNARWING_CLOUD_API_KEY")
             && !existing.is_empty()
         {
             print_info(&format!(
-                "NEARAI_API_KEY found: {}",
+                "LUNARWING_CLOUD_API_KEY found: {}",
                 mask_api_key(&existing)
             ));
             if confirm("Use this key?", true).map_err(SetupError::Io)? {
                 if let Ok(ctx) = self.init_secrets_context().await {
                     let key = SecretString::from(existing.clone());
-                    if let Err(e) = ctx.save_secret("llm_nearai_api_key", &key).await {
-                        tracing::warn!("Failed to persist NEARAI_API_KEY to secrets: {}", e);
+                    if let Err(e) = ctx.save_secret("llm_lunarwing_cloud_api_key", &key).await {
+                        tracing::warn!(
+                            "Failed to persist LUNARWING_CLOUD_API_KEY to secrets: {}",
+                            e
+                        );
                     }
                 }
                 self.llm_api_key = Some(SecretString::from(existing));
-                print_success("NEAR AI configured (from env)");
+                print_success("LunarWing Cloud configured (from env)");
                 return Ok(());
             }
         }
@@ -1608,7 +1624,7 @@ impl SetupWizard {
             print_info("Existing session found. Validating...");
             match session.ensure_authenticated().await {
                 Ok(()) => {
-                    print_success("NEAR AI session valid");
+                    print_success("LunarWing Cloud session valid");
                     return Ok(());
                 }
                 Err(e) => {
@@ -1642,20 +1658,23 @@ impl SetupWizard {
         // doesn't have a DB store attached during onboarding.
         self.persist_session_to_db().await;
 
-        // If the user chose the API key path, NEARAI_API_KEY is now set
+        // If the user chose the API key path, LUNARWING_CLOUD_API_KEY is now set
         // in the runtime env overlay. Persist it to the encrypted secrets
         // store so inject_llm_keys_from_secrets() can load it on future runs.
-        if let Some(api_key) = crate::config::helpers::env_or_override("NEARAI_API_KEY")
+        if let Some(api_key) = crate::config::helpers::env_or_override("LUNARWING_CLOUD_API_KEY")
             && !api_key.is_empty()
             && let Ok(ctx) = self.init_secrets_context().await
         {
             let key = SecretString::from(api_key);
-            if let Err(e) = ctx.save_secret("llm_nearai_api_key", &key).await {
-                tracing::warn!("Failed to persist NEARAI_API_KEY to secrets: {}", e);
+            if let Err(e) = ctx.save_secret("llm_lunarwing_cloud_api_key", &key).await {
+                tracing::warn!(
+                    "Failed to persist LUNARWING_CLOUD_API_KEY to secrets: {}",
+                    e
+                );
             }
         }
 
-        print_success("NEAR AI configured");
+        print_success("LunarWing Cloud configured");
         Ok(())
     }
 
@@ -1856,13 +1875,17 @@ impl SetupWizard {
             }
         }
 
-        let backend = self.settings.llm_backend.as_deref().unwrap_or("nearai");
+        let backend = self
+            .settings
+            .llm_backend
+            .as_deref()
+            .unwrap_or("lunarwing_cloud");
         let registry = crate::llm::ProviderRegistry::load();
 
         match backend {
-            "nearai" => {
-                // NEAR AI: use existing provider list_models()
-                let fetched = self.fetch_nearai_models().await;
+            "lunarwing_cloud" => {
+                // LunarWing Cloud: use existing provider list_models()
+                let fetched = self.fetch_lunarwing_cloud_models().await;
                 let models = if fetched.is_empty() {
                     crate::llm::default_models()
                 } else {
@@ -1998,11 +2021,11 @@ impl SetupWizard {
         Ok(())
     }
 
-    /// Fetch available models from the NEAR AI API.
+    /// Fetch available models from the LunarWing Cloud API.
     ///
-    /// Uses [`build_nearai_model_fetch_config`] to construct the provider config,
-    /// which reads `NEARAI_API_KEY` from the environment when present.
-    async fn fetch_nearai_models(&self) -> Vec<String> {
+    /// Uses [`build_lunarwing_cloud_model_fetch_config`] to construct the provider config,
+    /// which reads `LUNARWING_CLOUD_API_KEY` from the environment when present.
+    async fn fetch_lunarwing_cloud_models(&self) -> Vec<String> {
         let session = match self.session_manager {
             Some(ref s) => Arc::clone(s),
             None => return vec![],
@@ -2010,7 +2033,7 @@ impl SetupWizard {
 
         use crate::llm::create_llm_provider;
 
-        let config = build_nearai_model_fetch_config();
+        let config = build_lunarwing_cloud_model_fetch_config();
 
         match create_llm_provider(&config, session).await {
             Ok(provider) => match provider.list_models().await {
@@ -2041,10 +2064,14 @@ impl SetupWizard {
             return Ok(());
         }
 
-        let backend = self.settings.llm_backend.as_deref().unwrap_or("nearai");
+        let backend = self
+            .settings
+            .llm_backend
+            .as_deref()
+            .unwrap_or("lunarwing_cloud");
         let has_openai_key = std::env::var("OPENAI_API_KEY").is_ok()
             || (backend == "openai" && self.llm_api_key.is_some());
-        let has_nearai = backend == "nearai" || self.session_manager.is_some();
+        let has_lunarwing_cloud = backend == "lunarwing_cloud" || self.session_manager.is_some();
 
         // If the LLM backend is OpenAI and we already have a key, default to OpenAI embeddings
         if backend == "openai" && has_openai_key {
@@ -2055,17 +2082,17 @@ impl SetupWizard {
             return Ok(());
         }
 
-        // If no NEAR AI session and no OpenAI key, only OpenAI is viable
-        if !has_nearai && !has_openai_key {
-            print_info("No NEAR AI session or OpenAI key found for embeddings.");
+        // If no LunarWing Cloud session and no OpenAI key, only OpenAI is viable
+        if !has_lunarwing_cloud && !has_openai_key {
+            print_info("No LunarWing Cloud session or OpenAI key found for embeddings.");
             print_info("Set OPENAI_API_KEY in your environment to enable embeddings.");
             self.settings.embeddings.enabled = false;
             return Ok(());
         }
 
         let mut options = Vec::new();
-        if has_nearai {
-            options.push("NEAR AI (uses same auth, no extra cost)");
+        if has_lunarwing_cloud {
+            options.push("LunarWing Cloud (uses same auth, no extra cost)");
         }
         options.push("OpenAI (requires API key)");
         options.push("OpenAI-compatible (custom URL)");
@@ -2073,20 +2100,20 @@ impl SetupWizard {
         let choice = select_one("Select embeddings provider:", &options).map_err(SetupError::Io)?;
 
         // Map choice back to provider name
-        let provider = if has_nearai && choice == 0 {
-            "nearai"
-        } else if (!has_nearai && choice == 1) || (has_nearai && choice == 2) {
+        let provider = if has_lunarwing_cloud && choice == 0 {
+            "lunarwing_cloud"
+        } else if (!has_lunarwing_cloud && choice == 1) || (has_lunarwing_cloud && choice == 2) {
             "openai_compatible"
         } else {
             "openai"
         };
 
         match provider {
-            "nearai" => {
+            "lunarwing_cloud" => {
                 self.settings.embeddings.enabled = true;
-                self.settings.embeddings.provider = "nearai".to_string();
+                self.settings.embeddings.provider = "lunarwing_cloud".to_string();
                 self.settings.embeddings.model = "text-embedding-3-small".to_string();
-                print_success("Embeddings enabled via NEAR AI");
+                print_success("Embeddings enabled via LunarWing Cloud");
             }
             "openai_compatible" => {
                 self.settings.embeddings.enabled = true;
@@ -2942,11 +2969,11 @@ impl SetupWizard {
         Ok(())
     }
 
-    /// Persist the NEAR AI session token to the database.
+    /// Persist the LunarWing Cloud session token to the database.
     ///
     /// The session manager writes to disk during `ensure_authenticated()` but
     /// doesn't have a DB store attached during onboarding. This reads the
-    /// session file from disk and stores it under the `nearai.session_token`
+    /// session file from disk and stores it under the `lunarwing_cloud.session_token`
     /// key so the runtime's `attach_store()` finds it without fallback.
     ///
     /// Best-effort: silently ignores errors (no DB connection yet, no
@@ -2966,7 +2993,7 @@ impl SetupWizard {
         if let Some(ref pool) = self.db_pool {
             let store = crate::history::Store::from_pool(pool.clone());
             if let Err(e) = store
-                .set_setting(self.owner_id(), "nearai.session_token", &value)
+                .set_setting(self.owner_id(), "lunarwing_cloud.session_token", &value)
                 .await
             {
                 tracing::debug!("Could not persist session token to postgres: {}", e);
@@ -2980,7 +3007,7 @@ impl SetupWizard {
         if let Some(ref backend) = self.db_backend {
             use crate::db::SettingsStore as _;
             if let Err(e) = backend
-                .set_setting(self.owner_id(), "nearai.session_token", &value)
+                .set_setting(self.owner_id(), "lunarwing_cloud.session_token", &value)
                 .await
             {
                 tracing::debug!("Could not persist session token to libsql: {}", e);
@@ -3113,7 +3140,7 @@ impl SetupWizard {
 
         // Fact 1: Provider + model
         let provider_display = match self.settings.llm_backend.as_deref() {
-            Some("nearai") => "NEAR AI".to_string(),
+            Some("lunarwing_cloud") => "LunarWing Cloud".to_string(),
             Some("openai") => "OpenAI".to_string(),
             Some("ollama") => "Ollama".to_string(),
             Some("openai_compatible") => "OpenAI-compatible".to_string(),
@@ -3905,7 +3932,10 @@ mod tests {
 
         wizard.set_llm_backend_preserving_model("openai_compatible");
 
-        assert_eq!(wizard.settings.llm_backend.as_deref(), Some("openai_compatible"));
+        assert_eq!(
+            wizard.settings.llm_backend.as_deref(),
+            Some("openai_compatible")
+        );
         assert_eq!(wizard.settings.selected_model, None);
     }
 
@@ -4016,62 +4046,67 @@ mod tests {
         assert!(settings.secrets_master_key_hex.is_some());
     }
 
-    /// Regression test for #799: `fetch_nearai_models` hardcoded `api_key: None`,
+    /// Regression test for #799: `fetch_lunarwing_cloud_models` hardcoded `api_key: None`,
     /// causing the auth prompt to re-appear during model selection when the user
-    /// had authenticated via NEAR AI Cloud API key (option 4).
+    /// had authenticated via LunarWing Cloud Cloud API key (option 4).
     #[test]
-    fn test_build_nearai_model_fetch_config_picks_up_api_key_env() {
+    fn test_build_lunarwing_cloud_model_fetch_config_picks_up_api_key_env() {
         use secrecy::ExposeSecret;
 
         let _lock = lock_env();
-        let _guard = EnvGuard::set("NEARAI_API_KEY", "test-cloud-api-key-12345");
-        let _guard2 = EnvGuard::clear("NEARAI_BASE_URL");
+        let _guard = EnvGuard::set("LUNARWING_CLOUD_API_KEY", "test-cloud-api-key-12345");
+        let _guard2 = EnvGuard::clear("LUNARWING_CLOUD_BASE_URL");
 
-        let config = build_nearai_model_fetch_config();
+        let config = build_lunarwing_cloud_model_fetch_config();
         assert!(
-            config.nearai.api_key.is_some(),
-            "config should include NEARAI_API_KEY from env"
+            config.lunarwing_cloud.api_key.is_some(),
+            "config should include LUNARWING_CLOUD_API_KEY from env"
         );
         assert_eq!(
-            config.nearai.api_key.as_ref().unwrap().expose_secret(),
+            config
+                .lunarwing_cloud
+                .api_key
+                .as_ref()
+                .unwrap()
+                .expose_secret(),
             "test-cloud-api-key-12345"
         );
         // With API key, base_url must point to cloud-api (not private.near.ai)
         assert_eq!(
-            config.nearai.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
             "API key auth must use cloud-api base URL for model fetching"
         );
     }
 
-    /// Regression test for #799: when NEARAI_API_KEY is absent or empty,
+    /// Regression test for #799: when LUNARWING_CLOUD_API_KEY is absent or empty,
     /// the config should have `api_key: None` (session token path).
     #[test]
-    fn test_build_nearai_model_fetch_config_none_when_no_api_key() {
+    fn test_build_lunarwing_cloud_model_fetch_config_none_when_no_api_key() {
         let _lock = lock_env();
-        let _guard = EnvGuard::clear("NEARAI_API_KEY");
-        let _guard2 = EnvGuard::clear("NEARAI_BASE_URL");
+        let _guard = EnvGuard::clear("LUNARWING_CLOUD_API_KEY");
+        let _guard2 = EnvGuard::clear("LUNARWING_CLOUD_BASE_URL");
 
-        let config = build_nearai_model_fetch_config();
+        let config = build_lunarwing_cloud_model_fetch_config();
         assert!(
-            config.nearai.api_key.is_none(),
+            config.lunarwing_cloud.api_key.is_none(),
             "config should have no api_key when env var is absent"
         );
         // Without API key, base_url must point to private.near.ai (session token)
         assert_eq!(
-            config.nearai.base_url, "https://private.near.ai",
+            config.lunarwing_cloud.base_url, "https://private.near.ai",
             "session-token auth must use private.near.ai base URL"
         );
     }
 
-    /// Regression test for #799: empty NEARAI_API_KEY should be treated as absent.
+    /// Regression test for #799: empty LUNARWING_CLOUD_API_KEY should be treated as absent.
     #[test]
-    fn test_build_nearai_model_fetch_config_none_when_empty_api_key() {
+    fn test_build_lunarwing_cloud_model_fetch_config_none_when_empty_api_key() {
         let _lock = lock_env();
-        let _guard = EnvGuard::set("NEARAI_API_KEY", "");
+        let _guard = EnvGuard::set("LUNARWING_CLOUD_API_KEY", "");
 
-        let config = build_nearai_model_fetch_config();
+        let config = build_lunarwing_cloud_model_fetch_config();
         assert!(
-            config.nearai.api_key.is_none(),
+            config.lunarwing_cloud.api_key.is_none(),
             "config should have no api_key when env var is empty"
         );
     }
@@ -4085,52 +4120,57 @@ mod tests {
         use secrecy::ExposeSecret;
 
         let _lock = lock_env();
-        let _guard = EnvGuard::clear("NEARAI_API_KEY");
-        let _guard2 = EnvGuard::clear("NEARAI_BASE_URL");
+        let _guard = EnvGuard::clear("LUNARWING_CLOUD_API_KEY");
+        let _guard2 = EnvGuard::clear("LUNARWING_CLOUD_BASE_URL");
 
-        crate::config::inject_single_var("NEARAI_API_KEY", "injected-wizard-key");
-        let config = build_nearai_model_fetch_config();
+        crate::config::inject_single_var("LUNARWING_CLOUD_API_KEY", "injected-wizard-key");
+        let config = build_lunarwing_cloud_model_fetch_config();
 
         // Clean up: empty values are treated as unset by env_or_override()
         // at every layer (real env, runtime overrides, INJECTED_VARS).
-        crate::config::inject_single_var("NEARAI_API_KEY", "");
+        crate::config::inject_single_var("LUNARWING_CLOUD_API_KEY", "");
 
         assert!(
-            config.nearai.api_key.is_some(),
-            "for_model_discovery must read NEARAI_API_KEY from inject_single_var overlay"
+            config.lunarwing_cloud.api_key.is_some(),
+            "for_model_discovery must read LUNARWING_CLOUD_API_KEY from inject_single_var overlay"
         );
         assert_eq!(
-            config.nearai.api_key.as_ref().unwrap().expose_secret(),
+            config
+                .lunarwing_cloud
+                .api_key
+                .as_ref()
+                .unwrap()
+                .expose_secret(),
             "injected-wizard-key"
         );
         assert_eq!(
-            config.nearai.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
             "API key from overlay must select cloud-api base URL"
         );
     }
 
     /// Regression: API key set via set_runtime_env (interactive api_key_login
-    /// path) must be picked up by build_nearai_model_fetch_config so that
+    /// path) must be picked up by build_lunarwing_cloud_model_fetch_config so that
     /// model listing doesn't fall back to session-token auth and re-trigger
-    /// the NEAR AI authentication menu.
+    /// the LunarWing Cloud authentication menu.
     #[test]
-    fn test_build_nearai_model_fetch_config_picks_up_runtime_env() {
+    fn test_build_lunarwing_cloud_model_fetch_config_picks_up_runtime_env() {
         let _lock = lock_env();
         // Ensure the real env var is unset so the only source is the overlay.
-        let _guard = EnvGuard::clear("NEARAI_API_KEY");
+        let _guard = EnvGuard::clear("LUNARWING_CLOUD_API_KEY");
 
-        crate::config::helpers::set_runtime_env("NEARAI_API_KEY", "test-key-from-overlay");
-        let config = build_nearai_model_fetch_config();
+        crate::config::helpers::set_runtime_env("LUNARWING_CLOUD_API_KEY", "test-key-from-overlay");
+        let config = build_lunarwing_cloud_model_fetch_config();
 
         // Clean up runtime overlay
-        crate::config::helpers::set_runtime_env("NEARAI_API_KEY", "");
+        crate::config::helpers::set_runtime_env("LUNARWING_CLOUD_API_KEY", "");
 
         assert!(
-            config.nearai.api_key.is_some(),
-            "config must pick up NEARAI_API_KEY from runtime overlay"
+            config.lunarwing_cloud.api_key.is_some(),
+            "config must pick up LUNARWING_CLOUD_API_KEY from runtime overlay"
         );
         assert_eq!(
-            config.nearai.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
             "API key auth must use cloud-api base URL"
         );
     }

@@ -23,7 +23,7 @@ use crate::types::project::ProjectId;
 pub struct PlatformInfo {
     /// Software version (from CARGO_PKG_VERSION).
     pub version: Option<String>,
-    /// LLM backend name (e.g. "nearai", "openai", "anthropic").
+    /// LLM backend name (e.g. "lunarwing_cloud", "openai", "anthropic").
     pub llm_backend: Option<String>,
     /// Active model name.
     pub model_name: Option<String>,
@@ -289,7 +289,7 @@ mod tests {
     async fn prompt_with_platform_info_injects_identity() {
         let info = PlatformInfo {
             version: Some("1.2.3".into()),
-            llm_backend: Some("nearai".into()),
+            llm_backend: Some("lunarwing_cloud".into()),
             model_name: Some("qwen3-235b".into()),
             database_backend: Some("libsql".into()),
             active_channels: vec!["telegram".into(), "cli".into()],
@@ -300,7 +300,7 @@ mod tests {
             build_codeact_system_prompt(&[], None, ProjectId(uuid::Uuid::nil()), Some(&info)).await;
         assert!(prompt.contains("LunarWing"));
         assert!(prompt.contains("1.2.3"));
-        assert!(prompt.contains("nearai"));
+        assert!(prompt.contains("lunarwing_cloud"));
         assert!(prompt.contains("qwen3-235b"));
         assert!(prompt.contains("libsql"));
         assert!(prompt.contains("telegram"));

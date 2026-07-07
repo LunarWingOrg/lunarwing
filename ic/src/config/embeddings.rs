@@ -16,7 +16,7 @@ pub const DEFAULT_EMBEDDING_CACHE_SIZE: usize = 10_000;
 pub struct EmbeddingsConfig {
     /// Whether embeddings are enabled.
     pub enabled: bool,
-    /// Provider to use: "openai", "nearai", "ollama", or "openai_compatible"
+    /// Provider to use: "openai", "lunarwing_cloud", "ollama", or "openai_compatible"
     pub provider: String,
     /// OpenAI API key (for OpenAI provider).
     pub openai_api_key: Option<SecretString>,
@@ -126,11 +126,11 @@ impl EmbeddingsConfig {
     /// Create the appropriate embedding provider based on configuration.
     ///
     /// Returns `None` if embeddings are disabled or the required credentials
-    /// are missing. The `nearai_base_url` and `session` are needed only for
-    /// the NEAR AI provider but must be passed unconditionally.
+    /// are missing. The `lunarwing_cloud_base_url` and `session` are needed only for
+    /// the LunarWing Cloud provider but must be passed unconditionally.
     pub fn create_provider(
         &self,
-        nearai_base_url: &str,
+        lunarwing_cloud_base_url: &str,
         session: Arc<SessionManager>,
     ) -> Option<Arc<dyn EmbeddingProvider>> {
         if !self.enabled {
@@ -139,15 +139,18 @@ impl EmbeddingsConfig {
         }
 
         match self.provider.as_str() {
-            "nearai" => {
+            "lunarwing_cloud" => {
                 tracing::debug!(
-                    "Embeddings enabled via NEAR AI (model: {}, dim: {})",
+                    "Embeddings enabled via LunarWing Cloud (model: {}, dim: {})",
                     self.model,
                     self.dimension,
                 );
                 Some(Arc::new(
-                    crate::workspace::NearAiEmbeddings::new(nearai_base_url, session)
-                        .with_model(&self.model, self.dimension),
+                    crate::workspace::LunarWingCloudEmbeddings::new(
+                        lunarwing_cloud_base_url,
+                        session,
+                    )
+                    .with_model(&self.model, self.dimension),
                 ))
             }
             "ollama" => {

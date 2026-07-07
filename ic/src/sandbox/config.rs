@@ -183,7 +183,7 @@ pub fn default_credential_mappings() -> Vec<crate::secrets::CredentialMapping> {
     vec![
         CredentialMapping::bearer("OPENAI_API_KEY", "api.openai.com"),
         CredentialMapping::header("ANTHROPIC_API_KEY", "x-api-key", "api.anthropic.com"),
-        CredentialMapping::bearer("NEARAI_API_KEY", "api.near.ai"),
+        CredentialMapping::bearer("LUNARWING_CLOUD_API_KEY", "api.near.ai"),
     ]
 }
 

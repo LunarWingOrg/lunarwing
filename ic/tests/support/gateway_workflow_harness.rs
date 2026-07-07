@@ -270,7 +270,7 @@ impl GatewayWorkflowHarness {
                 document_extraction: None,
                 sandbox_readiness: lunarwing::agent::SandboxReadiness::DisabledByConfig,
                 builder: None,
-                llm_backend: "nearai".to_string(),
+                llm_backend: "lunarwing_cloud".to_string(),
             },
             channels,
             None,
