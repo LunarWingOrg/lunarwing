@@ -55,10 +55,10 @@ fn bootstrap_env_round_trips_llm_backend() {
     // All other backends the wizard supports
     for backend in &[
         "lunarwing_cloud",
-        "anthropic",
+        "openai",
         "ollama",
         "openai_compatible",
-        "tinfoil",
+        "openai_codex",
     ] {
         save_bootstrap_env_to(&env_path, &[("LLM_BACKEND", backend)]).unwrap();
         let map = read_env_map(&env_path);
@@ -241,13 +241,13 @@ fn bootstrap_env_preserves_existing_values() {
     );
 
     // Upsert an existing key and verify the value is updated, others preserved
-    upsert_bootstrap_var_to(&env_path, "LLM_BACKEND", "anthropic").unwrap();
+    upsert_bootstrap_var_to(&env_path, "LLM_BACKEND", "ollama").unwrap();
 
     let map3 = read_env_map(&env_path);
 
     assert_eq!(
         map3.get("LLM_BACKEND").map(String::as_str),
-        Some("anthropic"),
+        Some("ollama"),
         "LLM_BACKEND must be updated after upsert"
     );
     assert_eq!(
