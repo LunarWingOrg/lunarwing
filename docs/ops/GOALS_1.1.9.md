@@ -32,7 +32,7 @@
 27. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v4
 28. [ ] Fix these issues with kawarimi: https://github.com/LunarWingOrg/lunarwing/issues/161
 29. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
-30. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/140
+30. [ ] Address items from any other open issues
 31. [ ] Run automated testing scripts if still relevant. If not, bring them up to speed and document properly
 32. [ ] Need a full extensive test using testing_guide and other testing scripts (if they are still relevant) See docs/guides/TESTING_GUIDE.md and ic/scripts/release-test.sh
 33. [ ] Retest kawarimi tenant migration (export/import full process, incorporate early numbers for this too when performing full range of tests, i.e. a 1.1.8 or 1.1.7 tenant or even lower version kawarimi'd to 1.1.9 pre-release build)
