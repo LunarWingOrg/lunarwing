@@ -697,80 +697,80 @@ mod tests {
     }
 
     #[test]
-    fn registry_provider_resolves_groq() {
+    fn registry_provider_resolves_openai() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("GROQ_API_KEY");
-            std::env::remove_var("GROQ_MODEL");
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("OPENAI_MODEL");
+            std::env::remove_var("OPENAI_BASE_URL");
         }
 
         let settings = Settings {
-            llm_backend: Some("groq".to_string()),
-            selected_model: Some("llama-3.3-70b-versatile".to_string()),
+            llm_backend: Some("openai".to_string()),
+            selected_model: Some("gpt-5-mini".to_string()),
             ..Default::default()
         };
 
         let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "groq");
+        assert_eq!(cfg.backend, "openai");
         let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "groq");
-        assert_eq!(provider.model, "llama-3.3-70b-versatile");
-        assert_eq!(provider.base_url, "https://api.groq.com/openai/v1");
+        assert_eq!(provider.provider_id, "openai");
+        assert_eq!(provider.model, "gpt-5-mini");
         assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
-    }
-
-    #[test]
-    fn registry_provider_resolves_tinfoil() {
-        let _guard = lock_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("TINFOIL_API_KEY");
-            std::env::remove_var("TINFOIL_MODEL");
-        }
-
-        let settings = Settings {
-            llm_backend: Some("tinfoil".to_string()),
-            ..Default::default()
-        };
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "tinfoil");
-        let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.base_url, "https://inference.tinfoil.sh/v1");
-        assert_eq!(provider.model, "kimi-k2-5");
         assert!(
             provider
                 .unsupported_params
                 .contains(&"temperature".to_string()),
-            "tinfoil should propagate unsupported_params from registry"
+            "openai should propagate unsupported_params from registry"
         );
     }
 
     #[test]
-    fn registry_provider_alias_resolves_mistral() {
+    fn registry_provider_resolves_ollama() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("MISTRAL_API_KEY");
-            std::env::remove_var("MISTRAL_MODEL");
+            std::env::remove_var("OLLAMA_BASE_URL");
+            std::env::remove_var("OLLAMA_MODEL");
         }
 
         let settings = Settings {
-            llm_backend: Some("mistral_ai".to_string()),
-            selected_model: Some("mistral-large-latest".to_string()),
+            llm_backend: Some("ollama".to_string()),
             ..Default::default()
         };
 
         let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "mistral");
+        assert_eq!(cfg.backend, "ollama");
         let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "mistral");
-        assert_eq!(provider.model, "mistral-large-latest");
-        assert_eq!(provider.base_url, "https://api.mistral.ai/v1");
+        assert_eq!(provider.base_url, "http://localhost:11434");
+        assert_eq!(provider.model, "llama3");
+    }
+
+    #[test]
+    fn registry_provider_alias_resolves_openai_alias() {
+        let _guard = lock_env();
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("OPENAI_MODEL");
+            std::env::remove_var("OPENAI_BASE_URL");
+        }
+
+        let settings = Settings {
+            llm_backend: Some("open_ai".to_string()),
+            selected_model: Some("gpt-5-mini".to_string()),
+            ..Default::default()
+        };
+
+        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
+        assert_eq!(cfg.backend, "openai");
+        let provider = cfg.provider.expect("provider config should be present");
+        assert_eq!(provider.provider_id, "openai");
+        assert_eq!(provider.model, "gpt-5-mini");
         assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
     }
 
