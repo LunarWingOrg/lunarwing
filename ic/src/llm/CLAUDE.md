@@ -7,17 +7,17 @@ Multi-provider LLM integration with circuit breaker, retry, failover, and respon
 | File | Role |
 |------|------|
 | `mod.rs` | Provider factory (`create_llm_provider`, `build_provider_chain`); `LlmBackend` enum |
-| `config.rs` | LLM config types (`LlmConfig`, `RegistryProviderConfig`, `NearAiConfig`, `BedrockConfig`) |
+| `config.rs` | LLM config types (`LlmConfig`, `RegistryProviderConfig`, `LunarWingCloudConfig`, `BedrockConfig`) |
 | `error.rs` | `LlmError` enum used by all providers |
 | `provider.rs` | `LlmProvider` trait, `ChatMessage`, `ToolCall`, `CompletionRequest`, `sanitize_tool_messages` |
-| `nearai_chat.rs` | NEAR AI Chat Completions provider (dual auth: session token or API key) |
+| `lunarwing_cloud_chat.rs` | LunarWing Cloud Chat Completions provider (dual auth: session token or API key) |
 | `codex_auth.rs` | Reads Codex CLI `auth.json`, extracts tokens, refreshes ChatGPT OAuth access tokens |
 | `codex_chatgpt.rs` | Custom Responses API provider for Codex ChatGPT backend (`/backend-api/codex`) |
 | `openai_codex_provider.rs` | OpenAI Codex Responses API client (SSE streaming, JWT auth, subscription billing) |
 | `openai_codex_session.rs` | OAuth 2.0 session manager for OpenAI Codex (device code flow, token persistence) |
 | `token_refreshing.rs` | Token-refreshing `LlmProvider` decorator for OpenAI Codex (pre-emptive refresh, zero-cost billing) |
 | `reasoning.rs` | `Reasoning` struct, `ReasoningContext`, `RespondResult`, `ActionPlan`, `ToolSelection`; thinking-tag stripping; `SILENT_REPLY_TOKEN` |
-| `session.rs` | NEAR AI session token management with disk + DB persistence, OAuth login flow |
+| `session.rs` | LunarWing Cloud session token management with disk + DB persistence, OAuth login flow |
 | `circuit_breaker.rs` | Circuit breaker: Closed → Open → HalfOpen state machine |
 | `retry.rs` | Exponential backoff retry wrapper; `is_retryable()` classification |
 | `failover.rs` | `FailoverProvider` — tries providers in order with per-provider cooldown |
@@ -34,7 +34,7 @@ Set via `LLM_BACKEND` env var:
 
 | Value | Provider | Key env vars |
 |-------|----------|-------------|
-| `nearai` (default) | NEAR AI Chat Completions | `NEARAI_SESSION_TOKEN` or `NEARAI_API_KEY` |
+| `lunarwing_cloud` (default) | LunarWing Cloud Chat Completions | `LUNARWING_CLOUD_SESSION_TOKEN` or `LUNARWING_CLOUD_API_KEY` |
 | `openai` | OpenAI | `OPENAI_API_KEY` |
 | `anthropic` | Anthropic | `ANTHROPIC_API_KEY` |
 | `ollama` | Ollama local | `OLLAMA_BASE_URL` |
@@ -60,19 +60,19 @@ Uses the native Converse API via `aws-sdk-bedrockruntime` (`bedrock.rs`). Requir
 - `BEDROCK_MODEL` — Required model ID (e.g., `anthropic.claude-opus-4-6-v1`)
 - `BEDROCK_CROSS_REGION` — Optional cross-region inference prefix (`us`, `eu`, `apac`, `global`)
 
-## NEAR AI Provider Gotchas
+## LunarWing Cloud Provider Gotchas
 
 **Dual auth modes:**
-- **Session token** (default): `NEARAI_SESSION_TOKEN=sess_...`, base URL = `https://private.near.ai`. Tokens are persisted to `~/.lunarwing/session.json` (mode 0600) and optionally to the DB `settings` table (`nearai.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `NearAiChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
-- **API key**: Set `NEARAI_API_KEY` (from `cloud.near.ai`), base URL defaults to `https://cloud-api.near.ai`. 401s with API key auth are immediately returned as `LlmError::AuthFailed` — no renewal.
+- **Session token** (default): `LUNARWING_CLOUD_SESSION_TOKEN=sess_...`, base URL = `https://private.near.ai`. Tokens are persisted to `~/.lunarwing/session.json` (mode 0600) and optionally to the DB `settings` table (`lunarwing_cloud.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `LunarWingCloudChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
+- **API key**: Set `LUNARWING_CLOUD_API_KEY` (from `cloud.near.ai`), base URL defaults to `https://cloud-api.near.ai`. 401s with API key auth are immediately returned as `LlmError::AuthFailed` — no renewal.
 
-**Session renewal is interactive:** When `SessionExpired` triggers renewal, it blocks and prompts the user in the terminal (GitHub/Google OAuth or manual API key entry). This is unsuitable for headless/hosted deployments — set `NEARAI_SESSION_TOKEN` env var instead.
+**Session renewal is interactive:** When `SessionExpired` triggers renewal, it blocks and prompts the user in the terminal (GitHub/Google OAuth or manual API key entry). This is unsuitable for headless/hosted deployments — set `LUNARWING_CLOUD_SESSION_TOKEN` env var instead.
 
-**Tool message flattening:** NEAR AI's API doesn't support `role: "tool"` messages in the standard format. `nearai_chat.rs` defaults `flatten_tool_messages = true`, converting tool results to user messages with `[Tool result from <name>]: <content>` format. Use `NearAiChatProvider::new_with_flatten(..., false)` to disable for compliant endpoints.
+**Tool message flattening:** LunarWing Cloud's API doesn't support `role: "tool"` messages in the standard format. `lunarwing_cloud_chat.rs` defaults `flatten_tool_messages = true`, converting tool results to user messages with `[Tool result from <name>]: <content>` format. Use `LunarWingCloudChatProvider::new_with_flatten(..., false)` to disable for compliant endpoints.
 
-**Pricing auto-fetch:** On startup, `NearAiChatProvider` fires a background task to fetch per-model pricing from `/v1/model/list`. If the fetch fails, it silently falls back to `costs::model_cost()` / `costs::default_cost()`. Pricing is stored in-memory only.
+**Pricing auto-fetch:** On startup, `LunarWingCloudChatProvider` fires a background task to fetch per-model pricing from `/v1/model/list`. If the fetch fails, it silently falls back to `costs::model_cost()` / `costs::default_cost()`. Pricing is stored in-memory only.
 
-**HTTP request timeout:** The NEAR AI HTTP client has a 120-second timeout per request. Rate limit `Retry-After` headers are parsed (both delay-seconds and HTTP-date formats) and forwarded as `LlmError::RateLimited { retry_after }` for the `RetryProvider` to honor.
+**HTTP request timeout:** The LunarWing Cloud HTTP client has a 120-second timeout per request. Rate limit `Retry-After` headers are parsed (both delay-seconds and HTTP-date formats) and forwarded as `LlmError::RateLimited { retry_after }` for the `RetryProvider` to honor.
 
 ## Circuit Breaker
 
@@ -87,7 +87,7 @@ Closed (normal)
 
 **Transient vs non-transient errors:** Only `RequestFailed`, `RateLimited`, `InvalidResponse`, `SessionExpired`, `SessionRenewalFailed`, `Http`, and `Io` count toward the threshold. `AuthFailed`, `ContextLengthExceeded`, `ModelNotAvailable`, and `Json` errors never trip the breaker — they indicate caller problems, not backend degradation.
 
-Configure via `NearAiConfig` fields: `circuit_breaker_threshold` (None = disabled), `circuit_breaker_recovery_secs` (default: 30).
+Configure via `LunarWingCloudConfig` fields: `circuit_breaker_threshold` (None = disabled), `circuit_breaker_recovery_secs` (default: 30).
 
 The circuit breaker wraps the entire provider chain. When open, it immediately returns `LlmError::RequestFailed` with a message including remaining cooldown seconds. The `FailoverProvider` sitting outside can then try a fallback model.
 
@@ -95,9 +95,9 @@ The circuit breaker wraps the entire provider chain. When open, it immediately r
 
 `FailoverProvider` in `failover.rs` wraps a list of `LlmProvider` instances. On a retryable error, it tries the next provider in the list. Providers that fail repeatedly enter a cooldown period and are skipped (unless all providers are in cooldown, in which case the least-recently-cooled one is tried).
 
-**Cooldown defaults:** `failure_threshold = 3` consecutive retryable failures → cooldown for `cooldown_duration = 300s`. Configure via `NearAiConfig` fields: `failover_cooldown_secs`, `failover_cooldown_threshold`.
+**Cooldown defaults:** `failure_threshold = 3` consecutive retryable failures → cooldown for `cooldown_duration = 300s`. Configure via `LunarWingCloudConfig` fields: `failover_cooldown_secs`, `failover_cooldown_threshold`.
 
-**Current wiring:** The failover is set up between primary model and `NEARAI_FALLBACK_MODEL` (a different model name on the same NEAR AI backend), not across different LLM provider types. Cross-provider failover (e.g., NEAR AI → Anthropic) requires manual construction.
+**Current wiring:** The failover is set up between primary model and `LUNARWING_CLOUD_FALLBACK_MODEL` (a different model name on the same LunarWing Cloud backend), not across different LLM provider types. Cross-provider failover (e.g., LunarWing Cloud → Anthropic) requires manual construction.
 
 ## Retry
 
@@ -105,7 +105,7 @@ The circuit breaker wraps the entire provider chain. When open, it immediately r
 
 **Backoff schedule:** base 1s doubled per attempt with ±25% jitter, minimum floor 100ms. Attempt 0: ~1s, attempt 1: ~2s, attempt 2: ~4s. For `RateLimited`, uses the `retry_after` duration from the error (provider-supplied) instead of backoff.
 
-Configure via `NearAiConfig.max_retries` (env: `NEARAI_MAX_RETRIES`; default: 3). Set to 0 to disable.
+Configure via `LunarWingCloudConfig.max_retries` (env: `LUNARWING_CLOUD_MAX_RETRIES`; default: 3). Set to 0 to disable.
 
 **Empty-response retry (reasoning.rs):** A separate retry mechanism in `Reasoning::respond_with_tools()` handles the case where the LLM returns a valid HTTP response but the content cleans to empty (e.g. reasoning models returning only `<think>` tags). This retries up to `MAX_EMPTY_RESPONSE_RETRIES` (default 1) before returning the "I'm not sure how to respond to that." fallback. It is independent of `RetryProvider` — `RetryProvider` handles transport-level errors, while this handles content-level cleaning artifacts.
 
@@ -135,9 +135,9 @@ pub trait LlmProvider: Send + Sync {
 ```
 
 Key notes:
-- `model_name()` returns the configured model name; `active_model_name()` returns the currently active model (may differ if `set_model()` was called — only `NearAiChatProvider` supports this).
+- `model_name()` returns the configured model name; `active_model_name()` returns the currently active model (may differ if `set_model()` was called — only `LunarWingCloudChatProvider` supports this).
 - `cost_per_token()` returns `(Decimal, Decimal)` using `rust_decimal`. Look up via `costs::model_cost()` in your constructor; fall back to `costs::default_cost()` for unknowns.
-- `RigAdapter` ignores per-request model overrides (logs a warning). Only `NearAiChatProvider` supports per-request model overrides via `CompletionRequest::model`.
+- `RigAdapter` ignores per-request model overrides (logs a warning). Only `LunarWingCloudChatProvider` supports per-request model overrides via `CompletionRequest::model`.
 - `complete_with_tools()` is never cached (tool calls can have side effects) — `CachedProvider` always passes them through.
 
 To add a new provider:
@@ -150,7 +150,7 @@ To add a new provider:
 
 `CachedProvider` in `response_cache.rs` caches `complete()` responses. `complete_with_tools()` is never cached (side effects). Cache key is SHA-256 of `(model_name, messages_json, max_tokens, temperature, stop_sequences)`. LRU eviction when `max_entries` is reached; TTL-based expiry on access.
 
-**Defaults:** TTL = 1 hour, max entries = 1000. Configure via `NearAiConfig` fields: `response_cache_enabled` (env: `NEARAI_RESPONSE_CACHE_ENABLED`), `response_cache_ttl_secs`, `response_cache_max_entries`. Cache is in-memory only — evicted on restart.
+**Defaults:** TTL = 1 hour, max entries = 1000. Configure via `LunarWingCloudConfig` fields: `response_cache_enabled` (env: `LUNARWING_CLOUD_RESPONSE_CACHE_ENABLED`), `response_cache_ttl_secs`, `response_cache_max_entries`. Cache is in-memory only — evicted on restart.
 
 ## OpenAI-Compatible Custom Headers
 
@@ -181,10 +181,10 @@ Uses the Responses API at `chatgpt.com/backend-api/codex/responses` with ChatGPT
 ```
 Raw provider
   → RetryProvider           (per-provider backoff; wraps both primary and fallback)
-  → SmartRoutingProvider    (cheap/primary split when NEARAI_CHEAP_MODEL is set)
-  → FailoverProvider        (fallback model; only when NEARAI_FALLBACK_MODEL is set)
-  → CircuitBreakerProvider  (fast-fail; only when NEARAI_CIRCUIT_BREAKER_THRESHOLD is set)
-  → CachedProvider          (response cache; only when NEARAI_RESPONSE_CACHE_ENABLED=true)
+  → SmartRoutingProvider    (cheap/primary split when LUNARWING_CLOUD_CHEAP_MODEL is set)
+  → FailoverProvider        (fallback model; only when LUNARWING_CLOUD_FALLBACK_MODEL is set)
+  → CircuitBreakerProvider  (fast-fail; only when LUNARWING_CLOUD_CIRCUIT_BREAKER_THRESHOLD is set)
+  → CachedProvider          (response cache; only when LUNARWING_CLOUD_RESPONSE_CACHE_ENABLED=true)
   → RecordingLlm            (trace capture; only when IRONCLAW_RECORD_TRACE is set)
 ```
 
@@ -207,7 +207,7 @@ Raw provider
 
 ## rig_adapter.rs Details
 
-`RigAdapter<M>` bridges any rig-core `CompletionModel` to `LlmProvider`. It is actively used in production for all non-NEAR AI providers (OpenAI, Anthropic, Ollama, Tinfoil, OpenAI-compatible). Key behaviors:
+`RigAdapter<M>` bridges any rig-core `CompletionModel` to `LlmProvider`. It is actively used in production for all non-LunarWing Cloud providers (OpenAI, Anthropic, Ollama, Tinfoil, OpenAI-compatible). Key behaviors:
 - **Per-request model overrides are silently ignored** (warning logged); the model is baked at construction time.
 - **OpenAI strict-mode schema normalization** is applied to all tool definitions: `additionalProperties: false`, all properties added to `required`, optional fields made nullable via `"type": ["T", "null"]`. This happens transparently at the provider boundary.
 - **System messages** are extracted into the rig-core `preamble` field (concatenated with newlines if multiple).

@@ -34,7 +34,7 @@ docker build --platform linux/amd64 -f Dockerfile.test -t lunarwing-test .
 docker run --rm -p 3003:3003 \
   -e ONBOARD_COMPLETED=true \
   -e CLI_ENABLED=false \
-  -e NEARAI_API_KEY=<key> \
+  -e LUNARWING_CLOUD_API_KEY=<key> \
   lunarwing-test
 
 # Open in browser
@@ -64,22 +64,22 @@ Build takes ~5-10 minutes on first run (cached subsequent builds are faster). Th
 
 Pick ONE of these configurations:
 
-**NEAR AI (API key mode):**
+**LunarWing Cloud (API key mode):**
 ```bash
 docker run --rm -p 3003:3003 \
   -e ONBOARD_COMPLETED=true \
   -e CLI_ENABLED=false \
-  -e NEARAI_API_KEY=<your-key> \
+  -e LUNARWING_CLOUD_API_KEY=<your-key> \
   lunarwing-test
 ```
 
-**NEAR AI (session token mode):**
+**LunarWing Cloud (session token mode):**
 ```bash
 docker run --rm -p 3003:3003 \
   -e ONBOARD_COMPLETED=true \
   -e CLI_ENABLED=false \
-  -e NEARAI_SESSION_TOKEN=<sess_xxx> \
-  -e NEARAI_BASE_URL=https://private.near.ai \
+  -e LUNARWING_CLOUD_SESSION_TOKEN=<sess_xxx> \
+  -e LUNARWING_CLOUD_BASE_URL=https://private.near.ai \
   lunarwing-test
 ```
 
@@ -108,7 +108,7 @@ docker run --rm -p 3003:3003 \
 docker run --rm -p 3003:3003 \
   -e ONBOARD_COMPLETED=true \
   -e CLI_ENABLED=false \
-  -e NEARAI_API_KEY=dummy \
+  -e LUNARWING_CLOUD_API_KEY=dummy \
   lunarwing-test
 ```
 
@@ -118,7 +118,7 @@ docker run --rm -p 3003:3003 \
 |----------|---------|---------|
 | `GATEWAY_PORT` | Change the listen port | `3003` (default) |
 | `GATEWAY_AUTH_TOKEN` | Auth token for API | `test` (default) |
-| `NEARAI_MODEL` | Override LLM model | `claude-3-5-sonnet-20241022` |
+| `LUNARWING_CLOUD_MODEL` | Override LLM model | `claude-3-5-sonnet-20241022` |
 | `RUST_LOG` | Logging verbosity | `lunarwing=debug` |
 | `ROUTINES_ENABLED` | Enable routines | `true`/`false` |
 | `SKILLS_ENABLED` | Enable skills system | `true` (default) |
@@ -128,8 +128,8 @@ docker run --rm -p 3003:3003 \
 Run multiple containers on different host ports:
 
 ```bash
-docker run --rm -d --name ic-test-a -p 3003:3003 -e ONBOARD_COMPLETED=true -e CLI_ENABLED=false -e NEARAI_API_KEY=dummy lunarwing-test
-docker run --rm -d --name ic-test-b -p 3004:3003 -e ONBOARD_COMPLETED=true -e CLI_ENABLED=false -e NEARAI_API_KEY=dummy lunarwing-test
+docker run --rm -d --name ic-test-a -p 3003:3003 -e ONBOARD_COMPLETED=true -e CLI_ENABLED=false -e LUNARWING_CLOUD_API_KEY=dummy lunarwing-test
+docker run --rm -d --name ic-test-b -p 3004:3003 -e ONBOARD_COMPLETED=true -e CLI_ENABLED=false -e LUNARWING_CLOUD_API_KEY=dummy lunarwing-test
 ```
 
 ## Chrome MCP Testing Workflow
@@ -209,7 +209,7 @@ docker rmi lunarwing-test
 
 ### "Model not found" or LLM errors
 - Check that your API key/token is valid and the model name is correct.
-- For NEAR AI session token mode, you also need `NEARAI_BASE_URL=https://private.near.ai`.
+- For LunarWing Cloud session token mode, you also need `LUNARWING_CLOUD_BASE_URL=https://private.near.ai`.
 
 ### Platform mismatch warnings on Apple Silicon
 - The `--platform linux/amd64` flag causes QEMU emulation warnings — these are harmless.

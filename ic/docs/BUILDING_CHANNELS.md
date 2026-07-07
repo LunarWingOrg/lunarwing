@@ -74,11 +74,11 @@ wit_bindgen::generate!({
 use serde::{Deserialize, Serialize};
 
 // Re-export generated types
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, ChannelConfig, Guest, HttpEndpointConfig, IncomingHttpRequest,
     OutgoingHttpResponse, PollConfig,
 };
-use near::agent::channel_host::{self, EmittedMessage};
+use lunarwing::agent::channel_host::{self, EmittedMessage};
 ```
 
 ### Implementing the Guest Trait

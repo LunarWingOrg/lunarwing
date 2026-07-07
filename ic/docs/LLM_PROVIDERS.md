@@ -1,6 +1,6 @@
 # LLM Provider Configuration
 
-LunarWing defaults to NEAR AI for model access, but supports any OpenAI-compatible
+LunarWing defaults to LunarWing Cloud for model access, but supports any OpenAI-compatible
 endpoint as well as Anthropic, Ollama, and Google Gemini directly. This guide covers
 the most common configurations.
 
@@ -8,7 +8,7 @@ the most common configurations.
 
 | Provider | Backend value | Requires API key | Notes |
 |---|---|---|---|
-| NEAR AI | `nearai` | OAuth (browser) | Default; multi-model |
+| LunarWing Cloud | `lunarwing_cloud` | OAuth (browser) | Default; multi-model |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | Claude models |
 | OpenAI | `openai` | `OPENAI_API_KEY` | GPT models |
 | Google Gemini | `gemini_oauth` | OAuth (browser) | Gemini models; function calling |
@@ -30,15 +30,15 @@ the most common configurations.
 
 ---
 
-## NEAR AI (default)
+## LunarWing Cloud (default)
 
 No additional configuration required. On first run, `lunarwing onboard` opens a browser
 for OAuth authentication. Credentials are saved to `~/.lunarwing/session.json`
 (or `$LUNARWING_BASE_DIR/session.json`).
 
 ```env
-NEARAI_MODEL=claude-3-5-sonnet-20241022
-NEARAI_BASE_URL=https://private.near.ai
+LUNARWING_CLOUD_MODEL=claude-3-5-sonnet-20241022
+LUNARWING_CLOUD_BASE_URL=https://private.near.ai
 ```
 
 ---
