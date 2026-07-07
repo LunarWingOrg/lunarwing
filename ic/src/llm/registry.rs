@@ -329,8 +329,8 @@ mod tests {
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
         assert!(
-            registry.all().len() >= 5,
-            "should have at least 5 built-in providers"
+            registry.all().len() >= 3,
+            "should have at least 3 built-in providers"
         );
     }
 
@@ -361,8 +361,8 @@ mod tests {
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
         assert!(registry.find("OpenAI").is_some());
-        assert!(registry.find("GROQ").is_some());
-        assert!(registry.find("Tinfoil").is_some());
+        assert!(registry.find("OLLAMA").is_some());
+        assert!(registry.find("OPENAI_COMPATIBLE").is_some());
     }
 
     #[test]
@@ -430,9 +430,9 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        assert_eq!(registry.model_env_var("groq"), "GROQ_MODEL");
-        assert_eq!(registry.model_env_var("tinfoil"), "TINFOIL_MODEL");
         assert_eq!(registry.model_env_var("openai"), "OPENAI_MODEL");
+        assert_eq!(registry.model_env_var("ollama"), "OLLAMA_MODEL");
+        assert_eq!(registry.model_env_var("openai_compatible"), "LLM_MODEL");
     }
 
     #[test]
@@ -450,7 +450,7 @@ mod tests {
         );
         assert!(registry.is_known("nearai"));
         assert!(registry.is_known("openai"));
-        assert!(registry.is_known("groq"));
+        assert!(registry.is_known("ollama"));
         assert!(!registry.is_known("nonexistent"));
     }
 
@@ -497,16 +497,7 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        // Groq has models_filter: "chat"
-        let groq = registry.find("groq").expect("groq should exist");
-        let filter = groq
-            .setup
-            .as_ref()
-            .and_then(|s| s.models_filter())
-            .expect("groq should have models_filter");
-        assert_eq!(filter, "chat");
 
-        // OpenAI has no models_filter
         let openai = registry.find("openai").expect("openai should exist");
         assert!(
             openai
@@ -517,7 +508,6 @@ mod tests {
             "openai should not have models_filter"
         );
 
-        // Ollama setup hint variant should return None
         let ollama = registry.find("ollama").expect("ollama should exist");
         assert!(
             ollama
@@ -527,6 +517,39 @@ mod tests {
                 .is_none(),
             "ollama should not have models_filter"
         );
+
+        let providers = vec![ProviderDefinition {
+            id: "custom_filtered".to_string(),
+            aliases: vec![],
+            protocol: ProviderProtocol::OpenAiCompletions,
+            default_base_url: Some("http://localhost/v1".to_string()),
+            base_url_env: None,
+            base_url_required: false,
+            api_key_env: Some("CUSTOM_API_KEY".to_string()),
+            api_key_required: true,
+            model_env: "CUSTOM_MODEL".to_string(),
+            default_model: "m1".to_string(),
+            description: "Custom with filter".to_string(),
+            extra_headers_env: None,
+            setup: Some(SetupHint::ApiKey {
+                secret_name: "llm_custom_api_key".to_string(),
+                key_url: None,
+                display_name: "Custom".to_string(),
+                can_list_models: true,
+                models_filter: Some("chat".to_string()),
+            }),
+            unsupported_params: vec![],
+        }];
+        let custom_registry = ProviderRegistry::new(providers);
+        let custom = custom_registry
+            .find("custom_filtered")
+            .expect("custom_filtered should exist");
+        let filter = custom
+            .setup
+            .as_ref()
+            .and_then(|s| s.models_filter())
+            .expect("custom provider should have models_filter");
+        assert_eq!(filter, "chat");
     }
 
     #[test]
@@ -751,16 +774,7 @@ mod tests {
         let providers: Vec<ProviderDefinition> =
             serde_json::from_str(include_str!("../../providers.json")).unwrap();
 
-        // Tinfoil should have temperature in unsupported_params
-        let tinfoil = providers.iter().find(|p| p.id == "tinfoil").unwrap();
-        assert!(
-            tinfoil
-                .unsupported_params
-                .contains(&"temperature".to_string()),
-            "tinfoil should have 'temperature' in unsupported_params"
-        );
-
-        // OpenAI should also have temperature in unsupported_params
+        // OpenAI should have temperature in unsupported_params
         let openai = providers.iter().find(|p| p.id == "openai").unwrap();
         assert!(
             openai
@@ -770,10 +784,18 @@ mod tests {
         );
 
         // Providers without the field in JSON should deserialize to empty vec
-        let groq = providers.iter().find(|p| p.id == "groq").unwrap();
+        let ollama = providers.iter().find(|p| p.id == "ollama").unwrap();
         assert!(
-            groq.unsupported_params.is_empty(),
-            "groq should have empty unsupported_params (field absent in JSON)"
+            ollama.unsupported_params.is_empty(),
+            "ollama should have empty unsupported_params (field absent in JSON)"
+        );
+        let openai_compatible = providers
+            .iter()
+            .find(|p| p.id == "openai_compatible")
+            .unwrap();
+        assert!(
+            openai_compatible.unsupported_params.is_empty(),
+            "openai_compatible should have empty unsupported_params (field absent in JSON)"
         );
 
         // All entries should only contain valid param names
