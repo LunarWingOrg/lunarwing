@@ -25,6 +25,7 @@ from lunarwing_mt_onboard.secrets import (
     is_valid_master_key,
     mask_secret,
 )
+from lunarwing_mt_onboard.upgrade_cli import UpgradeCliArgs, run_upgrade_flow
 from lunarwing_mt_onboard.verify import verify_tenant
 
 console = Console()
@@ -81,7 +82,46 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run add-tenant and build-tenant but skip start-tenant.",
     )
+    subparsers = p.add_subparsers(dest="command")
+    provision = subparsers.add_parser(
+        "provision",
+        help="Provision a fresh tenant (default when no subcommand is given).",
+    )
+    _add_provision_args(provision)
+
+    upgrade = subparsers.add_parser(
+        "upgrade",
+        help="Run an in-place upgrade for an existing tenant.",
+    )
+    _add_upgrade_args(upgrade)
     return p
+
+
+def _add_provision_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--non-interactive", action="store_true")
+    parser.add_argument("--accept-defaults", action="store_true")
+    parser.add_argument("--resume", metavar="FILE")
+    parser.add_argument("--save", metavar="FILE")
+    parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--skip-start", action="store_true")
+
+
+def _add_upgrade_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--tenant", help="Existing tenant name to upgrade.")
+    parser.add_argument("--target", default="", help="Target release tag, e.g. v1.1.9.")
+    parser.add_argument(
+        "--source-version-override",
+        default="",
+        help="Override detected source release tag, e.g. v1.1.7.",
+    )
+    parser.add_argument("--apply", action="store_true", help="Apply changes; default is dry-run.")
+    parser.add_argument("--yes", action="store_true", help="Forward --yes to the upgrade script.")
+    parser.add_argument("--force", action="store_true", help="Continue after preflight failure.")
+    parser.add_argument("--no-preflight", action="store_true", help="Skip upgrade preflight.")
+    parser.add_argument("--non-interactive", action="store_true")
+    parser.add_argument("--accept-defaults", action="store_true")
+    parser.add_argument("--resume", metavar="FILE")
+    parser.add_argument("--save", metavar="FILE")
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +435,9 @@ def _show_verify(tenant: str, host: str = "127.0.0.1", port: int = 0) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if getattr(args, "command", None) == "upgrade":
+        return run_upgrade_flow(UpgradeCliArgs.from_namespace(args))
 
     config = TenantConfig()
     if args.resume:
