@@ -129,7 +129,7 @@ Add result structs with `#[derive(Debug, Serialize)]`. Use `#[serde(skip_seriali
 Implement the API calls using the host HTTP capability:
 
 ```rust
-use crate::near::agent::host;
+use crate::lunarwing::agent::host;
 use crate::types::*;
 
 const API_BASE: &str = "https://api.example.com";
@@ -178,14 +178,14 @@ wit_bindgen::generate!({
 
 struct <Name>Tool;
 
-impl exports::near::agent::tool::Guest for <Name>Tool {
-    fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
+impl exports::lunarwing::agent::tool::Guest for <Name>Tool {
+    fn execute(req: exports::lunarwing::agent::tool::Request) -> exports::lunarwing::agent::tool::Response {
         match execute_inner(&req.params) {
-            Ok(result) => exports::near::agent::tool::Response {
+            Ok(result) => exports::lunarwing::agent::tool::Response {
                 output: Some(result),
                 error: None,
             },
-            Err(e) => exports::near::agent::tool::Response {
+            Err(e) => exports::lunarwing::agent::tool::Response {
                 output: None,
                 error: Some(e),
             },
@@ -204,15 +204,15 @@ impl exports::near::agent::tool::Guest for <Name>Tool {
 
 fn execute_inner(params: &str) -> Result<String, String> {
     // Check required secrets
-    if !crate::near::agent::host::secret_exists("<secret_name>") {
+    if !crate::lunarwing::agent::host::secret_exists("<secret_name>") {
         return Err("<Secret> not configured. Please add the '<secret_name>' secret.".to_string());
     }
 
     let action: <Name>Action =
         serde_json::from_str(params).map_err(|e| format!("Invalid parameters: {}", e))?;
 
-    crate::near::agent::host::log(
-        crate::near::agent::host::LogLevel::Info,
+    crate::lunarwing::agent::host::log(
+        crate::lunarwing::agent::host::LogLevel::Info,
         &format!("Executing action: {:?}", action),
     );
 

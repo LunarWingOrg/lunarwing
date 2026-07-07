@@ -22,7 +22,7 @@ Channel (cli/web/wasm) → IncomingMessage
       → handle_command() for /commands
     → run_agentic_loop() iterates LLM calls
       → Reasoning::respond_with_tools() (reasoning.rs)
-        → LlmProvider::complete_with_tools() (nearai_chat.rs or nearai.rs)
+        → LlmProvider::complete_with_tools() (lunarwing_cloud_chat.rs)
       → Tool execution with approval gating
       → Context message accumulation
     → Response flows back through Channel::send_response()
@@ -46,7 +46,7 @@ Tool trait impl (tools/builtin/*.rs or tools/mcp/client.rs or tools/wasm/wrapper
   → ToolRegistry::register() (tools/registry.rs)
   → tool_definitions() builds Vec<ToolDefinition> for LLM
     → ToolDefinition { name, description, parameters } (llm/provider.rs)
-    → Serialized to ChatCompletionTool (nearai_chat.rs)
+    → Serialized to ChatCompletionTool (lunarwing_cloud_chat.rs)
   → LLM returns ToolCall { id, name, arguments }
   → agent_loop.rs executes via execute_chat_tool()
     → Safety layer sanitizes output
@@ -67,8 +67,7 @@ Tool trait impl (tools/builtin/*.rs or tools/mcp/client.rs or tools/wasm/wrapper
 | Message dispatch | `src/agent/agent_loop.rs` | `handle_message`, `process_user_input`, `process_approval`, `run_agentic_loop` |
 | Input parsing | `src/agent/submission.rs` | `SubmissionParser::parse` |
 | LLM reasoning | `src/llm/reasoning.rs` | `respond_with_tools`, `select_tools`, `plan` |
-| Chat completions | `src/llm/nearai_chat.rs` | `complete_with_tools`, `From<ChatMessage>` |
-| Responses API | `src/llm/nearai.rs` | `complete_with_tools`, `split_messages` |
+| Chat completions | `src/llm/lunarwing_cloud_chat.rs` | `complete_with_tools`, `From<ChatMessage>` |
 | Channel trait | `src/channels/channel.rs` | `Channel`, `StatusUpdate`, `IncomingMessage` |
 | Web gateway | `src/channels/web/mod.rs` | `send_status`, `send_response` |
 | Web server | `src/channels/web/server.rs` | Route handlers, SSE endpoints |
