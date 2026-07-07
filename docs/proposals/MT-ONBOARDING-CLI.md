@@ -19,6 +19,11 @@ Replace the manual, error-prone sequence of `add-tenant → build-tenant → sta
 
 A web UI (SSE-driven real-time build logs) is deferred to a future phase. CLI ships first.
 
+The same CLI now also exposes an `upgrade` subcommand for existing tenants that
+need an in-place move from older 1.1.x releases such as 1.1.6, 1.1.7, and
+1.1.8. That mode remains a thin wrapper over the existing shell upgrade tools
+instead of duplicating upgrade logic in Python.
+
 ## Recommendation Summary
 
 | Decision | Choice | Rationale |
@@ -29,6 +34,48 @@ A web UI (SSE-driven real-time build logs) is deferred to a future phase. CLI sh
 | Legacy deprecation | `setup-instance.sh` prints a banner pointing to the new tool | Clean signal without breaking existing automation. |
 | Install surface | Standalone `lunarwing_mt_onboard/` directory at repo root, optional, not bundled | Can be run directly as `python3 -m lunarwing_mt_onboard` or via an entry script. Released alongside the binary but does not ship inside it. |
 | Web UI | Phase 2 (not in this proposal) | Adds `http.server` + vanilla JS or a tiny Rust/Node server. Deferred until CLI is stable. |
+
+## In-place upgrade mode
+
+`python3 -m lunarwing_mt_onboard upgrade` drives the existing in-place upgrade
+tooling with an interactive or non-interactive wrapper. The Python layer gathers
+operator intent, prints a clear summary, streams script output, and displays the
+phase result table. The shell scripts remain the source of truth for upgrade
+gates and host compatibility:
+
+- `ic/scripts/upgrade-preflight.sh` performs the read-only readiness check.
+- `ic/scripts/upgrade-tenant-version.sh` performs the dry-run or apply phase.
+
+Upgrade mode is dry-run by default. The wrapper only forwards `--apply` when the
+operator explicitly chooses apply mode or passes `--apply` on the command line.
+
+```bash
+# Interactive dry-run
+sudo python3 -m lunarwing_mt_onboard upgrade
+
+# Non-interactive dry-run for a tenant currently on v1.1.6, v1.1.7, or v1.1.8
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --non-interactive
+
+# Apply after reviewing dry-run/preflight output
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --apply \
+  --yes \
+  --non-interactive
+```
+
+The underlying upgrade script is PostgreSQL/rootful-Docker oriented. The wrapper
+does not second-guess those checks; it runs preflight first by default and stops
+before the upgrade if preflight reports a blocking failure. Operators can pass
+`--force` to continue past a failed preflight, matching the shell script's
+explicit override model.
+
+For the lower-level operational runbook, see
+`docs/ops/MT-LEGACY-UPGRADE-NOTES.md`.
 
 ## Architecture
 
@@ -157,6 +204,17 @@ Serializes to a JSON file for repeat runs: `config.to_json()` → `anthony.tenan
 - Retries `apt-get update` calls (the snapshot fallback handles transient mirror issues; we add one retry for TCP/SSH failures).
 - Returns a `ProvisionResult` with per-phase status, exit codes, and log paths.
 
+### `upgrade.py` / `upgrade_cli.py` — in-place upgrade wrapper
+
+- Captures upgrade intent in `UpgradeConfig`: tenant, target tag, source-version
+  override, dry-run/apply mode, preflight, force, and auto-confirm flags.
+- Builds argv for `upgrade-preflight.sh` and `upgrade-tenant-version.sh` without
+  placing secrets on the command line.
+- Defaults to dry-run and only includes `--apply` when explicitly requested.
+- Runs preflight before upgrade by default and stops on preflight failure unless
+  `--force` is set.
+- Reuses the existing result-table display pattern and post-apply verification.
+
 ### `secrets.py` — key generation + encrypted PG insert
 
 Two modes:
@@ -208,13 +266,16 @@ This preserves backward compatibility for any existing scripts that source it, w
 
 - `python3 -m unittest discover` for prompt validation and JSON serialization.
 - `bash scripts/test-mt-onboard.sh` runs a full non-interactive provisioning of a throwaway tenant using a pre-seeded ports registry, verifies `add-tenant` succeeds, runs `remove-tenant --purge`, and asserts the port block returns to the free pool.
+- `bash ic/scripts/test-mt-onboard.sh` also checks upgrade config/argv tests and
+  parses `upgrade --tenant <name> --target v1.1.9 --non-interactive --no-preflight`.
 - Manual smoke test: install on the Gentoo box, provision `anthony`, verify XMPP connects + Gotify fires on a synthetic alert.
 
 ## Out-of-scope
 
 - Kawarimi import / export flows (handled by `export-tenant.sh` / `import-tenant.sh`).
 - WASM tool / channel installation beyond the `--with-wasm` flag.
-- Over-the-air upgrade of an existing tenant.
+- Cross-host migration of an existing tenant; upgrade mode covers same-host
+  in-place upgrades only.
 - Phase 2 web UI.
 
 ## Docs to update
