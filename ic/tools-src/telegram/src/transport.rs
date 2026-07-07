@@ -2,7 +2,7 @@ use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{Deserialization, Encrypted, Mtp, Plain};
 use grammers_tl_types::Serializable;
 
-use crate::near::agent::host;
+use crate::lunarwing::agent::host;
 
 /// DC names indexed by dc_id (1-based). DC1=pluto, DC2=venus, etc.
 const DC_NAMES: &[&str] = &["", "pluto", "venus", "aurora", "vesta", "flora"];

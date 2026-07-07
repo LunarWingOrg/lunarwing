@@ -1,5 +1,5 @@
 // WASM Tool Sandbox Interface
-package near:agent@0.3.0;
+package lunarwing:agent@0.3.0;
 
 interface host {
     enum log-level {

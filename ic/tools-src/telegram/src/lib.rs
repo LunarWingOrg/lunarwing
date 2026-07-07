@@ -60,14 +60,14 @@ wit_bindgen::generate!({
 
 struct TelegramTool;
 
-impl exports::near::agent::tool::Guest for TelegramTool {
-    fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
+impl exports::lunarwing::agent::tool::Guest for TelegramTool {
+    fn execute(req: exports::lunarwing::agent::tool::Request) -> exports::lunarwing::agent::tool::Response {
         match execute_inner(&req.params) {
-            Ok(result) => exports::near::agent::tool::Response {
+            Ok(result) => exports::lunarwing::agent::tool::Response {
                 output: Some(result),
                 error: None,
             },
-            Err(e) => exports::near::agent::tool::Response {
+            Err(e) => exports::lunarwing::agent::tool::Response {
                 output: None,
                 error: Some(e),
             },
@@ -93,8 +93,8 @@ fn execute_inner(params: &str) -> Result<String, String> {
     let action: TelegramAction =
         serde_json::from_str(params).map_err(|e| format!("Invalid parameters: {e}"))?;
 
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         &format!("Executing Telegram action: {action:?}"),
     );
 
@@ -163,15 +163,15 @@ fn execute_login(phone_number: &str) -> Result<String, String> {
     session.phone_number = Some(phone_number.to_string());
 
     // Step 1: DH auth key exchange
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         "Starting DH auth key exchange with Telegram DC...",
     );
     auth::generate_auth_key(&mut session)?;
 
     // Step 2: send verification code
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         "Auth key generated. Sending verification code...",
     );
     let result = api::send_code(&mut session)?;
@@ -217,7 +217,7 @@ fn get_api_id() -> Result<i32, String> {
     // The secret store holds the value but WASM can't read it directly.
     // The api_id is injected via env or must be in capabilities.
     // For now, read from workspace config if available.
-    if let Some(val) = near::agent::host::workspace_read("telegram/api_id") {
+    if let Some(val) = lunarwing::agent::host::workspace_read("telegram/api_id") {
         return val
             .trim()
             .parse::<i32>()
@@ -231,7 +231,7 @@ fn get_api_id() -> Result<i32, String> {
 }
 
 fn get_api_hash() -> Result<String, String> {
-    if let Some(val) = near::agent::host::workspace_read("telegram/api_hash") {
+    if let Some(val) = lunarwing::agent::host::workspace_read("telegram/api_hash") {
         let trimmed = val.trim().to_string();
         if trimmed.is_empty() {
             return Err("telegram/api_hash is empty".into());

@@ -5,11 +5,11 @@ wit_bindgen::generate!({
 
 use serde::{Deserialize, Serialize};
 
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse, PollConfig,
     StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage};
+use lunarwing::agent::channel_host::{self, EmittedMessage};
 
 const CONFIG_PATH: &str = "config.json";
 const STATE_PATH: &str = "state.json";
