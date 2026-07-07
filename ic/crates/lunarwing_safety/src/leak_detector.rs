@@ -456,9 +456,9 @@ fn default_patterns() -> Vec<LeakPattern> {
             severity: LeakSeverity::Critical,
             action: LeakAction::Block,
         },
-        // NEAR AI session tokens
+        // LunarWing Cloud session tokens
         LeakPattern {
-            name: "nearai_session".to_string(),
+            name: "lunarwing_cloud_session".to_string(),
             regex: Regex::new(r"sess_[a-zA-Z0-9]{32,}").unwrap(), // safety: hardcoded literal
             severity: LeakSeverity::Critical,
             action: LeakAction::Block,
@@ -1008,7 +1008,7 @@ mod tests {
         }
 
         #[test]
-        fn nearai_session_pattern_100kb_near_miss() {
+        fn lunarwing_cloud_session_pattern_100kb_near_miss() {
             let detector = LeakDetector::new();
             // Near-miss: "sess_" followed by short string (< 32 chars)
             let chunk = "sess_shorttoken12 ";
@@ -1020,7 +1020,7 @@ mod tests {
             let elapsed = start.elapsed();
             assert!(
                 elapsed.as_millis() < 100,
-                "nearai_session pattern took {}ms on 100KB near-miss",
+                "lunarwing_cloud_session pattern took {}ms on 100KB near-miss",
                 elapsed.as_millis()
             );
         }
