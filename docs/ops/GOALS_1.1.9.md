@@ -27,8 +27,8 @@
 22. [x] Update repo root-level README.md
 23. [x] Update ROADMAP file to reflect accuracy
 24. [ ] Purge other unecessary code from repo _thr
-25. [ ] Run all cargo tests — full `--all-features --no-fail-fast` run: lib 4087 passed/0 failed/4 ignored; all integration binaries + doctests pass except the 6 known-deferred `multi_tenant_system_prompt` architectural, e2e_advanced_traces `bootstrap-greeting` See `docs/proposals/CARGO_TESTS_FIX.md`. Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure — Fixed the 3 stale `lib` failures this cycle: `registry::embedded::tests::test_load_embedded_parses` (github→ssh sentinel), `cli::tests::test_help_output` + `test_long_help_output` (accepted rebranded insta snapshots). Lib re-run: 4087 passed/0 failed. The 6 remaining failures are documented known-deferred (architectural / harness), not regressions.
-26. [ ] Cherrypick rarity/item-25-20260707-0500
+25. [x] Run all cargo tests — full `--all-features --no-fail-fast` run: lib 4087 passed/0 failed/4 ignored; all integration binaries + doctests pass except the 6 known-deferred `multi_tenant_system_prompt` architectural, e2e_advanced_traces `bootstrap-greeting` See `docs/proposals/CARGO_TESTS_FIX.md`. Fix any remaining broken cargo tests and ensure updated documentation. Create (or rewrite) new tests if necessary. then re-run cargo tests to ensure — Fixed the 3 stale `lib` failures this cycle: `registry::embedded::tests::test_load_embedded_parses` (github→ssh sentinel), `cli::tests::test_help_output` + `test_long_help_output` (accepted rebranded insta snapshots). Lib re-run: 4087 passed/0 failed. The 6 remaining failures are documented known-deferred (architectural / harness), not regressions.
+26. [x] Cherrypick item-25-20260707-0500
 27. [x] Plan unified upgrade harness (combine legacy upgrade with regular upgrade script if avail) v3/v4
 28. [ ] Fix these issues with kawarimi: https://github.com/LunarWingOrg/lunarwing/issues/161
 29. [ ] Address items from this issue: https://github.com/LunarWingOrg/lunarwing/issues/180
