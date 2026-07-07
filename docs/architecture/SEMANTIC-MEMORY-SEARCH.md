@@ -15,7 +15,7 @@ Workspace::search()
   +-- embed query via EmbeddingProvider (if enabled)
   |     |
   |     +-- check LRU cache (10,000 entries default)
-  |     +-- on miss: call provider API (OpenAI / Ollama / NEAR AI)
+  |     +-- on miss: call provider API (OpenAI / Ollama / LunarWing Cloud)
   |
   +-- parallel search
   |     |
@@ -87,7 +87,7 @@ trait EmbeddingProvider: Send + Sync {
 |----------|--------|-------------------|--------|
 | **OpenAI** | `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002` | 1536 / 3072 / 1536 | `OPENAI_API_KEY` |
 | **Ollama** | `nomic-embed-text`, `mxbai-embed-large`, `all-minilm` | 768 / 1024 / 384 | `OLLAMA_BASE_URL` (default `http://localhost:11434`) |
-| **NEAR AI** | Configurable | Configurable | NEAR AI session auth |
+| **LunarWing Cloud** | Configurable | Configurable | LunarWing Cloud session auth |
 | **Mock** | Deterministic | Configurable | Test harness only |
 
 Source: `ic/src/workspace/embeddings.rs`
@@ -267,7 +267,7 @@ SearchConfig {
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `EMBEDDING_ENABLED` | `false` | Enable semantic embeddings |
-| `EMBEDDING_PROVIDER` | `openai` | Provider: `openai`, `nearai`, or `ollama` |
+| `EMBEDDING_PROVIDER` | `openai` | Provider: `openai`, `lunarwing_cloud`, or `ollama` |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
 | `EMBEDDING_DIMENSION` | Auto-inferred | Override embedding dimension |
 | `EMBEDDING_CACHE_SIZE` | `10000` | LRU cache capacity (min 1) |

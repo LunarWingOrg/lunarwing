@@ -235,7 +235,7 @@ See `projects/ocr-sidecar/README.md` for the full API reference and `projects/oc
 
 ## Embeddings
 
-The embedding system supports four providers: `openai`, `nearai`, `ollama`, and `openai_compatible`.
+The embedding system supports four providers: `openai`, `lunarwing_cloud`, `ollama`, and `openai_compatible`.
 
 The `openai_compatible` provider allows connecting to any OpenAI-compatible embedding endpoint (e.g., TensorZero, local models) via a configurable base URL. Set the URL through the `EMBEDDING_BASE_URL` env var or the `base_url` field in `settings.json` under the `embeddings` section. The setup wizard offers this as a provider choice.
 

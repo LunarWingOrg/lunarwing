@@ -248,10 +248,10 @@ impl EmbeddingProvider for OpenAiEmbeddings {
     }
 }
 
-/// NEAR AI embedding provider using the NEAR AI API.
+/// LunarWing Cloud embedding provider using the LunarWing Cloud API.
 ///
 /// Uses the same session-based auth as the LLM provider.
-pub struct NearAiEmbeddings {
+pub struct LunarWingCloudEmbeddings {
     client: reqwest::Client,
     base_url: String,
     session: std::sync::Arc<crate::llm::SessionManager>,
@@ -259,8 +259,8 @@ pub struct NearAiEmbeddings {
     dimension: usize,
 }
 
-impl NearAiEmbeddings {
-    /// Create a new NEAR AI embedding provider.
+impl LunarWingCloudEmbeddings {
+    /// Create a new LunarWing Cloud embedding provider.
     ///
     /// Uses the same session manager as the LLM provider for auth.
     pub fn new(
@@ -285,23 +285,23 @@ impl NearAiEmbeddings {
 }
 
 #[derive(Debug, Serialize)]
-struct NearAiEmbeddingRequest<'a> {
+struct LunarWingCloudEmbeddingRequest<'a> {
     model: &'a str,
     input: &'a [String],
 }
 
 #[derive(Debug, Deserialize)]
-struct NearAiEmbeddingResponse {
-    data: Vec<NearAiEmbeddingData>,
+struct LunarWingCloudEmbeddingResponse {
+    data: Vec<LunarWingCloudEmbeddingData>,
 }
 
 #[derive(Debug, Deserialize)]
-struct NearAiEmbeddingData {
+struct LunarWingCloudEmbeddingData {
     embedding: Vec<f32>,
 }
 
 #[async_trait]
-impl EmbeddingProvider for NearAiEmbeddings {
+impl EmbeddingProvider for LunarWingCloudEmbeddings {
     fn dimension(&self) -> usize {
         self.dimension
     }
@@ -336,7 +336,7 @@ impl EmbeddingProvider for NearAiEmbeddings {
             return Ok(Vec::new());
         }
 
-        let request = NearAiEmbeddingRequest {
+        let request = LunarWingCloudEmbeddingRequest {
             model: &self.model,
             input: texts,
         };
@@ -378,7 +378,7 @@ impl EmbeddingProvider for NearAiEmbeddings {
             )));
         }
 
-        let result: NearAiEmbeddingResponse = response.json().await.map_err(|e| {
+        let result: LunarWingCloudEmbeddingResponse = response.json().await.map_err(|e| {
             EmbeddingError::InvalidResponse(format!("Failed to parse response: {}", e))
         })?;
 

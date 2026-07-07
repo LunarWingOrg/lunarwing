@@ -17,7 +17,7 @@ wit_bindgen::generate!({
     path: "../../wit/tool.wit",
 });
 
-use exports::near::agent::tool;
+use exports::lunarwing::agent::tool;
 use serde::Deserialize;
 
 struct SshTool;
@@ -60,7 +60,7 @@ fn run(params: &str) -> Result<String, String> {
     let input: SshInput =
         serde_json::from_str(params).map_err(|e| format!("invalid parameters: {e}"))?;
 
-    let resp = near::agent::host::ssh_exec(&input.host, &input.command)
+    let resp = lunarwing::agent::host::ssh_exec(&input.host, &input.command)
         .map_err(|e| format!("ssh failed: {e}"))?;
 
     let stdout = String::from_utf8_lossy(&resp.stdout).to_string();

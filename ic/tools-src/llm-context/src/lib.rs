@@ -53,14 +53,14 @@ const VALID_THRESHOLD_MODES: [&str; 4] = ["strict", "balanced", "lenient", "disa
 
 struct LlmContextTool;
 
-impl exports::near::agent::tool::Guest for LlmContextTool {
-    fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
+impl exports::lunarwing::agent::tool::Guest for LlmContextTool {
+    fn execute(req: exports::lunarwing::agent::tool::Request) -> exports::lunarwing::agent::tool::Response {
         match execute_inner(&req.params) {
-            Ok(result) => exports::near::agent::tool::Response {
+            Ok(result) => exports::lunarwing::agent::tool::Response {
                 output: Some(result),
                 error: None,
             },
-            Err(e) => exports::near::agent::tool::Response {
+            Err(e) => exports::lunarwing::agent::tool::Response {
                 output: None,
                 error: Some(e),
             },
@@ -244,7 +244,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
 
 /// Verify the API key is available before making the request.
 fn preflight_check() -> Result<(), String> {
-    if !near::agent::host::secret_exists("brave_api_key") {
+    if !lunarwing::agent::host::secret_exists("brave_api_key") {
         return Err("Brave API key not found in secret store. Set it with: \
              lunarwing secret set brave_api_key <key>. \
              Get a key at: https://brave.com/search/api/"
@@ -265,7 +265,7 @@ fn call_brave_api(params: &LlmContextParams) -> Result<String, String> {
     let response = loop {
         attempt += 1;
 
-        let resp = near::agent::host::http_request(
+        let resp = lunarwing::agent::host::http_request(
             "POST",
             BRAVE_LLM_CONTEXT_ENDPOINT,
             &headers.to_string(),
@@ -279,8 +279,8 @@ fn call_brave_api(params: &LlmContextParams) -> Result<String, String> {
         }
 
         if attempt < MAX_RETRIES && resp.status >= 500 {
-            near::agent::host::log(
-                near::agent::host::LogLevel::Warn,
+            lunarwing::agent::host::log(
+                lunarwing::agent::host::LogLevel::Warn,
                 &format!(
                     "Brave LLM Context API error {} (attempt {}/{}). Retrying...",
                     resp.status, attempt, MAX_RETRIES

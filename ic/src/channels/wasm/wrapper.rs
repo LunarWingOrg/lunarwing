@@ -267,14 +267,14 @@ impl WasiView for ChannelStoreData {
 }
 
 // Implement the generated Host trait for channel-host interface
-impl near::agent::channel_host::Host for ChannelStoreData {
-    fn log(&mut self, level: near::agent::channel_host::LogLevel, message: String) {
+impl lunarwing::agent::channel_host::Host for ChannelStoreData {
+    fn log(&mut self, level: lunarwing::agent::channel_host::LogLevel, message: String) {
         let log_level = match level {
-            near::agent::channel_host::LogLevel::Trace => LogLevel::Trace,
-            near::agent::channel_host::LogLevel::Debug => LogLevel::Debug,
-            near::agent::channel_host::LogLevel::Info => LogLevel::Info,
-            near::agent::channel_host::LogLevel::Warn => LogLevel::Warn,
-            near::agent::channel_host::LogLevel::Error => LogLevel::Error,
+            lunarwing::agent::channel_host::LogLevel::Trace => LogLevel::Trace,
+            lunarwing::agent::channel_host::LogLevel::Debug => LogLevel::Debug,
+            lunarwing::agent::channel_host::LogLevel::Info => LogLevel::Info,
+            lunarwing::agent::channel_host::LogLevel::Warn => LogLevel::Warn,
+            lunarwing::agent::channel_host::LogLevel::Error => LogLevel::Error,
         };
         let _ = self.host_state.log(log_level, message);
     }
@@ -300,7 +300,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
         headers_json: String,
         body: Option<Vec<u8>>,
         timeout_ms: Option<u32>,
-    ) -> Result<near::agent::channel_host::HttpResponse, String> {
+    ) -> Result<lunarwing::agent::channel_host::HttpResponse, String> {
         tracing::info!(
             method = %method,
             original_url = %url,
@@ -507,7 +507,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
                     .map_err(|e| format!("Potential secret leak in response: {}", e))?;
             }
 
-            Ok(near::agent::channel_host::HttpResponse {
+            Ok(lunarwing::agent::channel_host::HttpResponse {
                 status,
                 headers_json,
                 body,
@@ -535,7 +535,7 @@ impl near::agent::channel_host::Host for ChannelStoreData {
         self.host_state.secret_exists(&name)
     }
 
-    fn emit_message(&mut self, msg: near::agent::channel_host::EmittedMessage) {
+    fn emit_message(&mut self, msg: lunarwing::agent::channel_host::EmittedMessage) {
         tracing::info!(
             user_id = %msg.user_id,
             user_name = ?msg.user_name,
@@ -619,14 +619,14 @@ impl near::agent::channel_host::Host for ChannelStoreData {
         channel: String,
         id: String,
         meta_json: String,
-    ) -> Result<near::agent::channel_host::PairingUpsertResult, String> {
+    ) -> Result<lunarwing::agent::channel_host::PairingUpsertResult, String> {
         let meta = if meta_json.is_empty() {
             None
         } else {
             serde_json::from_str(&meta_json).ok()
         };
         match self.pairing_store.upsert_request(&channel, &id, meta) {
-            Ok(r) => Ok(near::agent::channel_host::PairingUpsertResult {
+            Ok(r) => Ok(lunarwing::agent::channel_host::PairingUpsertResult {
                 code: r.code,
                 created: r.created,
             }),
@@ -1061,7 +1061,7 @@ impl WasmChannel {
         })?;
 
         // Use the generated add_to_linker function from bindgen for our custom interface
-        near::agent::channel_host::add_to_linker(linker, |state| state).map_err(|e| {
+        lunarwing::agent::channel_host::add_to_linker(linker, |state| state).map_err(|e| {
             WasmChannelError::Config(format!("Failed to add host functions: {}", e))
         })?;
 
@@ -1131,7 +1131,7 @@ impl WasmChannel {
         // Instantiate using the generated bindings
         let instance = SandboxedChannel::instantiate(store, &component, &linker).map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("near:agent") || msg.contains("import") {
+            if msg.contains("lunarwing:agent") || msg.contains("import") {
                 WasmChannelError::Instantiation(format!(
                     "{msg}. This may indicate a WIT version mismatch — \
                          the channel was compiled against a different WIT than the host supports \
@@ -1232,7 +1232,7 @@ impl WasmChannel {
                 )?;
                 let instance = Self::instantiate_component(&runtime, &prepared, &mut store)?;
 
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 let config_result = channel_iface
                     .call_on_start(&mut store, &config_json)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))
@@ -1396,7 +1396,7 @@ impl WasmChannel {
                 };
 
                 // Call on_http_request using the generated typed interface
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 let wit_response = channel_iface
                     .call_on_http_request(&mut store, &wit_request)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))?;
@@ -1483,7 +1483,7 @@ impl WasmChannel {
                 let instance = Self::instantiate_component(&runtime, &prepared, &mut store)?;
 
                 // Call on_poll using the generated typed interface
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 channel_iface
                     .call_on_poll(&mut store)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))?;
@@ -1637,7 +1637,7 @@ impl WasmChannel {
                 );
 
                 // Call on_respond using the generated typed interface
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 let wasm_result = channel_iface
                     .call_on_respond(&mut store, &wit_response)
                     .map_err(|e| {
@@ -1765,7 +1765,7 @@ impl WasmChannel {
                     attachments: wit_attachments,
                 };
 
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 let wasm_result = channel_iface
                     .call_on_broadcast(&mut store, &user_id, &wit_response)
                     .map_err(|e| {
@@ -1854,7 +1854,7 @@ impl WasmChannel {
                 )?;
                 let instance = Self::instantiate_component(&runtime, &prepared, &mut store)?;
 
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 channel_iface
                     .call_on_status(&mut store, &wit_update)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))?;
@@ -1923,7 +1923,7 @@ impl WasmChannel {
                 )?;
                 let instance = Self::instantiate_component(&runtime, &prepared, &mut store)?;
 
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 channel_iface
                     .call_on_status(&mut store, &wit_update)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))?;
@@ -2493,7 +2493,7 @@ impl WasmChannel {
                 let instance = Self::instantiate_component(&runtime, &prepared, &mut store)?;
 
                 // Call on_poll using the generated typed interface
-                let channel_iface = instance.near_agent_channel();
+                let channel_iface = instance.lunarwing_agent_channel();
                 channel_iface
                     .call_on_poll(&mut store)
                     .map_err(|e| Self::map_wasm_error(e, &prepared.name, prepared.limits.fuel))?;
@@ -3021,7 +3021,7 @@ impl Channel for SharedWasmChannel {
 // ============================================================================
 
 // Type aliases for the generated WIT types (exported interface)
-use exports::near::agent::channel as wit_channel;
+use exports::lunarwing::agent::channel as wit_channel;
 
 /// Convert WIT-generated ChannelConfig to our internal type.
 fn convert_channel_config(wit: wit_channel::ChannelConfig) -> ChannelConfig {

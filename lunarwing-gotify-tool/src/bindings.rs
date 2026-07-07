@@ -3,7 +3,7 @@
 //   * runtime_path: "wit_bindgen_rt"
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
-pub mod near {
+pub mod lunarwing {
     pub mod agent {
         #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
         pub mod host {
@@ -75,7 +75,7 @@ pub mod near {
                     let ptr0 = vec0.as_ptr().cast::<u8>();
                     let len0 = vec0.len();
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "log"]
                         fn wit_import1(_: i32, _: *mut u8, _: usize);
@@ -91,7 +91,7 @@ pub mod near {
             pub fn now_millis() -> u64 {
                 unsafe {
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "now-millis"]
                         fn wit_import0() -> i64;
@@ -123,7 +123,7 @@ pub mod near {
                     let len0 = vec0.len();
                     let ptr1 = ret_area.0.as_mut_ptr().cast::<u8>();
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "workspace-read"]
                         fn wit_import2(_: *mut u8, _: usize, _: *mut u8);
@@ -203,7 +203,7 @@ pub mod near {
                     };
                     let ptr6 = ret_area.0.as_mut_ptr().cast::<u8>();
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "http-request"]
                         fn wit_import7(
@@ -336,7 +336,7 @@ pub mod near {
                     let len1 = vec1.len();
                     let ptr2 = ret_area.0.as_mut_ptr().cast::<u8>();
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "tool-invoke"]
                         fn wit_import3(
@@ -410,7 +410,7 @@ pub mod near {
                     let ptr0 = vec0.as_ptr().cast::<u8>();
                     let len0 = vec0.len();
                     #[cfg(target_arch = "wasm32")]
-                    #[link(wasm_import_module = "near:agent/host@0.3.0")]
+                    #[link(wasm_import_module = "lunarwing:agent/host@0.3.0")]
                     unsafe extern "C" {
                         #[link_name = "secret-exists"]
                         fn wit_import1(_: *mut u8, _: usize) -> i32;
@@ -429,7 +429,7 @@ pub mod near {
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
 pub mod exports {
-    pub mod near {
+    pub mod lunarwing {
         pub mod agent {
             #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
             pub mod tool {
@@ -628,35 +628,35 @@ pub mod exports {
                     fn description() -> _rt::String;
                 }
                 #[doc(hidden)]
-                macro_rules! __export_near_agent_tool_0_3_0_cabi {
+                macro_rules! __export_lunarwing_agent_tool_0_3_0_cabi {
                     ($ty:ident with_types_in $($path_to_types:tt)*) => {
                         const _ : () = { #[unsafe (export_name =
-                        "near:agent/tool@0.3.0#execute")] unsafe extern "C" fn
+                        "lunarwing:agent/tool@0.3.0#execute")] unsafe extern "C" fn
                         export_execute(arg0 : * mut u8, arg1 : usize, arg2 : i32, arg3 :
                         * mut u8, arg4 : usize,) -> * mut u8 { unsafe {
                         $($path_to_types)*:: _export_execute_cabi::<$ty > (arg0, arg1,
                         arg2, arg3, arg4) } } #[unsafe (export_name =
-                        "cabi_post_near:agent/tool@0.3.0#execute")] unsafe extern "C" fn
-                        _post_return_execute(arg0 : * mut u8,) { unsafe {
+                        "cabi_post_lunarwing:agent/tool@0.3.0#execute")] unsafe extern
+                        "C" fn _post_return_execute(arg0 : * mut u8,) { unsafe {
                         $($path_to_types)*:: __post_return_execute::<$ty > (arg0) } }
-                        #[unsafe (export_name = "near:agent/tool@0.3.0#schema")] unsafe
-                        extern "C" fn export_schema() -> * mut u8 { unsafe {
+                        #[unsafe (export_name = "lunarwing:agent/tool@0.3.0#schema")]
+                        unsafe extern "C" fn export_schema() -> * mut u8 { unsafe {
                         $($path_to_types)*:: _export_schema_cabi::<$ty > () } } #[unsafe
-                        (export_name = "cabi_post_near:agent/tool@0.3.0#schema")] unsafe
-                        extern "C" fn _post_return_schema(arg0 : * mut u8,) { unsafe {
-                        $($path_to_types)*:: __post_return_schema::<$ty > (arg0) } }
-                        #[unsafe (export_name = "near:agent/tool@0.3.0#description")]
-                        unsafe extern "C" fn export_description() -> * mut u8 { unsafe {
-                        $($path_to_types)*:: _export_description_cabi::<$ty > () } }
-                        #[unsafe (export_name =
-                        "cabi_post_near:agent/tool@0.3.0#description")] unsafe extern "C"
-                        fn _post_return_description(arg0 : * mut u8,) { unsafe {
-                        $($path_to_types)*:: __post_return_description::<$ty > (arg0) } }
-                        };
+                        (export_name = "cabi_post_lunarwing:agent/tool@0.3.0#schema")]
+                        unsafe extern "C" fn _post_return_schema(arg0 : * mut u8,) {
+                        unsafe { $($path_to_types)*:: __post_return_schema::<$ty > (arg0)
+                        } } #[unsafe (export_name =
+                        "lunarwing:agent/tool@0.3.0#description")] unsafe extern "C" fn
+                        export_description() -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_description_cabi::<$ty > () } } #[unsafe (export_name =
+                        "cabi_post_lunarwing:agent/tool@0.3.0#description")] unsafe
+                        extern "C" fn _post_return_description(arg0 : * mut u8,) { unsafe
+                        { $($path_to_types)*:: __post_return_description::<$ty > (arg0) }
+                        } };
                     };
                 }
                 #[doc(hidden)]
-                pub(crate) use __export_near_agent_tool_0_3_0_cabi;
+                pub(crate) use __export_lunarwing_agent_tool_0_3_0_cabi;
                 #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
                 #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
                 struct _RetArea(
@@ -799,20 +799,20 @@ macro_rules! __export_sandboxed_tool_impl {
     };
     ($ty:ident with_types_in $($path_to_types_root:tt)*) => {
         $($path_to_types_root)*::
-        exports::near::agent::tool::__export_near_agent_tool_0_3_0_cabi!($ty
-        with_types_in $($path_to_types_root)*:: exports::near::agent::tool);
+        exports::lunarwing::agent::tool::__export_lunarwing_agent_tool_0_3_0_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::lunarwing::agent::tool);
     };
 }
 #[doc(inline)]
 pub(crate) use __export_sandboxed_tool_impl as export;
 #[cfg(target_arch = "wasm32")]
 #[unsafe(
-    link_section = "component-type:wit-bindgen:0.41.0:near:agent@0.3.0:sandboxed-tool:encoded world"
+    link_section = "component-type:wit-bindgen:0.41.0:lunarwing:agent@0.3.0:sandboxed-tool:encoded world"
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 691] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xae\x04\x01A\x02\x01\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 706] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xbd\x04\x01A\x02\x01\
 A\x04\x01B\x16\x01m\x05\x05trace\x05debug\x04info\x04warn\x05error\x04\0\x09log-\
 level\x03\0\0\x01p}\x01r\x03\x06status{\x0cheaders-jsons\x04body\x02\x04\0\x0dht\
 tp-response\x03\0\x03\x01@\x02\x05level\x01\x07messages\x01\0\x04\0\x03log\x01\x05\
@@ -820,14 +820,14 @@ tp-response\x03\0\x03\x01@\x02\x05level\x01\x07messages\x01\0\x04\0\x03log\x01\x
 rkspace-read\x01\x08\x01k\x02\x01ky\x01j\x01\x04\x01s\x01@\x05\x06methods\x03url\
 s\x0cheaders-jsons\x04body\x09\x0atimeout-ms\x0a\0\x0b\x04\0\x0chttp-request\x01\
 \x0c\x01j\x01s\x01s\x01@\x02\x05aliass\x0bparams-jsons\0\x0d\x04\0\x0btool-invok\
-e\x01\x0e\x01@\x01\x04names\0\x7f\x04\0\x0dsecret-exists\x01\x0f\x03\0\x15near:a\
-gent/host@0.3.0\x05\0\x01B\x0a\x01ks\x01r\x02\x06paramss\x07context\0\x04\0\x07r\
-equest\x03\0\x01\x01r\x02\x06output\0\x05error\0\x04\0\x08response\x03\0\x03\x01\
-@\x01\x03req\x02\0\x04\x04\0\x07execute\x01\x05\x01@\0\0s\x04\0\x06schema\x01\x06\
-\x04\0\x0bdescription\x01\x06\x04\0\x15near:agent/tool@0.3.0\x05\x01\x04\0\x1fne\
-ar:agent/sandboxed-tool@0.3.0\x04\0\x0b\x14\x01\0\x0esandboxed-tool\x03\0\0\0G\x09\
-producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-bindgen-rus\
-t\x060.41.0";
+e\x01\x0e\x01@\x01\x04names\0\x7f\x04\0\x0dsecret-exists\x01\x0f\x03\0\x1alunarw\
+ing:agent/host@0.3.0\x05\0\x01B\x0a\x01ks\x01r\x02\x06paramss\x07context\0\x04\0\
+\x07request\x03\0\x01\x01r\x02\x06output\0\x05error\0\x04\0\x08response\x03\0\x03\
+\x01@\x01\x03req\x02\0\x04\x04\0\x07execute\x01\x05\x01@\0\0s\x04\0\x06schema\x01\
+\x06\x04\0\x0bdescription\x01\x06\x04\0\x1alunarwing:agent/tool@0.3.0\x05\x01\x04\
+\0$lunarwing:agent/sandboxed-tool@0.3.0\x04\0\x0b\x14\x01\0\x0esandboxed-tool\x03\
+\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10wit-\
+bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

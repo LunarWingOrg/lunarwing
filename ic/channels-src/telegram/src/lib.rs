@@ -29,11 +29,11 @@ wit_bindgen::generate!({
 use serde::{Deserialize, Serialize};
 
 // Re-export generated types
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, Attachment, ChannelConfig, Guest, HttpEndpointConfig, IncomingHttpRequest,
     OutgoingHttpResponse, PollConfig, StatusType, StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage, InboundAttachment};
+use lunarwing::agent::channel_host::{self, EmittedMessage, InboundAttachment};
 
 // ============================================================================
 // Telegram API Types

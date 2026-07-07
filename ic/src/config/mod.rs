@@ -62,8 +62,7 @@ pub use self::tunnel::TunnelConfig;
 pub use self::wasm::WasmConfig;
 pub use self::workspace::WorkspaceConfig;
 pub use crate::llm::config::{
-    LlmConfig, NearAiConfig, OpenAiCodexConfig,
-    RegistryProviderConfig,
+    LlmConfig, LunarWingCloudConfig, OpenAiCodexConfig, RegistryProviderConfig,
 };
 pub use crate::llm::session::SessionConfig;
 
@@ -424,9 +423,8 @@ pub async fn inject_llm_keys_from_secrets(
     // Static mappings for well-known providers.
     // The registry's setup hints define secret_name -> env_var mappings,
     // so new providers added to providers.json get injection automatically.
-    let mut mappings: Vec<(&str, &str)> = vec![
-        ("llm_nearai_api_key", "NEARAI_API_KEY"),
-    ];
+    let mut mappings: Vec<(&str, &str)> =
+        vec![("llm_lunarwing_cloud_api_key", "LUNARWING_CLOUD_API_KEY")];
 
     // Dynamically discover secret->env mappings from the provider registry.
     // Uses selectable() which deduplicates user overrides correctly.

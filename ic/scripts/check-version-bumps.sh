@@ -40,7 +40,7 @@ fi
 
 # --- Helper functions ---------------------------------------------------------
 
-# Extract the version from a WIT package line like: package near:agent@1.2.3;
+# Extract the version from a WIT package line like: package lunarwing:agent@1.2.3;
 extract_wit_version() {
     local file="$1"
     if [[ ! -f "$file" ]]; then

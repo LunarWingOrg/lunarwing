@@ -119,23 +119,23 @@ mod tests {
     fn record_event_does_not_panic() {
         let obs = LogObserver;
         obs.record_event(&ObserverEvent::AgentStart {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
         });
         obs.record_event(&ObserverEvent::LlmRequest {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
             message_count: 5,
         });
         obs.record_event(&ObserverEvent::LlmResponse {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
             duration: Duration::from_millis(150),
             success: true,
             error_message: None,
         });
         obs.record_event(&ObserverEvent::LlmResponse {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
             duration: Duration::from_millis(1500),
             success: false,

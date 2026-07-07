@@ -43,11 +43,11 @@ wit_bindgen::generate!({
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, ChannelConfig, Guest, HttpEndpointConfig, IncomingHttpRequest,
     OutgoingHttpResponse, PollConfig, StatusType, StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage};
+use lunarwing::agent::channel_host::{self, EmittedMessage};
 
 // ============================================================================
 // WeeChat API Types

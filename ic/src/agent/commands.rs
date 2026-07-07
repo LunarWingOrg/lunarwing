@@ -856,7 +856,7 @@ impl Agent {
             //
             // Env vars have the HIGHEST priority in LlmConfig::resolve_model()
             // (env var > TOML > DB > default). If the .env file has e.g.
-            // NEARAI_MODEL=old-model, it shadows everything else. We must
+            // LUNARWING_CLOUD_MODEL=old-model, it shadows everything else. We must
             // update this var or the /model change is invisible on restart.
             let registry = crate::llm::ProviderRegistry::load();
             let model_env = registry.model_env_var(&backend);

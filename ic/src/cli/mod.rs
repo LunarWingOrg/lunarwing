@@ -417,7 +417,7 @@ pub async fn run_memory_command(mem_cmd: &MemoryCommand) -> anyhow::Result<()> {
 
     let embeddings = config
         .embeddings
-        .create_provider(&config.llm.nearai.base_url, session);
+        .create_provider(&config.llm.lunarwing_cloud.base_url, session);
 
     let db: Arc<dyn crate::db::Database> = crate::db::connect_from_config(&config.database)
         .await

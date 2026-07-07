@@ -201,13 +201,13 @@ Two improvements ported from IronClaw:
 1. **Top-level decorator chain env vars** (`LLM_MAX_RETRIES`, `LLM_CIRCUIT_BREAKER_THRESHOLD`,
    `LLM_CIRCUIT_BREAKER_RECOVERY_SECS`, `LLM_RESPONSE_CACHE_ENABLED`,
    `LLM_RESPONSE_CACHE_TTL_SECS`, `LLM_RESPONSE_CACHE_MAX_ENTRIES`). These work with
-   any backend (TensorZero, Ollama, Anthropic, etc.), not just NearAI. They fall back
-   to the NearAI-specific values for backward compatibility.
+   any backend (TensorZero, Ollama, Anthropic, etc.), not just LunarWing Cloud. They fall back
+   to the LunarWing Cloud-specific values for backward compatibility.
 
-2. **Conditional NearAI URL validation**. NearAI auth/base URLs are only validated when
-   NearAI is the configured backend, or the user explicitly set `NEARAI_AUTH_URL`,
-   `NEARAI_BASE_URL`, or `NEARAI_API_KEY`. This prevents startup failures in air-gapped
-   environments that use a non-NearAI backend.
+2. **Conditional LunarWing Cloud URL validation**. LunarWing Cloud auth/base URLs are only validated when
+   LunarWing Cloud is the configured backend, or the user explicitly set `LUNARWING_CLOUD_AUTH_URL`,
+   `LUNARWING_CLOUD_BASE_URL`, or `LUNARWING_CLOUD_API_KEY`. This prevents startup failures in air-gapped
+   environments that use a non-LunarWing Cloud backend.
 
 ### Unit Tests
 
@@ -220,16 +220,16 @@ cargo test -p lunarwing --lib llm::tests
 ```
 
 Key new tests:
-- `llm_max_retries_overrides_nearai_default` — `LLM_MAX_RETRIES=7` overrides NearAI's default 3
-- `llm_max_retries_falls_back_to_nearai` — when unset, falls back to `NEARAI_MAX_RETRIES`
+- `llm_max_retries_overrides_lunarwing_cloud_default` — `LLM_MAX_RETRIES=7` overrides LunarWing Cloud's default 3
+- `llm_max_retries_falls_back_to_lunarwing_cloud` — when unset, falls back to `LUNARWING_CLOUD_MAX_RETRIES`
 - `llm_max_retries_rejects_invalid` — non-numeric value produces descriptive error
-- `llm_response_cache_enabled_overrides_nearai` — `LLM_RESPONSE_CACHE_ENABLED=true` works
-- `llm_circuit_breaker_threshold_overrides_nearai` — `LLM_CIRCUIT_BREAKER_THRESHOLD=10` works
-- `non_nearai_backend_skips_nearai_url_validation` — openai_compatible backend doesn't fail on NearAI URLs
+- `llm_response_cache_enabled_overrides_lunarwing_cloud` — `LLM_RESPONSE_CACHE_ENABLED=true` works
+- `llm_circuit_breaker_threshold_overrides_lunarwing_cloud` — `LLM_CIRCUIT_BREAKER_THRESHOLD=10` works
+- `non_lunarwing_cloud_backend_skips_lunarwing_cloud_url_validation` — openai_compatible backend doesn't fail on LunarWing Cloud URLs
 
 ### Integration Verification
 
-Test that the new `LLM_*` env vars work with non-NearAI backends:
+Test that the new `LLM_*` env vars work with non-LunarWing Cloud backends:
 
 ```bash
 # Verify retry config reaches the provider chain
@@ -249,10 +249,10 @@ LLM circuit breaker enabled threshold=10 recovery_secs=30
 
 ### Air-Gapped Environment Verification
 
-Without any NearAI env vars, a non-NearAI backend should start cleanly:
+Without any LunarWing Cloud env vars, a non-LunarWing Cloud backend should start cleanly:
 
 ```bash
-unset NEARAI_AUTH_URL NEARAI_BASE_URL NEARAI_API_KEY
+unset LUNARWING_CLOUD_AUTH_URL LUNARWING_CLOUD_BASE_URL LUNARWING_CLOUD_API_KEY
 LLM_BACKEND=ollama OLLAMA_BASE_URL=http://localhost:11434 cargo run
 ```
 

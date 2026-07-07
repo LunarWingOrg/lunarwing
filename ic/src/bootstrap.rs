@@ -451,7 +451,7 @@ pub async fn migrate_disk_to_db(
             Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
                 Ok(value) => {
                     store
-                        .set_setting(user_id, "nearai.session_token", &value)
+                        .set_setting(user_id, "lunarwing_cloud.session_token", &value)
                         .await
                         .map_err(|e| {
                             MigrationError::Database(format!(
@@ -1080,7 +1080,7 @@ INJECTED="pwned"#;
         let vars = [
             ("DATABASE_BACKEND", "postgres"),
             ("DATABASE_URL", "postgres://u:p@h:5432/db"),
-            ("LLM_BACKEND", "nearai"),
+            ("LLM_BACKEND", "lunarwing_cloud"),
             ("ONBOARD_COMPLETED", "true"),
             ("EMBEDDING_ENABLED", "false"),
         ];

@@ -228,7 +228,7 @@ SKILL.md files extend the agent's prompt with domain-specific instructions. See 
 
 ## Configuration
 
-See `.env.example` for all environment variables. LLM backends (`nearai`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `tinfoil`, `bedrock`) documented in `src/llm/CLAUDE.md`.
+See `.env.example` for all environment variables. LLM backends (`lunarwing_cloud`, `openai`, `anthropic`, `ollama`, `openai_compatible`, `tinfoil`, `bedrock`) documented in `src/llm/CLAUDE.md`.
 
 ## Adding a New Channel
 

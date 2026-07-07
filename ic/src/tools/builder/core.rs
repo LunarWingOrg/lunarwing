@@ -336,7 +336,7 @@ The tool MUST use `wit_bindgen` and `cargo-component` to build.
 
 ## Available Host Functions (from WIT interface)
 
-The host provides these functions via `near::agent::host`:
+The host provides these functions via `lunarwing::agent::host`:
 
 ```rust
 // Logging (always available)
@@ -398,8 +398,8 @@ wit_bindgen::generate!({
 });
 
 use serde::{Deserialize, Serialize};
-use exports::near::agent::tool::{Guest, Request, Response};
-use near::agent::host::{self, LogLevel};
+use exports::lunarwing::agent::tool::{Guest, Request, Response};
+use lunarwing::agent::host::{self, LogLevel};
 
 // Your input/output types
 #[derive(Deserialize)]

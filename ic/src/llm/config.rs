@@ -86,20 +86,20 @@ impl Default for OpenAiCodexConfig {
 
 /// LLM provider configuration.
 ///
-/// NearAI remains the default backend with its own config struct (session auth).
+/// LunarWing Cloud remains the default backend with its own config struct (session auth).
 /// All other providers are resolved through the provider registry, producing
 /// a generic `RegistryProviderConfig`.
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
-    /// Backend identifier (e.g., "nearai", "openai", "groq", "tinfoil").
+    /// Backend identifier (e.g., "lunarwing_cloud", "openai", "groq", "tinfoil").
     pub backend: String,
     /// Session manager configuration (auth URL, token persistence path).
-    /// Used by the NearAI provider for OAuth/session-token auth.
+    /// Used by the LunarWing Cloud provider for OAuth/session-token auth.
     pub session: SessionConfig,
-    /// NEAR AI config (always populated, also used for embeddings).
-    pub nearai: NearAiConfig,
+    /// LunarWing Cloud config (always populated, also used for embeddings).
+    pub lunarwing_cloud: LunarWingCloudConfig,
     /// Resolved provider config for registry-based providers.
-    /// `None` when backend is "nearai".
+    /// `None` when backend is "lunarwing_cloud".
     pub provider: Option<RegistryProviderConfig>,
     /// OpenAI Codex config (populated when backend=openai_codex).
     pub openai_codex: Option<OpenAiCodexConfig>,
@@ -116,28 +116,28 @@ pub struct LlmConfig {
     pub llm_turn_budget_secs: u64,
     /// Generic cheap/fast model for lightweight tasks (heartbeat, routing, evaluation).
     /// Works with any backend. Set via `LLM_CHEAP_MODEL` env var.
-    /// When set, takes priority over the NearAI-specific `NEARAI_CHEAP_MODEL`.
+    /// When set, takes priority over the LunarWing Cloud-specific `LUNARWING_CLOUD_CHEAP_MODEL`.
     pub cheap_model: Option<String>,
     /// Enable cascade mode for smart routing (retry with primary if cheap model
     /// response seems uncertain). Default: true. Set via `SMART_ROUTING_CASCADE`.
     pub smart_routing_cascade: bool,
     /// Maximum retries for transient LLM errors.
-    /// Set via `LLM_MAX_RETRIES`, falls back to NearAI config value.
+    /// Set via `LLM_MAX_RETRIES`, falls back to LunarWing Cloud config value.
     pub max_retries: u32,
     /// Consecutive failures before circuit breaker opens. None = disabled.
-    /// Set via `LLM_CIRCUIT_BREAKER_THRESHOLD`, falls back to NearAI config value.
+    /// Set via `LLM_CIRCUIT_BREAKER_THRESHOLD`, falls back to LunarWing Cloud config value.
     pub circuit_breaker_threshold: Option<u32>,
     /// Seconds the circuit stays open before probing.
-    /// Set via `LLM_CIRCUIT_BREAKER_RECOVERY_SECS`, falls back to NearAI config value.
+    /// Set via `LLM_CIRCUIT_BREAKER_RECOVERY_SECS`, falls back to LunarWing Cloud config value.
     pub circuit_breaker_recovery_secs: u64,
     /// Enable in-memory response caching.
-    /// Set via `LLM_RESPONSE_CACHE_ENABLED`, falls back to NearAI config value.
+    /// Set via `LLM_RESPONSE_CACHE_ENABLED`, falls back to LunarWing Cloud config value.
     pub response_cache_enabled: bool,
     /// TTL in seconds for cached responses.
-    /// Set via `LLM_RESPONSE_CACHE_TTL_SECS`, falls back to NearAI config value.
+    /// Set via `LLM_RESPONSE_CACHE_TTL_SECS`, falls back to LunarWing Cloud config value.
     pub response_cache_ttl_secs: u64,
     /// Max cached responses before LRU eviction.
-    /// Set via `LLM_RESPONSE_CACHE_MAX_ENTRIES`, falls back to NearAI config value.
+    /// Set via `LLM_RESPONSE_CACHE_MAX_ENTRIES`, falls back to LunarWing Cloud config value.
     pub response_cache_max_entries: usize,
 }
 
@@ -146,11 +146,11 @@ impl LlmConfig {
     ///
     /// Resolution order:
     /// 1. `LLM_CHEAP_MODEL` (generic, works with any backend)
-    /// 2. `NEARAI_CHEAP_MODEL` (NearAI-only, backward compatibility)
+    /// 2. `LUNARWING_CLOUD_CHEAP_MODEL` (LunarWing Cloud-only, backward compatibility)
     pub fn cheap_model_name(&self) -> Option<&str> {
         self.cheap_model.as_deref().or_else(|| {
-            if self.backend == "nearai" {
-                self.nearai.cheap_model.as_deref()
+            if self.backend == "lunarwing_cloud" {
+                self.lunarwing_cloud.cheap_model.as_deref()
             } else {
                 None
             }
@@ -158,16 +158,16 @@ impl LlmConfig {
     }
 }
 
-/// NEAR AI configuration.
+/// LunarWing Cloud configuration.
 #[derive(Debug, Clone)]
-pub struct NearAiConfig {
+pub struct LunarWingCloudConfig {
     /// Model to use (e.g., "claude-3-5-sonnet-20241022", "gpt-4o")
     pub model: String,
     /// Cheap/fast model for lightweight tasks (heartbeat, routing, evaluation).
     pub cheap_model: Option<String>,
-    /// Base URL for the NEAR AI API.
+    /// Base URL for the LunarWing Cloud API.
     pub base_url: String,
-    /// API key for NEAR AI Cloud.
+    /// API key for LunarWing Cloud Cloud.
     pub api_key: Option<SecretString>,
     /// Optional fallback model for failover.
     pub fallback_model: Option<String>,
@@ -191,14 +191,14 @@ pub struct NearAiConfig {
     pub smart_routing_cascade: bool,
 }
 
-impl NearAiConfig {
+impl LunarWingCloudConfig {
     /// Create a minimal config suitable for listing available models.
     ///
-    /// Reads `NEARAI_API_KEY` from the environment and selects the
+    /// Reads `LUNARWING_CLOUD_API_KEY` from the environment and selects the
     /// appropriate base URL (cloud-api when API key is present,
     /// private.near.ai for session-token auth).
     pub(crate) fn for_model_discovery() -> Self {
-        let api_key = crate::config::helpers::env_or_override("NEARAI_API_KEY")
+        let api_key = crate::config::helpers::env_or_override("LUNARWING_CLOUD_API_KEY")
             .filter(|k| !k.is_empty())
             .map(SecretString::from);
 
@@ -207,7 +207,7 @@ impl NearAiConfig {
         } else {
             "https://private.near.ai"
         };
-        let base_url = crate::config::helpers::env_or_override("NEARAI_BASE_URL")
+        let base_url = crate::config::helpers::env_or_override("LUNARWING_CLOUD_BASE_URL")
             .unwrap_or_else(|| default_base.to_string());
 
         Self {
@@ -228,4 +228,3 @@ impl NearAiConfig {
         }
     }
 }
-

@@ -433,7 +433,7 @@ impl<'a> LoopDelegate for ChatDelegate<'a> {
         _reason_ctx: &mut ReasoningContext,
     ) -> TextAction {
         // Strip internal "[Called tool ...]" text that can leak when
-        // provider flattening (e.g. NEAR AI) converts tool_calls to
+        // provider flattening (e.g. LunarWing Cloud) converts tool_calls to
         // plain text and the LLM echoes it back.
         let sanitized = strip_internal_tool_call_text(text);
         TextAction::Return(LoopOutcome::Response(sanitized))
@@ -1079,7 +1079,7 @@ fn compact_messages_for_retry(messages: &[ChatMessage]) -> Vec<ChatMessage> {
 
 /// Strip internal `[Called tool ...]` and `[Tool ... returned: ...]` markers
 /// from a response string. These markers are inserted by provider-level message
-/// flattening (e.g. NEAR AI) and can leak into the user-visible response when
+/// flattening (e.g. LunarWing Cloud) and can leak into the user-visible response when
 /// the LLM echoes them back.
 fn strip_internal_tool_call_text(text: &str) -> String {
     // Remove lines that are purely internal tool-call markers.
@@ -1259,7 +1259,7 @@ mod tests {
             document_extraction: None,
             sandbox_readiness: crate::agent::routine_engine::SandboxReadiness::DisabledByConfig,
             builder: None,
-            llm_backend: "nearai".to_string(),
+            llm_backend: "lunarwing_cloud".to_string(),
         };
 
         Agent::new(
@@ -2145,7 +2145,7 @@ mod tests {
             document_extraction: None,
             sandbox_readiness: crate::agent::routine_engine::SandboxReadiness::DisabledByConfig,
             builder: None,
-            llm_backend: "nearai".to_string(),
+            llm_backend: "lunarwing_cloud".to_string(),
         };
 
         Agent::new(
@@ -2271,7 +2271,7 @@ mod tests {
                 document_extraction: None,
                 sandbox_readiness: crate::agent::routine_engine::SandboxReadiness::DisabledByConfig,
                 builder: None,
-                llm_backend: "nearai".to_string(),
+                llm_backend: "lunarwing_cloud".to_string(),
             };
 
             Agent::new(

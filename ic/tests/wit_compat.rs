@@ -199,7 +199,7 @@ fn stub_shared_host_functions(
     Ok(())
 }
 
-/// Instantiate a tool component (world: sandboxed-tool, imports: near:agent/host).
+/// Instantiate a tool component (world: sandboxed-tool, imports: lunarwing:agent/host).
 fn instantiate_tool_component(
     engine: &wasmtime::Engine,
     component: &wasmtime::component::Component,
@@ -216,7 +216,7 @@ fn instantiate_tool_component(
     // or instantiation will fail.
     // Register stubs for both versioned (0.3.0+) and unversioned (pre-0.3.0) interface
     // paths so that both old and new WASM artifacts can instantiate.
-    for interface in &["near:agent/host", "near:agent/host@0.3.0"] {
+    for interface in &["lunarwing:agent/host", "lunarwing:agent/host@0.3.0"] {
         let mut root = linker.root();
         if let Ok(mut host) = root.instance(interface) {
             stub_shared_host_functions(&mut host)?;
@@ -228,6 +228,14 @@ fn instantiate_tool_component(
                 Ok(())
             })
             .map_err(|e| format!("stub 'tool-invoke': {e}"))?;
+
+            host.func_new("ssh-exec", |_ctx, _args, results| {
+                results[0] = wasmtime::component::Val::Result(Err(Some(Box::new(
+                    wasmtime::component::Val::String("stub".into()),
+                ))));
+                Ok(())
+            })
+            .map_err(|e| format!("stub 'ssh-exec': {e}"))?;
         }
     }
 
@@ -239,7 +247,7 @@ fn instantiate_tool_component(
     Ok(())
 }
 
-/// Instantiate a channel component (world: sandboxed-channel, imports: near:agent/channel-host).
+/// Instantiate a channel component (world: sandboxed-channel, imports: lunarwing:agent/channel-host).
 fn instantiate_channel_component(
     engine: &wasmtime::Engine,
     component: &wasmtime::component::Component,
@@ -306,14 +314,14 @@ fn instantiate_channel_component(
     {
         let mut root = linker.root();
         let mut host = root
-            .instance("near:agent/channel-host")
+            .instance("lunarwing:agent/channel-host")
             .map_err(|e| format!("failed to create unversioned channel-host: {e}"))?;
         stub_channel_host(&mut host)?;
     }
     {
         let mut root = linker.root();
         let mut host = root
-            .instance("near:agent/channel-host@0.3.0")
+            .instance("lunarwing:agent/channel-host@0.3.0")
             .map_err(|e| format!("failed to create versioned channel-host@0.3.0: {e}"))?;
         stub_channel_host(&mut host)?;
     }
@@ -510,8 +518,8 @@ fn wit_files_contain_version_annotation() {
             .unwrap_or_else(|e| panic!("failed to read {wit_file}: {e}"));
 
         assert!(
-            content.contains("package near:agent@"),
-            "{wit_file} must contain a versioned package declaration (e.g., 'package near:agent@0.3.0;')"
+            content.contains("package lunarwing:agent@"),
+            "{wit_file} must contain a versioned package declaration (e.g., 'package lunarwing:agent@0.3.0;')"
         );
     }
 }
@@ -526,11 +534,11 @@ fn wit_version_constants_match_wit_files() {
         .expect("failed to read wit/channel.wit");
 
     let expected_tool = format!(
-        "package near:agent@{};",
+        "package lunarwing:agent@{};",
         lunarwing::tools::wasm::WIT_TOOL_VERSION
     );
     let expected_channel = format!(
-        "package near:agent@{};",
+        "package lunarwing:agent@{};",
         lunarwing::tools::wasm::WIT_CHANNEL_VERSION
     );
 
