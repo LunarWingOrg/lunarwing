@@ -839,7 +839,6 @@ mod tests {
     }
 
     /// Adversarial tests for leak detector regex patterns and masking.
-    /// See <https://github.com/nearai/ironclaw/issues/1025>.
     mod adversarial {
         use crate::leak_detector::{LeakDetector, mask_secret};
 

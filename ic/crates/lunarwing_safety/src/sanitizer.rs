@@ -433,7 +433,7 @@ mod tests {
     }
 
     /// Adversarial tests for regex backtracking, Unicode edge cases, and
-    /// control character variants. See <https://github.com/nearai/ironclaw/issues/1025>.
+    /// control character variants.
     mod adversarial {
         use super::*;
 
