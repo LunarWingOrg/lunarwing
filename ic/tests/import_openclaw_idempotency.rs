@@ -289,7 +289,7 @@ mod idempotency_tests {
         // Settings should use upsert (update if exists, insert if not)
         let settings_map = vec![
             ("llm.backend", "openai"),
-            ("llm.backend", "anthropic"), // Same key, different value
+            ("llm.backend", "ollama"), // Same key, different value
             ("embeddings.model", "text-embedding-3"),
         ];
 
@@ -301,7 +301,7 @@ mod idempotency_tests {
 
         // Should have 2 entries, not 3 (last value wins)
         assert_eq!(result.len(), 2);
-        assert_eq!(result.get("llm.backend"), Some(&"anthropic")); // Last value
+        assert_eq!(result.get("llm.backend"), Some(&"ollama")); // Last value
     }
 
     #[test]

@@ -2,8 +2,7 @@
 
 All project documentation, organized by category. This index reflects the current tree —
 every **active** file is listed below. Archived material lives under
-[`internal/history/`](internal/history/) (superseded LunarWing docs) and
-[`internal/vendored/`](internal/vendored/) (third-party upstream copies).
+[`internal/history/`](internal/history/) (superseded LunarWing docs).
 
 * Original Author: Starforce Nebula *
 * Updated on July 6th by Rarity to reflect recent changes to the documentation tree: added missing entries for reviews/, specs/, superpowers/; fixed broken links (ROADMAP_2026, DOCS_REORG_CHECKLIST); added READMEs to previously undocumentated subdirectories.*
@@ -283,7 +282,6 @@ Internal notes, drafts, and working documents — incomplete or in-progress by n
 
 **Archives** (kept for provenance, not active docs):
 
-- [`vendored/`](internal/vendored/) — third-party upstream copies (nanocode/opencode) swept into `docs/` by an earlier bulk commit. See [`vendored/README.md`](internal/vendored/README.md).
 - [`history/`](internal/history/) — superseded LunarWing docs relocated here during the reorg, by source area: `architecture/`, `guides/`, `internal/`, `proposals/`. See [`history/README.md`](internal/history/README.md).
 
 ---
@@ -322,5 +320,4 @@ When adding new documentation, place it in the appropriate subdirectory:
 8. **`reviews/`** — if it's a *codebase or architecture review*
 9. **`internal/`** — if it's a *draft, note, or working document*
 
-Superseded or shipped docs are archived under `internal/history/` (LunarWing-authored) or
-`internal/vendored/` (third-party). Update this index when adding or moving files.
+Superseded or shipped docs are archived under `internal/history/` (LunarWing-authored). Update this index when adding or moving files.

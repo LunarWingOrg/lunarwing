@@ -14,6 +14,3 @@ Organized by the `docs/` area each file came from:
 | `internal/` | Thin stubs formerly in `docs/internal/` — empty/placeholder stubs. (On 2026-06-19 the `custom_*` source-repo bookmarks were consolidated into [`../COMPONENT_SOURCES.md`](../COMPONENT_SOURCES.md).) The substantial working docs stayed in `docs/internal/`. |
 | `proposals/` | Shipped or superseded proposals formerly in `docs/proposals/`. |
 | `archive/` | Additional stale files moved during the 1.1.9 stale-doc cleanup (GOALS_1.1.9 item #13). Contains ops scratch, proposals, guides, and internal docs that were no longer active. |
-
-This is distinct from [`../vendored/`](../vendored/), which holds third-party
-upstream copies that were never LunarWing-authored.
