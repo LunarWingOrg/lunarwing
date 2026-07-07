@@ -22,8 +22,9 @@ jobs:
       - name: Mirror GitHub to Codeberg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CODEBERG_USER: your-codeberg-user-or-org
-          CODEBERG_REPO: your-repo
+          CODEBERG_AUTH_USER: cmcsun
+          CODEBERG_USER: LunarWing
+          CODEBERG_REPO: lunarwing
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
         run: |
           set -euo pipefail
@@ -31,6 +32,6 @@ jobs:
           git clone --mirror "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo.git
           cd repo.git
 
-          git remote set-url --push origin "https://${CODEBERG_USER}:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_USER}/${CODEBERG_REPO}.git"
+          git remote set-url --push origin "https://${CODEBERG_AUTH_USER}:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_OWNER}/${CODEBERG_REPO}.git"
           git fetch -p origin
           git push --mirror
