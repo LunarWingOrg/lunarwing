@@ -681,7 +681,7 @@ mod tests {
         let prev = std::env::var("LLM_BACKEND").ok();
         // SAFETY: Under ENV_MUTEX, no concurrent env access.
         unsafe {
-            std::env::set_var("LLM_BACKEND", "anthropic");
+            std::env::set_var("LLM_BACKEND", "ollama");
         }
         let _env_guard = EnvGuard("LLM_BACKEND", prev);
 
@@ -691,7 +691,7 @@ mod tests {
         match result {
             CheckResult::Skip(msg) => {
                 assert!(
-                    msg.contains("backend=anthropic"),
+                    msg.contains("backend=ollama"),
                     "expected backend name in skip message, got: {msg}"
                 );
             }

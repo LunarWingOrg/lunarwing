@@ -721,8 +721,8 @@ mod tests {
         let registry = ProviderRegistry::load();
         let all = registry.all();
         assert!(
-            all.len() >= 10,
-            "should have at least 10 built-in providers, got {}",
+            all.len() >= 3,
+            "should have at least 3 built-in providers, got {}",
             all.len()
         );
     }
@@ -731,9 +731,9 @@ mod tests {
     fn registry_find_by_alias() {
         let registry = ProviderRegistry::load();
         let def = registry
-            .find("claude")
-            .expect("claude alias should resolve");
-        assert_eq!(def.id, "anthropic");
+            .find("open_ai")
+            .expect("open_ai alias should resolve");
+        assert_eq!(def.id, "openai");
     }
 
     #[test]
@@ -781,16 +781,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("groq", None, Some(&toml_path)).expect("set provider");
+        cmd_set_provider("openai", None, Some(&toml_path)).expect("set provider");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("groq"));
-        assert_eq!(
-            settings.selected_model.as_deref(),
-            Some("llama-3.3-70b-versatile")
-        );
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(settings.selected_model.as_deref(), Some("gpt-5-mini"));
     }
 
     #[test]
@@ -798,14 +795,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("anthropic", Some("claude-opus-4-6"), Some(&toml_path))
+        cmd_set_provider("openai", Some("o3-mini"), Some(&toml_path))
             .expect("set provider with model");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("anthropic"));
-        assert_eq!(settings.selected_model.as_deref(), Some("claude-opus-4-6"));
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(settings.selected_model.as_deref(), Some("o3-mini"));
     }
 
     #[test]
@@ -817,12 +814,12 @@ mod tests {
         // (it returns early when config_path is Some).
         // We verify by checking that cmd_set_provider succeeds without
         // trying to write to the default ~/.lunarwing/.env.
-        cmd_set_provider("groq", None, Some(&toml_path)).expect("set provider with custom config");
+        cmd_set_provider("openai", None, Some(&toml_path)).expect("set provider with custom config");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("groq"));
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
         // The key assertion is that no error was thrown trying to write
         // to the default .env — sync_to_dotenv skipped it.
     }
@@ -848,14 +845,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("claude", None, Some(&toml_path)).expect("set via alias");
+        cmd_set_provider("open_ai", None, Some(&toml_path)).expect("set via alias");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
         assert_eq!(
             settings.llm_backend.as_deref(),
-            Some("anthropic"),
+            Some("openai"),
             "alias should be normalized to canonical ID"
         );
     }
