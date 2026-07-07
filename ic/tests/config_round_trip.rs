@@ -54,7 +54,7 @@ fn bootstrap_env_round_trips_llm_backend() {
 
     // All other backends the wizard supports
     for backend in &[
-        "nearai",
+        "lunarwing_cloud",
         "anthropic",
         "ollama",
         "openai_compatible",
@@ -154,7 +154,7 @@ fn bootstrap_env_round_trips_session_token_key() {
         &env_path,
         &[
             ("DATABASE_BACKEND", "libsql"),
-            ("NEARAI_API_KEY", token),
+            ("LUNARWING_CLOUD_API_KEY", token),
             ("ONBOARD_COMPLETED", "true"),
         ],
     )
@@ -163,16 +163,16 @@ fn bootstrap_env_round_trips_session_token_key() {
     let map = read_env_map(&env_path);
 
     assert_eq!(
-        map.get("NEARAI_API_KEY").map(String::as_str),
+        map.get("LUNARWING_CLOUD_API_KEY").map(String::as_str),
         Some(token),
-        "NEARAI_API_KEY (session token) must survive .env round-trip"
+        "LUNARWING_CLOUD_API_KEY (session token) must survive .env round-trip"
     );
 
     let session_token = "sess_hosting_provider_injected_token_value";
     save_bootstrap_env_to(
         &env_path,
         &[
-            ("NEARAI_SESSION_TOKEN", session_token),
+            ("LUNARWING_CLOUD_SESSION_TOKEN", session_token),
             ("ONBOARD_COMPLETED", "true"),
         ],
     )
@@ -180,9 +180,10 @@ fn bootstrap_env_round_trips_session_token_key() {
 
     let map2 = read_env_map(&env_path);
     assert_eq!(
-        map2.get("NEARAI_SESSION_TOKEN").map(String::as_str),
+        map2.get("LUNARWING_CLOUD_SESSION_TOKEN")
+            .map(String::as_str),
         Some(session_token),
-        "NEARAI_SESSION_TOKEN must survive .env round-trip"
+        "LUNARWING_CLOUD_SESSION_TOKEN must survive .env round-trip"
     );
 }
 
@@ -199,8 +200,8 @@ fn bootstrap_env_preserves_existing_values() {
             "DATABASE_URL",
             "postgres://user:pass@localhost:5432/lunarwing",
         ),
-        ("LLM_BACKEND", "nearai"),
-        ("NEARAI_API_KEY", "key_abc123"),
+        ("LLM_BACKEND", "lunarwing_cloud"),
+        ("LUNARWING_CLOUD_API_KEY", "key_abc123"),
         ("EMBEDDING_ENABLED", "true"),
         ("ONBOARD_COMPLETED", "true"),
     ];

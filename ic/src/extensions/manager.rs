@@ -5825,7 +5825,7 @@ mod tests {
         store
             .set_setting(
                 "test",
-                "nearai.session_token",
+                "lunarwing_cloud.session_token",
                 &serde_json::json!({"token":"secret"}),
             )
             .await
@@ -5842,7 +5842,7 @@ mod tests {
             prompt: "Provider".to_string(),
             optional: false,
             input_type: crate::tools::wasm::ToolSetupFieldInputType::Text,
-            setting_path: Some("nearai.session_token".to_string()),
+            setting_path: Some("lunarwing_cloud.session_token".to_string()),
             env: None,
             restart_required: false,
         };
@@ -5923,7 +5923,7 @@ mod tests {
                         {
                             "name": "session",
                             "prompt": "Session",
-                            "setting_path": "nearai.session_token"
+                            "setting_path": "lunarwing_cloud.session_token"
                         }
                     ]
                 }
@@ -5955,7 +5955,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .get_setting("test", "nearai.session_token")
+                .get_setting("test", "lunarwing_cloud.session_token")
                 .await
                 .expect("get disallowed setting"),
             None

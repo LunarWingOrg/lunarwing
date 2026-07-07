@@ -35,8 +35,8 @@ pub async fn run_doctor_command() -> anyhow::Result<()> {
     );
 
     check(
-        "NEAR AI session",
-        check_nearai_session(&settings).await,
+        "LunarWing Cloud session",
+        check_lunarwing_cloud_session(&settings).await,
         &mut passed,
         &mut failed,
         &mut skipped,
@@ -248,10 +248,10 @@ fn check_settings_file() -> CheckResult {
     }
 }
 
-// ── NEAR AI session ─────────────────────────────────────────
+// ── LunarWing Cloud session ─────────────────────────────────────────
 
-async fn check_nearai_session(settings: &Settings) -> CheckResult {
-    // Skip entirely when the configured backend is not NEAR AI.
+async fn check_lunarwing_cloud_session(settings: &Settings) -> CheckResult {
+    // Skip entirely when the configured backend is not LunarWing Cloud.
     let llm_config = match crate::config::LlmConfig::resolve(settings) {
         Ok(config) => config,
         Err(e) => {
@@ -259,9 +259,9 @@ async fn check_nearai_session(settings: &Settings) -> CheckResult {
             return CheckResult::Skip(format!("LLM config error: {e}"));
         }
     };
-    if llm_config.backend != "nearai" {
+    if llm_config.backend != "lunarwing_cloud" {
         return CheckResult::Skip(format!(
-            "not using NEAR AI backend (backend={})",
+            "not using LunarWing Cloud backend (backend={})",
             llm_config.backend
         ));
     }
@@ -270,7 +270,7 @@ async fn check_nearai_session(settings: &Settings) -> CheckResult {
     let session_path = crate::config::llm::default_session_path();
     if !session_path.exists() {
         // Check for API key mode
-        if crate::config::helpers::env_or_override("NEARAI_API_KEY").is_some() {
+        if crate::config::helpers::env_or_override("LUNARWING_CLOUD_API_KEY").is_some() {
             return CheckResult::Pass("API key configured".into());
         }
         return CheckResult::Fail(format!(
@@ -294,11 +294,11 @@ async fn check_nearai_session(settings: &Settings) -> CheckResult {
 fn check_llm_config(settings: &Settings) -> CheckResult {
     match crate::llm::LlmConfig::resolve(settings) {
         Ok(config) => {
-            // Show the model for the active backend, not always nearai.model.
+            // Show the model for the active backend, not always lunarwing_cloud.model.
             let model = if let Some(ref provider) = config.provider {
                 &provider.model
             } else {
-                &config.nearai.model
+                &config.lunarwing_cloud.model
             };
             CheckResult::Pass(format!("backend={}, model={}", config.backend, model))
         }
@@ -397,9 +397,9 @@ fn check_embeddings(settings: &Settings) -> CheckResult {
             }
             let has_creds = match config.provider.as_str() {
                 "openai" => config.openai_api_key().is_some(),
-                "nearai" => {
-                    // NearAiEmbeddings uses SessionManager::get_token() which
-                    // only returns session tokens, NOT NEARAI_API_KEY
+                "lunarwing_cloud" => {
+                    // LunarWingCloudEmbeddings uses SessionManager::get_token() which
+                    // only returns session tokens, NOT LUNARWING_CLOUD_API_KEY
                     // (src/workspace/embeddings.rs:309, src/llm/session.rs:132).
                     let session_path = crate::config::llm::default_session_path();
                     session_path.exists()
@@ -417,7 +417,7 @@ fn check_embeddings(settings: &Settings) -> CheckResult {
                 ))
             } else {
                 let hint = match config.provider.as_str() {
-                    "nearai" => "run `lunarwing onboard` to create a session",
+                    "lunarwing_cloud" => "run `lunarwing onboard` to create a session",
                     _ => "set OPENAI_API_KEY",
                 };
                 CheckResult::Fail(format!(
@@ -654,16 +654,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_nearai_session_does_not_panic() {
+    async fn check_lunarwing_cloud_session_does_not_panic() {
         let settings = Settings::default();
-        let result = check_nearai_session(&settings).await;
+        let result = check_lunarwing_cloud_session(&settings).await;
         match result {
             CheckResult::Pass(_) | CheckResult::Fail(_) | CheckResult::Skip(_) => {}
         }
     }
 
     #[test]
-    fn check_nearai_session_skips_for_non_nearai_backend() {
+    fn check_lunarwing_cloud_session_skips_for_non_lunarwing_cloud_backend() {
         struct EnvGuard(&'static str, Option<String>);
         impl Drop for EnvGuard {
             fn drop(&mut self) {
@@ -687,7 +687,7 @@ mod tests {
 
         let settings = Settings::default();
         let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-        let result = rt.block_on(check_nearai_session(&settings));
+        let result = rt.block_on(check_lunarwing_cloud_session(&settings));
         match result {
             CheckResult::Skip(msg) => {
                 assert!(
@@ -696,7 +696,7 @@ mod tests {
                 );
             }
             other => panic!(
-                "expected Skip for non-nearai backend, got: {}",
+                "expected Skip for non-lunarwing_cloud backend, got: {}",
                 format_result(&other)
             ),
         }
@@ -796,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn check_llm_config_shows_nearai_model_for_nearai_backend() {
+    fn check_llm_config_shows_lunarwing_cloud_model_for_lunarwing_cloud_backend() {
         let _guard = crate::config::helpers::lock_env();
         // SAFETY: Under ENV_MUTEX, no concurrent env access.
         unsafe {
@@ -806,13 +806,13 @@ mod tests {
         match check_llm_config(&settings) {
             CheckResult::Pass(msg) => {
                 assert!(
-                    msg.contains("backend=nearai"),
-                    "expected nearai backend, got: {msg}"
+                    msg.contains("backend=lunarwing_cloud"),
+                    "expected lunarwing_cloud backend, got: {msg}"
                 );
-                // Must NOT show a bedrock or registry model when backend is nearai
+                // Must NOT show a bedrock or registry model when backend is lunarwing_cloud
                 assert!(
                     !msg.contains("anthropic.claude"),
-                    "should not show bedrock model for nearai backend: {msg}"
+                    "should not show bedrock model for lunarwing_cloud backend: {msg}"
                 );
             }
             other => panic!(

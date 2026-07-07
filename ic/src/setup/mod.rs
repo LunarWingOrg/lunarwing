@@ -41,7 +41,7 @@ pub use wizard::{SetupConfig, SetupError, SetupWizard};
 /// Check if onboarding is needed and return the reason.
 ///
 /// Reads environment variables (`DATABASE_URL`, `LIBSQL_PATH`,
-/// `ONBOARD_COMPLETED`, `NEARAI_API_KEY`) and checks for the default
+/// `ONBOARD_COMPLETED`, `LUNARWING_CLOUD_API_KEY`) and checks for the default
 /// session file on disk. Not safe to call concurrently with `env::set_var`.
 #[cfg(any(feature = "postgres", feature = "libsql"))]
 pub fn check_onboard_needed() -> Option<&'static str> {
@@ -60,7 +60,7 @@ pub fn check_onboard_needed() -> Option<&'static str> {
         return None;
     }
 
-    if std::env::var("NEARAI_API_KEY").is_err() {
+    if std::env::var("LUNARWING_CLOUD_API_KEY").is_err() {
         let session_path = crate::config::default_session_path();
         if !session_path.exists() {
             return Some("First run");

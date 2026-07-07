@@ -93,14 +93,14 @@ struct ToolOutput {
 
 struct VisionAnalyzeTool;
 
-impl exports::near::agent::tool::Guest for VisionAnalyzeTool {
-    fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
+impl exports::lunarwing::agent::tool::Guest for VisionAnalyzeTool {
+    fn execute(req: exports::lunarwing::agent::tool::Request) -> exports::lunarwing::agent::tool::Response {
         match execute_inner(&req.params, req.context.as_deref()) {
-            Ok(output) => exports::near::agent::tool::Response {
+            Ok(output) => exports::lunarwing::agent::tool::Response {
                 output: Some(output),
                 error: None,
             },
-            Err(e) => exports::near::agent::tool::Response {
+            Err(e) => exports::lunarwing::agent::tool::Response {
                 output: None,
                 error: Some(e),
             },
@@ -190,7 +190,7 @@ fn execute_inner(params_json: &str, context_json: Option<&str>) -> Result<String
     let headers = r#"{"Content-Type": "application/json"}"#;
     let body_bytes = body_json.into_bytes();
 
-    let response = near::agent::host::http_request(
+    let response = lunarwing::agent::host::http_request(
         "POST",
         &endpoint,
         headers,
@@ -265,7 +265,7 @@ fn get_image_data(req: &VisionRequest) -> Result<String, String> {
             Ok(b64.clone())
         }
         (None, Some(path)) => {
-            let content = near::agent::host::workspace_read(path)
+            let content = lunarwing::agent::host::workspace_read(path)
                 .ok_or_else(|| format!("Could not read workspace file: {path}"))?;
 
             if content.is_empty() {

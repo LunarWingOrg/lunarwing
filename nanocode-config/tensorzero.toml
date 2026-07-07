@@ -366,72 +366,72 @@ api_key_location = "env::OPENROUTER_API_KEY"
 
 # near 1 is called NEAR_AI_API_KEY
 
-# --- Gemini 3 Pro on NEAR AI ----------------------------------------------
-[models.gemini3pro_nearai]
-routing = ["nearai"]
+# --- Gemini 3 Pro on LunarWing Cloud ----------------------------------------------
+[models.gemini3pro_lunarwing_cloud]
+routing = ["lunarwing_cloud"]
 
-[models.gemini3pro_nearai.timeouts.streaming]
+[models.gemini3pro_lunarwing_cloud.timeouts.streaming]
 ttft_ms = 18000
 total_ms = 90000
 
-[models.gemini3pro_nearai.timeouts.non_streaming]
+[models.gemini3pro_lunarwing_cloud.timeouts.non_streaming]
 total_ms = 299000
 
-[models.gemini3pro_nearai.providers.nearai]
+[models.gemini3pro_lunarwing_cloud.providers.lunarwing_cloud]
 type = "openai"
 model_name = "google/gemini-3-pro"
 api_base = "https://cloud-api.near.ai/v1/"
 api_key_location = "env::NEAR_AI_API_KEY"
 
 
-# --- GPT-5.2 on NEAR AI ----------------------------------------------------
-[models.gpt52_nearai]
-routing = ["nearai"]
+# --- GPT-5.2 on LunarWing Cloud ----------------------------------------------------
+[models.gpt52_lunarwing_cloud]
+routing = ["lunarwing_cloud"]
 
-[models.gpt52_nearai.timeouts.streaming]
+[models.gpt52_lunarwing_cloud.timeouts.streaming]
 ttft_ms = 18000
 total_ms = 90000
 
-[models.gpt52_nearai.timeouts.non_streaming]
+[models.gpt52_lunarwing_cloud.timeouts.non_streaming]
 total_ms = 299000
 
-[models.gpt52_nearai.providers.nearai]
+[models.gpt52_lunarwing_cloud.providers.lunarwing_cloud]
 type = "openai"
 model_name = "openai/gpt-5.2"
 api_base = "https://cloud-api.near.ai/v1/"
 api_key_location = "env::NEAR_AI_API_KEY"
 
 
-# --- GPT-OSS-120B on NEAR AI ----------------------------------------------
-[models.gptoss120b_nearai]
-routing = ["nearai"]
+# --- GPT-OSS-120B on LunarWing Cloud ----------------------------------------------
+[models.gptoss120b_lunarwing_cloud]
+routing = ["lunarwing_cloud"]
 
-[models.gptoss120b_nearai.timeouts.streaming]
+[models.gptoss120b_lunarwing_cloud.timeouts.streaming]
 ttft_ms = 18000
 total_ms = 90000
 
-[models.gptoss120b_nearai.timeouts.non_streaming]
+[models.gptoss120b_lunarwing_cloud.timeouts.non_streaming]
 total_ms = 299000
 
-[models.gptoss120b_nearai.providers.nearai]
+[models.gptoss120b_lunarwing_cloud.providers.lunarwing_cloud]
 type = "openai"
 model_name = "openai/gpt-oss-120b"
 api_base = "https://cloud-api.near.ai/v1/"
 api_key_location = "env::NEAR_AI_API_KEY"
 
 
-# --- GLM-5.1 FP8 on NEAR AI ------------------------------------------------
-[models.glm51_fp8_nearai]
-routing = ["nearai"]
+# --- GLM-5.1 FP8 on LunarWing Cloud ------------------------------------------------
+[models.glm51_fp8_lunarwing_cloud]
+routing = ["lunarwing_cloud"]
 
-[models.glm51_fp8_nearai.timeouts.streaming]
+[models.glm51_fp8_lunarwing_cloud.timeouts.streaming]
 ttft_ms = 18000
 total_ms = 90000
 
-[models.glm51_fp8_nearai.timeouts.non_streaming]
+[models.glm51_fp8_lunarwing_cloud.timeouts.non_streaming]
 total_ms = 299000
 
-[models.glm51_fp8_nearai.providers.nearai]
+[models.glm51_fp8_lunarwing_cloud.providers.lunarwing_cloud]
 type = "openai"
 model_name = "zai-org/GLM-5.1-FP8"
 api_base = "https://cloud-api.near.ai/v1/"
@@ -1187,7 +1187,7 @@ type = "chat"
 
 [functions.coding.experimentation]
 type = "static"
-candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_nearai" = 0.15, "gptoss120b_nearai" = 0.05, "glm51_fp8_nearai" = 0.05 }
+candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_lunarwing_cloud" = 0.15, "gptoss120b_lunarwing_cloud" = 0.05, "glm51_fp8_lunarwing_cloud" = 0.05 }
 fallback_variants = ["qwen235b_nanogpt","ds32_or","gemma4_26b_ng"]
 
 [functions.coding.variants.local_bigpc]
@@ -1198,17 +1198,17 @@ model = "gemma_bigpc"
 type = "chat_completion"
 model = "qwen_tee_redundant"
 
-[functions.coding.variants.gpt52_nearai]
+[functions.coding.variants.gpt52_lunarwing_cloud]
 type = "chat_completion"
-model = "gpt52_nearai"
+model = "gpt52_lunarwing_cloud"
 
-[functions.coding.variants.gptoss120b_nearai]
+[functions.coding.variants.gptoss120b_lunarwing_cloud]
 type = "chat_completion"
-model = "gptoss120b_nearai"
+model = "gptoss120b_lunarwing_cloud"
 
-[functions.coding.variants.glm51_fp8_nearai]
+[functions.coding.variants.glm51_fp8_lunarwing_cloud]
 type = "chat_completion"
-model = "glm51_fp8_nearai"
+model = "glm51_fp8_lunarwing_cloud"
 
 [functions.coding.variants.qwen235b_nanogpt]
 type = "chat_completion"
@@ -1232,7 +1232,7 @@ type = "chat"
 
 [functions.nanocode.experimentation]
 type = "static"
-candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_nearai" = 0.15, "gptoss120b_nearai" = 0.05, "glm51_fp8_nearai" = 0.05 }
+candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_lunarwing_cloud" = 0.15, "gptoss120b_lunarwing_cloud" = 0.05, "glm51_fp8_lunarwing_cloud" = 0.05 }
 fallback_variants = ["qwen235b_nanogpt","ds32_or","gemma4_26b_ng"]
 
 [functions.nanocode.variants.local_bigpc]
@@ -1243,17 +1243,17 @@ model = "gemma_bigpc"
 type = "chat_completion"
 model = "qwen_tee_redundant"
 
-[functions.nanocode.variants.gpt52_nearai]
+[functions.nanocode.variants.gpt52_lunarwing_cloud]
 type = "chat_completion"
-model = "gpt52_nearai"
+model = "gpt52_lunarwing_cloud"
 
-[functions.nanocode.variants.gptoss120b_nearai]
+[functions.nanocode.variants.gptoss120b_lunarwing_cloud]
 type = "chat_completion"
-model = "gptoss120b_nearai"
+model = "gptoss120b_lunarwing_cloud"
 
-[functions.nanocode.variants.glm51_fp8_nearai]
+[functions.nanocode.variants.glm51_fp8_lunarwing_cloud]
 type = "chat_completion"
-model = "glm51_fp8_nearai"
+model = "glm51_fp8_lunarwing_cloud"
 
 [functions.nanocode.variants.qwen235b_nanogpt]
 type = "chat_completion"
@@ -1277,7 +1277,7 @@ type = "chat"
 
 [functions.opencode.experimentation]
 type = "static"
-candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_nearai" = 0.15, "gptoss120b_nearai" = 0.05, "glm51_fp8_nearai" = 0.05 }
+candidate_variants = { "local_bigpc" = 0.05, "qwen_tee" = 0.70, "gpt52_lunarwing_cloud" = 0.15, "gptoss120b_lunarwing_cloud" = 0.05, "glm51_fp8_lunarwing_cloud" = 0.05 }
 fallback_variants = ["qwen235b_nanogpt","ds32_or","gemma4_26b_ng"]
 
 [functions.opencode.variants.local_bigpc]
@@ -1288,17 +1288,17 @@ model = "gemma_bigpc"
 type = "chat_completion"
 model = "qwen_tee_redundant"
 
-[functions.opencode.variants.gpt52_nearai]
+[functions.opencode.variants.gpt52_lunarwing_cloud]
 type = "chat_completion"
-model = "gpt52_nearai"
+model = "gpt52_lunarwing_cloud"
 
-[functions.opencode.variants.gptoss120b_nearai]
+[functions.opencode.variants.gptoss120b_lunarwing_cloud]
 type = "chat_completion"
-model = "gptoss120b_nearai"
+model = "gptoss120b_lunarwing_cloud"
 
-[functions.opencode.variants.glm51_fp8_nearai]
+[functions.opencode.variants.glm51_fp8_lunarwing_cloud]
 type = "chat_completion"
-model = "glm51_fp8_nearai"
+model = "glm51_fp8_lunarwing_cloud"
 
 [functions.opencode.variants.qwen235b_nanogpt]
 type = "chat_completion"
@@ -1346,20 +1346,20 @@ type = "chat"
 
 [functions.ironclaw.experimentation]
 type = "static"
-candidate_variants = { "local_bigpc" = 0.40, "qwen_tee" = 0.20, "gpt52_nearai" = 0.20, "gptoss120b_nearai" = 0.10, "glm51_fp8_nearai" = 0.10 }
+candidate_variants = { "local_bigpc" = 0.40, "qwen_tee" = 0.20, "gpt52_lunarwing_cloud" = 0.20, "gptoss120b_lunarwing_cloud" = 0.10, "glm51_fp8_lunarwing_cloud" = 0.10 }
 fallback_variants = ["qwen235b_nanogpt","glm51_or","ds32_or","gemma4_26b_ng"]
 
-[functions.ironclaw.variants.gpt52_nearai]
+[functions.ironclaw.variants.gpt52_lunarwing_cloud]
 type = "chat_completion"
-model = "gpt52_nearai"
+model = "gpt52_lunarwing_cloud"
 
-[functions.ironclaw.variants.gptoss120b_nearai]
+[functions.ironclaw.variants.gptoss120b_lunarwing_cloud]
 type = "chat_completion"
-model = "gptoss120b_nearai"
+model = "gptoss120b_lunarwing_cloud"
 
-[functions.ironclaw.variants.glm51_fp8_nearai]
+[functions.ironclaw.variants.glm51_fp8_lunarwing_cloud]
 type = "chat_completion"
-model = "glm51_fp8_nearai"
+model = "glm51_fp8_lunarwing_cloud"
 
 [functions.ironclaw.variants.qwen235b_nanogpt]
 type = "chat_completion"
@@ -1684,29 +1684,29 @@ type = "chat"
 type = "chat_completion"
 model = "qwen_laptop"
 
-[functions.gemini3pro_nearai]
+[functions.gemini3pro_lunarwing_cloud]
 type = "chat"
-[functions.gemini3pro_nearai.variants.default]
+[functions.gemini3pro_lunarwing_cloud.variants.default]
 type = "chat_completion"
-model = "gemini3pro_nearai"
+model = "gemini3pro_lunarwing_cloud"
 
-[functions.gpt52_nearai]
+[functions.gpt52_lunarwing_cloud]
 type = "chat"
-[functions.gpt52_nearai.variants.default]
+[functions.gpt52_lunarwing_cloud.variants.default]
 type = "chat_completion"
-model = "gpt52_nearai"
+model = "gpt52_lunarwing_cloud"
 
-[functions.gptoss120b_nearai]
+[functions.gptoss120b_lunarwing_cloud]
 type = "chat"
-[functions.gptoss120b_nearai.variants.default]
+[functions.gptoss120b_lunarwing_cloud.variants.default]
 type = "chat_completion"
-model = "gptoss120b_nearai"
+model = "gptoss120b_lunarwing_cloud"
 
-[functions.glm51_fp8_nearai]
+[functions.glm51_fp8_lunarwing_cloud]
 type = "chat"
-[functions.glm51_fp8_nearai.variants.default]
+[functions.glm51_fp8_lunarwing_cloud.variants.default]
 type = "chat_completion"
-model = "glm51_fp8_nearai"
+model = "glm51_fp8_lunarwing_cloud"
 
 # ============================================================================
 # METRICS

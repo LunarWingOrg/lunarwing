@@ -30,11 +30,11 @@ wit_bindgen::generate!({
 
 use serde::{Deserialize, Serialize};
 
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, ChannelConfig, Guest, IncomingHttpRequest,
     OutgoingHttpResponse, PollConfig, StatusType, StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage};
+use lunarwing::agent::channel_host::{self, EmittedMessage};
 
 // === Adapter API Types ===
 

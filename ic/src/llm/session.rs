@@ -1,4 +1,4 @@
-//! Session management for NEAR AI authentication.
+//! Session management for LunarWing Cloud authentication.
 //!
 //! Handles session token persistence, expiration detection, and renewal via
 //! OAuth flow. Tokens are stored in `~/.lunarwing/session.json` and refreshed
@@ -46,7 +46,7 @@ impl Default for SessionConfig {
     }
 }
 
-/// Manages NEAR AI session tokens with persistence and automatic renewal.
+/// Manages LunarWing Cloud session tokens with persistence and automatic renewal.
 pub struct SessionManager {
     config: SessionConfig,
     client: Client,
@@ -116,7 +116,7 @@ impl SessionManager {
     /// Attach a database store for persisting session tokens.
     ///
     /// When a store is attached, session tokens are saved to the `settings`
-    /// table (key: `nearai.session_token`) in addition to the disk file.
+    /// table (key: `lunarwing_cloud.session_token`) in addition to the disk file.
     /// On load, DB is preferred over disk.
     pub async fn attach_store(&self, store: Arc<dyn crate::db::Database>, user_id: &str) {
         *self.store.write().await = Some(store);
@@ -132,7 +132,7 @@ impl SessionManager {
     pub async fn get_token(&self) -> Result<SecretString, LlmError> {
         let guard = self.token.read().await;
         guard.clone().ok_or_else(|| LlmError::AuthFailed {
-            provider: "nearai".to_string(),
+            provider: "lunarwing_cloud".to_string(),
         })
     }
 
@@ -180,7 +180,7 @@ impl SessionManager {
             .send()
             .await
             .map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Validation request failed: {}", e),
             })?;
 
@@ -190,7 +190,7 @@ impl SessionManager {
 
         if response.status().as_u16() == 401 {
             return Err(LlmError::SessionExpired {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
             });
         }
 
@@ -198,7 +198,7 @@ impl SessionManager {
         let body = response.text().await.unwrap_or_default();
         let preview = crate::agent::truncate_for_preview(&body, 200);
         Err(LlmError::SessionRenewalFailed {
-            provider: "nearai".to_string(),
+            provider: "lunarwing_cloud".to_string(),
             reason: format!("Validation failed: HTTP {status}: {preview}"),
         })
     }
@@ -227,9 +227,9 @@ impl SessionManager {
     /// 3. Wait for OAuth callback with session token
     /// 4. Save and return the token
     ///
-    /// For NEAR AI Cloud API key:
+    /// For LunarWing Cloud Cloud API key:
     /// 1. Prompt user for API key from cloud.near.ai
-    /// 2. Set NEARAI_API_KEY env var and save to bootstrap .env
+    /// 2. Set LUNARWING_CLOUD_API_KEY env var and save to bootstrap .env
     /// 3. No session token saved (different auth model)
     async fn initiate_login(&self) -> Result<(), LlmError> {
         use crate::llm::oauth_helpers;
@@ -240,14 +240,14 @@ impl SessionManager {
         // Show auth provider menu BEFORE binding the listener
         println!();
         println!("╔════════════════════════════════════════════════════════════════╗");
-        println!("║                    NEAR AI Authentication                      ║");
+        println!("║                    LunarWing Cloud Authentication                      ║");
         println!("╠════════════════════════════════════════════════════════════════╣");
         println!("║  Choose an authentication method:                              ║");
         println!("║                                                                ║");
         println!("║    [1] GitHub            (requires localhost browser access)   ║");
         println!("║    [2] Google            (requires localhost browser access)   ║");
         println!("║    [3] NEAR Wallet (coming soon)                               ║");
-        println!("║    [4] NEAR AI Cloud API key                                   ║");
+        println!("║    [4] LunarWing Cloud Cloud API key                                   ║");
         println!("║                                                                ║");
         println!("╚════════════════════════════════════════════════════════════════╝");
         println!();
@@ -262,7 +262,7 @@ impl SessionManager {
         std::io::stdin()
             .read_line(&mut choice)
             .map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Failed to read input: {}", e),
             })?;
 
@@ -273,14 +273,14 @@ impl SessionManager {
                 println!("NEAR Wallet authentication is not yet implemented.");
                 println!("Please use GitHub or Google for now.");
                 return Err(LlmError::SessionRenewalFailed {
-                    provider: "nearai".to_string(),
+                    provider: "lunarwing_cloud".to_string(),
                     reason: "NEAR Wallet auth not yet implemented".to_string(),
                 });
             }
             "1" | "" | "2" => {} // handled below after listener bind
             other => {
                 return Err(LlmError::SessionRenewalFailed {
-                    provider: "nearai".to_string(),
+                    provider: "lunarwing_cloud".to_string(),
                     reason: format!("Invalid choice: {}", other),
                 });
             }
@@ -301,7 +301,7 @@ impl SessionManager {
         // OAuth paths: bind the callback listener now
         let listener = oauth_helpers::bind_callback_listener().await.map_err(|e| {
             LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: e.to_string(),
             }
         })?;
@@ -342,14 +342,19 @@ impl SessionManager {
         println!();
         println!("Waiting for authentication...");
 
-        // The NEAR AI API redirects to: {frontend_callback}/auth/callback?token=X&...
-        let session_token =
-            oauth_helpers::wait_for_callback(listener, "/auth/callback", "token", "NEAR AI", None)
-                .await
-                .map_err(|e| LlmError::SessionRenewalFailed {
-                    provider: "nearai".to_string(),
-                    reason: e.to_string(),
-                })?;
+        // The LunarWing Cloud API redirects to: {frontend_callback}/auth/callback?token=X&...
+        let session_token = oauth_helpers::wait_for_callback(
+            listener,
+            "/auth/callback",
+            "token",
+            "LunarWing Cloud",
+            None,
+        )
+        .await
+        .map_err(|e| LlmError::SessionRenewalFailed {
+            provider: "lunarwing_cloud".to_string(),
+            reason: e.to_string(),
+        })?;
 
         let auth_provider = Some(auth_provider.to_string());
 
@@ -370,9 +375,9 @@ impl SessionManager {
         Ok(())
     }
 
-    /// NEAR AI Cloud API key entry flow.
+    /// LunarWing Cloud Cloud API key entry flow.
     ///
-    /// Prompts the user to enter a NEAR AI Cloud API key from
+    /// Prompts the user to enter a LunarWing Cloud Cloud API key from
     /// cloud.near.ai. The key is stored in the thread-safe runtime
     /// env overlay (via `set_runtime_env`) so `LlmConfig::resolve()`
     /// auto-selects ChatCompletions mode, and persisted to
@@ -381,7 +386,7 @@ impl SessionManager {
     /// performed (different auth model).
     async fn api_key_login(&self) -> Result<(), LlmError> {
         println!();
-        println!("NEAR AI Cloud API key");
+        println!("LunarWing Cloud Cloud API key");
         println!("─────────────────────");
         println!();
         println!("  1. Open https://cloud.near.ai in your browser");
@@ -391,7 +396,7 @@ impl SessionManager {
 
         let key_secret =
             crate::setup::secret_input("API key").map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Failed to read input: {}", e),
             })?;
 
@@ -399,7 +404,7 @@ impl SessionManager {
         let key = key_secret.expose_secret().to_string();
         if key.is_empty() {
             return Err(LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: "API key cannot be empty".to_string(),
             });
         }
@@ -408,17 +413,17 @@ impl SessionManager {
         // callers for the remainder of this process. Uses a thread-safe
         // overlay instead of `std::env::set_var`, which is UB in
         // multi-threaded programs (Rust 1.82+).
-        crate::config::helpers::set_runtime_env("NEARAI_API_KEY", &key);
+        crate::config::helpers::set_runtime_env("LUNARWING_CLOUD_API_KEY", &key);
 
         // Persist to ~/.lunarwing/.env so the key survives restarts
         // (bootstrap layer — available before DB is connected).
         // Uses upsert to avoid clobbering existing bootstrap vars.
-        if let Err(e) = crate::bootstrap::upsert_bootstrap_var("NEARAI_API_KEY", &key) {
+        if let Err(e) = crate::bootstrap::upsert_bootstrap_var("LUNARWING_CLOUD_API_KEY", &key) {
             tracing::warn!("Failed to save API key to bootstrap .env: {}", e);
         }
 
         println!();
-        crate::setup::print_success("NEAR AI Cloud API key saved.");
+        crate::setup::print_success("LunarWing Cloud Cloud API key saved.");
         println!();
 
         Ok(())
@@ -444,7 +449,7 @@ impl SessionManager {
 
         let json =
             serde_json::to_string_pretty(&session).map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Failed to serialize session: {}", e),
             })?;
 
@@ -488,7 +493,7 @@ impl SessionManager {
             let session_json = serde_json::to_value(&session)
                 .unwrap_or(serde_json::Value::String(token.to_string()));
             if let Err(e) = store
-                .set_setting(&user_id, "nearai.session_token", &session_json)
+                .set_setting(&user_id, "lunarwing_cloud.session_token", &session_json)
                 .await
             {
                 tracing::warn!("Failed to save session to DB: {}", e);
@@ -506,40 +511,40 @@ impl SessionManager {
         let store = store_guard
             .as_ref()
             .ok_or_else(|| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: "No DB store attached".to_string(),
             })?;
 
         let user_id = self.user_id.read().await.clone();
         let value = if let Some(value) = store
-            .get_setting(&user_id, "nearai.session_token")
+            .get_setting(&user_id, "lunarwing_cloud.session_token")
             .await
             .map_err(|e| LlmError::SessionRenewalFailed {
-            provider: "nearai".to_string(),
-            reason: format!("DB query failed: {}", e),
-        })? {
+                provider: "lunarwing_cloud".to_string(),
+                reason: format!("DB query failed: {}", e),
+            })? {
             value
         } else {
             // Try the legacy key. Only warn if it actually exists (real
             // backwards-compat migration). When neither key is present
             // (fresh install), just return the "No session in DB" error.
             let legacy = store
-                .get_setting(&user_id, "nearai.session")
+                .get_setting(&user_id, "lunarwing_cloud.session")
                 .await
                 .map_err(|e| LlmError::SessionRenewalFailed {
-                    provider: "nearai".to_string(),
+                    provider: "lunarwing_cloud".to_string(),
                     reason: format!("DB query failed: {}", e),
                 })?;
             match legacy {
                 Some(value) => {
                     tracing::warn!(
-                        "nearai.session_token missing; falling back to legacy nearai.session for backwards compatibility"
+                        "lunarwing_cloud.session_token missing; falling back to legacy lunarwing_cloud.session for backwards compatibility"
                     );
                     value
                 }
                 None => {
                     return Err(LlmError::SessionRenewalFailed {
-                        provider: "nearai".to_string(),
+                        provider: "lunarwing_cloud".to_string(),
                         reason: "No session in DB".to_string(),
                     });
                 }
@@ -548,7 +553,7 @@ impl SessionManager {
 
         let session: SessionData =
             serde_json::from_value(value).map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Failed to parse DB session: {}", e),
             })?;
 
@@ -576,7 +581,7 @@ impl SessionManager {
 
         let session: SessionData =
             serde_json::from_str(&data).map_err(|e| LlmError::SessionRenewalFailed {
-                provider: "nearai".to_string(),
+                provider: "lunarwing_cloud".to_string(),
                 reason: format!("Failed to parse session file: {}", e),
             })?;
 
@@ -603,18 +608,18 @@ impl SessionManager {
 
 /// Create a session manager from a config, loading env var if present.
 ///
-/// When `NEARAI_SESSION_TOKEN` is set, it takes precedence over file-based
+/// When `LUNARWING_CLOUD_SESSION_TOKEN` is set, it takes precedence over file-based
 /// tokens. This supports hosting providers that inject the token via env var.
 pub async fn create_session_manager(config: SessionConfig) -> Arc<SessionManager> {
     let manager = SessionManager::new_async(config).await;
 
-    // NEARAI_SESSION_TOKEN env var always takes precedence over file-based
+    // LUNARWING_CLOUD_SESSION_TOKEN env var always takes precedence over file-based
     // tokens. Hosting providers set this env var and expect it to be used
     // directly — no file persistence needed.
-    if let Ok(token) = std::env::var("NEARAI_SESSION_TOKEN")
+    if let Ok(token) = std::env::var("LUNARWING_CLOUD_SESSION_TOKEN")
         && !token.is_empty()
     {
-        tracing::info!("Using session token from NEARAI_SESSION_TOKEN env var");
+        tracing::info!("Using session token from LUNARWING_CLOUD_SESSION_TOKEN env var");
         manager.set_token(SecretString::from(token)).await;
     }
 
@@ -625,7 +630,7 @@ pub async fn create_session_manager(config: SessionConfig) -> Arc<SessionManager
 mod tests {
     use super::*;
     use crate::testing::credentials::{
-        TEST_SESSION_NEARAI_ABC, TEST_SESSION_NEARAI_XYZ, TEST_SESSION_TOKEN,
+        TEST_SESSION_LUNARWING_CLOUD_ABC, TEST_SESSION_LUNARWING_CLOUD_XYZ, TEST_SESSION_TOKEN,
     };
     use secrecy::ExposeSecret;
     use tempfile::tempdir;
@@ -689,7 +694,7 @@ mod tests {
     #[test]
     fn test_session_data_serde_roundtrip_with_auth_provider() {
         let original = SessionData {
-            session_token: TEST_SESSION_NEARAI_ABC.to_string(),
+            session_token: TEST_SESSION_LUNARWING_CLOUD_ABC.to_string(),
             created_at: Utc::now(),
             auth_provider: Some("github".to_string()),
         };
@@ -703,7 +708,7 @@ mod tests {
     #[test]
     fn test_session_data_serde_roundtrip_without_auth_provider() {
         let original = SessionData {
-            session_token: TEST_SESSION_NEARAI_XYZ.to_string(),
+            session_token: TEST_SESSION_LUNARWING_CLOUD_XYZ.to_string(),
             created_at: Utc::now(),
             auth_provider: None,
         };

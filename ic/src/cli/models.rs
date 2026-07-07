@@ -89,7 +89,7 @@ fn resolve_active_from_settings(settings: &Settings) -> (String, String) {
     let backend = std::env::var("LLM_BACKEND")
         .ok()
         .or_else(|| settings.llm_backend.clone())
-        .unwrap_or_else(|| "nearai".to_string());
+        .unwrap_or_else(|| "lunarwing_cloud".to_string());
 
     let registry = ProviderRegistry::load();
 
@@ -98,8 +98,8 @@ fn resolve_active_from_settings(settings: &Settings) -> (String, String) {
         .map(|d| d.id.clone())
         .unwrap_or_else(|| backend.clone());
 
-    let model = if canonical_backend == "nearai" {
-        std::env::var("NEARAI_MODEL")
+    let model = if canonical_backend == "lunarwing_cloud" {
+        std::env::var("LUNARWING_CLOUD_MODEL")
             .ok()
             .or_else(|| settings.selected_model.clone())
             .unwrap_or_else(|| "qwen2.5-72b-instruct:free".to_string())
@@ -166,7 +166,7 @@ async fn try_fetch_models(provider_id: &str, config_path: Option<&Path>) -> Opti
 
     // For registry providers, resolve the RegistryProviderConfig if not
     // already set for this backend.
-    if provider_id != "nearai" && provider_id != "bedrock" {
+    if provider_id != "lunarwing_cloud" && provider_id != "bedrock" {
         let registry = ProviderRegistry::load();
         if let Some(def) = registry.find(provider_id)
             && llm_config
@@ -247,11 +247,11 @@ fn cmd_status(json: bool, config_path: Option<&Path>) -> anyhow::Result<()> {
     let (backend, model) = resolve_active_from_settings(&settings);
     let registry = ProviderRegistry::load();
 
-    let fallback = std::env::var("NEARAI_FALLBACK_MODEL").ok();
-    let cheap = std::env::var("NEARAI_CHEAP_MODEL").ok();
+    let fallback = std::env::var("LUNARWING_CLOUD_FALLBACK_MODEL").ok();
+    let cheap = std::env::var("LUNARWING_CLOUD_CHEAP_MODEL").ok();
 
-    let description = if backend == "nearai" {
-        "NEAR AI inference (default)".to_string()
+    let description = if backend == "lunarwing_cloud" {
+        "LunarWing Cloud inference (default)".to_string()
     } else {
         registry
             .find(&backend)
@@ -299,7 +299,7 @@ fn cmd_set_model(model: &str, config_path: Option<&Path>) -> anyhow::Result<()> 
 
     // Warn if model name doesn't match any known provider's default model
     let known_model = registry.all().iter().any(|d| d.default_model == trimmed)
-        || trimmed.contains("qwen")  // nearai models
+        || trimmed.contains("qwen")  // lunarwing_cloud models
         || trimmed.contains("llama")
         || trimmed.contains("gpt")
         || trimmed.contains("claude")
@@ -318,11 +318,11 @@ fn cmd_set_model(model: &str, config_path: Option<&Path>) -> anyhow::Result<()> 
     let backend = std::env::var("LLM_BACKEND")
         .ok()
         .or_else(|| settings.llm_backend.clone())
-        .unwrap_or_else(|| "nearai".to_string());
+        .unwrap_or_else(|| "lunarwing_cloud".to_string());
 
     // Also write to .env so the change takes effect immediately
-    let model_env = if backend == "nearai" {
-        "NEARAI_MODEL".to_string()
+    let model_env = if backend == "lunarwing_cloud" {
+        "LUNARWING_CLOUD_MODEL".to_string()
     } else {
         registry
             .find(&backend)
@@ -354,11 +354,11 @@ fn cmd_set_provider(
     let registry = ProviderRegistry::load();
 
     // Validate and normalize provider
-    let canonical_id = if provider == "nearai" || provider == "near_ai" || provider == "near" {
-        "nearai".to_string()
+    let canonical_id = if provider == "lunarwing_cloud" {
+        "lunarwing_cloud".to_string()
     } else {
         let def = registry.find(provider).ok_or_else(|| {
-            let known: Vec<&str> = std::iter::once("nearai")
+            let known: Vec<&str> = std::iter::once("lunarwing_cloud")
                 .chain(registry.all().iter().map(|d| d.id.as_str()))
                 .collect();
             anyhow::anyhow!(
@@ -373,7 +373,7 @@ fn cmd_set_provider(
     // Resolve model: explicit > provider default
     let resolved_model = if let Some(m) = model {
         m.to_string()
-    } else if canonical_id == "nearai" {
+    } else if canonical_id == "lunarwing_cloud" {
         "qwen2.5-72b-instruct:free".to_string()
     } else if let Some(def) = registry.find(&canonical_id) {
         def.default_model.clone()
@@ -387,8 +387,8 @@ fn cmd_set_provider(
     save_settings(&settings, config_path)?;
 
     // Also write to .env so the change takes effect immediately
-    let model_env = if canonical_id == "nearai" {
-        "NEARAI_MODEL".to_string()
+    let model_env = if canonical_id == "lunarwing_cloud" {
+        "LUNARWING_CLOUD_MODEL".to_string()
     } else {
         registry
             .find(&canonical_id)
@@ -429,14 +429,14 @@ async fn cmd_list_providers(
     if json {
         let mut entries: Vec<serde_json::Value> = Vec::new();
 
-        // NEAR AI (not in registry)
-        let nearai_active = active_backend == "nearai";
+        // LunarWing Cloud (not in registry)
+        let lunarwing_cloud_active = active_backend == "lunarwing_cloud";
         entries.push(serde_json::json!({
-            "id": "nearai",
-            "description": "NEAR AI inference (default)",
+            "id": "lunarwing_cloud",
+            "description": "LunarWing Cloud inference (default)",
             "default_model": "qwen2.5-72b-instruct:free",
-            "active": nearai_active,
-            "active_model": if nearai_active { Some(&active_model) } else { None },
+            "active": lunarwing_cloud_active,
+            "active_model": if lunarwing_cloud_active { Some(&active_model) } else { None },
         }));
 
         for def in registry.all() {
@@ -478,24 +478,28 @@ async fn cmd_list_providers(
     println!("Active: {} (model: {})\n", active_backend, active_model);
     println!(
         "{} provider(s) available:\n",
-        providers.len() + 1 // +1 for NEAR AI
+        providers.len() + 1 // +1 for LunarWing Cloud
     );
 
-    // NEAR AI (not in registry)
-    let nearai_marker = if active_backend == "nearai" { " *" } else { "" };
+    // LunarWing Cloud (not in registry)
+    let lunarwing_cloud_marker = if active_backend == "lunarwing_cloud" {
+        " *"
+    } else {
+        ""
+    };
     if verbose {
-        println!("  nearai{}", nearai_marker);
-        println!("    Description:   NEAR AI inference (default)");
+        println!("  lunarwing_cloud{}", lunarwing_cloud_marker);
+        println!("    Description:   LunarWing Cloud inference (default)");
         println!("    Default model: qwen2.5-72b-instruct:free");
-        println!("    Model env:     NEARAI_MODEL");
-        if active_backend == "nearai" {
+        println!("    Model env:     LUNARWING_CLOUD_MODEL");
+        if active_backend == "lunarwing_cloud" {
             println!("    Active model:  {}", active_model);
         }
         println!();
     } else {
         println!(
-            "  {:<22} {:<40} NEAR AI inference (default)",
-            format!("nearai{nearai_marker}"),
+            "  {:<22} {:<40} LunarWing Cloud inference (default)",
+            format!("lunarwing_cloud{lunarwing_cloud_marker}"),
             "qwen2.5-72b-instruct:free"
         );
     }
@@ -565,8 +569,8 @@ async fn cmd_show_provider(
     let (active_backend, active_model) = resolve_active(config_path);
 
     // Resolve canonical ID for model fetching
-    let canonical_id = if id == "nearai" || id == "near_ai" || id == "near" {
-        "nearai".to_string()
+    let canonical_id = if id == "lunarwing_cloud" {
+        "lunarwing_cloud".to_string()
     } else {
         registry
             .find(id)
@@ -577,15 +581,15 @@ async fn cmd_show_provider(
     // Try to fetch live model list from the provider
     let live_models = try_fetch_models(&canonical_id, config_path).await;
 
-    // Check NEAR AI first (not in registry)
-    if id == "nearai" || id == "near_ai" || id == "near" {
-        let is_active = active_backend == "nearai";
+    // Check LunarWing Cloud first (not in registry)
+    if id == "lunarwing_cloud" {
+        let is_active = active_backend == "lunarwing_cloud";
         if json {
             let mut v = serde_json::json!({
-                "id": "nearai",
-                "description": "NEAR AI inference (default)",
+                "id": "lunarwing_cloud",
+                "description": "LunarWing Cloud inference (default)",
                 "default_model": "qwen2.5-72b-instruct:free",
-                "model_env": "NEARAI_MODEL",
+                "model_env": "LUNARWING_CLOUD_MODEL",
                 "active": is_active,
             });
             if is_active {
@@ -599,10 +603,10 @@ async fn cmd_show_provider(
                 serde_json::to_string_pretty(&v).unwrap_or_else(|_| "{}".to_string())
             );
         } else {
-            println!("Provider: nearai");
-            println!("  Description:   NEAR AI inference (default)");
+            println!("Provider: lunarwing_cloud");
+            println!("  Description:   LunarWing Cloud inference (default)");
             println!("  Default model: qwen2.5-72b-instruct:free");
-            println!("  Model env:     NEARAI_MODEL");
+            println!("  Model env:     LUNARWING_CLOUD_MODEL");
             println!("  Active:        {}", if is_active { "yes" } else { "no" });
             if is_active {
                 println!("  Active model:  {}", active_model);
@@ -613,7 +617,7 @@ async fn cmd_show_provider(
     }
 
     let def = registry.find(id).ok_or_else(|| {
-        let known: Vec<&str> = std::iter::once("nearai")
+        let known: Vec<&str> = std::iter::once("lunarwing_cloud")
             .chain(registry.all().iter().map(|d| d.id.as_str()))
             .collect();
         anyhow::anyhow!(
@@ -710,7 +714,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolve_active_defaults_to_nearai() {
+    fn resolve_active_defaults_to_lunarwing_cloud() {
         let settings = Settings::default();
         assert!(settings.llm_backend.is_none());
         assert!(settings.selected_model.is_none());
@@ -814,7 +818,8 @@ mod tests {
         // (it returns early when config_path is Some).
         // We verify by checking that cmd_set_provider succeeds without
         // trying to write to the default ~/.lunarwing/.env.
-        cmd_set_provider("openai", None, Some(&toml_path)).expect("set provider with custom config");
+        cmd_set_provider("openai", None, Some(&toml_path))
+            .expect("set provider with custom config");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")

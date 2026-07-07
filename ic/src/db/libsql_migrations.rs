@@ -577,7 +577,7 @@ INSERT OR IGNORE INTO leak_detection_patterns (id, name, pattern, severity, acti
     ('550e8400-e29b-41d4-a716-446655440005', 'github_token', 'gh[pousr]_[A-Za-z0-9_]{36,}', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('550e8400-e29b-41d4-a716-446655440006', 'github_fine_grained_pat', 'github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('550e8400-e29b-41d4-a716-446655440007', 'stripe_api_key', 'sk_(?:live|test)_[a-zA-Z0-9]{24,}', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    ('550e8400-e29b-41d4-a716-446655440008', 'nearai_session', 'sess_[a-zA-Z0-9]{32,}', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('550e8400-e29b-41d4-a716-446655440008', 'lunarwing_cloud_session', 'sess_[a-zA-Z0-9]{32,}', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('550e8400-e29b-41d4-a716-446655440009', 'bearer_token', 'Bearer\s+[a-zA-Z0-9_-]{20,}', 'high', 'redact', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('550e8400-e29b-41d4-a716-44665544000a', 'pem_private_key', '-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('550e8400-e29b-41d4-a716-44665544000b', 'ssh_private_key', '-----BEGIN\s+(?:OPENSSH|EC|DSA)\s+PRIVATE\s+KEY-----', 'critical', 'block', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

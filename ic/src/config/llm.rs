@@ -15,12 +15,12 @@ impl LlmConfig {
     #[cfg(feature = "libsql")]
     pub fn for_testing() -> Self {
         Self {
-            backend: "nearai".to_string(),
+            backend: "lunarwing_cloud".to_string(),
             session: SessionConfig {
                 auth_base_url: "http://localhost:0".to_string(),
                 session_path: std::env::temp_dir().join("lunarwing-test-session.json"),
             },
-            nearai: NearAiConfig {
+            lunarwing_cloud: LunarWingCloudConfig {
                 model: "test-model".to_string(),
                 cheap_model: None,
                 base_url: "http://localhost:0".to_string(),
@@ -65,72 +65,81 @@ impl LlmConfig {
     pub(crate) fn resolve(settings: &Settings) -> Result<Self, ConfigError> {
         let registry = ProviderRegistry::load();
 
-        // Determine backend: env var > settings > default ("nearai")
+        // Determine backend: env var > settings > default ("lunarwing_cloud")
         let backend = if let Some(b) = optional_env("LLM_BACKEND")? {
             b
         } else if let Some(ref b) = settings.llm_backend {
             b.clone()
         } else {
-            "nearai".to_string()
+            "lunarwing_cloud".to_string()
         };
 
         // Validate the backend is known
         let backend_lower = backend.to_lowercase();
-        let is_nearai =
-            backend_lower == "nearai" || backend_lower == "near_ai" || backend_lower == "near";
+        let is_lunarwing_cloud = backend_lower == "lunarwing_cloud";
         let is_openai_codex = backend_lower == "openai_codex"
             || backend_lower == "openai-codex"
             || backend_lower == "codex";
 
-        if !is_nearai
-            && !is_openai_codex
-            && registry.find(&backend_lower).is_none()
-        {
+        if !is_lunarwing_cloud && !is_openai_codex && registry.find(&backend_lower).is_none() {
             tracing::warn!(
                 "Unknown LLM backend '{}'. Will attempt as openai_compatible fallback.",
                 backend
             );
         }
 
-        // Session config (used by NearAI provider for OAuth/session-token auth)
-        let nearai_auth_url = optional_env("NEARAI_AUTH_URL")?
+        // Session config (used by LunarWing Cloud provider for OAuth/session-token auth)
+        let lunarwing_cloud_auth_url = optional_env("LUNARWING_CLOUD_AUTH_URL")?
             .unwrap_or_else(|| "https://private.near.ai".to_string());
-        // Only validate NearAI URLs when NearAI is actually being used or
+        // Only validate LunarWing Cloud URLs when LunarWing Cloud is actually being used or
         // the user explicitly set the URL. Prevents startup failures in
         // air-gapped environments that use a different backend.
-        let nearai_api_key = optional_env("NEARAI_API_KEY")?.map(SecretString::from);
-        let nearai_url_explicitly_set = optional_env("NEARAI_AUTH_URL")?.is_some();
-        if is_nearai || nearai_url_explicitly_set || nearai_api_key.is_some() {
-            validate_base_url(&nearai_auth_url, "NEARAI_AUTH_URL")?;
+        let lunarwing_cloud_api_key =
+            optional_env("LUNARWING_CLOUD_API_KEY")?.map(SecretString::from);
+        let lunarwing_cloud_url_explicitly_set =
+            optional_env("LUNARWING_CLOUD_AUTH_URL")?.is_some();
+        if is_lunarwing_cloud
+            || lunarwing_cloud_url_explicitly_set
+            || lunarwing_cloud_api_key.is_some()
+        {
+            validate_base_url(&lunarwing_cloud_auth_url, "LUNARWING_CLOUD_AUTH_URL")?;
         }
         let session = SessionConfig {
-            auth_base_url: nearai_auth_url,
-            session_path: optional_env("NEARAI_SESSION_PATH")?
+            auth_base_url: lunarwing_cloud_auth_url,
+            session_path: optional_env("LUNARWING_CLOUD_SESSION_PATH")?
                 .map(PathBuf::from)
                 .unwrap_or_else(default_session_path),
         };
 
-        // Always resolve NEAR AI config (used for embeddings even when not the primary backend)
-        let nearai = NearAiConfig {
-            model: Self::resolve_model("NEARAI_MODEL", settings, crate::llm::DEFAULT_MODEL)?,
-            cheap_model: optional_env("NEARAI_CHEAP_MODEL")?,
+        // Always resolve LunarWing Cloud config (used for embeddings even when not the primary backend)
+        let lunarwing_cloud = LunarWingCloudConfig {
+            model: Self::resolve_model(
+                "LUNARWING_CLOUD_MODEL",
+                settings,
+                crate::llm::DEFAULT_MODEL,
+            )?,
+            cheap_model: optional_env("LUNARWING_CLOUD_CHEAP_MODEL")?,
             base_url: {
-                let url = optional_env("NEARAI_BASE_URL")?.unwrap_or_else(|| {
-                    if nearai_api_key.is_some() {
+                let url = optional_env("LUNARWING_CLOUD_BASE_URL")?.unwrap_or_else(|| {
+                    if lunarwing_cloud_api_key.is_some() {
                         "https://cloud-api.near.ai".to_string()
                     } else {
                         "https://private.near.ai".to_string()
                     }
                 });
-                let nearai_base_url_explicitly_set = optional_env("NEARAI_BASE_URL")?.is_some();
-                if is_nearai || nearai_base_url_explicitly_set || nearai_api_key.is_some() {
-                    validate_base_url(&url, "NEARAI_BASE_URL")?;
+                let lunarwing_cloud_base_url_explicitly_set =
+                    optional_env("LUNARWING_CLOUD_BASE_URL")?.is_some();
+                if is_lunarwing_cloud
+                    || lunarwing_cloud_base_url_explicitly_set
+                    || lunarwing_cloud_api_key.is_some()
+                {
+                    validate_base_url(&url, "LUNARWING_CLOUD_BASE_URL")?;
                 }
                 url
             },
-            api_key: nearai_api_key,
-            fallback_model: optional_env("NEARAI_FALLBACK_MODEL")?,
-            max_retries: parse_optional_env("NEARAI_MAX_RETRIES", 3)?,
+            api_key: lunarwing_cloud_api_key,
+            fallback_model: optional_env("LUNARWING_CLOUD_FALLBACK_MODEL")?,
+            max_retries: parse_optional_env("LUNARWING_CLOUD_MAX_RETRIES", 3)?,
             circuit_breaker_threshold: optional_env("CIRCUIT_BREAKER_THRESHOLD")?
                 .map(|s| s.parse())
                 .transpose()
@@ -147,8 +156,8 @@ impl LlmConfig {
             smart_routing_cascade: parse_optional_env("SMART_ROUTING_CASCADE", true)?,
         };
 
-        // Resolve registry provider config (for non-NearAI, non-Codex backends)
-        let provider = if is_nearai || is_openai_codex {
+        // Resolve registry provider config (for non-LunarWing Cloud, non-Codex backends)
+        let provider = if is_lunarwing_cloud || is_openai_codex {
             None
         } else {
             Some(Self::resolve_registry_provider(
@@ -199,11 +208,11 @@ impl LlmConfig {
         let llm_turn_budget_secs = parse_optional_env("LLM_TURN_BUDGET_SECS", 370)?;
 
         // Generic cheap model (works with any backend).
-        // Falls back to NearAI-specific cheap_model in provider chain logic.
+        // Falls back to LunarWing Cloud-specific cheap_model in provider chain logic.
         let cheap_model = optional_env("LLM_CHEAP_MODEL")?;
 
         // Generic smart routing cascade flag.
-        // Defaults to true. Overrides NearAI-specific smart_routing_cascade.
+        // Defaults to true. Overrides LunarWing Cloud-specific smart_routing_cascade.
         let smart_routing_cascade = parse_optional_env("SMART_ROUTING_CASCADE", true)?;
 
         // Decorator chain settings — top-level `LLM_*` vars with fallback to
@@ -215,7 +224,7 @@ impl LlmConfig {
                 key: "LLM_MAX_RETRIES".to_string(),
                 message: format!("must be a non-negative integer: {e}"),
             })?
-            .unwrap_or(nearai.max_retries);
+            .unwrap_or(lunarwing_cloud.max_retries);
 
         let circuit_breaker_threshold = optional_env("LLM_CIRCUIT_BREAKER_THRESHOLD")?
             .map(|s| s.parse::<u32>())
@@ -224,7 +233,7 @@ impl LlmConfig {
                 key: "LLM_CIRCUIT_BREAKER_THRESHOLD".to_string(),
                 message: format!("must be a positive integer: {e}"),
             })?
-            .or(nearai.circuit_breaker_threshold);
+            .or(lunarwing_cloud.circuit_breaker_threshold);
 
         let circuit_breaker_recovery_secs = optional_env("LLM_CIRCUIT_BREAKER_RECOVERY_SECS")?
             .map(|s| s.parse::<u64>())
@@ -233,7 +242,7 @@ impl LlmConfig {
                 key: "LLM_CIRCUIT_BREAKER_RECOVERY_SECS".to_string(),
                 message: format!("must be a non-negative integer: {e}"),
             })?
-            .unwrap_or(nearai.circuit_breaker_recovery_secs);
+            .unwrap_or(lunarwing_cloud.circuit_breaker_recovery_secs);
 
         let response_cache_enabled = optional_env("LLM_RESPONSE_CACHE_ENABLED")?
             .map(|s| s.parse::<bool>())
@@ -242,7 +251,7 @@ impl LlmConfig {
                 key: "LLM_RESPONSE_CACHE_ENABLED".to_string(),
                 message: format!("must be true or false: {e}"),
             })?
-            .unwrap_or(nearai.response_cache_enabled);
+            .unwrap_or(lunarwing_cloud.response_cache_enabled);
 
         let response_cache_ttl_secs = optional_env("LLM_RESPONSE_CACHE_TTL_SECS")?
             .map(|s| s.parse::<u64>())
@@ -251,7 +260,7 @@ impl LlmConfig {
                 key: "LLM_RESPONSE_CACHE_TTL_SECS".to_string(),
                 message: format!("must be a non-negative integer: {e}"),
             })?
-            .unwrap_or(nearai.response_cache_ttl_secs);
+            .unwrap_or(lunarwing_cloud.response_cache_ttl_secs);
 
         let response_cache_max_entries = optional_env("LLM_RESPONSE_CACHE_MAX_ENTRIES")?
             .map(|s| s.parse::<usize>())
@@ -260,11 +269,11 @@ impl LlmConfig {
                 key: "LLM_RESPONSE_CACHE_MAX_ENTRIES".to_string(),
                 message: format!("must be a non-negative integer: {e}"),
             })?
-            .unwrap_or(nearai.response_cache_max_entries);
+            .unwrap_or(lunarwing_cloud.response_cache_max_entries);
 
         Ok(Self {
-            backend: if is_nearai {
-                "nearai".to_string()
+            backend: if is_lunarwing_cloud {
+                "lunarwing_cloud".to_string()
             } else if is_openai_codex {
                 "openai_codex".to_string()
             } else if let Some(ref p) = provider {
@@ -273,7 +282,7 @@ impl LlmConfig {
                 backend_lower
             },
             session,
-            nearai,
+            lunarwing_cloud,
             provider,
             openai_codex,
             request_timeout_secs,
@@ -775,7 +784,7 @@ mod tests {
     }
 
     #[test]
-    fn nearai_backend_has_no_registry_provider() {
+    fn lunarwing_cloud_backend_has_no_registry_provider() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -784,7 +793,7 @@ mod tests {
 
         let settings = Settings::default();
         let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "nearai");
+        assert_eq!(cfg.backend, "lunarwing_cloud");
         assert!(cfg.provider.is_none());
     }
 
@@ -839,25 +848,20 @@ mod tests {
     }
 
     #[test]
-    fn nearai_aliases_all_resolve_to_nearai() {
+    fn lunarwing_cloud_backend_resolves_to_lunarwing_cloud() {
         let _guard = lock_env();
 
-        for alias in &["nearai", "near_ai", "near"] {
-            // SAFETY: Under ENV_MUTEX.
-            unsafe {
-                std::env::set_var("LLM_BACKEND", alias);
-            }
-            let settings = Settings::default();
-            let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-            assert_eq!(
-                cfg.backend, "nearai",
-                "alias '{alias}' should resolve to 'nearai'"
-            );
-            assert!(
-                cfg.provider.is_none(),
-                "nearai should not have a registry provider"
-            );
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::set_var("LLM_BACKEND", "lunarwing_cloud");
         }
+        let settings = Settings::default();
+        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
+        assert_eq!(cfg.backend, "lunarwing_cloud");
+        assert!(
+            cfg.provider.is_none(),
+            "lunarwing_cloud should not have a registry provider"
+        );
 
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -1091,7 +1095,7 @@ mod tests {
     // ── Decorator chain LLM_* env var tests ────────────────────────
 
     #[test]
-    fn llm_max_retries_overrides_nearai_default() {
+    fn llm_max_retries_overrides_lunarwing_cloud_default() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -1109,7 +1113,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_max_retries_falls_back_to_nearai() {
+    fn llm_max_retries_falls_back_to_lunarwing_cloud() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -1120,7 +1124,7 @@ mod tests {
         let cfg = LlmConfig::resolve(&Settings::default()).expect("resolve");
         assert_eq!(
             cfg.max_retries, 3,
-            "should fall back to NEARAI_MAX_RETRIES default"
+            "should fall back to LUNARWING_CLOUD_MAX_RETRIES default"
         );
     }
 
@@ -1147,7 +1151,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_response_cache_enabled_overrides_nearai() {
+    fn llm_response_cache_enabled_overrides_lunarwing_cloud() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -1165,7 +1169,7 @@ mod tests {
     }
 
     #[test]
-    fn llm_circuit_breaker_threshold_overrides_nearai() {
+    fn llm_circuit_breaker_threshold_overrides_lunarwing_cloud() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
@@ -1182,17 +1186,17 @@ mod tests {
         }
     }
 
-    // ── Conditional NearAI URL validation tests ────────────────────
+    // ── Conditional LunarWing Cloud URL validation tests ────────────────────
 
     #[test]
-    fn non_nearai_backend_skips_nearai_url_validation() {
+    fn non_lunarwing_cloud_backend_skips_lunarwing_cloud_url_validation() {
         let _guard = lock_env();
         clear_openai_compatible_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
-            std::env::remove_var("NEARAI_AUTH_URL");
-            std::env::remove_var("NEARAI_BASE_URL");
-            std::env::remove_var("NEARAI_API_KEY");
+            std::env::remove_var("LUNARWING_CLOUD_AUTH_URL");
+            std::env::remove_var("LUNARWING_CLOUD_BASE_URL");
+            std::env::remove_var("LUNARWING_CLOUD_API_KEY");
         }
 
         let settings = Settings {
@@ -1201,12 +1205,12 @@ mod tests {
             ..Default::default()
         };
 
-        // Should succeed even though NearAI default URLs point to external hosts.
+        // Should succeed even though LunarWing Cloud default URLs point to external hosts.
         // Previously this could fail in air-gapped environments.
         let result = LlmConfig::resolve(&settings);
         assert!(
             result.is_ok(),
-            "non-NearAI backend should not fail due to NearAI URL validation: {:?}",
+            "non-LunarWing Cloud backend should not fail due to LunarWing Cloud URL validation: {:?}",
             result.err()
         );
     }

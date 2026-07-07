@@ -38,6 +38,6 @@ Via settings.json:
 | Provider | Key | Base URL | Notes |
 |----------|-----|----------|-------|
 | `openai` | `OPENAI_API_KEY` | Default OpenAI API | Standard OpenAI embeddings |
-| `nearai` | NEAR AI auth | — | Uses NEAR AI infrastructure |
+| `lunarwing_cloud` | LunarWing Cloud auth | — | Uses LunarWing Cloud infrastructure |
 | `ollama` | — | `OLLAMA_BASE_URL` | Local Ollama instance |
 | `openai_compatible` | `OPENAI_API_KEY` | `EMBEDDING_BASE_URL` or settings `base_url` | Any OpenAI-compatible endpoint |

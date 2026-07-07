@@ -23,14 +23,14 @@ const MAX_RETRIES: u32 = 3;
 
 struct WebSearchTool;
 
-impl exports::near::agent::tool::Guest for WebSearchTool {
-    fn execute(req: exports::near::agent::tool::Request) -> exports::near::agent::tool::Response {
+impl exports::lunarwing::agent::tool::Guest for WebSearchTool {
+    fn execute(req: exports::lunarwing::agent::tool::Request) -> exports::lunarwing::agent::tool::Response {
         match execute_inner(&req.params) {
-            Ok(result) => exports::near::agent::tool::Response {
+            Ok(result) => exports::lunarwing::agent::tool::Response {
                 output: Some(result),
                 error: None,
             },
-            Err(e) => exports::near::agent::tool::Response {
+            Err(e) => exports::lunarwing::agent::tool::Response {
                 output: None,
                 error: Some(e),
             },
@@ -127,7 +127,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
     }
 
     // Pre-flight: verify API key is available.
-    if !near::agent::host::secret_exists("brave_api_key") {
+    if !lunarwing::agent::host::secret_exists("brave_api_key") {
         return Err(
             "Brave API key not found in secret store. Set it with: \
              lunarwing secret set brave_api_key <key>. \
@@ -152,7 +152,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
             attempt += 1;
 
             let resp =
-                near::agent::host::http_request("GET", &url, &headers.to_string(), None, None)
+                lunarwing::agent::host::http_request("GET", &url, &headers.to_string(), None, None)
                     .map_err(|e| format!("HTTP request failed: {e}"))?;
 
             if resp.status >= 200 && resp.status < 300 {
@@ -160,8 +160,8 @@ fn execute_inner(params: &str) -> Result<String, String> {
             }
 
             if attempt < MAX_RETRIES && (resp.status == 429 || resp.status >= 500) {
-                near::agent::host::log(
-                    near::agent::host::LogLevel::Warn,
+                lunarwing::agent::host::log(
+                    lunarwing::agent::host::LogLevel::Warn,
                     &format!(
                         "Brave API error {} (attempt {}/{}). Retrying...",
                         resp.status, attempt, MAX_RETRIES

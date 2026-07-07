@@ -1,7 +1,7 @@
 //! LLM integration for the agent.
 //!
 //! Supports multiple backends:
-//! - **NEAR AI** (default): Session token or API key auth via Chat Completions API
+//! - **LunarWing Cloud** (default): Session token or API key auth via Chat Completions API
 //! - **OpenAI**: Direct API access with your own key
 //! - **Ollama**: Local model inference
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
@@ -13,7 +13,7 @@ pub mod config;
 pub mod costs;
 pub mod error;
 pub mod failover;
-mod nearai_chat;
+mod lunarwing_cloud_chat;
 pub mod oauth_helpers;
 pub mod openai_codex_provider;
 pub mod openai_codex_session;
@@ -39,10 +39,12 @@ pub mod reasoning_models;
 pub mod vision_models;
 
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider};
-pub use config::{LlmConfig, NearAiConfig, OpenAiCodexConfig, RegistryProviderConfig};
+pub use config::{LlmConfig, LunarWingCloudConfig, OpenAiCodexConfig, RegistryProviderConfig};
 pub use error::LlmError;
 pub use failover::{CooldownConfig, FailoverProvider};
-pub use nearai_chat::{DEFAULT_MODEL, ModelInfo, NearAiChatProvider, default_models};
+pub use lunarwing_cloud_chat::{
+    DEFAULT_MODEL, LunarWingCloudChatProvider, ModelInfo, default_models,
+};
 pub use openai_codex_provider::OpenAiCodexProvider;
 pub use openai_codex_session::{OpenAiCodexSession, OpenAiCodexSessionManager};
 pub use provider::{
@@ -70,12 +72,12 @@ use std::sync::Arc;
 use rig::client::CompletionClient;
 use secrecy::ExposeSecret;
 
-// LlmConfig, NearAiConfig, RegistryProviderConfig, and LlmError are
+// LlmConfig, LunarWingCloudConfig, RegistryProviderConfig, and LlmError are
 // re-exported via `pub use` above from config and error submodules.
 
 /// Create an LLM provider based on configuration.
 ///
-/// - NearAI backend: Uses session manager for authentication
+/// - LunarWing Cloud backend: Uses session manager for authentication
 /// - Registry providers: Looked up by protocol and constructed generically
 pub async fn create_llm_provider(
     config: &LlmConfig,
@@ -83,8 +85,8 @@ pub async fn create_llm_provider(
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
     let timeout = config.request_timeout_secs;
 
-    if config.backend == "nearai" || config.backend == "near_ai" || config.backend == "near" {
-        return create_llm_provider_with_config(&config.nearai, session, timeout);
+    if config.backend == "lunarwing_cloud" {
+        return create_llm_provider_with_config(&config.lunarwing_cloud, session, timeout);
     }
 
     if config.backend == "openai_codex" {
@@ -106,12 +108,12 @@ pub async fn create_llm_provider(
     create_registry_provider(reg_config, timeout)
 }
 
-/// Create an LLM provider from a `NearAiConfig` directly.
+/// Create an LLM provider from a `LunarWingCloudConfig` directly.
 ///
 /// This is useful when constructing additional providers for failover,
 /// where only the model name differs from the primary config.
 pub fn create_llm_provider_with_config(
-    config: &NearAiConfig,
+    config: &LunarWingCloudConfig,
     session: Arc<SessionManager>,
     request_timeout_secs: u64,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
@@ -125,9 +127,9 @@ pub fn create_llm_provider_with_config(
         base_url = %config.base_url,
         auth = auth_mode,
         timeout_secs = request_timeout_secs,
-        "Using NEAR AI (Chat Completions API)"
+        "Using LunarWing Cloud (Chat Completions API)"
     );
-    Ok(Arc::new(NearAiChatProvider::new_with_timeout(
+    Ok(Arc::new(LunarWingCloudChatProvider::new_with_timeout(
         config.clone(),
         session,
         request_timeout_secs,
@@ -349,7 +351,7 @@ async fn create_openai_codex_provider(
 ///
 /// Resolution order:
 /// 1. `LLM_CHEAP_MODEL` (generic, works with any backend)
-/// 2. `NEARAI_CHEAP_MODEL` (NearAI-only, backward compatibility)
+/// 2. `LUNARWING_CLOUD_CHEAP_MODEL` (LunarWing Cloud-only, backward compatibility)
 ///
 /// Returns `None` if no cheap model is configured.
 pub fn create_cheap_llm_provider(
@@ -366,15 +368,15 @@ pub fn create_cheap_llm_provider(
 /// Create a cheap provider for a specific backend.
 ///
 /// Handles backend-specific provider construction:
-/// - `nearai` — clones NearAiConfig, swaps model, uses `create_llm_provider_with_config`
+/// - `lunarwing_cloud` — clones LunarWingCloudConfig, swaps model, uses `create_llm_provider_with_config`
 /// - All others — clones `RegistryProviderConfig`, swaps model, uses `create_registry_provider`
 fn create_cheap_provider_for_backend(
     config: &LlmConfig,
     session: Arc<SessionManager>,
     cheap_model: &str,
 ) -> Result<Option<Arc<dyn LlmProvider>>, LlmError> {
-    if config.backend == "nearai" {
-        let mut cheap_config = config.nearai.clone();
+    if config.backend == "lunarwing_cloud" {
+        let mut cheap_config = config.lunarwing_cloud.clone();
         cheap_config.model = cheap_model.to_string();
         let provider =
             create_llm_provider_with_config(&cheap_config, session, config.request_timeout_secs)?;
@@ -477,40 +479,43 @@ pub async fn build_provider_chain(
     };
 
     // 3. Failover
-    let llm: Arc<dyn LlmProvider> = if let Some(ref fallback_model) = config.nearai.fallback_model {
-        if fallback_model == &config.nearai.model {
-            tracing::warn!(
-                "fallback_model is the same as primary model, failover may not be effective"
+    let llm: Arc<dyn LlmProvider> =
+        if let Some(ref fallback_model) = config.lunarwing_cloud.fallback_model {
+            if fallback_model == &config.lunarwing_cloud.model {
+                tracing::warn!(
+                    "fallback_model is the same as primary model, failover may not be effective"
+                );
+            }
+            let mut fallback_config = config.lunarwing_cloud.clone();
+            fallback_config.model = fallback_model.clone();
+            let fallback = create_llm_provider_with_config(
+                &fallback_config,
+                session.clone(),
+                config.request_timeout_secs,
+            )?;
+            tracing::debug!(
+                primary = %llm.model_name(),
+                fallback = %fallback.model_name(),
+                "LLM failover enabled"
             );
-        }
-        let mut fallback_config = config.nearai.clone();
-        fallback_config.model = fallback_model.clone();
-        let fallback = create_llm_provider_with_config(
-            &fallback_config,
-            session.clone(),
-            config.request_timeout_secs,
-        )?;
-        tracing::debug!(
-            primary = %llm.model_name(),
-            fallback = %fallback.model_name(),
-            "LLM failover enabled"
-        );
-        let fallback: Arc<dyn LlmProvider> = if retry_config.max_retries > 0 {
-            Arc::new(RetryProvider::new(fallback, retry_config.clone()))
+            let fallback: Arc<dyn LlmProvider> = if retry_config.max_retries > 0 {
+                Arc::new(RetryProvider::new(fallback, retry_config.clone()))
+            } else {
+                fallback
+            };
+            let cooldown_config = CooldownConfig {
+                cooldown_duration: std::time::Duration::from_secs(
+                    config.lunarwing_cloud.failover_cooldown_secs,
+                ),
+                failure_threshold: config.lunarwing_cloud.failover_cooldown_threshold,
+            };
+            Arc::new(FailoverProvider::with_cooldown(
+                vec![llm, fallback],
+                cooldown_config,
+            )?)
         } else {
-            fallback
+            llm
         };
-        let cooldown_config = CooldownConfig {
-            cooldown_duration: std::time::Duration::from_secs(config.nearai.failover_cooldown_secs),
-            failure_threshold: config.nearai.failover_cooldown_threshold,
-        };
-        Arc::new(FailoverProvider::with_cooldown(
-            vec![llm, fallback],
-            cooldown_config,
-        )?)
-    } else {
-        llm
-    };
 
     // 4. Circuit breaker
     let llm: Arc<dyn LlmProvider> = if let Some(threshold) = config.circuit_breaker_threshold {
@@ -582,10 +587,10 @@ pub async fn build_provider_chain(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::config::NearAiConfig;
+    use crate::llm::config::LunarWingCloudConfig;
 
-    fn test_nearai_config() -> NearAiConfig {
-        NearAiConfig {
+    fn test_lunarwing_cloud_config() -> LunarWingCloudConfig {
+        LunarWingCloudConfig {
             model: "test-model".to_string(),
             cheap_model: None,
             base_url: "https://api.near.ai".to_string(),
@@ -604,17 +609,17 @@ mod tests {
     }
 
     fn test_llm_config() -> LlmConfig {
-        let nearai = test_nearai_config();
+        let lunarwing_cloud = test_lunarwing_cloud_config();
         LlmConfig {
-            backend: "nearai".to_string(),
+            backend: "lunarwing_cloud".to_string(),
             session: SessionConfig::default(),
-            max_retries: nearai.max_retries,
-            circuit_breaker_threshold: nearai.circuit_breaker_threshold,
-            circuit_breaker_recovery_secs: nearai.circuit_breaker_recovery_secs,
-            response_cache_enabled: nearai.response_cache_enabled,
-            response_cache_ttl_secs: nearai.response_cache_ttl_secs,
-            response_cache_max_entries: nearai.response_cache_max_entries,
-            nearai,
+            max_retries: lunarwing_cloud.max_retries,
+            circuit_breaker_threshold: lunarwing_cloud.circuit_breaker_threshold,
+            circuit_breaker_recovery_secs: lunarwing_cloud.circuit_breaker_recovery_secs,
+            response_cache_enabled: lunarwing_cloud.response_cache_enabled,
+            response_cache_ttl_secs: lunarwing_cloud.response_cache_ttl_secs,
+            response_cache_max_entries: lunarwing_cloud.response_cache_max_entries,
+            lunarwing_cloud,
             provider: None,
             request_timeout_secs: 120,
             llm_turn_budget_secs: 270,
@@ -635,9 +640,9 @@ mod tests {
     }
 
     #[test]
-    fn test_create_cheap_llm_provider_creates_provider_with_nearai_cheap_model() {
+    fn test_create_cheap_llm_provider_creates_provider_with_lunarwing_cloud_cheap_model() {
         let mut config = test_llm_config();
-        config.nearai.cheap_model = Some("cheap-test-model".to_string());
+        config.lunarwing_cloud.cheap_model = Some("cheap-test-model".to_string());
 
         let session = Arc::new(SessionManager::new(SessionConfig::default()));
         let result = create_cheap_llm_provider(&config, session);
@@ -649,9 +654,9 @@ mod tests {
     }
 
     #[test]
-    fn test_create_cheap_llm_provider_generic_overrides_nearai() {
+    fn test_create_cheap_llm_provider_generic_overrides_lunarwing_cloud() {
         let mut config = test_llm_config();
-        config.nearai.cheap_model = Some("nearai-cheap".to_string());
+        config.lunarwing_cloud.cheap_model = Some("lunarwing_cloud-cheap".to_string());
         config.cheap_model = Some("generic-cheap".to_string());
 
         let session = Arc::new(SessionManager::new(SessionConfig::default()));
@@ -663,15 +668,16 @@ mod tests {
         assert_eq!(
             provider.unwrap().model_name(),
             "generic-cheap",
-            "LLM_CHEAP_MODEL should take priority over NEARAI_CHEAP_MODEL"
+            "LLM_CHEAP_MODEL should take priority over LUNARWING_CLOUD_CHEAP_MODEL"
         );
     }
 
     #[test]
-    fn test_create_cheap_llm_provider_nearai_cheap_ignored_for_non_nearai_backend() {
+    fn test_create_cheap_llm_provider_lunarwing_cloud_cheap_ignored_for_non_lunarwing_cloud_backend()
+     {
         let mut config = test_llm_config();
         config.backend = "openai".to_string();
-        config.nearai.cheap_model = Some("cheap-test-model".to_string());
+        config.lunarwing_cloud.cheap_model = Some("cheap-test-model".to_string());
 
         let session = Arc::new(SessionManager::new(SessionConfig::default()));
         let result = create_cheap_llm_provider(&config, session);
@@ -679,7 +685,7 @@ mod tests {
         assert!(result.is_ok());
         assert!(
             result.unwrap().is_none(),
-            "NEARAI_CHEAP_MODEL should be ignored when backend is not nearai"
+            "LUNARWING_CLOUD_CHEAP_MODEL should be ignored when backend is not lunarwing_cloud"
         );
     }
 
@@ -688,18 +694,18 @@ mod tests {
         // Generic takes priority
         let mut config = test_llm_config();
         config.cheap_model = Some("generic".to_string());
-        config.nearai.cheap_model = Some("nearai".to_string());
+        config.lunarwing_cloud.cheap_model = Some("lunarwing_cloud".to_string());
         assert_eq!(config.cheap_model_name(), Some("generic"));
 
-        // NearAI fallback when backend is nearai
+        // LunarWing Cloud fallback when backend is lunarwing_cloud
         let mut config = test_llm_config();
-        config.nearai.cheap_model = Some("nearai".to_string());
-        assert_eq!(config.cheap_model_name(), Some("nearai"));
+        config.lunarwing_cloud.cheap_model = Some("lunarwing_cloud".to_string());
+        assert_eq!(config.cheap_model_name(), Some("lunarwing_cloud"));
 
-        // NearAI ignored for non-nearai backend
+        // LunarWing Cloud ignored for non-lunarwing_cloud backend
         let mut config = test_llm_config();
         config.backend = "openai".to_string();
-        config.nearai.cheap_model = Some("nearai".to_string());
+        config.lunarwing_cloud.cheap_model = Some("lunarwing_cloud".to_string());
         assert_eq!(config.cheap_model_name(), None);
 
         // None when nothing configured

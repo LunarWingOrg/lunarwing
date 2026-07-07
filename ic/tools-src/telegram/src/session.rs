@@ -68,7 +68,7 @@ impl Session {
 
 /// Load session from workspace (returns None if not found or unparseable).
 pub fn load_session() -> Option<Session> {
-    let data = crate::near::agent::host::workspace_read("telegram/session.json")?;
+    let data = crate::lunarwing::agent::host::workspace_read("telegram/session.json")?;
     serde_json::from_str(&data).ok()
 }
 

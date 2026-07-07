@@ -12,7 +12,7 @@ Automatic model selection based on request complexity. The router analyzes each 
 
 1. **Cost optimization** — Simple requests ("hi", "what time is it") don't need expensive models
 2. **User experience** — Simple requests return faster with lightweight models
-3. **NEAR AI native** — Default backend uses NEAR AI inference where costs vary by model
+3. **LunarWing Cloud native** — Default backend uses LunarWing Cloud inference where costs vary by model
 4. **Zero-config value** — Users benefit immediately without configuration
 5. **Not just power users** — Everyone gets smart defaults, power users can override
 
@@ -98,7 +98,7 @@ Fast-path rules that bypass scoring for obvious cases:
 ### Configuration
 
 > **Note:** The current implementation supports smart routing via
-> `NEARAI_CHEAP_MODEL` and `SMART_ROUTING_CASCADE` env vars, plus
+> `LUNARWING_CLOUD_CHEAP_MODEL` and `SMART_ROUTING_CASCADE` env vars, plus
 > `domain_keywords` on `SmartRoutingConfig`. The full `llm.routing` YAML
 > schema below is the target design — not all knobs are wired yet.
 
@@ -163,7 +163,7 @@ llm:
 
 - Tier→model mappings come from config
 - Default mappings use `-latest` patterns where supported
-- NEAR AI backend handles actual model resolution
+- LunarWing Cloud backend handles actual model resolution
 - Router only knows about tiers
 
 ### Layers of Control

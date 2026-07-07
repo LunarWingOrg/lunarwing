@@ -12,11 +12,11 @@ wit_bindgen::generate!({
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-use exports::near::agent::channel::{
+use exports::lunarwing::agent::channel::{
     AgentResponse, Attachment, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse,
     PollConfig, StatusType, StatusUpdate,
 };
-use near::agent::channel_host::{self, EmittedMessage, InboundAttachment};
+use lunarwing::agent::channel_host::{self, EmittedMessage, InboundAttachment};
 
 const CONFIG_PATH: &str = "config.json";
 const CURSOR_PATH: &str = "cursor.txt";

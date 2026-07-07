@@ -5,7 +5,7 @@ wit_bindgen::generate!({
 
 use serde::{Deserialize, Serialize};
 
-use exports::near::agent::tool;
+use exports::lunarwing::agent::tool;
 
 // ── Config ─────────────────────────────────────────────────────
 
@@ -30,13 +30,13 @@ fn default_runtime_type() -> String {
 
 fn load_config() -> Result<MulticaConfig, String> {
     // Try structured JSON config first
-    if let Some(content) = near::agent::host::workspace_read("config/multica.json") {
+    if let Some(content) = lunarwing::agent::host::workspace_read("config/multica.json") {
         return serde_json::from_str(&content)
             .map_err(|e| format!("failed to parse config/multica.json: {e}"));
     }
 
     // Fall back to individual workspace keys
-    let url = near::agent::host::workspace_read("config/multica_url")
+    let url = lunarwing::agent::host::workspace_read("config/multica_url")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .ok_or(
@@ -44,18 +44,18 @@ fn load_config() -> Result<MulticaConfig, String> {
              {\"url\": \"https://...\", \"workspace_id\": \"...\"}  \
              Or set individual keys: config/multica_url, config/multica_workspace_id",
         )?;
-    let workspace_id = near::agent::host::workspace_read("config/multica_workspace_id")
+    let workspace_id = lunarwing::agent::host::workspace_read("config/multica_workspace_id")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .ok_or("config/multica_workspace_id not found in workspace")?;
-    let runtime_id = near::agent::host::workspace_read("config/multica_runtime_id")
+    let runtime_id = lunarwing::agent::host::workspace_read("config/multica_runtime_id")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let daemon_id = near::agent::host::workspace_read("config/multica_daemon_id")
+    let daemon_id = lunarwing::agent::host::workspace_read("config/multica_daemon_id")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(default_daemon_id);
-    let runtime_type = near::agent::host::workspace_read("config/multica_runtime_type")
+    let runtime_type = lunarwing::agent::host::workspace_read("config/multica_runtime_type")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(default_runtime_type);
@@ -128,21 +128,21 @@ fn json_headers() -> String {
 }
 
 fn http_get(url: &str) -> Result<(u16, String), String> {
-    let resp = near::agent::host::http_request("GET", url, &json_headers(), None, Some(15000))
+    let resp = lunarwing::agent::host::http_request("GET", url, &json_headers(), None, Some(15000))
         .map_err(|e| format!("HTTP GET failed: {e}"))?;
     Ok((resp.status, String::from_utf8_lossy(&resp.body).to_string()))
 }
 
 fn http_post(url: &str, body: &[u8]) -> Result<(u16, String), String> {
     let resp =
-        near::agent::host::http_request("POST", url, &json_headers(), Some(body), Some(15000))
+        lunarwing::agent::host::http_request("POST", url, &json_headers(), Some(body), Some(15000))
             .map_err(|e| format!("HTTP POST failed: {e}"))?;
     Ok((resp.status, String::from_utf8_lossy(&resp.body).to_string()))
 }
 
 fn http_put(url: &str, body: &[u8]) -> Result<(u16, String), String> {
     let resp =
-        near::agent::host::http_request("PUT", url, &json_headers(), Some(body), Some(15000))
+        lunarwing::agent::host::http_request("PUT", url, &json_headers(), Some(body), Some(15000))
             .map_err(|e| format!("HTTP PUT failed: {e}"))?;
     Ok((resp.status, String::from_utf8_lossy(&resp.body).to_string()))
 }
@@ -245,7 +245,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
     let input: ToolInput =
         serde_json::from_str(params_json).map_err(|e| format!("invalid parameters: {e}"))?;
 
-    if !near::agent::host::secret_exists("multica_api_token") {
+    if !lunarwing::agent::host::secret_exists("multica_api_token") {
         return Err(
             "Secret 'multica_api_token' not configured. Run: lunarwing tool auth multica-bridge"
                 .into(),
@@ -290,15 +290,15 @@ fn action_register(base: &str, config: &MulticaConfig) -> Result<String, String>
         }]
     });
     let url = api_url(base, "/api/daemon/register");
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         &format!("Registering with Multica at {url}"),
     );
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "register")?;
 
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         "Multica registration successful",
     );
     Ok(resp_body)
@@ -594,8 +594,8 @@ fn action_export_skill(
     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
     require_ok(status, &resp_body, "export_skill")?;
 
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         &format!("Exported skill '{name}' to Multica board"),
     );
     Ok(resp_body)

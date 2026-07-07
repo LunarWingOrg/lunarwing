@@ -4,8 +4,8 @@ wit_bindgen::generate!({
     path: "../wit/tool.wit",
 });
 
-use near::agent::host::{self, LogLevel};
-use exports::near::agent::tool::{Guest, Request, Response};
+use lunarwing::agent::host::{self, LogLevel};
+use exports::lunarwing::agent::tool::{Guest, Request, Response};
 use serde::{Deserialize, Serialize};
 
 // Input structure for job prompt requests

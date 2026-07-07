@@ -2002,7 +2002,7 @@ mod tests {
                 "event_type": "issue.opened",
                 "filters": {
                     "repository": {
-                        "owner": "nearai",
+                        "owner": "lunarwing_cloud",
                         "name": "lunarwing"
                     }
                 }

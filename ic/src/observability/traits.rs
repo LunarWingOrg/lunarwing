@@ -94,16 +94,16 @@ mod tests {
     #[test]
     fn event_variants_are_constructible() {
         let _ = ObserverEvent::AgentStart {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
         };
         let _ = ObserverEvent::LlmRequest {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
             message_count: 3,
         };
         let _ = ObserverEvent::LlmResponse {
-            provider: "nearai".into(),
+            provider: "lunarwing_cloud".into(),
             model: "test".into(),
             duration: Duration::from_millis(100),
             success: true,

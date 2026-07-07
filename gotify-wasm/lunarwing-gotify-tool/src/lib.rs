@@ -11,7 +11,7 @@ wit_bindgen::generate!({
 
 use serde::{Deserialize, Serialize};
 
-use exports::near::agent::tool;
+use exports::lunarwing::agent::tool;
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -106,21 +106,21 @@ struct ResolvedConfig {
 }
 
 fn resolve_gotify_config() -> ResolvedConfig {
-    if let Some(content) = near::agent::host::workspace_read("config/gotify.json") {
+    if let Some(content) = lunarwing::agent::host::workspace_read("config/gotify.json") {
         if let Ok(config) = serde_json::from_str::<GotifyConfig>(&content) {
             let url = config.url.trim_end_matches('/').to_string();
             let title = config
                 .title
                 .filter(|t| !t.is_empty())
                 .unwrap_or_else(|| DEFAULT_TITLE.to_string());
-            near::agent::host::log(
-                near::agent::host::LogLevel::Info,
+            lunarwing::agent::host::log(
+                lunarwing::agent::host::LogLevel::Info,
                 &format!("Using Gotify config from workspace: url={url}, title={title}"),
             );
             return ResolvedConfig { url, title };
         }
-        near::agent::host::log(
-            near::agent::host::LogLevel::Warn,
+        lunarwing::agent::host::log(
+            lunarwing::agent::host::LogLevel::Warn,
             "config/gotify.json exists but failed to parse; using defaults",
         );
     }
@@ -150,7 +150,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         }
     };
 
-    if !near::agent::host::secret_exists("gotify_app_token") {
+    if !lunarwing::agent::host::secret_exists("gotify_app_token") {
         return Err("Secret 'gotify_app_token' not configured.".into());
     }
 
@@ -166,8 +166,8 @@ fn dispatch(params_json: &str) -> Result<String, String> {
 
     let url = format!("{}/message", config.url);
 
-    near::agent::host::log(
-        near::agent::host::LogLevel::Info,
+    lunarwing::agent::host::log(
+        lunarwing::agent::host::LogLevel::Info,
         &format!("Sending Gotify notification: {}", msg.title),
     );
 
@@ -175,7 +175,7 @@ fn dispatch(params_json: &str) -> Result<String, String> {
         "Content-Type": "application/json"
     });
 
-    let response = near::agent::host::http_request(
+    let response = lunarwing::agent::host::http_request(
         "POST",
         &url,
         &headers.to_string(),
@@ -188,8 +188,8 @@ fn dispatch(params_json: &str) -> Result<String, String> {
     let resp_body = String::from_utf8_lossy(&response.body).to_string();
 
     if status >= 200 && status < 300 {
-        near::agent::host::log(
-            near::agent::host::LogLevel::Info,
+        lunarwing::agent::host::log(
+            lunarwing::agent::host::LogLevel::Info,
             &format!("Gotify notification sent (HTTP {status})"),
         );
         Ok(format!(

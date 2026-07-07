@@ -2,7 +2,7 @@
 //!
 //! Uses wasmtime::component::bindgen! to generate typed bindings from the WIT
 //! interface, ensuring all host functions are properly registered under the
-//! correct `near:agent/host` namespace.
+//! correct `lunarwing:agent/host` namespace.
 //!
 //! Each execution creates a fresh instance (NEAR pattern) to ensure
 //! isolation and deterministic behavior.
@@ -33,9 +33,9 @@ use crate::tools::wasm::runtime::{EPOCH_TICK_INTERVAL, PreparedModule, WasmToolR
 // Generate component model bindings from the WIT file.
 //
 // This creates:
-// - `near::agent::host::Host` trait + `add_to_linker()` for the import interface
+// - `lunarwing::agent::host::Host` trait + `add_to_linker()` for the import interface
 // - `SandboxedTool` struct with `instantiate()` for the world
-// - `exports::near::agent::tool::*` types for the export interface
+// - `exports::lunarwing::agent::tool::*` types for the export interface
 wasmtime::component::bindgen!({
     path: "wit/tool.wit",
     world: "sandboxed-tool",
@@ -45,7 +45,7 @@ wasmtime::component::bindgen!({
 
 // Alias the export interface types for convenience.
 use crate::cli::oauth_defaults;
-use exports::near::agent::tool as wit_tool;
+use exports::lunarwing::agent::tool as wit_tool;
 
 /// Configuration needed to refresh an expired OAuth access token.
 ///
@@ -306,16 +306,16 @@ impl WasiView for StoreData {
 
 // Implement the generated Host trait from bindgen.
 //
-// This registers all 6 host functions under the `near:agent/host` namespace:
+// This registers all 6 host functions under the `lunarwing:agent/host` namespace:
 // log, now-millis, workspace-read, http-request, secret-exists, tool-invoke
-impl near::agent::host::Host for StoreData {
-    fn log(&mut self, level: near::agent::host::LogLevel, message: String) {
+impl lunarwing::agent::host::Host for StoreData {
+    fn log(&mut self, level: lunarwing::agent::host::LogLevel, message: String) {
         let log_level = match level {
-            near::agent::host::LogLevel::Trace => LogLevel::Trace,
-            near::agent::host::LogLevel::Debug => LogLevel::Debug,
-            near::agent::host::LogLevel::Info => LogLevel::Info,
-            near::agent::host::LogLevel::Warn => LogLevel::Warn,
-            near::agent::host::LogLevel::Error => LogLevel::Error,
+            lunarwing::agent::host::LogLevel::Trace => LogLevel::Trace,
+            lunarwing::agent::host::LogLevel::Debug => LogLevel::Debug,
+            lunarwing::agent::host::LogLevel::Info => LogLevel::Info,
+            lunarwing::agent::host::LogLevel::Warn => LogLevel::Warn,
+            lunarwing::agent::host::LogLevel::Error => LogLevel::Error,
         };
         let _ = self.host_state.log(log_level, message);
     }
@@ -335,7 +335,7 @@ impl near::agent::host::Host for StoreData {
         headers_json: String,
         body: Option<Vec<u8>>,
         timeout_ms: Option<u32>,
-    ) -> Result<near::agent::host::HttpResponse, String> {
+    ) -> Result<lunarwing::agent::host::HttpResponse, String> {
         // Inject credentials into URL (e.g., replace {TELEGRAM_BOT_TOKEN})
         let injected_url = self.inject_credentials(&url, "url");
 
@@ -455,7 +455,7 @@ impl near::agent::host::Host for StoreData {
                     .collect();
                 let resp_headers_json =
                     serde_json::to_string(&resp_headers).unwrap_or_else(|_| "{}".to_string());
-                return Ok(near::agent::host::HttpResponse {
+                return Ok(lunarwing::agent::host::HttpResponse {
                     status: resp.status,
                     headers_json: resp_headers_json,
                     body: resp.body.into_bytes(),
@@ -560,7 +560,7 @@ impl near::agent::host::Host for StoreData {
                     .map_err(|e| format!("Potential secret leak in response: {}", e))?;
             }
 
-            Ok(near::agent::host::HttpResponse {
+            Ok(lunarwing::agent::host::HttpResponse {
                 status,
                 headers_json,
                 body,
@@ -637,7 +637,7 @@ impl near::agent::host::Host for StoreData {
         &mut self,
         host: String,
         command: String,
-    ) -> Result<near::agent::host::SshResponse, String> {
+    ) -> Result<lunarwing::agent::host::SshResponse, String> {
         // Capability gate: the tool must have been granted the ssh capability
         // with this host in its allowlist (defense-in-depth on top of the
         // [[ssh.hosts]] map, which is itself the hard egress allowlist).
@@ -708,7 +708,7 @@ impl near::agent::host::Host for StoreData {
                 .map_err(|e| format!("Potential secret leak in ssh stderr blocked: {e}"))?;
         }
 
-        Ok(near::agent::host::SshResponse {
+        Ok(lunarwing::agent::host::SshResponse {
             exit_code: cmd_result.exit_code,
             stdout: cmd_result.stdout,
             stderr: cmd_result.stderr,
@@ -1077,14 +1077,14 @@ impl WasmToolWrapper {
     ///
     /// Uses the bindgen-generated `add_to_linker` function to properly register
     /// all host functions with correct component model signatures under the
-    /// `near:agent/host` namespace.
+    /// `lunarwing:agent/host` namespace.
     fn add_host_functions(linker: &mut Linker<StoreData>) -> Result<(), WasmError> {
         // Add WASI support (required by components built with wasm32-wasip2)
         wasmtime_wasi::add_to_linker_sync(linker)
             .map_err(|e| WasmError::ConfigError(format!("Failed to add WASI functions: {}", e)))?;
 
         // Add our custom host interface using the generated add_to_linker
-        near::agent::host::add_to_linker(linker, |state| state)
+        lunarwing::agent::host::add_to_linker(linker, |state| state)
             .map_err(|e| WasmError::ConfigError(format!("Failed to add host functions: {}", e)))?;
 
         Ok(())
@@ -1140,7 +1140,7 @@ impl WasmToolWrapper {
         let instance =
             SandboxedTool::instantiate(&mut store, &component, &linker).map_err(|e| {
                 let msg = e.to_string();
-                if msg.contains("near:agent") || msg.contains("import") {
+                if msg.contains("lunarwing:agent") || msg.contains("import") {
                     WasmError::InstantiationFailed(format!(
                         "{msg}. This usually means the extension was compiled against \
                          a different WIT version than the host supports. \
@@ -1153,7 +1153,7 @@ impl WasmToolWrapper {
             })?;
 
         // Get typed interface — used for execute.
-        let tool_iface = instance.near_agent_tool();
+        let tool_iface = instance.lunarwing_agent_tool();
 
         // Prepare the request
         let params_json = serde_json::to_string(&params)
@@ -1223,7 +1223,7 @@ pub(super) fn extract_wasm_metadata(
     WasmToolWrapper::add_host_functions(&mut linker)?;
     let instance = SandboxedTool::instantiate(&mut store, component, &linker)
         .map_err(|e| WasmError::InstantiationFailed(e.to_string()))?;
-    let tool_iface = instance.near_agent_tool();
+    let tool_iface = instance.lunarwing_agent_tool();
 
     // Extract description (fall back to generic)
     let description = tool_iface

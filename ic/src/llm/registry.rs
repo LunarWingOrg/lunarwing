@@ -270,7 +270,7 @@ impl ProviderRegistry {
     /// Providers that should appear in the setup wizard's selection menu.
     ///
     /// Returns all providers that have a `setup` hint, in registry order.
-    /// NearAI is not in the registry (handled specially) so it won't appear here.
+    /// LunarWing Cloud is not in the registry (handled specially) so it won't appear here.
     pub fn selectable(&self) -> Vec<&ProviderDefinition> {
         // Deduplicate: only keep the last definition for each ID
         let mut seen = HashMap::new();
@@ -293,21 +293,18 @@ impl ProviderRegistry {
         result
     }
 
-    /// Check whether a backend string is a known provider (NearAI or registry).
+    /// Check whether a backend string is a known provider (LunarWing Cloud or registry).
     pub fn is_known(&self, backend: &str) -> bool {
-        backend == "nearai"
-            || backend == "near_ai"
-            || backend == "near"
-            || self.find(backend).is_some()
+        backend == "lunarwing_cloud" || self.find(backend).is_some()
     }
 
     /// Get the model env var for a backend string.
     ///
     /// Returns the registry provider's `model_env` if found,
-    /// or `"NEARAI_MODEL"` for the NearAI backend.
+    /// or `"LUNARWING_CLOUD_MODEL"` for the LunarWing Cloud backend.
     pub fn model_env_var(&self, backend: &str) -> &str {
-        if backend == "nearai" || backend == "near_ai" || backend == "near" {
-            return "NEARAI_MODEL";
+        if backend == "lunarwing_cloud" {
+            return "LUNARWING_CLOUD_MODEL";
         }
         self.find(backend)
             .map(|def| def.model_env.as_str())
@@ -417,12 +414,18 @@ mod tests {
     }
 
     #[test]
-    fn test_model_env_var_nearai() {
+    fn test_model_env_var_lunarwing_cloud() {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        assert_eq!(registry.model_env_var("nearai"), "NEARAI_MODEL");
-        assert_eq!(registry.model_env_var("near_ai"), "NEARAI_MODEL");
+        assert_eq!(
+            registry.model_env_var("lunarwing_cloud"),
+            "LUNARWING_CLOUD_MODEL"
+        );
+        assert_eq!(
+            registry.model_env_var("lunarwing_cloud"),
+            "LUNARWING_CLOUD_MODEL"
+        );
     }
 
     #[test]
@@ -448,7 +451,7 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        assert!(registry.is_known("nearai"));
+        assert!(registry.is_known("lunarwing_cloud"));
         assert!(registry.is_known("openai"));
         assert!(registry.is_known("ollama"));
         assert!(!registry.is_known("nonexistent"));

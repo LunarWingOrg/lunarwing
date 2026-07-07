@@ -437,7 +437,7 @@ mod tests {
     //
     // Verifies that RateLimited errors always have a duration (never None)
     // due to the 60-second fallback applied in all rate limit error creation sites
-    // (nearai_chat.rs, anthropic_oauth.rs, embeddings.rs).
+    // (lunarwing_cloud_chat.rs, anthropic_oauth.rs, embeddings.rs).
     #[test]
     fn rate_limited_error_always_has_duration() {
         let err = LlmError::RateLimited {
