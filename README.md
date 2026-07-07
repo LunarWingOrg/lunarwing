@@ -341,4 +341,10 @@ Full documentation index: [docs/README.md](docs/README.md)
 
 [![Chat on IRC](https://img.shields.io/badge/IRC-%23lunarwing-00b0aa?style=for-the-badge&labelColor=000000)](https://web.libera.chat/?channel=#lunarwing)
 
+## Codeberg
+
+Mirrored to Codeberg as of 2026-07-07
+
+https://codeberg.org/LunarWing/lunarwing
+
 #### See: COMMUNITY.md for more information
