@@ -108,7 +108,6 @@ lunarwing_skills = { path = "crates/lunarwing_skills", version = "1.1.9" }
 # Safety/sanitization
 lunarwing_safety = { path = "crates/lunarwing_safety", version = "1.1.9" }
 regex = "1"
-aho-corasick = "1"
 
 # Fuzzy string matching for the reflex router
 strsim = "0.11"
@@ -217,7 +216,6 @@ serde_json = "1"
 tokio-test = "0.4"
 tracing-test = "0.2"
 tokio-tungstenite = "0.26"
-testcontainers-modules = { version = "0.11", features = ["postgres"] }
 pretty_assertions = "1"
 tempfile = "3"
 insta = "1.46.3"
