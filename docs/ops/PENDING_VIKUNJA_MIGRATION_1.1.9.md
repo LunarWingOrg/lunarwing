@@ -1,7 +1,7 @@
 # PRE-RELEASE CHECKLIST for 1.1.9 Codename `Kiyome きよめ`
 **Open TODOs (1.1.9) — To be done before release**
 
-## TODO: Replace this document with only agent goal tasks for autonomous dev autoloop and move actual goals exclusively to Vikunja
+## TODO: Move actual goals exclusively to Vikunja and stop using this document. Archive it once first step is confirmed.
 
 ### Helps to do items in order (generally)
 
