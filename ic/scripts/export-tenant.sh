@@ -170,7 +170,7 @@ copy_key() {  # <src> <dest> <key>
 if $DRY_RUN; then
   note "[dry-run] would extract ${#LW_KEYS[@]}+ keys from lunarwing.env (incl. SECRETS_MASTER_KEY) and ${#BRIDGE_KEYS[@]} from xmpp-bridge.env; intra-host tokens are NOT carried"
 else
-  ( umask 077; : > "$WORK/manifest-lunarwing.env"; : > "$WORK/manifest-bridge.env" )
+  ( umask 077; : > "$WORK/manifest-lunarwing.env"; : > "$WORK/manifest-bridge.env"; : > "$WORK/manifest-vision.env" )
   for k in "${LW_KEYS[@]}"; do copy_key "$ENVF" "$WORK/manifest-lunarwing.env" "$k"; done
   # LLM_BASE_URL: carry ONLY a non-local custom endpoint; a local proxy URL is
   # host-specific (its port differs on the new host, which sets its own).
@@ -191,6 +191,23 @@ else
   for k in "${BRIDGE_KEYS[@]}"; do copy_key "$BRIDGE_ENVF" "$WORK/manifest-bridge.env" "$k"; done
   grep -q '^SECRETS_MASTER_KEY=' "$WORK/manifest-lunarwing.env" \
     || die "SECRETS_MASTER_KEY not found in $ENVF — refusing to export a bundle that can't decrypt the DB. Locate the key first."
+
+  # LunarVision OCR/vision sidecar: carry VL_URL, VL_MODEL, and the sidecar
+  # auth token so the target host preserves a custom VL backend and the same
+  # auth token (the port and internal OCR/health ports are host-specific and
+  # always re-allocated by add-tenant). Only carried if vision.env exists.
+  local vision_env="$LWROOT/env/vision.env"
+  if [[ -f "$vision_env" ]]; then
+    local vision_key
+    for vision_key in VL_URL VL_MODEL LUNARWING_AUTH_TOKEN; do
+      copy_key "$vision_env" "$WORK/manifest-vision.env" "$vision_key"
+    done
+    # OCR_PORT / OCR_HEALTH_PORT are host-specific (fixed internal ports); skip.
+    say "  manifest-vision.env:    $(grep -c '=' "$WORK/manifest-vision.env" 2>/dev/null || echo 0) keys"
+  else
+    note "no vision.env at $vision_env — vision sidecar config not carried"
+  fi
+
   say "  manifest-lunarwing.env: $(grep -c '=' "$WORK/manifest-lunarwing.env") keys (incl. SECRETS_MASTER_KEY)"
   say "  manifest-bridge.env:    $(grep -c '=' "$WORK/manifest-bridge.env" 2>/dev/null || echo 0) keys"
 fi

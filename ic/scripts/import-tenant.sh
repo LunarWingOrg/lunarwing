@@ -27,7 +27,7 @@
 # Usage (run as root on the new host):
 #   sudo ic/scripts/import-tenant.sh <bundle.tar> [--name <t>] [--start] [--old-stopped]
 #        [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]
-#        [--dry-run] [--yes] [--force]
+#        [--with-vision] [--enable-health] [--dry-run] [--yes] [--force]
 set -euo pipefail
 
 BUNDLE=""
@@ -38,6 +38,8 @@ WITH_NANOCODE=false
 WITH_PEBBLE=false
 WITH_OPENCODE=false
 WITH_TOOLCHAINS=false
+WITH_VISION=false
+ENABLE_HEALTH=false
 DRY_RUN=false
 AUTO_YES=false
 FORCE=false
@@ -51,6 +53,8 @@ while [[ $# -gt 0 ]]; do
     --with-pebble)   WITH_PEBBLE=true; shift ;;
     --with-opencode)   WITH_OPENCODE=true; shift ;;
     --with-toolchains) WITH_TOOLCHAINS=true; shift ;;
+    --with-vision)     WITH_VISION=true; shift ;;
+    --enable-health)   ENABLE_HEALTH=true; shift ;;
     --dry-run)       DRY_RUN=true; shift ;;
     --yes|-y)        AUTO_YES=true; shift ;;
     --force)         FORCE=true; shift ;;
@@ -88,7 +92,7 @@ inject_keys() {  # <manifest> <live_env>
   done < "$man"
 }
 
-[[ -n "$BUNDLE" ]] || die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains] [--dry-run] [--yes] [--force]"
+[[ -n "$BUNDLE" ]] ||     die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains] [--with-vision] [--enable-health] [--dry-run] [--yes] [--force]"
 [[ -f "$BUNDLE" ]] || die "bundle not found: $BUNDLE"
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo) — mt-admin needs root"
 command -v jq  >/dev/null 2>&1 || die "jq required"
@@ -159,6 +163,7 @@ HOME_T="$(getent passwd "$TENANT" | cut -d: -f6 2>/dev/null || echo "/home/$TENA
 LWROOT="$HOME_T/lunarwing"
 ENVF="$LWROOT/env/lunarwing.env"
 BRIDGE_ENVF="$LWROOT/env/xmpp-bridge.env"
+VISION_ENVF="$LWROOT/env/vision.env"
 
 # ---- 2. build daemon + workers -----------------------------------------------
 banner "2/6  Build"
@@ -168,14 +173,24 @@ $WITH_PEBBLE  && build_args+=(--with-pebble)
 $WITH_OPENCODE && build_args+=(--with-opencode)
 $WITH_TOOLCHAINS && build_args+=(--with-toolchains)
 run "$MT" "${build_args[@]}"
+if $WITH_VISION; then
+  run "$MT" build-vision-sidecar
+fi
 
 # ---- 3. inject carried secrets + config (CRITICAL: SECRETS_MASTER_KEY) -------
 banner "3/6  Inject carried secrets + config"
 if $DRY_RUN; then
   note "[dry-run] would inject manifest-lunarwing.env -> $ENVF and manifest-bridge.env -> $BRIDGE_ENVF (incl. SECRETS_MASTER_KEY, XMPP password, XMPP/LLM config)"
+  [[ -f "$WORK/manifest-vision.env" ]] && note "[dry-run] would inject manifest-vision.env -> $VISION_ENVF (VL_URL, VL_MODEL, auth token)"
 else
   inject_keys "$WORK/manifest-lunarwing.env" "$ENVF"
   [[ -f "$WORK/manifest-bridge.env" ]] && inject_keys "$WORK/manifest-bridge.env" "$BRIDGE_ENVF"
+  if [[ -f "$WORK/manifest-vision.env" ]] && [[ -n "$(grep -c '=' "$WORK/manifest-vision.env" 2>/dev/null || echo 0)" ]]; then
+    mkdir -p "$(dirname "$VISION_ENVF")"
+    inject_keys "$WORK/manifest-vision.env" "$VISION_ENVF"
+    chown "$TENANT:$TENANT" "$VISION_ENVF" 2>/dev/null || true
+    note "vision.env: injected carried VL_URL/VL_MODEL/auth token"
+  fi
   chown "$TENANT:$TENANT" "$ENVF" "$BRIDGE_ENVF" 2>/dev/null || true
   # Verify the master key landed VERBATIM — without putting the value on argv
   # (command substitution keeps it out of /proc/<pid>/cmdline) and without the
