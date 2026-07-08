@@ -6,8 +6,6 @@ ignore = [
     # serde_yml unsound/unmaintained — direct dep, upgrade tracked separately
     "RUSTSEC-2025-0068",
     # tokio-tar PAX header parsing — sandbox containers only
-    "RUSTSEC-2025-0111",
-    # wasmtime fd_renumber host panic — WASIp1, mitigated by fuel limits
     "RUSTSEC-2025-0046",
     # wasmtime shared linear memory unsoundness — no shared memory in our guests
     "RUSTSEC-2025-0118",
@@ -19,7 +17,13 @@ ignore = [
     "RUSTSEC-2026-0049",
     { id = "RUSTSEC-2019-0036", reason = "failure crate EOL; vendored libsignal-protocol dependency, no patch" },
     { id = "RUSTSEC-2020-0036", reason = "failure crate EOL; no patch" },
-    { id = "RUSTSEC-2023-0071", reason = "rsa Marvin timing: upstream has no released constant-time fix yet" },
+    { id = "RUSTSEC-2026-0118", reason = "hickory-proto 0.25.x has no patch; code moved to hickory-net in 0.26.x; upgrading tokio-xmpp/hickory-resolver pending" },
+    { id = "RUSTSEC-2023-0071", reason = "rsa Marvin timing attack; no upstream constant-time release yet" },
+    { id = "RUSTSEC-2026-0119", reason = "hickory-proto 0.25.x constrained by hickory-resolver 0.25 via tokio-xmpp 5.0.0; blocked on upstream tokio-xmpp release supporting hickory-resolver 0.26" },
+    { id = "RUSTSEC-2026-0187", reason = "lopdf 0.34 constrained by pdf-extract 0.7.12; blocked on upstream pdf-extract release supporting lopdf 0.42" },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.102 constrained by rustls 0.22 via libsql 0.6.0; blocked on upstream libsql release supporting rustls 0.23" },
+    { id = "RUSTSEC-2026-0099", reason = "same as RUSTSEC-2026-0098" },
+    { id = "RUSTSEC-2026-0104", reason = "same as RUSTSEC-2026-0098" },
 ]
 
 [licenses]
@@ -57,5 +61,4 @@ allow-git = [
     "https://github.com/astral-sh/ruff.git",
 ]
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
 
