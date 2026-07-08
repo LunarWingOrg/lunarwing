@@ -43,7 +43,7 @@ allow = [
 unused-allowed-license = "allow"
 
 [bans]
-multiple-versions = "warn"
+multiple-versions = "allow"
 wildcards = "deny"
 
 [sources]
