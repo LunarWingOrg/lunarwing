@@ -4,10 +4,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use futures::Future;
-use russh_keys::agent::server::{Agent, MessageType};
-use russh_keys::key::KeyPair;
+use russh::keys::PrivateKey;
+use russh::keys::agent::server::{Agent, MessageType};
 use secrecy::ExposeSecret;
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
@@ -18,7 +17,7 @@ use crate::bridge::ssh::{Result, SSHCredentials, SshBridgeError};
 
 #[derive(Clone)]
 pub struct SshAgent {
-    keys: Arc<Mutex<HashMap<String, Arc<KeyPair>>>>,
+    keys: Arc<Mutex<HashMap<String, Arc<PrivateKey>>>>,
 }
 
 impl Default for SshAgent {
@@ -57,28 +56,31 @@ impl SshAgent {
     }
 }
 
-pub(crate) fn parse_key(creds: &SSHCredentials) -> Result<KeyPair> {
+pub(crate) fn parse_key(creds: &SSHCredentials) -> Result<PrivateKey> {
     let key_str = String::from_utf8_lossy(&creds.key_data).to_string();
     let passphrase = creds.passphrase.as_ref().map(|s| s.expose_secret());
 
     // Use the internal format decoder - it's public in the crate root
-    russh_keys::decode_secret_key(&key_str, passphrase)
+    russh::keys::decode_secret_key(&key_str, passphrase)
         .map_err(|e| SshBridgeError::InvalidKeyFormat(format!("Key parse error: {}", e)))
 }
 
-#[async_trait]
 impl Agent for SshAgent {
-    fn confirm(self, _pk: Arc<KeyPair>) -> Box<dyn Future<Output = (Self, bool)> + Unpin + Send> {
+    fn confirm(
+        self,
+        _pk: Arc<PrivateKey>,
+    ) -> Box<dyn Future<Output = (Self, bool)> + Unpin + Send> {
         Box::new(futures::future::ready((self, true)))
     }
-    async fn confirm_request(&self, _msg: MessageType) -> bool {
-        true
+
+    fn confirm_request(&self, _msg: MessageType) -> impl Future<Output = bool> + Send {
+        async { true }
     }
 }
 
 pub struct SshAgentServer {
     socket_path: PathBuf,
-    keys: Arc<Mutex<HashMap<String, Arc<KeyPair>>>>,
+    keys: Arc<Mutex<HashMap<String, Arc<PrivateKey>>>>,
     _join_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -129,11 +131,11 @@ impl SshAgentServer {
         info!("SSH agent server listening: {}", socket_path.display());
 
         // Parse keys upfront so we can add them via the agent client protocol
-        // after the server starts. The russh_keys agent server maintains its
+        // after the server starts. The russh agent server maintains its
         // OWN internal KeyStore (separate from SshAgent.keys), so keys must be
         // added via the agent protocol (ADD_IDENTITY message) — not just
         // stored in the SshAgent struct.
-        let mut parsed_keys: Vec<(String, KeyPair)> = Vec::new();
+        let mut parsed_keys: Vec<(String, PrivateKey)> = Vec::new();
         for (hostname, creds) in keys {
             match parse_key(&creds) {
                 Ok(key_pair) => {
@@ -143,7 +145,7 @@ impl SshAgentServer {
             }
         }
 
-        let keys_map: Arc<Mutex<HashMap<String, Arc<KeyPair>>>> =
+        let keys_map: Arc<Mutex<HashMap<String, Arc<PrivateKey>>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let keys_clone = Arc::clone(&keys_map);
         let socket_path_for_log = socket_path.clone();
@@ -152,7 +154,7 @@ impl SshAgentServer {
         let join_handle = tokio::spawn(async move {
             let stream = UnixListenerStream::new(listener);
             let agent = SshAgent { keys: keys_clone };
-            if let Err(e) = russh_keys::agent::server::serve(stream, agent).await {
+            if let Err(e) = russh::keys::agent::server::serve(stream, agent).await {
                 error!(
                     "SSH agent server error on {}: {}",
                     socket_path_for_log.display(),
@@ -174,7 +176,8 @@ impl SshAgentServer {
                 let mut guard = keys_map.lock().await;
                 guard.insert(hostname.clone(), key_arc);
             }
-            match russh_keys::agent::client::AgentClient::connect_uds(&socket_path_for_client).await
+            match russh::keys::agent::client::AgentClient::connect_uds(&socket_path_for_client)
+                .await
             {
                 Ok(mut client) => {
                     if let Err(e) = client.add_identity(&key_pair, &[]).await {
