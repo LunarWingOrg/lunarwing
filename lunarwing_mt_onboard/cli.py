@@ -19,6 +19,7 @@ from lunarwing_mt_onboard.config import (
     TenantConfig,
     WorkerType,
 )
+from lunarwing_mt_onboard.export_cli import ExportCliArgs, run_export_flow
 from lunarwing_mt_onboard.provisioner import ensure_mt_admin, provision
 from lunarwing_mt_onboard.secrets import (
     generate_master_key,
@@ -94,6 +95,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run an in-place upgrade for an existing tenant.",
     )
     _add_upgrade_args(upgrade)
+
+    export = subparsers.add_parser(
+        "export",
+        help="Export (Kawarimi migrate) a tenant for cross-host migration.",
+    )
+    _add_export_args(export)
     return p
 
 
@@ -118,6 +125,25 @@ def _add_upgrade_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--yes", action="store_true", help="Forward --yes to the upgrade script.")
     parser.add_argument("--force", action="store_true", help="Continue after preflight failure.")
     parser.add_argument("--no-preflight", action="store_true", help="Skip upgrade preflight.")
+
+
+def _add_export_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--tenant", help="Existing tenant name to export.")
+    parser.add_argument(
+        "--out-dir",
+        default="/var/lib/lunarwing-migrate",
+        help="Directory for the migration bundle (default: /var/lib/lunarwing-migrate).",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Execute the export (stops the tenant, writes the bundle). Default is dry-run.",
+    )
+    parser.add_argument(
+        "--no-quiesce",
+        action="store_true",
+        help="Skip auto-stopping services; you must have already stopped them.",
+    )
     parser.add_argument("--non-interactive", action="store_true")
     parser.add_argument("--accept-defaults", action="store_true")
     parser.add_argument("--resume", metavar="FILE")
@@ -438,6 +464,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if getattr(args, "command", None) == "upgrade":
         return run_upgrade_flow(UpgradeCliArgs.from_namespace(args))
+
+    if getattr(args, "command", None) == "export":
+        return run_export_flow(ExportCliArgs.from_namespace(args))
 
     config = TenantConfig()
     if args.resume:

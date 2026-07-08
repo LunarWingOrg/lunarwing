@@ -99,7 +99,7 @@ impl LlmConfig {
 
         // Session config (used by LunarWing Cloud provider for OAuth/session-token auth)
         let lunarwing_cloud_auth_url = optional_env("LUNARWING_CLOUD_AUTH_URL")?
-            .unwrap_or_else(|| "https://private.near.ai".to_string());
+            .unwrap_or_else(|| "https://private.lunarwing.org".to_string());
         // Only validate LunarWing Cloud URLs when LunarWing Cloud is actually being used or
         // the user explicitly set the URL. Prevents startup failures in
         // air-gapped environments that use a different backend.
@@ -131,9 +131,9 @@ impl LlmConfig {
             base_url: {
                 let url = optional_env("LUNARWING_CLOUD_BASE_URL")?.unwrap_or_else(|| {
                     if lunarwing_cloud_api_key.is_some() {
-                        "https://cloud-api.near.ai".to_string()
+                        "https://lunarwing.org".to_string()
                     } else {
-                        "https://private.near.ai".to_string()
+                        "https://private.lunarwing.org".to_string()
                     }
                 });
                 let lunarwing_cloud_base_url_explicitly_set =

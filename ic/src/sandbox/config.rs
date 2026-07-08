@@ -172,7 +172,7 @@ pub fn default_allowlist() -> Vec<String> {
         // Common APIs (credentials will be injected by proxy)
         "api.openai.com".to_string(),
         "api.anthropic.com".to_string(),
-        "api.near.ai".to_string(),
+        "api.lunarwing.org".to_string(),
     ]
 }
 
@@ -183,7 +183,7 @@ pub fn default_credential_mappings() -> Vec<crate::secrets::CredentialMapping> {
     vec![
         CredentialMapping::bearer("OPENAI_API_KEY", "api.openai.com"),
         CredentialMapping::header("ANTHROPIC_API_KEY", "x-api-key", "api.anthropic.com"),
-        CredentialMapping::bearer("LUNARWING_CLOUD_API_KEY", "api.near.ai"),
+        CredentialMapping::bearer("LUNARWING_CLOUD_API_KEY", "api.lunarwing.org"),
     ]
 }
 

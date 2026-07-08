@@ -335,9 +335,9 @@ with its own secret name and env var. It is **not** stored as `openai_compatible
 **LunarWing Cloud** (`setup_lunarwing_cloud`):
 - Calls `session_manager.ensure_authenticated()` which shows the auth menu:
   - Options 1-2 (GitHub/Google): browser OAuth → **LunarWing Cloud Chat** mode
-    (Responses API at `private.near.ai`, session token auth)
+    (Responses API at `private.lunarwing.org`, session token auth)
   - Option 4: LunarWing Cloud API key → **LunarWing Cloud API** mode
-    (Chat Completions API at `cloud-api.near.ai`, API key auth)
+    (Chat Completions API at `lunarwing.org`, API key auth)
 - **LunarWing Cloud Chat** path: session token saved to `~/.lunarwing/session.json`.
   Hosting providers can set `LUNARWING_CLOUD_SESSION_TOKEN` env var directly (takes
   precedence over file-based tokens).
@@ -745,7 +745,7 @@ local browser.
 **Solutions:**
 
 1. **LunarWing Cloud API key (option 4 in auth menu):** Get an API key
-   from `https://cloud.near.ai` and paste it into the terminal. No
+   from `https://lunarwing.org` and paste it into the terminal. No
    local listener is needed. The key is saved to `~/.lunarwing/.env`
    and the encrypted secrets store. Uses the OpenAI-compatible
    ChatCompletions API mode.

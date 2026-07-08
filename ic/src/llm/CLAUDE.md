@@ -62,8 +62,8 @@ Uses the native Converse API via `aws-sdk-bedrockruntime` (`bedrock.rs`). Requir
 ## LunarWing Cloud Provider Gotchas
 
 **Dual auth modes:**
-- **Session token** (default): `LUNARWING_CLOUD_SESSION_TOKEN=sess_...`, base URL = `https://private.near.ai`. Tokens are persisted to `~/.lunarwing/session.json` (mode 0600) and optionally to the DB `settings` table (`lunarwing_cloud.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `LunarWingCloudChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
-- **API key**: Set `LUNARWING_CLOUD_API_KEY` (from `cloud.near.ai`), base URL defaults to `https://cloud-api.near.ai`. 401s with API key auth are immediately returned as `LlmError::AuthFailed` — no renewal.
+- **Session token** (default): `LUNARWING_CLOUD_SESSION_TOKEN=sess_...`, base URL = `https://private.lunarwing.org`. Tokens are persisted to `~/.lunarwing/session.json` (mode 0600) and optionally to the DB `settings` table (`lunarwing_cloud.session_token`). On 401 responses where the body contains "session" + "expired"/"invalid", `LunarWingCloudChatProvider` calls `session.handle_auth_failure()` which triggers the interactive OAuth login flow and retries once. Plain `AuthFailed` 401s are not retried.
+- **API key**: Set `LUNARWING_CLOUD_API_KEY` (from `lunarwing.org`), base URL defaults to `https://lunarwing.org`. 401s with API key auth are immediately returned as `LlmError::AuthFailed` — no renewal.
 
 **Session renewal is interactive:** When `SessionExpired` triggers renewal, it blocks and prompts the user in the terminal (GitHub/Google OAuth or manual API key entry). This is unsuitable for headless/hosted deployments — set `LUNARWING_CLOUD_SESSION_TOKEN` env var instead.
 

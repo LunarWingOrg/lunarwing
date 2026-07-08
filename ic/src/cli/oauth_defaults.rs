@@ -1442,7 +1442,7 @@ mod tests {
         unsafe {
             std::env::set_var(
                 "IRONCLAW_OAUTH_CALLBACK_URL",
-                "https://kind-deer.agent1.near.ai",
+                "https://kind-deer.agent1.lunarwing.org",
             );
         }
         assert!(crate::cli::oauth_defaults::use_gateway_callback());
