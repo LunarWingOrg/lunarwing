@@ -224,7 +224,11 @@ def run_preflight(
     on_output: Callable[[str], None] | None = None,
 ) -> PhaseResult:
     """Run the preflight script for *cfg* and return a single PhaseResult."""
-    return run_command(build_preflight_args(cfg), on_output=on_output)
+    return run_command(
+        build_preflight_args(cfg),
+        on_output=on_output,
+        phase_name="preflight",
+    )
 
 
 def run_upgrade(
@@ -247,7 +251,11 @@ def run_upgrade(
         if not preflight.ok and not cfg.force:
             return result
 
-    upgrade = run_command(build_upgrade_args(cfg), on_output=on_output)
+    upgrade = run_command(
+        build_upgrade_args(cfg),
+        on_output=on_output,
+        phase_name="upgrade",
+    )
     result.phases.append(upgrade)
     return result
 

@@ -38,7 +38,7 @@ impl AttachmentKind {
 /// A file or media attachment on an incoming message.
 #[derive(Debug, Clone)]
 pub struct IncomingAttachment {
-    /// Unique identifier within the channel (e.g., XMPP file_id).
+    /// Unique identifier within the channel (e.g., attachment-123).
     pub id: String,
     /// What kind of content this is.
     pub kind: AttachmentKind,
@@ -409,7 +409,7 @@ impl StatusUpdate {
 /// a unified format. They also handle sending responses back.
 #[async_trait]
 pub trait Channel: Send + Sync {
-    /// Get the channel name (e.g., "cli", "xmpp", "xmpp", "http").
+    /// Get the channel name (e.g., "cli", "xmpp", "signal", "http").
     fn name(&self) -> &str;
 
     /// Start listening for messages.

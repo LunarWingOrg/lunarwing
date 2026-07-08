@@ -250,5 +250,47 @@ class TestUpgradeArgs(unittest.TestCase):
         self.assertIn("--yes", args)
 
 
+class TestUpgradePhaseNames(unittest.TestCase):
+    def test_run_preflight_uses_preflight_phase_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = _write_script(tmp, "upgrade-preflight.sh", "echo ok\nexit 0")
+
+            previous = upgrade.PREFLIGHT_SCRIPT
+            upgrade.PREFLIGHT_SCRIPT = script
+            try:
+                result = upgrade.run_preflight(UpgradeConfig(tenant="alpha"))
+            finally:
+                upgrade.PREFLIGHT_SCRIPT = previous
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.name, "preflight")
+
+    def test_run_upgrade_uses_distinct_phase_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            preflight = _write_script(tmp, "upgrade-preflight.sh", "echo ok\nexit 0")
+            upgrade_script = _write_script(tmp, "upgrade-tenant-version.sh", "echo ok\nexit 0")
+
+            prev_preflight = upgrade.PREFLIGHT_SCRIPT
+            prev_upgrade = upgrade.UPGRADE_SCRIPT
+            upgrade.PREFLIGHT_SCRIPT = preflight
+            upgrade.UPGRADE_SCRIPT = upgrade_script
+            try:
+                result = upgrade.run_upgrade(UpgradeConfig(tenant="alpha"))
+            finally:
+                upgrade.PREFLIGHT_SCRIPT = prev_preflight
+                upgrade.UPGRADE_SCRIPT = prev_upgrade
+
+        self.assertTrue(result.ok)
+        self.assertEqual([phase.name for phase in result.phases], ["preflight", "upgrade"])
+
+
+def _write_script(directory: str, name: str, body: str) -> str:
+    path = os.path.join(directory, name)
+    with open(path, "w") as f:
+        f.write(f"#!/bin/sh\n{body}\n")
+    os.chmod(path, 0o700)
+    return path
+
+
 if __name__ == "__main__":
     unittest.main()

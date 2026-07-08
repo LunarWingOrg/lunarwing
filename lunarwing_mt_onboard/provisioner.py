@@ -62,6 +62,7 @@ def _run(
     *,
     env: dict[str, str] | None = None,
     on_output: Callable[[str], None] | None = None,
+    phase_name: str | None = None,
 ) -> PhaseResult:
     """Execute *args* merged stdout→stderr, calling *on_output* per line.
 
@@ -95,7 +96,7 @@ def _run(
             proc.wait()
 
     return PhaseResult(
-        name=args[1] if len(args) > 1 else args[0],
+        name=phase_name or (args[1] if len(args) > 1 else args[0]),
         returncode=proc.returncode,
         stdout="\n".join(lines),
     )
@@ -106,8 +107,9 @@ def run_command(
     *,
     env: dict[str, str] | None = None,
     on_output: Callable[[str], None] | None = None,
+    phase_name: str | None = None,
 ) -> PhaseResult:
-    return _run(args, env=env, on_output=on_output)
+    return _run(args, env=env, on_output=on_output, phase_name=phase_name)
 
 
 def ensure_mt_admin() -> str:
