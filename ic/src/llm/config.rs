@@ -196,16 +196,16 @@ impl LunarWingCloudConfig {
     ///
     /// Reads `LUNARWING_CLOUD_API_KEY` from the environment and selects the
     /// appropriate base URL (cloud-api when API key is present,
-    /// private.near.ai for session-token auth).
+    /// private.lunarwing.org for session-token auth).
     pub(crate) fn for_model_discovery() -> Self {
         let api_key = crate::config::helpers::env_or_override("LUNARWING_CLOUD_API_KEY")
             .filter(|k| !k.is_empty())
             .map(SecretString::from);
 
         let default_base = if api_key.is_some() {
-            "https://cloud-api.near.ai"
+            "https://lunarwing.org"
         } else {
-            "https://private.near.ai"
+            "https://private.lunarwing.org"
         };
         let base_url = crate::config::helpers::env_or_override("LUNARWING_CLOUD_BASE_URL")
             .unwrap_or_else(|| default_base.to_string());

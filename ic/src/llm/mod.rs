@@ -592,7 +592,7 @@ mod tests {
         LunarWingCloudConfig {
             model: "test-model".to_string(),
             cheap_model: None,
-            base_url: "https://api.near.ai".to_string(),
+            base_url: "https://api.lunarwing.org".to_string(),
             api_key: None,
             fallback_model: None,
             max_retries: 3,

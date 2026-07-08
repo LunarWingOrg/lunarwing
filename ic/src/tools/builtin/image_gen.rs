@@ -9,7 +9,7 @@ use crate::tools::{Tool, ToolError, ToolOutput};
 
 /// Tool for generating images using FLUX or compatible image generation APIs.
 pub struct ImageGenerateTool {
-    /// API base URL (e.g., "https://cloud-api.near.ai").
+    /// API base URL (e.g., "https://lunarwing.org").
     api_base_url: String,
     /// Bearer token for API auth.
     api_key: SecretString,

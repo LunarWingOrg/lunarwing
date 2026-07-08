@@ -3986,9 +3986,9 @@ mod tests {
                 .expose_secret(),
             "test-cloud-api-key-12345"
         );
-        // With API key, base_url must point to cloud-api (not private.near.ai)
+        // With API key, base_url must point to cloud-api (not private.lunarwing.org)
         assert_eq!(
-            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://lunarwing.org",
             "API key auth must use cloud-api base URL for model fetching"
         );
     }
@@ -4006,10 +4006,10 @@ mod tests {
             config.lunarwing_cloud.api_key.is_none(),
             "config should have no api_key when env var is absent"
         );
-        // Without API key, base_url must point to private.near.ai (session token)
+        // Without API key, base_url must point to private.lunarwing.org (session token)
         assert_eq!(
-            config.lunarwing_cloud.base_url, "https://private.near.ai",
-            "session-token auth must use private.near.ai base URL"
+            config.lunarwing_cloud.base_url, "https://private.lunarwing.org",
+            "session-token auth must use private.lunarwing.org base URL"
         );
     }
 
@@ -4059,7 +4059,7 @@ mod tests {
             "injected-wizard-key"
         );
         assert_eq!(
-            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://lunarwing.org",
             "API key from overlay must select cloud-api base URL"
         );
     }
@@ -4085,7 +4085,7 @@ mod tests {
             "config must pick up LUNARWING_CLOUD_API_KEY from runtime overlay"
         );
         assert_eq!(
-            config.lunarwing_cloud.base_url, "https://cloud-api.near.ai",
+            config.lunarwing_cloud.base_url, "https://lunarwing.org",
             "API key auth must use cloud-api base URL"
         );
     }

@@ -108,7 +108,7 @@ pub(crate) async fn fetch_openai_compatible_models(
 /// config, then wraps it in an `LlmConfig` with session config for auth.
 pub(crate) fn build_lunarwing_cloud_model_fetch_config() -> crate::config::LlmConfig {
     let auth_base_url = crate::config::helpers::env_or_override("LUNARWING_CLOUD_AUTH_URL")
-        .unwrap_or_else(|| "https://private.near.ai".to_string());
+        .unwrap_or_else(|| "https://private.lunarwing.org".to_string());
 
     let lunarwing_cloud = crate::config::LunarWingCloudConfig::for_model_discovery();
     crate::config::LlmConfig {

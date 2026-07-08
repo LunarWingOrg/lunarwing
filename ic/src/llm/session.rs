@@ -29,7 +29,7 @@ pub struct SessionData {
 /// Configuration for session management.
 #[derive(Debug, Clone)]
 pub struct SessionConfig {
-    /// Base URL for auth endpoints (e.g., https://private.near.ai).
+    /// Base URL for auth endpoints (e.g., https://private.lunarwing.org).
     pub auth_base_url: String,
     /// Path to session file (e.g., ~/.lunarwing/session.json).
     pub session_path: PathBuf,
@@ -38,7 +38,7 @@ pub struct SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            auth_base_url: "https://private.near.ai".to_string(),
+            auth_base_url: "https://private.lunarwing.org".to_string(),
             // Real path is set by LlmConfig::resolve() via config/llm.rs.
             // This default is only used in tests.
             session_path: PathBuf::from("session.json"),
@@ -228,7 +228,7 @@ impl SessionManager {
     /// 4. Save and return the token
     ///
     /// For LunarWing Cloud Cloud API key:
-    /// 1. Prompt user for API key from cloud.near.ai
+    /// 1. Prompt user for API key from lunarwing.org
     /// 2. Set LUNARWING_CLOUD_API_KEY env var and save to bootstrap .env
     /// 3. No session token saved (different auth model)
     async fn initiate_login(&self) -> Result<(), LlmError> {
@@ -378,7 +378,7 @@ impl SessionManager {
     /// LunarWing Cloud Cloud API key entry flow.
     ///
     /// Prompts the user to enter a LunarWing Cloud Cloud API key from
-    /// cloud.near.ai. The key is stored in the thread-safe runtime
+    /// lunarwing.org. The key is stored in the thread-safe runtime
     /// env overlay (via `set_runtime_env`) so `LlmConfig::resolve()`
     /// auto-selects ChatCompletions mode, and persisted to
     /// `~/.lunarwing/.env` for survival across restarts.
@@ -389,7 +389,7 @@ impl SessionManager {
         println!("LunarWing Cloud Cloud API key");
         println!("─────────────────────");
         println!();
-        println!("  1. Open https://cloud.near.ai in your browser");
+        println!("  1. Open https://lunarwing.org in your browser");
         println!("  2. Sign in and navigate to API Keys");
         println!("  3. Create or copy an existing API key");
         println!();
@@ -729,7 +729,7 @@ mod tests {
     #[test]
     fn test_session_config_default() {
         let config = SessionConfig::default();
-        assert_eq!(config.auth_base_url, "https://private.near.ai");
+        assert_eq!(config.auth_base_url, "https://private.lunarwing.org");
         assert!(config.session_path.ends_with("session.json"));
     }
 
