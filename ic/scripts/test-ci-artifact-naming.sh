@@ -34,9 +34,9 @@ assert_parse() {
 assert_parse "tool-gotify-0.2.1-wasm32-wasip2.tar.gz" "tool" "gotify"
 assert_parse "channel-weechat-0.2.1-wasm32-wasip2.tar.gz" "channel" "weechat"
 
-# Same collision case for telegram
-assert_parse "tool-telegram-0.2.2-wasm32-wasip2.tar.gz" "tool" "telegram"
-assert_parse "channel-telegram-0.2.2-wasm32-wasip2.tar.gz" "channel" "telegram"
+# Same collision case for xmpp
+assert_parse "tool-xmpp-0.2.2-wasm32-wasip2.tar.gz" "tool" "xmpp"
+assert_parse "channel-xmpp-0.2.2-wasm32-wasip2.tar.gz" "channel" "xmpp"
 
 # Hyphenated extension names
 assert_parse "tool-web-search-0.2.0-wasm32-wasip2.tar.gz" "tool" "web-search"

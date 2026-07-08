@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Must match lunarwing's Telegram channel (channels-src/telegram/Cargo.toml)
+# Must match LunarWing's weechat channel (channels-src/weechat/Cargo.toml)
 wit-bindgen = "0.36"
 
 [profile.release]

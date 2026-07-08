@@ -93,7 +93,7 @@ interface channel-host {
     ///
     /// The optional timeout-ms parameter controls the HTTP client timeout
     /// in milliseconds. Defaults to 30000 (30s) when not provided. Use a
-    /// longer timeout for long-polling requests (e.g., Telegram getUpdates).
+    /// longer timeout for long-polling requests (e.g., channel polling).
     /// Capped at the channel's callback_timeout to prevent hangs.
     http-request: func(
         method: string,
@@ -120,7 +120,7 @@ interface channel-host {
     /// properties are needed. Binary data (e.g., downloaded voice bytes) should be
     /// stored via `store-attachment-data` rather than inlined in the record.
     record inbound-attachment {
-        /// Unique identifier within the channel (e.g., Telegram file_id).
+        /// Unique identifier within the channel (e.g., a channel-specific file id).
         id: string,
         /// MIME type (e.g., "image/jpeg", "audio/ogg", "application/pdf").
         mime-type: string,
@@ -406,7 +406,7 @@ interface channel {
     /// The user-id identifies the target user within the channel.
     ///
     /// Arguments:
-    /// - user-id: Target user identifier (e.g., Telegram chat_id)
+    /// - user-id: Target user identifier (e.g., a channel-specific user id)
     /// - response: The message content and attachments to send
     ///
     /// Returns:

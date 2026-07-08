@@ -25,13 +25,13 @@ pub enum RegistryCommand {
 
     /// Show detailed information about an extension or bundle
     Info {
-        /// Extension or bundle name (e.g. "gotify", "default", "tools/github")
+        /// Extension or bundle name (e.g. "gotify", "lunarwing", "tools/github")
         name: String,
     },
 
     /// Install an extension or bundle from the registry
     Install {
-        /// Extension or bundle name (e.g. "gotify", "lunarwing", "default")
+        /// Extension or bundle name (e.g. "gotify", "lunarwing", "xmpp")
         name: String,
 
         /// Force overwrite if already installed
@@ -43,7 +43,7 @@ pub enum RegistryCommand {
         build: bool,
     },
 
-    /// Install the default bundle of recommended extensions
+    /// Install the LunarWing bundle of recommended extensions
     InstallDefaults {
         /// Force overwrite if already installed
         #[arg(short, long)]
@@ -81,7 +81,7 @@ pub async fn run_registry_command(cmd: RegistryCommand) -> anyhow::Result<()> {
             cmd_install(&catalog, &repo_root, &name, force, build).await
         }
         RegistryCommand::InstallDefaults { force, build } => {
-            cmd_install(&catalog, &repo_root, "default", force, build).await
+            cmd_install(&catalog, &repo_root, "lunarwing", force, build).await
         }
     }
 }
