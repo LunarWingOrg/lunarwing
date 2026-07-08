@@ -1600,11 +1600,11 @@ mod tests {
     fn test_extension_setup_request_deserialize_with_fields() {
         let json = r#"{
             "secrets": { "api_key": "sk-123" },
-            "fields": { "llm_backend": "openai", "selected_model": "gpt-4o" }
+            "fields": { "llm_backend": "openai_compatible", "selected_model": "gpt-4o" }
         }"#;
         let req: ExtensionSetupRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.secrets.get("api_key").unwrap(), "sk-123");
-        assert_eq!(req.fields.get("llm_backend").unwrap(), "openai");
+        assert_eq!(req.fields.get("llm_backend").unwrap(), "openai_compatible");
         assert_eq!(req.fields.get("selected_model").unwrap(), "gpt-4o");
     }
 

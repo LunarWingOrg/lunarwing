@@ -12,8 +12,9 @@
 #   add-tenant --no-health (fresh: clone, ports, THROWAWAY secrets, empty PG, units;
 #     NO daemon) -> build-tenant + workers -> INJECT carried secrets/config (incl.
 #     SECRETS_MASTER_KEY — without it the restored DB's encrypted secrets are dead;
-#     verified verbatim before restore) -> restore-tenant (DB) -> restore state dir
-#     (OMEMO/workspace) -> install-wasm (fresh v1.1.4 artifacts) -> [--start] start.
+#     verified verbatim before restore) -> restore-tenant (DB) -> verify/rekey
+#     owner scope -> restore state dir (OMEMO/workspace) -> install-wasm
+#     (fresh v1.1.4 artifacts) -> [--start] start.
 #
 # Intra-host tokens (gateway/bridge/webhook/relay) are NOT carried — add-tenant minted
 # fresh, self-consistent ones (so config.toml's worker auth matches the gateway token).
@@ -28,7 +29,7 @@
 #   sudo ic/scripts/import-tenant.sh <bundle.tar> [--name <t>] [--start] [--old-stopped]
 #        [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains]
 #        [--with-vision] [--docker-group] [--tensorzero-url <url>]
-#        [--dry-run] [--yes] [--force]
+#        [--owner-scope <old_scope>] [--dry-run] [--yes] [--force]
 set -euo pipefail
 
 BUNDLE=""
@@ -42,6 +43,7 @@ WITH_OPENCODE=false
 WITH_TOOLCHAINS=false
 WITH_VISION=false
 TENSORZERO_URL=""
+OWNER_SCOPE=""
 DRY_RUN=false
 AUTO_YES=false
 FORCE=false
@@ -58,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --with-opencode)   WITH_OPENCODE=true; shift ;;
     --with-toolchains) WITH_TOOLCHAINS=true; shift ;;
     --with-vision)     WITH_VISION=true; shift ;;
+    --owner-scope)      OWNER_SCOPE="$2"; shift 2 ;;
     --dry-run)       DRY_RUN=true; shift ;;
     --yes|-y)        AUTO_YES=true; shift ;;
     --force)         FORCE=true; shift ;;
@@ -95,7 +98,74 @@ inject_keys() {  # <manifest> <live_env>
   done < "$man"
 }
 
-[[ -n "$BUNDLE" ]] || die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains] [--with-vision] [--docker-group] [--tensorzero-url <url>] [--dry-run] [--yes] [--force]"
+non_target_owner_scopes() {  # <scope-summary> <target-scope>
+  local summary="$1" target="$2" line scope count
+  while IFS=$' \t' read -r scope count _; do
+    [[ -n "$scope" ]] || continue
+    [[ "$scope" == "$target" ]] && continue
+    printf '%s\n' "$scope"
+  done <<< "$summary" | sort -u
+}
+
+show_owner_scope_summary() {  # <summary>
+  local summary="$1"
+  if [[ -z "$summary" ]]; then
+    note "no owner-scoped rows detected"
+    return 0
+  fi
+  say "  owner scopes:"
+  printf '%s\n' "$summary" | sed 's/^/    /'
+}
+
+reconcile_owner_scope() {
+  banner "5/7  Owner scope"
+
+  if $DRY_RUN; then
+    if [[ -n "$OWNER_SCOPE" ]]; then
+      note "[dry-run] would: $MT migrate-owner-scope $TENANT --from $OWNER_SCOPE"
+    else
+      note "[dry-run] would inspect restored owner scopes and rekey default -> $TENANT if needed"
+    fi
+    return 0
+  fi
+
+  local summary
+  summary="$("$MT" owner-scopes "$TENANT")" \
+    || die "failed to inspect owner scopes after restore"
+  show_owner_scope_summary "$summary"
+  [[ -n "$summary" ]] || return 0
+
+  local -a non_targets
+  mapfile -t non_targets < <(non_target_owner_scopes "$summary" "$TENANT")
+  if [[ "${#non_targets[@]}" -eq 0 ]]; then
+    note "owner-scoped rows already use '$TENANT'"
+    return 0
+  fi
+  if [[ "${#non_targets[@]}" -gt 1 ]]; then
+    die "multiple non-target owner scopes detected: ${non_targets[*]} — inspect the DB and re-run with a clean bundle"
+  fi
+
+  local source_scope="${non_targets[0]}"
+  if [[ -n "$OWNER_SCOPE" && "$OWNER_SCOPE" != "$source_scope" ]]; then
+    die "--owner-scope '$OWNER_SCOPE' was requested, but restored data has '$source_scope'"
+  fi
+  if [[ "$source_scope" != "default" && -z "$OWNER_SCOPE" ]]; then
+    die "non-target owner scope '$source_scope' detected; re-run with --owner-scope '$source_scope' to rekey it explicitly"
+  fi
+
+  run "$MT" migrate-owner-scope "$TENANT" --from "$source_scope"
+
+  local verify_summary
+  verify_summary="$("$MT" owner-scopes "$TENANT")" \
+    || die "failed to verify owner scopes after rekey"
+  local -a remaining
+  mapfile -t remaining < <(non_target_owner_scopes "$verify_summary" "$TENANT")
+  [[ "${#remaining[@]}" -eq 0 ]] \
+    || die "owner-scope rekey incomplete; remaining non-target scopes: ${remaining[*]}"
+  note "owner-scope continuity verified for '$TENANT'"
+}
+
+[[ -n "$BUNDLE" ]] || die "usage: $0 <bundle.tar> [--name <t>] [--start] [--old-stopped] [--with-nanocode] [--with-pebble] [--with-opencode] [--with-toolchains] [--with-vision] [--docker-group] [--tensorzero-url <url>] [--owner-scope <old_scope>] [--dry-run] [--yes] [--force]"
 [[ -f "$BUNDLE" ]] || die "bundle not found: $BUNDLE"
 [[ "$(id -u)" -eq 0 ]] || die "run as root (sudo) — mt-admin needs root"
 command -v jq  >/dev/null 2>&1 || die "jq required"
@@ -107,6 +177,7 @@ PORTS_REGISTRY="${LUNARWING_PORTS_REGISTRY:-/etc/lunarwing/ports.json}"
 [[ -x "$MT" ]] || die "mt-admin not found/executable at $MT"
 [[ -x "$WEECHAT_PREFLIGHT" ]] || die "WeeChat preflight not found/executable at $WEECHAT_PREFLIGHT"
 grep -qE '^\s*restore-tenant\)' "$MT" || die "mt-admin at $MT predates restore-tenant (need a v1.1.4-class host)"
+grep -qE '^\s*owner-scopes\)' "$MT" || die "mt-admin at $MT predates owner-scopes (need current Kawarimi owner-scope checks)"
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 chmod 0700 "$WORK"
@@ -152,7 +223,7 @@ GOTIFY_URL="$(manifest_value GOTIFY_URL)"
 confirm "Stage tenant '$TENANT' on THIS host from the bundle?" || die "aborted by user"
 
 # ---- 1. provision fresh (no daemon, no health) -------------------------------
-banner "1/6  Provision (add-tenant --no-health)"
+banner "1/7  Provision (add-tenant --no-health)"
 add_args=(add-tenant "$TENANT" --no-health)
 $WITH_DOCKER_GROUP && add_args+=(--docker-group)
 [[ -n "$XMPP_JID" ]] && add_args+=(--xmpp-jid "$XMPP_JID")
@@ -173,7 +244,7 @@ BRIDGE_ENVF="$LWROOT/env/xmpp-bridge.env"
 VISION_ENVF="$LWROOT/env/vision.env"
 
 # ---- 2. build daemon + workers -----------------------------------------------
-banner "2/6  Build"
+banner "2/7  Build"
 build_args=(build-tenant "$TENANT" --with-wasm)
 $WITH_NANOCODE && build_args+=(--with-nanocode)
 $WITH_PEBBLE  && build_args+=(--with-pebble)
@@ -183,7 +254,7 @@ run "$MT" "${build_args[@]}"
 $WITH_VISION && run "$MT" build-vision-sidecar
 
 # ---- 3. inject carried secrets + config (CRITICAL: SECRETS_MASTER_KEY) -------
-banner "3/6  Inject carried secrets + config"
+banner "3/7  Inject carried secrets + config"
 if $DRY_RUN; then
   note "[dry-run] would inject manifest-lunarwing.env -> $ENVF and manifest-bridge.env -> $BRIDGE_ENVF (incl. SECRETS_MASTER_KEY, XMPP password, XMPP/LLM config)"
   [[ -s "$WORK/manifest-vision.env" ]] && note "[dry-run] would inject manifest-vision.env -> $VISION_ENVF (VL_URL, VL_MODEL, LUNARWING_AUTH_TOKEN)"
@@ -208,12 +279,14 @@ else
 fi
 
 # ---- 4. restore the database (PG up from step 1, daemon not started) ---------
-banner "4/6  Restore database"
+banner "4/7  Restore database"
 if $DRY_RUN; then note "[dry-run] would: $MT restore-tenant $TENANT <bundle db.dump> --yes"
 else "$MT" restore-tenant "$TENANT" "$WORK/db.dump" --yes; fi
 
-# ---- 5. restore on-disk state (OMEMO/workspace), then fresh WASM -------------
-banner "5/6  Restore state + install WASM"
+reconcile_owner_scope
+
+# ---- 6. restore on-disk state (OMEMO/workspace), then fresh WASM -------------
+banner "6/7  Restore state + install WASM"
 if [[ -f "$WORK/state.tar.gz" ]]; then
   if $DRY_RUN; then note "[dry-run] would: tar xzf state.tar.gz into $LWROOT (OMEMO + workspace), chown to $TENANT"
   else
@@ -232,8 +305,8 @@ run "$MT" install-wasm "$TENANT"   # lay down current v1.1.4 .wasm artifacts
 banner "WeeChat migration preflight"
 run "$WEECHAT_PREFLIGHT" "$TENANT"
 
-# ---- 6. cutover ---------------------------------------------------------------
-banner "6/6  Cutover"
+# ---- 7. cutover ---------------------------------------------------------------
+banner "7/7  Cutover"
 stage_msg() {
   say "Tenant '$TENANT' is STAGED (DB + secrets + state restored, units rendered) but NOT started."
   say ""

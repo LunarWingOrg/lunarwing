@@ -23,7 +23,7 @@ use crate::llm::session::SessionConfig;
 pub struct RegistryProviderConfig {
     /// Which API protocol to use (determines the rig-core client).
     pub protocol: ProviderProtocol,
-    /// Provider identifier (e.g., "groq", "openai", "tinfoil").
+    /// Provider identifier (e.g., "openai_compatible", "ollama", or a user-defined provider).
     pub provider_id: String,
     /// API key (optional for some providers like Ollama).
     pub api_key: Option<SecretString>,
@@ -91,7 +91,7 @@ impl Default for OpenAiCodexConfig {
 /// a generic `RegistryProviderConfig`.
 #[derive(Debug, Clone)]
 pub struct LlmConfig {
-    /// Backend identifier (e.g., "lunarwing_cloud", "openai", "groq", "tinfoil").
+    /// Backend identifier (e.g., "lunarwing_cloud", "openai_compatible", "ollama").
     pub backend: String,
     /// Session manager configuration (auth URL, token persistence path).
     /// Used by the LunarWing Cloud provider for OAuth/session-token auth.

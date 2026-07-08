@@ -320,7 +320,7 @@ mod tests {
         let info = BootInfo {
             version: "0.1.0".to_string(),
             agent_name: "test".to_string(),
-            llm_backend: "openai".to_string(),
+            llm_backend: "openai_compatible".to_string(),
             llm_model: "gpt-4o".to_string(),
             cheap_model: None,
             db_backend: "postgres".to_string(),

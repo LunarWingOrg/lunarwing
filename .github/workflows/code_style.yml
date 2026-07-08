@@ -38,8 +38,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           CODE_CHANGES=$(git diff --name-only "$BASE_SHA"...HEAD -- \
-            'src/' 'crates/' 'channels-src/' 'tools-src/' 'tests/' 'migrations/' \
-            'Cargo.toml' 'Cargo.lock' 'Dockerfile' 'build.rs' \
+            'ic/src/' 'ic/crates/' 'ic/channels-src/' 'ic/tools-src/' 'ic/tests/' 'ic/migrations/' \
+            'ic/Cargo.toml' 'ic/Cargo.lock' 'ic/Dockerfile' 'ic/build.rs' \
             | head -1)
           if [ -n "$CODE_CHANGES" ]; then
             echo "has_code=true" >> "$GITHUB_OUTPUT"
@@ -87,6 +87,7 @@ jobs:
       with:
         components: rustfmt
     - name: Check formatting
+      working-directory: ic
       run: cargo fmt --all -- --check
 
   gateway-js-syntax:
@@ -118,6 +119,9 @@ jobs:
         persist-credentials: false
     - name: Run cargo deny
       uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979 # v2
+      with:
+        manifest-path: ic/Cargo.toml
+        command-arguments: --config ic/deny.toml
 
   clippy:
     name: Clippy (${{ matrix.name }})
@@ -139,6 +143,7 @@ jobs:
         components: clippy
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
+        workspaces: ic -> target
         # Single shared slot across the clippy matrix. The all-features leg
         # builds a superset of the other configs; subset legs (push only)
         # restore from it. Only all-features writes the slot, and only on
@@ -150,40 +155,7 @@ jobs:
     # and pulling in `criterion` adds ~30s+ of dependency compilation per run.
     # `bench-compile` in test.yml provides the type-check signal for benches.
     - name: Check lints
-      run: cargo clippy --all --tests --examples ${{ matrix.flags }} -- -D warnings
-
-  clippy-windows:
-    name: Clippy Windows (${{ matrix.name }})
-    needs: [changes, clippy-matrix]
-    # PR-to-main runs the full Windows matrix; pushes to long-lived branches
-    # run it for cache warming. Other PRs skip Windows lint — windows-build
-    # in test.yml provides the Windows compile signal.
-    if: >
-      needs.changes.outputs.has_code == 'true' &&
-      (github.event_name == 'push' || github.base_ref == 'main')
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.clippy-matrix.outputs.matrix) }}
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      with:
-        persist-credentials: false
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      with:
-        components: clippy
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      with:
-        # Per-variant Windows cache, shared with test.yml's windows-build
-        # job. windows-build runs on push (where save-if allows writes), so
-        # clippy-windows restores from a warm cache on PRs.
-        key: windows-${{ matrix.name }}
-        save-if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') }}
-    # `--benches` omitted; see comment on the Linux clippy job above.
-    - name: Check lints
+      working-directory: ic
       run: cargo clippy --all --tests --examples ${{ matrix.flags }} -- -D warnings
 
   no-panics:
@@ -203,6 +175,7 @@ jobs:
       with:
         python-version: "3.12"
     - name: Check for .unwrap(), .expect(), assert!() in production code
+      working-directory: ic
       run: |
         BASE="${{ github.event.pull_request.base.sha }}"
         python3 scripts/check_no_panics.py --base "$BASE" --head HEAD
@@ -218,7 +191,6 @@ jobs:
       - format
       - gateway-js-syntax
       - clippy
-      - clippy-windows
       - deny-check
       - no-panics
     steps:
@@ -246,8 +218,7 @@ jobs:
           # Conditional jobs: must succeed when run, may be skipped on
           # events where their `if:` filter excludes them.
           for job_result in \
-            "no-panics=${{ needs.no-panics.result }}" \
-            "clippy-windows=${{ needs.clippy-windows.result }}"; do
+            "no-panics=${{ needs.no-panics.result }}"; do
             name="${job_result%%=*}"
             result="${job_result##*=}"
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then

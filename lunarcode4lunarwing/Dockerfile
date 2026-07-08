@@ -20,7 +20,12 @@ RUN set -e; \
     rm -rf /var/lib/apt/lists/*
 
 # Copy nanocode monorepo source
-COPY nanocode/ ./nanocode/
+# Pin nanocode to a release tag for reproducible builds.
+# Override with: docker build --build-arg NANOCODE_REF=v1.2.28 ...
+# Bump this default when upgrading the worker to a newer nanocode release.
+ARG NANOCODE_REF=v1.2.28
+
+RUN git clone --depth 1 --branch "${NANOCODE_REF}" https://github.com/nanogpt-community/nanocode.git nanocode
 
 # Install dependencies and build the opencode package
 WORKDIR /build/nanocode

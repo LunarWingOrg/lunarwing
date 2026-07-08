@@ -28,11 +28,13 @@ jobs:
           CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
         run: |
           set -euo pipefail
-
           git clone --mirror "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo.git
-          
-          cd repo.git
 
+          cd repo.git
           git remote set-url --push origin "https://${CODEBERG_AUTH_USER}:${CODEBERG_TOKEN}@codeberg.org/${CODEBERG_OWNER}/${CODEBERG_REPO}.git"
           git fetch -p origin
+
+          # strip GitHub's hidden pull refs before mirroring — Codeberg rejects writes to refs/pull/*
+          git for-each-ref --format='delete %(refname)' refs/pull | git update-ref --stdin
+
           git push --mirror

@@ -334,6 +334,7 @@ Commands:
   migrate-owner-scope <name>       Rekey DB data from 'default' to tenant scope
     --from <old_scope>             Old owner_id (default: 'default')
                                    (run after patch-env adds LUNARWING_OWNER_ID)
+  owner-scopes <name>              Print restored owner scopes and row counts
 
   list-tenants                     Show all tenants with ports and status
   status <name>                    Detailed status for one tenant
@@ -1703,7 +1704,7 @@ build_tenant() {
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
-    build_nanocode_worker "false"
+    build_nanocode_worker "false" "$with_toolchains"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
@@ -1812,7 +1813,7 @@ build_all() {
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
-    build_nanocode_worker "false"
+    build_nanocode_worker "false" "$with_toolchains"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
@@ -1838,30 +1839,20 @@ build_all() {
 
 build_nanocode_worker() {
   local no_cache="${1:-false}"
+  local with_toolchains="${2:-false}"
+  local nanocode_ref="${3:-v1.2.28}"
   local nanocode_dir="${LUNARWING_ROOT}/lunarcode4lunarwing"
-  local nanocode_src="${LUNARWING_ROOT}/nanocode-config/nanocode"
 
   [[ -d "$nanocode_dir" ]] || die "nanocode worker dir not found at $nanocode_dir"
 
   ensure_container_runtime
 
-  # Ensure nanocode source is available in the build context.
-  # Docker COPY cannot follow symlinks outside the build context, so we
-  # must copy the directory rather than symlinking it.
-  if [[ ! -d "$nanocode_dir/nanocode" ]] || [[ -L "$nanocode_dir/nanocode" ]]; then
-    if [[ -d "$nanocode_src" ]]; then
-      # Remove stale symlink if present
-      rm -f "$nanocode_dir/nanocode" 2>/dev/null || true
-      say "copying nanocode source into build context ..."
-      cp -rL "$nanocode_src" "$nanocode_dir/nanocode"
-    else
-      die "nanocode source not found at $nanocode_src; cannot build worker image"
-    fi
-  fi
-
-  say "building nanocode worker Docker image ..."
+  say "building nanocode worker Docker image (nanocode ref: ${nanocode_ref}) ..."
   local cache_flag=""
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
+
+  local toolchain_arg=""
+  [[ "$with_toolchains" == "true" ]] && toolchain_arg="--build-arg WITH_TOOLCHAINS=true"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
     # --network=host (F8): rootless/rootful podman's default build network can't
@@ -1871,10 +1862,10 @@ build_nanocode_worker() {
     # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
     # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct
     # if the image is ever run directly / under a healthcheck-honouring runtime).
-    podman build $cache_flag --network=host --format docker -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    podman build $cache_flag $toolchain_arg --network=host --format docker --build-arg NANOCODE_REF="${nanocode_ref}" -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   else
-    docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    docker build $cache_flag $toolchain_arg --build-arg NANOCODE_REF="${nanocode_ref}" -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   fi
 
@@ -2967,6 +2958,41 @@ patch_tenant_env() {
 # existing tenant-scoped row and copying content from the old row if the new
 # one is empty.
 #
+owner_scope_tables() {
+  printf '%s\n' \
+    settings conversations memory_documents routines agent_jobs api_tokens \
+    heartbeat_state reflex_patterns user_identities secrets wasm_tools \
+    tool_rate_limit_state secret_usage_log leak_detection_events wasm_channels
+}
+
+# Print aggregate owner-scope counts as: <user_id><tab><row_count>
+owner_scope_rows() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_container_runtime
+
+  local container_name="lunarwing-pg-$name"
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' — start the tenant's pg container first"
+
+  local psql_cmd="psql -U lunarwing -d lunarwing"
+  local selects="" sep="" tbl exists
+  while IFS= read -r tbl; do
+    exists="$(cd / && _ctr "$name" exec "$container_name" $psql_cmd -tAc \
+      "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='$tbl' AND column_name='user_id'" 2>/dev/null || true)"
+    [[ "$exists" == "1" ]] || continue
+    selects+="${sep}SELECT user_id, count(*)::bigint AS row_count FROM $tbl GROUP BY user_id"
+    sep=" UNION ALL "
+  done < <(owner_scope_tables)
+
+  [[ -n "$selects" ]] || return 0
+  local sql
+  sql="SELECT user_id, sum(row_count)::bigint FROM ($selects) s GROUP BY user_id ORDER BY user_id;"
+  cd / && _ctr "$name" exec "$container_name" \
+    psql -U lunarwing -d lunarwing -tA -F $'\t' -c "$sql"
+}
+
 # Check whether a tenant's DB has orphaned old-scope rows that need migration.
 # Returns 0 (needs migration) or 1 (already clean / DB unreachable).
 # Usage: _owner_scope_needs_migration <name> [old_scope]
@@ -3029,7 +3055,8 @@ migrate_owner_scope() {
   # Tables with a user_id column (base tables only, not views).
   # Discovered via information_schema — kept as a static list so the migration
   # is deterministic and doesn't break if a view is added/renamed.
-  local tables="settings conversations memory_documents routines agent_jobs api_tokens heartbeat_state reflex_patterns user_identities secrets tool_rate_limit_state secret_usage_log wasm_channels"
+  local tables
+  tables="$(owner_scope_tables)"
 
   # Stop the daemon first so it doesn't re-create 'default' rows mid-migration.
   ensure_init_system
@@ -3085,6 +3112,11 @@ migrate_owner_scope() {
         sql="DELETE FROM secrets d USING secrets t
                WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
              UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      wasm_tools)  # UNIQUE (user_id, name, version)
+        sql="DELETE FROM wasm_tools d USING wasm_tools t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.name=t.name AND d.version=t.version;
+             UPDATE wasm_tools SET user_id='$name' WHERE user_id='$old_scope';" ;;
       routines)  # UNIQUE (user_id, name)
         sql="DELETE FROM routines d USING routines t
                WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
@@ -3119,7 +3151,7 @@ migrate_owner_scope() {
                  AND d.metadata->>'thread_type'='heartbeat'
                  AND t.metadata->>'thread_type'='heartbeat';
              UPDATE conversations SET user_id='$name' WHERE user_id='$old_scope';" ;;
-      *)  # agent_jobs, api_tokens, user_identities, secret_usage_log: no user_id-bearing unique key
+      *)  # agent_jobs, api_tokens, user_identities, secret_usage_log, leak_detection_events: no user_id-bearing unique key
         sql="UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" ;;
     esac
 
@@ -6659,14 +6691,18 @@ main() {
     build-nanocode-worker)
       require_root
       local no_cache="false"
+      local with_toolchains="false"
+      local nanocode_ref="v1.2.28"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --no-cache) no_cache="true"; shift ;;
-          -*)         die "unknown flag: $1" ;;
-          *)          die "unexpected argument: $1" ;;
+          --no-cache)        no_cache="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          --nanocode-ref)    nanocode_ref="$2"; shift 2 ;;
+          -*)                die "unknown flag: $1" ;;
+          *)                 die "unexpected argument: $1" ;;
         esac
       done
-      build_nanocode_worker "$no_cache"
+      build_nanocode_worker "$no_cache" "$with_toolchains" "$nanocode_ref"
       ;;
 
     build-pebble-worker)
@@ -6918,6 +6954,14 @@ main() {
       [[ -n "$name" ]] || die "usage: migrate-owner-scope <name> [--from <old_scope>]"
       ports_registry_init
       migrate_owner_scope "$name" "$old_scope"
+      ;;
+
+    owner-scopes)
+      require_root
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "usage: owner-scopes <name>"
+      ports_registry_init
+      owner_scope_rows "$name"
       ;;
 
     backup-tenant)
