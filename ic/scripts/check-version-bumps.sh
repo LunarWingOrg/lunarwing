@@ -6,6 +6,23 @@ set -euo pipefail
 
 ERRORS=0
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+REPO_ROOT=$(git -C "$PROJECT_ROOT" rev-parse --show-toplevel)
+PROJECT_PREFIX=$(git -C "$PROJECT_ROOT" rev-parse --show-prefix)
+PROJECT_PREFIX=${PROJECT_PREFIX%/}
+
+cd "$PROJECT_ROOT"
+
+repo_file_path() {
+    local file="$1"
+    if [[ -n "$PROJECT_PREFIX" ]]; then
+        printf '%s/%s' "$PROJECT_PREFIX" "$file"
+    else
+        printf '%s' "$file"
+    fi
+}
+
 # --- Skip mechanism -----------------------------------------------------------
 
 if [[ "${PR_LABELS:-}" == *"skip-version-check"* ]]; then
@@ -31,7 +48,11 @@ if ! git rev-parse "origin/${BASE_BRANCH}" >/dev/null 2>&1; then
     git fetch origin "$BASE_BRANCH" --depth=1
 fi
 
-CHANGED_FILES=$(git diff --name-only "origin/${BASE_BRANCH}...HEAD")
+if [[ -n "$PROJECT_PREFIX" ]]; then
+    CHANGED_FILES=$(git -C "$REPO_ROOT" diff --name-only --relative="$PROJECT_PREFIX" "origin/${BASE_BRANCH}...HEAD" -- "$PROJECT_PREFIX")
+else
+    CHANGED_FILES=$(git -C "$REPO_ROOT" diff --name-only "origin/${BASE_BRANCH}...HEAD")
+fi
 
 if [[ -z "$CHANGED_FILES" ]]; then
     echo "No changed files detected. Nothing to check."
@@ -54,7 +75,7 @@ extract_wit_version() {
 # Extract version from the base branch copy of a file
 extract_wit_version_base() {
     local file="$1"
-    git show "origin/${BASE_BRANCH}:${file}" 2>/dev/null \
+    git show "origin/${BASE_BRANCH}:$(repo_file_path "$file")" 2>/dev/null \
         | sed -n 's/^[[:space:]]*package[[:space:]]\+[^@]*@\([0-9][0-9.]*[0-9]\)[[:space:]]*;.*/\1/p' \
         | head -n1 || true
 }
@@ -84,7 +105,7 @@ extract_json_version() {
 # Extract JSON "version" from the base branch copy of a file
 extract_json_version_base() {
     local file="$1"
-    git show "origin/${BASE_BRANCH}:${file}" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true
+    git show "origin/${BASE_BRANCH}:$(repo_file_path "$file")" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true
 }
 
 # Return 0 if $1 (new) is strictly greater than $2 (old) via sort -V, or old is empty.
