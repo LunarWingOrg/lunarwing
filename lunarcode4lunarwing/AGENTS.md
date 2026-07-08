@@ -18,15 +18,13 @@ The `lunarwing-agent-v1` WebSocket subprotocol (legacy alias `ironclaw-agent-v1`
 
 ## Build Notes
 
-The Dockerfile copies the nanocode monorepo source from the build context. The `nanocode/` directory is expected as a sibling or symlink. If it's missing, the build will fail.
+The Dockerfile clones the upstream nanocode repo at build time. For reproducible builds, pin a specific tag by changing the `ARG NANOCODE_REF` line, or override at build time:
 
-Before building, ensure:
 ```bash
-# If nanocode source is in nanocode-config/nanocode:
-ln -s ../nanocode-config/nanocode ./nanocode
-# Or copy it
-cp -r ../nanocode-config/nanocode ./nanocode
+docker build --build-arg NANOCODE_REF=v1.2.28 -t lunarwing-worker-nanocode:latest .
 ```
+
+The `nanocode/` directory in this repo is NOT needed for builds — it's only a cached copy from the previous vendoring approach and is gitignored.
 
 ## Do Not
 
