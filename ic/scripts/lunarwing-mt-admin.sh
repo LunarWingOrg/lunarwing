@@ -1703,7 +1703,7 @@ build_tenant() {
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
-    build_nanocode_worker "false"
+    build_nanocode_worker "false" "$with_toolchains"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
@@ -1812,7 +1812,7 @@ build_all() {
   if [[ "$with_nanocode" == "true" ]]; then
     say ""
     say "=== Building nanocode worker image ==="
-    build_nanocode_worker "false"
+    build_nanocode_worker "false" "$with_toolchains"
   fi
 
   if [[ "$with_pebble" == "true" ]]; then
@@ -1838,30 +1838,20 @@ build_all() {
 
 build_nanocode_worker() {
   local no_cache="${1:-false}"
+  local with_toolchains="${2:-false}"
+  local nanocode_ref="${3:-v1.2.28}"
   local nanocode_dir="${LUNARWING_ROOT}/lunarcode4lunarwing"
-  local nanocode_src="${LUNARWING_ROOT}/nanocode-config/nanocode"
 
   [[ -d "$nanocode_dir" ]] || die "nanocode worker dir not found at $nanocode_dir"
 
   ensure_container_runtime
 
-  # Ensure nanocode source is available in the build context.
-  # Docker COPY cannot follow symlinks outside the build context, so we
-  # must copy the directory rather than symlinking it.
-  if [[ ! -d "$nanocode_dir/nanocode" ]] || [[ -L "$nanocode_dir/nanocode" ]]; then
-    if [[ -d "$nanocode_src" ]]; then
-      # Remove stale symlink if present
-      rm -f "$nanocode_dir/nanocode" 2>/dev/null || true
-      say "copying nanocode source into build context ..."
-      cp -rL "$nanocode_src" "$nanocode_dir/nanocode"
-    else
-      die "nanocode source not found at $nanocode_src; cannot build worker image"
-    fi
-  fi
-
-  say "building nanocode worker Docker image ..."
+  say "building nanocode worker Docker image (nanocode ref: ${nanocode_ref}) ..."
   local cache_flag=""
   [[ "$no_cache" == "true" ]] && cache_flag="--no-cache"
+
+  local toolchain_arg=""
+  [[ "$with_toolchains" == "true" ]] && toolchain_arg="--build-arg WITH_TOOLCHAINS=true"
 
   if [[ "$CONTAINER_RT" == "podman" ]]; then
     # --network=host (F8): rootless/rootful podman's default build network can't
@@ -1871,10 +1861,10 @@ build_nanocode_worker() {
     # HEALTHCHECK ("not supported for OCI image format"); build docker-format so the
     # baked healthcheck survives (harmless for the OpenRC init-unit probe, correct
     # if the image is ever run directly / under a healthcheck-honouring runtime).
-    podman build $cache_flag --network=host --format docker -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    podman build $cache_flag $toolchain_arg --network=host --format docker --build-arg NANOCODE_REF="${nanocode_ref}" -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   else
-    docker build $cache_flag -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
+    docker build $cache_flag $toolchain_arg --build-arg NANOCODE_REF="${nanocode_ref}" -t lunarwing-worker-nanocode:latest "$nanocode_dir" \
       || die "nanocode worker image build failed"
   fi
 
@@ -6659,14 +6649,18 @@ main() {
     build-nanocode-worker)
       require_root
       local no_cache="false"
+      local with_toolchains="false"
+      local nanocode_ref="v1.2.28"
       while [[ $# -gt 0 ]]; do
         case "$1" in
-          --no-cache) no_cache="true"; shift ;;
-          -*)         die "unknown flag: $1" ;;
-          *)          die "unexpected argument: $1" ;;
+          --no-cache)        no_cache="true"; shift ;;
+          --with-toolchains) with_toolchains="true"; shift ;;
+          --nanocode-ref)    nanocode_ref="$2"; shift 2 ;;
+          -*)                die "unknown flag: $1" ;;
+          *)                 die "unexpected argument: $1" ;;
         esac
       done
-      build_nanocode_worker "$no_cache"
+      build_nanocode_worker "$no_cache" "$with_toolchains" "$nanocode_ref"
       ;;
 
     build-pebble-worker)
