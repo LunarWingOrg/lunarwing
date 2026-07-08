@@ -112,16 +112,16 @@ fn test_pairing_reject_invalid_code() {
 fn test_pairing_multiple_channels_isolated() {
     let (store, _) = test_store();
 
-    let r_xmpp = store.upsert_request("xmpp", "user_a", None).unwrap();
+    let r_weechat = store.upsert_request("weechat", "user_a", None).unwrap();
     let r_xmpp = store.upsert_request("xmpp", "user_b", None).unwrap();
 
     // Each channel has its own pending
-    assert_eq!(store.list_pending("xmpp").unwrap().len(), 1);
+    assert_eq!(store.list_pending("weechat").unwrap().len(), 1);
     assert_eq!(store.list_pending("xmpp").unwrap().len(), 1);
 
     // Approve in one channel doesn't affect the other
-    store.approve("xmpp", &r_xmpp.code).unwrap();
-    assert!(store.is_sender_allowed("xmpp", "user_a", None).unwrap());
+    store.approve("weechat", &r_weechat.code).unwrap();
+    assert!(store.is_sender_allowed("weechat", "user_a", None).unwrap());
     assert!(!store.is_sender_allowed("xmpp", "user_a", None).unwrap());
 
     store.approve("xmpp", &r_xmpp.code).unwrap();
