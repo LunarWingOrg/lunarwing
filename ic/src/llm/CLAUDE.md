@@ -35,7 +35,6 @@ Set via `LLM_BACKEND` env var:
 | Value | Provider | Key env vars |
 |-------|----------|-------------|
 | `lunarwing_cloud` (default) | LunarWing Cloud Chat Completions | `LUNARWING_CLOUD_SESSION_TOKEN` or `LUNARWING_CLOUD_API_KEY` |
-| `openai` | OpenAI | `OPENAI_API_KEY` |
 | `anthropic` | Anthropic | `ANTHROPIC_API_KEY` |
 | `ollama` | Ollama local | `OLLAMA_BASE_URL` |
 | `openai_compatible` | Any OpenAI-compatible endpoint | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` |

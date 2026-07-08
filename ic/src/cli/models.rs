@@ -42,7 +42,7 @@ pub enum ModelsCommand {
 
     /// Set the LLM provider
     SetProvider {
-        /// Provider ID or alias (e.g., "openai", "anthropic", "ollama")
+        /// Provider ID or alias (e.g., "openai_compatible", "ollama")
         provider: String,
 
         /// Also set the model (defaults to provider's default model)
@@ -725,8 +725,8 @@ mod tests {
         let registry = ProviderRegistry::load();
         let all = registry.all();
         assert!(
-            all.len() >= 3,
-            "should have at least 3 built-in providers, got {}",
+            all.len() >= 2,
+            "should have at least 2 built-in providers, got {}",
             all.len()
         );
     }
@@ -735,9 +735,9 @@ mod tests {
     fn registry_find_by_alias() {
         let registry = ProviderRegistry::load();
         let def = registry
-            .find("open_ai")
-            .expect("open_ai alias should resolve");
-        assert_eq!(def.id, "openai");
+            .find("compatible")
+            .expect("compatible alias should resolve");
+        assert_eq!(def.id, "openai_compatible");
     }
 
     #[test]
@@ -785,13 +785,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("openai", None, Some(&toml_path)).expect("set provider");
+        cmd_set_provider("openai_compatible", None, Some(&toml_path)).expect("set provider");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
-        assert_eq!(settings.selected_model.as_deref(), Some("gpt-5-mini"));
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai_compatible"));
+        assert_eq!(settings.selected_model.as_deref(), Some("default"));
     }
 
     #[test]
@@ -799,13 +799,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("openai", Some("o3-mini"), Some(&toml_path))
+        cmd_set_provider("openai_compatible", Some("o3-mini"), Some(&toml_path))
             .expect("set provider with model");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(settings.selected_model.as_deref(), Some("o3-mini"));
     }
 
@@ -818,13 +818,13 @@ mod tests {
         // (it returns early when config_path is Some).
         // We verify by checking that cmd_set_provider succeeds without
         // trying to write to the default ~/.lunarwing/.env.
-        cmd_set_provider("openai", None, Some(&toml_path))
+        cmd_set_provider("openai_compatible", None, Some(&toml_path))
             .expect("set provider with custom config");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
-        assert_eq!(settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(settings.llm_backend.as_deref(), Some("openai_compatible"));
         // The key assertion is that no error was thrown trying to write
         // to the default .env — sync_to_dotenv skipped it.
     }
@@ -850,14 +850,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let toml_path = dir.path().join("config.toml");
 
-        cmd_set_provider("open_ai", None, Some(&toml_path)).expect("set via alias");
+        cmd_set_provider("compatible", None, Some(&toml_path)).expect("set via alias");
 
         let settings = Settings::load_toml(&toml_path)
             .expect("read toml")
             .expect("should have settings");
         assert_eq!(
             settings.llm_backend.as_deref(),
-            Some("openai"),
+            Some("openai_compatible"),
             "alias should be normalized to canonical ID"
         );
     }

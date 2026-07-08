@@ -954,7 +954,7 @@ INJECTED="pwned"#;
         // Simulate what the wizard writes for LLM backend selection
         let vars = [
             ("DATABASE_BACKEND", "libsql"),
-            ("LLM_BACKEND", "openai"),
+            ("LLM_BACKEND", "openai_compatible"),
             ("ONBOARD_COMPLETED", "true"),
         ];
         let mut content = String::new();
@@ -974,7 +974,7 @@ INJECTED="pwned"#;
         assert!(llm_backend.is_some(), "LLM_BACKEND must be present");
         assert_eq!(
             llm_backend.unwrap().1,
-            "openai",
+            "openai_compatible",
             "LLM_BACKEND must survive .env round-trip"
         );
     }
@@ -1384,7 +1384,10 @@ INJECTED="pwned"#;
         std::fs::write(&env_path, initial).unwrap();
 
         // Upsert wizard vars — should preserve HTTP_HOST and CUSTOM_VAR
-        let vars = [("DATABASE_BACKEND", "libsql"), ("LLM_BACKEND", "openai")];
+        let vars = [
+            ("DATABASE_BACKEND", "libsql"),
+            ("LLM_BACKEND", "openai_compatible"),
+        ];
         upsert_bootstrap_vars_to(&env_path, &vars).unwrap();
 
         let parsed: Vec<(String, String)> = dotenvy::from_path_iter(&env_path)
@@ -1422,7 +1425,7 @@ INJECTED="pwned"#;
         assert!(
             parsed
                 .iter()
-                .any(|(k, v)| k == "LLM_BACKEND" && v == "openai"),
+                .any(|(k, v)| k == "LLM_BACKEND" && v == "openai_compatible"),
             "LLM_BACKEND must be added"
         );
 

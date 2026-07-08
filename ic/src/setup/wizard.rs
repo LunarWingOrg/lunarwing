@@ -3,7 +3,7 @@
 //! The wizard guides users through:
 //! 1. Database connection
 //! 2. Security (secrets master key)
-//! 3. Inference provider (LunarWing Cloud, OpenAI, OpenAI Codex, Ollama, OpenAI-compatible)
+//! 3. Inference provider (LunarWing Cloud, OpenAI Codex, Ollama, OpenAI-compatible)
 //! 4. Model selection
 //! 5. Embeddings
 //! 6. Channel configuration
@@ -26,10 +26,7 @@ use crate::channels::wasm::{
 };
 use crate::llm::models::{
     build_lunarwing_cloud_model_fetch_config, fetch_ollama_models, fetch_openai_compatible_models,
-    fetch_openai_models,
 };
-#[cfg(test)]
-use crate::llm::models::{is_openai_chat_model, sort_openai_models};
 use crate::llm::{SessionConfig, SessionManager};
 use crate::secrets::{SecretsCrypto, SecretsStore};
 use crate::settings::{KeySource, Settings};
@@ -416,8 +413,6 @@ impl SetupWizard {
                     self.settings.llm_backend = Some(b);
                 } else if std::env::var("LUNARWING_CLOUD_API_KEY").is_ok() {
                     self.settings.llm_backend = Some("lunarwing_cloud".to_string());
-                } else if std::env::var("OPENAI_API_KEY").is_ok() {
-                    self.settings.llm_backend = Some("openai".to_string());
                 } else if std::env::var("OPENROUTER_API_KEY").is_ok() {
                     self.settings.llm_backend = Some("openrouter".to_string());
                 }
@@ -441,29 +436,6 @@ impl SetupWizard {
                 self.llm_api_key = Some(SecretString::from(api_key));
                 if self.settings.selected_model.is_none() {
                     let default = crate::llm::DEFAULT_MODEL;
-                    self.settings.selected_model = Some(default.to_string());
-                    print_info(&format!("Using default model: {default}"));
-                }
-                self.persist_after_step().await;
-            } else if let Ok(api_key) = std::env::var("OPENAI_API_KEY")
-                && !api_key.is_empty()
-                && self.settings.llm_backend.as_deref() == Some("openai")
-            {
-                // OpenAI key detected — skip interactive prompts
-                print_info("OPENAI_API_KEY found — using OpenAI provider");
-                if let Ok(ctx) = self.init_secrets_context().await {
-                    let key = SecretString::from(api_key.clone());
-                    if let Err(e) = ctx.save_secret("llm_openai_api_key", &key).await {
-                        tracing::warn!("Failed to persist OPENAI_API_KEY to secrets: {}", e);
-                    }
-                }
-                self.llm_api_key = Some(SecretString::from(api_key));
-                let registry = crate::llm::ProviderRegistry::load();
-                if self.settings.selected_model.is_none() {
-                    let default = registry
-                        .find("openai")
-                        .map(|d| d.default_model.as_str())
-                        .unwrap_or("gpt-5-mini");
                     self.settings.selected_model = Some(default.to_string());
                     print_info(&format!("Using default model: {default}"));
                 }
@@ -1422,7 +1394,6 @@ impl SetupWizard {
                 "lunarwing_cloud",
                 std::env::var("LUNARWING_CLOUD_API_KEY").is_ok(),
             ),
-            ("openai", std::env::var("OPENAI_API_KEY").is_ok()),
             ("openrouter", std::env::var("OPENROUTER_API_KEY").is_ok()),
         ]
         .into_iter()
@@ -1688,10 +1659,7 @@ impl SetupWizard {
         hint_url: &str,
         override_display_name: Option<&str>,
     ) -> Result<(), SetupError> {
-        let display_name = override_display_name.unwrap_or(match backend {
-            "openai" => "OpenAI",
-            other => other,
-        });
+        let display_name = override_display_name.unwrap_or(backend);
 
         self.set_llm_backend_preserving_model(backend);
 
@@ -1909,7 +1877,6 @@ impl SetupWizard {
                             .map(|k| k.expose_secret().to_string());
 
                         let models = match backend {
-                            "openai" => fetch_openai_models(cached_key.as_deref()).await,
                             "ollama" => {
                                 let base_url = self
                                     .settings
@@ -2069,18 +2036,8 @@ impl SetupWizard {
             .llm_backend
             .as_deref()
             .unwrap_or("lunarwing_cloud");
-        let has_openai_key = std::env::var("OPENAI_API_KEY").is_ok()
-            || (backend == "openai" && self.llm_api_key.is_some());
+        let has_openai_key = std::env::var("OPENAI_API_KEY").is_ok();
         let has_lunarwing_cloud = backend == "lunarwing_cloud" || self.session_manager.is_some();
-
-        // If the LLM backend is OpenAI and we already have a key, default to OpenAI embeddings
-        if backend == "openai" && has_openai_key {
-            self.settings.embeddings.enabled = true;
-            self.settings.embeddings.provider = "openai".to_string();
-            self.settings.embeddings.model = "text-embedding-3-small".to_string();
-            print_success("Embeddings enabled via OpenAI (using existing API key)");
-            return Ok(());
-        }
 
         // If no LunarWing Cloud session and no OpenAI key, only OpenAI is viable
         if !has_lunarwing_cloud && !has_openai_key {
@@ -3141,7 +3098,6 @@ impl SetupWizard {
         // Fact 1: Provider + model
         let provider_display = match self.settings.llm_backend.as_deref() {
             Some("lunarwing_cloud") => "LunarWing Cloud".to_string(),
-            Some("openai") => "OpenAI".to_string(),
             Some("ollama") => "Ollama".to_string(),
             Some("openai_compatible") => "OpenAI-compatible".to_string(),
             Some("openai_codex") => "OpenAI Codex".to_string(),
@@ -3657,12 +3613,12 @@ mod tests {
     fn test_seed_default_instance_assets_preserves_existing_config() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
-        std::fs::write(&config_path, "llm_backend = \"openai\"\n").unwrap();
+        std::fs::write(&config_path, "llm_backend = \"openai_compatible\"\n").unwrap();
 
         seed_default_instance_assets_to(dir.path()).expect("seed should succeed");
 
         let current = std::fs::read_to_string(config_path).expect("config should still exist");
-        assert_eq!(current, "llm_backend = \"openai\"\n");
+        assert_eq!(current, "llm_backend = \"openai_compatible\"\n");
     }
 
     #[test]
@@ -3795,54 +3751,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_openai_models_static_fallback() {
-        let _guard = EnvGuard::clear("OPENAI_API_KEY");
-        let models = fetch_openai_models(None).await;
-        assert!(!models.is_empty());
-        assert_eq!(models[0].0, "gpt-5.3-codex");
-        assert!(
-            models.iter().any(|(id, _)| id.contains("gpt")),
-            "static defaults should include a GPT model"
-        );
-    }
-
-    #[test]
-    fn test_is_openai_chat_model_includes_gpt5_and_filters_non_chat_variants() {
-        assert!(is_openai_chat_model("gpt-5"));
-        assert!(is_openai_chat_model("gpt-5-mini-2026-01-01"));
-        assert!(is_openai_chat_model("o3-2025-04-16"));
-        assert!(!is_openai_chat_model("chatgpt-image-latest"));
-        assert!(!is_openai_chat_model("gpt-4o-realtime-preview"));
-        assert!(!is_openai_chat_model("gpt-4o-mini-transcribe"));
-        assert!(!is_openai_chat_model("text-embedding-3-large"));
-    }
-
-    #[test]
-    fn test_sort_openai_models_prioritizes_best_models_first() {
-        let mut models = vec![
-            ("gpt-4o-mini".to_string(), "gpt-4o-mini".to_string()),
-            ("gpt-5-mini".to_string(), "gpt-5-mini".to_string()),
-            ("o3".to_string(), "o3".to_string()),
-            ("gpt-4.1".to_string(), "gpt-4.1".to_string()),
-            ("gpt-5".to_string(), "gpt-5".to_string()),
-        ];
-
-        sort_openai_models(&mut models);
-
-        let ordered: Vec<String> = models.into_iter().map(|(id, _)| id).collect();
-        assert_eq!(
-            ordered,
-            vec![
-                "gpt-5".to_string(),
-                "gpt-5-mini".to_string(),
-                "o3".to_string(),
-                "gpt-4.1".to_string(),
-                "gpt-4o-mini".to_string(),
-            ]
-        );
-    }
-
-    #[tokio::test]
     async fn test_fetch_ollama_models_unreachable_fallback() {
         // Point at a port nothing listens on
         let models = fetch_ollama_models("http://127.0.0.1:1").await;
@@ -3904,30 +3812,37 @@ mod tests {
     #[test]
     fn test_set_llm_backend_preserves_model_when_backend_unchanged() {
         let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("openai".to_string());
+        wizard.settings.llm_backend = Some("openai_compatible".to_string());
         wizard.settings.selected_model = Some("gpt-4o".to_string());
 
-        wizard.set_llm_backend_preserving_model("openai");
+        wizard.set_llm_backend_preserving_model("openai_compatible");
 
-        assert_eq!(wizard.settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(
+            wizard.settings.llm_backend.as_deref(),
+            Some("openai_compatible")
+        );
         assert_eq!(wizard.settings.selected_model.as_deref(), Some("gpt-4o"));
     }
 
     #[test]
     fn test_set_llm_backend_clears_model_when_backend_was_unset() {
         let mut wizard = SetupWizard::new();
+        wizard.settings.llm_backend = None;
         wizard.settings.selected_model = Some("gpt-4o".to_string());
 
-        wizard.set_llm_backend_preserving_model("openai");
+        wizard.set_llm_backend_preserving_model("openai_compatible");
 
-        assert_eq!(wizard.settings.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(
+            wizard.settings.llm_backend.as_deref(),
+            Some("openai_compatible")
+        );
         assert_eq!(wizard.settings.selected_model, None);
     }
 
     #[test]
     fn test_set_llm_backend_clears_model_when_backend_changes() {
         let mut wizard = SetupWizard::new();
-        wizard.settings.llm_backend = Some("openai".to_string());
+        wizard.settings.llm_backend = Some("ollama".to_string());
         wizard.settings.selected_model = Some("gpt-4o".to_string());
 
         wizard.set_llm_backend_preserving_model("openai_compatible");
@@ -3970,10 +3885,10 @@ mod tests {
         wizard.settings.selected_model = Some("llama3".to_string());
 
         // Simulate switching to a different provider -- model should be cleared
-        if wizard.settings.llm_backend.as_deref() != Some("openai") {
+        if wizard.settings.llm_backend.as_deref() != Some("openai_compatible") {
             wizard.settings.selected_model = None;
         }
-        wizard.settings.llm_backend = Some("openai".to_string());
+        wizard.settings.llm_backend = Some("openai_compatible".to_string());
 
         assert!(
             wizard.settings.selected_model.is_none(),

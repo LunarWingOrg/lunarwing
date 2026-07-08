@@ -58,7 +58,8 @@ LLM_MODEL=tensorzero::function_name::lunarwing
 To point directly at OpenAI (bypassing TensorZero):
 
 ```bash
-LLM_BACKEND=openai
+LLM_BACKEND=openai_compatible
+LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=sk-...
 LLM_MODEL=gpt-4o
 ```

@@ -16,7 +16,7 @@ pub fn map_openclaw_config_to_settings(
         if let Some(ref provider) = llm.provider {
             settings.insert(
                 "llm.backend".to_string(),
-                serde_json::Value::String(provider.clone()),
+                serde_json::Value::String(map_llm_provider(provider)),
             );
         }
 
@@ -59,6 +59,13 @@ pub fn map_openclaw_config_to_settings(
     }
 
     settings
+}
+
+fn map_llm_provider(provider: &str) -> String {
+    match provider {
+        "openai" | "open_ai" => "openai_compatible".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// Extract credentials from OpenClaw configuration.
@@ -109,7 +116,7 @@ mod tests {
 
         assert_eq!(
             settings.get("llm.backend"),
-            Some(&serde_json::Value::String("openai".to_string()))
+            Some(&serde_json::Value::String("openai_compatible".to_string()))
         );
         assert_eq!(
             settings.get("llm.selected_model"),

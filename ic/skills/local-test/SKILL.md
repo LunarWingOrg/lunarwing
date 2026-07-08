@@ -83,13 +83,14 @@ docker run --rm -p 3003:3003 \
   lunarwing-test
 ```
 
-**OpenAI:**
+**OpenAI API via OpenAI-compatible backend:**
 ```bash
 docker run --rm -p 3003:3003 \
   -e ONBOARD_COMPLETED=true \
   -e CLI_ENABLED=false \
-  -e LLM_BACKEND=openai \
-  -e OPENAI_API_KEY=<your-key> \
+  -e LLM_BACKEND=openai_compatible \
+  -e LLM_BASE_URL=https://api.openai.com/v1 \
+  -e LLM_API_KEY=<your-key> \
   lunarwing-test
 ```
 

@@ -395,7 +395,7 @@ mod security_tests {
     #[test]
     fn test_llm_config_debug_redacts_api_key() {
         let config = OpenClawLlmConfig {
-            provider: Some("openai".to_string()),
+            provider: Some("openai_compatible".to_string()),
             model: Some("gpt-4".to_string()),
             api_key: Some(SecretString::new("sk-secret-key-12345".into())),
             base_url: Some("https://api.openai.com".to_string()),
@@ -428,7 +428,7 @@ mod security_tests {
     #[test]
     fn test_llm_config_without_api_key() {
         let config = OpenClawLlmConfig {
-            provider: Some("openai".to_string()),
+            provider: Some("openai_compatible".to_string()),
             model: Some("gpt-4".to_string()),
             api_key: None,
             base_url: None,

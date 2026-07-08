@@ -310,7 +310,6 @@ env-var mode or skipped secrets.
 | LunarWing Cloud Chat | Browser OAuth or session token | - | `LUNARWING_CLOUD_SESSION_TOKEN` |
 | LunarWing Cloud API | API key | `llm_lunarwing_cloud_api_key` | `LUNARWING_CLOUD_API_KEY` |
 | Anthropic | API key | `llm_anthropic_api_key` | `ANTHROPIC_API_KEY` |
-| OpenAI | API key | `llm_openai_api_key` | `OPENAI_API_KEY` |
 | Ollama | None | - | - |
 | OpenRouter | API key | `llm_openrouter_api_key` | `OPENROUTER_API_KEY` |
 | OpenAI-compatible | Optional API key | `llm_compatible_api_key` | `LLM_API_KEY` |
@@ -388,7 +387,7 @@ key first, then falls back to the standard env var.
 1. Ask "Enable semantic search?" (default: yes)
 2. Detect available providers:
    - LunarWing Cloud: if backend is `lunarwing_cloud` OR valid session exists
-   - OpenAI: if `OPENAI_API_KEY` in env OR (backend is `openai` AND cached key)
+   - OpenAI: if `OPENAI_API_KEY` is in env
 3. If both available → let user choose
 4. If only one → use it
 5. If neither → disable embeddings
@@ -635,7 +634,7 @@ pub struct Settings {
     pub secrets_master_key_source: KeySource, // Keychain | Env | None
 
     // Step 3: Inference
-    pub llm_backend: Option<String>,         // "lunarwing_cloud" | "anthropic" | "openai" | "ollama" | "openai_compatible" | "bedrock"
+    pub llm_backend: Option<String>,         // "lunarwing_cloud" | "ollama" | "openai_compatible" | "openai_codex"
     pub ollama_base_url: Option<String>,
     pub openai_compatible_base_url: Option<String>,
 

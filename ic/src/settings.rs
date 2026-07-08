@@ -39,7 +39,7 @@ pub struct CustomLlmProviderSettings {
 /// Per-provider overrides for built-in LLM providers (API key and/or model).
 ///
 /// Stored as `llm_builtin_overrides` in the settings store, keyed by provider ID
-/// (e.g. `"openai"`, `"gemini"`). Resolved at startup during `LlmConfig::resolve()`.
+/// (e.g. `"openai_compatible"`). Resolved at startup during `LlmConfig::resolve()`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LlmBuiltinOverride {
     /// API key override. Takes precedence over environment variables.
@@ -111,7 +111,7 @@ pub struct Settings {
     pub secrets_master_key_hex: Option<String>,
 
     // === Step 3: Inference Provider ===
-    /// LLM backend: "lunarwing_cloud", "openai", "ollama", "openai_compatible", "tinfoil", "openai_codex".
+    /// LLM backend: "lunarwing_cloud", "ollama", "openai_compatible", "openai_codex".
     #[serde(default)]
     pub llm_backend: Option<String>,
 
@@ -2097,7 +2097,7 @@ timeout_ms = 300000
     fn wizard_recovery_defaults_dont_clobber_prior() {
         // Prior run saved non-default settings
         let prior_run = Settings {
-            llm_backend: Some("openai".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             heartbeat: HeartbeatSettings {
                 enabled: true,
@@ -2121,7 +2121,7 @@ timeout_ms = 300000
         current.merge_from(&step1);
 
         // Prior settings preserved (Step 1 doesn't touch these)
-        assert_eq!(current.llm_backend, Some("openai".to_string()));
+        assert_eq!(current.llm_backend, Some("openai_compatible".to_string()));
         assert_eq!(current.selected_model, Some("gpt-4o".to_string()));
         assert!(current.heartbeat.enabled);
         assert_eq!(current.heartbeat.interval_secs, 900);
@@ -2370,7 +2370,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
             libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
-            llm_backend: Some("openai".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             embeddings: EmbeddingsSettings {
                 enabled: true,
@@ -2493,7 +2493,7 @@ timeout_ms = 300000
             onboard_completed: true,
             database_backend: Some("libsql".to_string()),
             libsql_path: Some("/home/user/.lunarwing/lunarwing.db".to_string()),
-            llm_backend: Some("openai".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             channels: ChannelSettings {
                 http_enabled: true,
@@ -2649,15 +2649,15 @@ timeout_ms = 300000
         current.merge_from(&from_db);
         current.merge_from(&step1);
 
-        // Step 3: user switches to openai
-        let backend_changed = current.llm_backend.as_deref() != Some("openai");
+        // Step 3: user switches to ollama
+        let backend_changed = current.llm_backend.as_deref() != Some("ollama");
         assert!(backend_changed, "switching providers should be detected");
-        current.llm_backend = Some("openai".to_string());
+        current.llm_backend = Some("ollama".to_string());
         if backend_changed {
             current.selected_model = None;
         }
 
-        assert_eq!(current.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(current.llm_backend.as_deref(), Some("ollama"));
         assert!(
             current.selected_model.is_none(),
             "Model must be cleared when switching providers"
@@ -2683,7 +2683,7 @@ timeout_ms = 300000
 
         // Step 3 adds provider
         let mut after_step3 = after_step2.clone();
-        after_step3.llm_backend = Some("openai".to_string());
+        after_step3.llm_backend = Some("openai_compatible".to_string());
 
         // persist_after_step saves again — the full settings object
         let db_map_after_step3 = after_step3.to_db_map();
@@ -2704,7 +2704,7 @@ timeout_ms = 300000
         );
         assert_eq!(
             restored.llm_backend.as_deref(),
-            Some("openai"),
+            Some("openai_compatible"),
             "Step 3 provider setting must be saved"
         );
 
@@ -2716,7 +2716,7 @@ timeout_ms = 300000
 
         assert_eq!(
             merged.llm_backend.as_deref(),
-            Some("openai"),
+            Some("openai_compatible"),
             "Step 3 provider must not be clobbered by step 2 snapshot merge"
         );
         assert_eq!(
@@ -2734,7 +2734,7 @@ timeout_ms = 300000
         let prior = Settings {
             database_backend: Some("postgres".to_string()),
             database_url: Some("postgres://host/db".to_string()),
-            llm_backend: Some("openai".to_string()),
+            llm_backend: Some("openai_compatible".to_string()),
             selected_model: Some("gpt-4o".to_string()),
             ..Default::default()
         };
@@ -2761,7 +2761,7 @@ timeout_ms = 300000
         );
 
         // Prior provider/model should survive (unrelated to DB switch)
-        assert_eq!(current.llm_backend.as_deref(), Some("openai"));
+        assert_eq!(current.llm_backend.as_deref(), Some("openai_compatible"));
         assert_eq!(current.selected_model.as_deref(), Some("gpt-4o"));
 
         // Note: database_url from prior run persists in merge because

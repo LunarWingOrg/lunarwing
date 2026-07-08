@@ -1389,7 +1389,7 @@ mod tests {
         let record = LlmCallRecord {
             job_id: None,
             conversation_id: None,
-            provider: "openai",
+            provider: "openai_compatible",
             model: "gpt-4",
             input_tokens: 100,
             output_tokens: 50,

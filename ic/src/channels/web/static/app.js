@@ -4893,7 +4893,7 @@ var INFERENCE_SETTINGS = [
     group: 'cfg.group.llm',
     settings: [
       { key: 'llm_backend', label: 'cfg.llm_backend.label', description: 'cfg.llm_backend.desc',
-        type: 'select', options: ['lunarwing_cloud', 'openai', 'ollama', 'openai_compatible', 'bedrock'] },
+        type: 'select', options: ['lunarwing_cloud', 'ollama', 'openai_compatible', 'bedrock'] },
       { key: 'selected_model', label: 'cfg.selected_model.label', description: 'cfg.selected_model.desc', type: 'text' },
       { key: 'ollama_base_url', label: 'cfg.ollama_base_url.label', description: 'cfg.ollama_base_url.desc', type: 'text',
         showWhen: { key: 'llm_backend', value: 'ollama' } },

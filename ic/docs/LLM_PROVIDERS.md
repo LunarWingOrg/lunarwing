@@ -1,7 +1,7 @@
 # LLM Provider Configuration
 
-LunarWing defaults to LunarWing Cloud for model access, but supports any OpenAI-compatible
-endpoint as well as Anthropic, Ollama, and Google Gemini directly. This guide covers
+LunarWing defaults to LunarWing Cloud for model access, but supports generic
+OpenAI-compatible endpoints, including the OpenAI API itself. This guide covers
 the most common configurations.
 
 ## Provider Overview
@@ -10,7 +10,6 @@ the most common configurations.
 |---|---|---|---|
 | LunarWing Cloud | `lunarwing_cloud` | OAuth (browser) | Default; multi-model |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | Claude models |
-| OpenAI | `openai` | `OPENAI_API_KEY` | GPT models |
 | Google Gemini | `gemini_oauth` | OAuth (browser) | Gemini models; function calling |
 | Mistral | `mistral` | `MISTRAL_API_KEY` | Mistral models |
 | Groq | `groq` | `GROQ_API_KEY` | Ultra-fast LPU inference |
@@ -19,6 +18,7 @@ the most common configurations.
 | Google Gemini (API key) | `gemini` | `GEMINI_API_KEY` | Gemini via OpenAI-compat endpoint |
 | Ollama | `ollama` | No | Local inference |
 | AWS Bedrock | `bedrock` | AWS credentials | Native Converse API |
+| OpenAI API | `openai_compatible` | `LLM_API_KEY` | Direct OpenAI API via compatible endpoint |
 | vLLM / LiteLLM | `openai_compatible` | Optional | Self-hosted |
 | LM Studio | `openai_compatible` | No | Local GUI |
 
@@ -27,6 +27,10 @@ the most common configurations.
 > Cloudflare Workers AI have been removed as dedicated registry entries. You can
 > still use any of these via the generic `openai_compatible` backend by setting
 > `LLM_BASE_URL` and `LLM_API_KEY` appropriately.
+
+> **Removed backend:** `LLM_BACKEND=openai` is no longer a dedicated provider.
+> Use `LLM_BACKEND=openai_compatible` with `LLM_BASE_URL=https://api.openai.com/v1`
+> and `LLM_API_KEY` instead.
 
 ---
 
@@ -51,17 +55,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Popular models: `claude-sonnet-4-20250514`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
-
----
-
-## OpenAI (GPT)
-
-```env
-LLM_BACKEND=openai
-OPENAI_API_KEY=sk-...
-```
-
-Popular models: `gpt-4o`, `gpt-4o-mini`, `o3-mini`
 
 ---
 
@@ -177,6 +170,15 @@ Set `BEDROCK_CROSS_REGION` to route requests across AWS regions for capacity:
 
 All providers below use `LLM_BACKEND=openai_compatible`. Set `LLM_BASE_URL` to the
 provider's OpenAI-compatible endpoint and `LLM_API_KEY` to your API key.
+
+### OpenAI API
+
+```env
+LLM_BACKEND=openai_compatible
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=sk-...
+LLM_MODEL=gpt-4o
+```
 
 ### OpenRouter
 

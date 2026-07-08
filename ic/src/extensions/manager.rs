@@ -5077,7 +5077,7 @@ mod tests {
         let mgr =
             make_test_manager_with_dirs(None, tools_dir, channels_dir, Some(Arc::clone(&store)));
         let mut fields = std::collections::HashMap::new();
-        fields.insert("llm_backend".to_string(), "openai".to_string());
+        fields.insert("llm_backend".to_string(), "openai_compatible".to_string());
 
         let result = mgr
             .configure(
@@ -5102,7 +5102,7 @@ mod tests {
                 .get_setting("test", "llm_backend")
                 .await
                 .expect("get setting"),
-            Some(serde_json::json!("openai"))
+            Some(serde_json::json!("openai_compatible"))
         );
     }
 

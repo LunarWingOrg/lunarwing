@@ -266,7 +266,7 @@ pub enum Command {
     #[command(
         subcommand,
         about = "Manage LLM providers and models",
-        long_about = "List providers, view current configuration, and set active provider/model.\nExamples:\n  lunarwing models list\n  lunarwing models list openai --verbose\n  lunarwing models status\n  lunarwing models set gpt-4o\n  lunarwing models set-provider anthropic --model claude-sonnet-4-6-20250514"
+        long_about = "List providers, view current configuration, and set active provider/model.\nExamples:\n  lunarwing models list\n  lunarwing models list openai_compatible --verbose\n  lunarwing models status\n  lunarwing models set gpt-4o\n  lunarwing models set-provider openai_compatible --model gpt-4o"
     )]
     Models(ModelsCommand),
 
