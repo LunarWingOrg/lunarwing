@@ -87,9 +87,8 @@ fn api_url(base: &str, path: &str) -> String {
 }
 
 fn http_post(url: &str, body: &[u8]) -> Result<(u16, Vec<u8>), String> {
-    let resp =
-        channel_host::http_request("POST", url, &json_headers(), Some(body), Some(15000))
-            .map_err(|e| format!("HTTP POST failed: {e}"))?;
+    let resp = channel_host::http_request("POST", url, &json_headers(), Some(body), Some(15000))
+        .map_err(|e| format!("HTTP POST failed: {e}"))?;
     Ok((resp.status, resp.body))
 }
 
@@ -288,8 +287,10 @@ impl Guest for MulticaChannel {
             "complete" | _ => {
                 if let Some(tid) = task_id {
                     let body = serde_json::json!({ "output": response.content });
-                    let url =
-                        api_url(&config.multica_url, &format!("/api/daemon/tasks/{tid}/complete"));
+                    let url = api_url(
+                        &config.multica_url,
+                        &format!("/api/daemon/tasks/{tid}/complete"),
+                    );
                     let (status, resp_body) = http_post(&url, body.to_string().as_bytes())?;
                     if status < 200 || status >= 300 {
                         return Err(format!(
@@ -315,8 +316,8 @@ impl Guest for MulticaChannel {
 // ── Internal functions ────────────────────────────────────────
 
 fn load_config() -> Result<RuntimeConfig, String> {
-    let json = channel_host::workspace_read(CONFIG_PATH)
-        .ok_or("multica channel config not found")?;
+    let json =
+        channel_host::workspace_read(CONFIG_PATH).ok_or("multica channel config not found")?;
     parse_config(&json)
 }
 
@@ -385,10 +386,7 @@ fn do_register(config: &RuntimeConfig) -> Result<String, String> {
         .ok_or_else(|| "register response missing runtime id".to_string())
 }
 
-fn send_heartbeat(
-    config: &RuntimeConfig,
-    runtime_id: &str,
-) -> Result<HeartbeatResponse, String> {
+fn send_heartbeat(config: &RuntimeConfig, runtime_id: &str) -> Result<HeartbeatResponse, String> {
     let body = serde_json::json!({ "runtime_id": runtime_id });
     let url = api_url(&config.multica_url, "/api/daemon/heartbeat");
     let (status, resp_bytes) = http_post(&url, body.to_string().as_bytes())?;
@@ -402,11 +400,7 @@ fn send_heartbeat(
         .map_err(|e| format!("failed to parse heartbeat response: {e}"))
 }
 
-fn handle_heartbeat_actions(
-    config: &RuntimeConfig,
-    runtime_id: &str,
-    hb: &HeartbeatResponse,
-) {
+fn handle_heartbeat_actions(config: &RuntimeConfig, runtime_id: &str, hb: &HeartbeatResponse) {
     if let Some(pending) = &hb.pending_local_skills {
         report_local_skills(config, runtime_id, &pending.request_id);
     }
@@ -452,7 +446,7 @@ fn report_local_skills(config: &RuntimeConfig, runtime_id: &str, request_id: &st
 }
 
 fn discover_local_skills() -> Vec<serde_json::Value> {
-    let mut skills = Vec::new();
+    let skills = Vec::new();
     // Read skill index from workspace. The channel workspace prefix is
     // channels/multica/, but we read from the agent's skill discovery cache
     // at config/multica-skills.json if available.

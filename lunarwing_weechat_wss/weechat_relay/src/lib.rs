@@ -44,8 +44,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use exports::lunarwing::agent::channel::{
-    AgentResponse, ChannelConfig, Guest, HttpEndpointConfig, IncomingHttpRequest,
-    OutgoingHttpResponse, PollConfig, StatusType, StatusUpdate,
+    AgentResponse, ChannelConfig, Guest, IncomingHttpRequest, OutgoingHttpResponse, PollConfig,
+    StatusType, StatusUpdate,
 };
 use lunarwing::agent::channel_host::{self, EmittedMessage};
 
@@ -927,10 +927,9 @@ fn do_longpoll(adapter_url: &str, relay_password: &str) {
     );
 
     // Load current per-buffer watermarks so long-poll can keep them in sync.
-    let mut last_seen_ids: HashMap<String, i64> =
-        channel_host::workspace_read(LAST_SEEN_IDS_PATH)
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+    let mut last_seen_ids: HashMap<String, i64> = channel_host::workspace_read(LAST_SEEN_IDS_PATH)
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
 
     // For drop_log when a duplicate line is detected (only active in debug).
     let verbose = channel_host::workspace_read(VERBOSE_DROPS_PATH)
@@ -952,10 +951,7 @@ fn do_longpoll(adapter_url: &str, relay_password: &str) {
                     // sees them.
                     let line_id = line.id.unwrap_or(-1);
                     {
-                        let current = last_seen_ids
-                            .get(full_name)
-                            .copied()
-                            .unwrap_or(-1);
+                        let current = last_seen_ids.get(full_name).copied().unwrap_or(-1);
                         if line_id <= current {
                             drop_log(
                                 verbose,
@@ -1763,7 +1759,7 @@ fn parse_iso8601_to_ms(date_str: &str) -> i64 {
 }
 
 /// Simple pseudo-random check (returns true with given probability).
-fn rand_check(probability: f64) -> bool {
+fn rand_check(_probability: f64) -> bool {
     // Without std::rand, use a simple heuristic based on current state
     // This is deterministic but varies across calls due to workspace state
     // For production, consider adding a lightweight PRNG

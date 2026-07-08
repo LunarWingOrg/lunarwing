@@ -1,8 +1,8 @@
 //! In-process SSH client (Option 2) — runs a command on a remote host using the
-//! russh 0.45 client.
+//! russh client.
 //!
 //! This is the first live consumer of the `russh` client half (the harness
-//! otherwise only uses `russh-keys`' agent server, `ssh_agent.rs`). It is also
+//! otherwise only uses russh's agent server, `ssh_agent.rs`). It is also
 //! the first live wiring of [`HostKeyVerifier`](crate::bridge::ssh_hostkeys::HostKeyVerifier):
 //! host-key verification runs inside russh's [`Handler::check_server_key`] during
 //! key exchange, *before* authentication.
@@ -14,9 +14,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use russh::client::{self, Handle, Handler};
+use russh::keys::key::PrivateKeyWithHashAlg;
+use russh::keys::{PublicKey, PublicKeyBase64};
 use russh::{ChannelMsg, Disconnect};
-use russh_keys::PublicKeyBase64;
-use russh_keys::key::PublicKey;
 
 use crate::bridge::ssh::{SSHCredentials, SSHHostConfig, SshBridgeError};
 use crate::bridge::ssh_agent::parse_key;
@@ -46,31 +46,32 @@ struct ClientHandler {
     reject_reason: Arc<std::sync::Mutex<Option<SshBridgeError>>>,
 }
 
-#[async_trait::async_trait]
 impl Handler for ClientHandler {
     type Error = russh::Error;
 
-    async fn check_server_key(
+    fn check_server_key(
         &mut self,
         server_public_key: &PublicKey,
-    ) -> Result<bool, Self::Error> {
+    ) -> impl std::future::Future<Output = Result<bool, Self::Error>> + Send {
         // `public_key_bytes()` yields the raw SSH wire blob — the same
         // representation `HostKeyVerifier` compares against (it byte-compares,
         // not fingerprint strings, so no base64-padding mismatch).
         let key_bytes = server_public_key.public_key_bytes();
-        match self
-            .verifier
-            .verify_from_config(&self.host, &key_bytes)
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                if let Ok(mut slot) = self.reject_reason.lock() {
-                    *slot = Some(e);
+        let verifier = Arc::clone(&self.verifier);
+        let host = self.host.clone();
+        let reject_reason = Arc::clone(&self.reject_reason);
+
+        async move {
+            match verifier.verify_from_config(&host, &key_bytes).await {
+                Ok(_) => Ok(true),
+                Err(e) => {
+                    if let Ok(mut slot) = reject_reason.lock() {
+                        *slot = Some(e);
+                    }
+                    // Returning Ok(false) aborts the handshake; the precise
+                    // reason was stashed above for connect_and_exec to report.
+                    Ok(false)
                 }
-                // Returning Ok(false) aborts the handshake; the precise reason
-                // was stashed above for connect_and_exec to report.
-                Ok(false)
             }
         }
     }
@@ -116,10 +117,13 @@ pub async fn connect_and_exec(
     // Authenticate with the decoded private key (Ed25519/ECDSA).
     let key = parse_key(creds)?;
     let authenticated = session
-        .authenticate_publickey(host.user.as_str(), Arc::new(key))
+        .authenticate_publickey(
+            host.user.as_str(),
+            PrivateKeyWithHashAlg::new(Arc::new(key), None),
+        )
         .await
         .map_err(|e| SshBridgeError::Internal(format!("SSH authentication error: {e}")))?;
-    if !authenticated {
+    if !authenticated.success() {
         return Err(SshBridgeError::AuthenticationFailed {
             user: host.user.clone(),
             host: host.host.clone(),

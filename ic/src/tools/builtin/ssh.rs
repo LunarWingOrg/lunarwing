@@ -1,5 +1,5 @@
 //! Built-in SSH tool (delivery Option 2) — runs a command on a configured
-//! remote host, in-process, via the russh 0.45 client.
+//! remote host, in-process, via the russh client.
 //!
 //! The `host` parameter must be an alias configured in `[[ssh.hosts]]`; user,
 //! port, key type, timeouts, and host-key policy come from that configuration.
@@ -92,8 +92,9 @@ impl Tool for SshTool {
             (host_cfg, creds, verifier)
         };
 
-        // Ed25519/ECDSA only — russh 0.45 signs RSA with ssh-rsa (SHA-1), which
-        // modern OpenSSH servers reject. Fail fast with a clear message.
+        // Ed25519/ECDSA only. The current RSA path would use legacy ssh-rsa
+        // (SHA-1), which modern OpenSSH servers reject. Fail fast with a clear
+        // message.
         if host_cfg.key_type == SSHKeyType::Rsa {
             return Err(ToolError::ExecutionFailed(
                 "RSA keys are not supported by the built-in ssh tool (use Ed25519 or ECDSA)"

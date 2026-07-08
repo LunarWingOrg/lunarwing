@@ -32,7 +32,7 @@ eula = false
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-stream = { version = "0.1", features = ["sync", "net"] }
 futures = "0.3"
 eventsource-stream = "0.2"
 
@@ -136,8 +136,8 @@ open = "5"
 pgvector = { version = "0.4", features = ["postgres"], optional = true }
 
 # WASM sandbox for untrusted tool execution
-wasmtime = { version = "28", features = ["component-model"] }
-wasmtime-wasi = "28"  # WASI support for component model
+wasmtime = { version = "36.0.12", features = ["component-model"] }
+wasmtime-wasi = "36.0.12"  # WASI support for component model
 wasmparser = "0.220"  # WASM binary parsing for validation
 
 # Cryptography for secrets management
@@ -146,8 +146,7 @@ hkdf = "0.12"
 hmac = "0.12"
 
 # SSH client (pure Rust, async)
-russh = "0.45"
-russh-keys = "0.45"
+russh = { version = "0.62", default-features = false, features = ["flate2", "ring", "rsa"] }
 
 # Cryptography utilities
 sha2 = "0.10"
