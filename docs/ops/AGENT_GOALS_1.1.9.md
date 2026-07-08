@@ -1,5 +1,5 @@
-# AGENT PRE-RELEASE CHECKLIST for 1.1.9 Codename `Kiyome きよめ`
-**Open TODOs (1.1.9) — To be done before release**
+# AGENT PRE-RELEASE CHECKLIST for 1.1.9.0 Codename `Kiyome (きよめ/清め)`
+**Open TODOs (1.1.9.0) — To be done before release**
 
 ### Helps to do items in order (generally)
 
@@ -13,6 +13,6 @@ NOTE: TODO: edit dev autonomous loop routine to use this file. ensure that check
 6. [ ] inspect status of cargo crates and create documented report of any crates that might still need to be updated
 7. [ ] inspect recent changes made to cargo crates sinced 1.1.8 and attempt to identify any problems in the builds of the binaries OR the WASM tools and channels. Document all findings to a document in docs.
 8. [ ] Update README.md - purge outdated sections. include the new MT Admin CLI wrapper into the README.md as part of a new up to date getting started section
-9. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9 explaining all relevant changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`. Use previous release notes in docs/release for reference as to how to write up this document. The file you write will be RELEASE_v1.1.9.0.md and should be written to the ROOT of the repo.
+9. [ ] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9.0 (note the version schema change) explaining all relevant changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`. Use previous release notes in docs/release for reference as to how to write up this document. The codename for this release is: `Kiyome (きよめ/清め)` - The file you write will be RELEASE-v1.1.9.0.md and should be written to the ROOT of the repo.
 
 ---
