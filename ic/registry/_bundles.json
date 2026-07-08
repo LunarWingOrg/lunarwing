@@ -1,21 +1,5 @@
 {
   "bundles": {
-    "messaging": {
-      "display_name": "Messaging Channels",
-      "description": "Telegram channel",
-      "extensions": [
-        "channels/telegram"
-      ],
-      "shared_auth": null
-    },
-    "default": {
-      "display_name": "Recommended Set",
-      "description": "Core tools and channels for a productive setup",
-      "extensions": [
-        "channels/telegram"
-      ],
-      "shared_auth": null
-    },
     "lunarwing": {
       "display_name": "LunarWing Extensions",
       "description": "DarkIRC, WeeChat, XMPP channels and Gotify notifications",

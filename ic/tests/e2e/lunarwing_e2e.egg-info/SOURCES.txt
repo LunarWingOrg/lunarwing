@@ -22,8 +22,6 @@ scenarios/test_routine_event_batch.py
 scenarios/test_routine_oauth_credential_injection.py
 scenarios/test_skills.py
 scenarios/test_sse_reconnect.py
-scenarios/test_telegram_hot_activation.py
-scenarios/test_telegram_token_validation.py
 scenarios/test_tool_approval.py
 scenarios/test_tool_execution.py
 scenarios/test_wasm_lifecycle.py

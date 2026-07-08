@@ -7,9 +7,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::channels::wasm::{
-    LoadedChannel, RegisteredEndpoint, SharedWasmChannel, TELEGRAM_CHANNEL_NAME, WasmChannel,
-    WasmChannelLoader, WasmChannelRouter, WasmChannelRuntime, WasmChannelRuntimeConfig,
-    bot_username_setting_key, create_wasm_channel_router,
+    LoadedChannel, RegisteredEndpoint, SharedWasmChannel, WasmChannel, WasmChannelLoader,
+    WasmChannelRouter, WasmChannelRuntime, WasmChannelRuntimeConfig, create_wasm_channel_router,
 };
 use crate::config::Config;
 use crate::db::Database;
@@ -176,16 +175,6 @@ async fn register_channel(
             config_updates.insert("owner_id".to_string(), serde_json::json!(owner_id));
         }
 
-        if channel_name == TELEGRAM_CHANNEL_NAME
-            && let Some(store) = settings_store
-            && let Ok(Some(serde_json::Value::String(username))) = store
-                .get_setting("default", &bot_username_setting_key(&channel_name))
-                .await
-            && !username.trim().is_empty()
-        {
-            config_updates.insert("bot_username".to_string(), serde_json::json!(username));
-        }
-
         config_updates.extend(
             load_channel_setup_field_overrides(
                 settings_store,
@@ -299,10 +288,10 @@ async fn register_channel(
 /// Inject credentials for a channel based on naming convention.
 ///
 /// Looks for secrets matching the pattern `{channel_name}_*` and injects them
-/// as credential placeholders (e.g., `telegram_bot_token` -> `{TELEGRAM_BOT_TOKEN}`).
+/// as credential placeholders (e.g., `xmpp_password` -> `{XMPP_PASSWORD}`).
 ///
 /// Falls back to environment variables starting with the uppercase channel name
-/// prefix (e.g., `TELEGRAM_` for channel `telegram`) for missing credentials.
+/// prefix (e.g., `XMPP_` for channel `xmpp`) for missing credentials.
 ///
 /// Returns the number of credentials injected.
 pub async fn inject_channel_credentials(
@@ -363,7 +352,7 @@ pub async fn inject_channel_credentials(
 
     // 2. Fall back to environment variables for credentials not in the secrets store.
     // Only env vars starting with the channel's uppercase prefix are allowed
-    // (e.g., TELEGRAM_ for channel "telegram") to prevent reading unrelated host
+    // (e.g., XMPP_ for channel "xmpp") to prevent reading unrelated host
     // credentials like AWS_SECRET_ACCESS_KEY.
     let prefix = format!("{}_", channel_name.to_ascii_uppercase());
     let caps = channel.capabilities();
@@ -712,7 +701,7 @@ mod tests {
         let mut updates = std::collections::HashMap::new();
         inject_channel_secrets_into_config("xmpp", &no_store, "test-owner", &mut updates).await;
         // Unknown channels are a no-op.
-        inject_channel_secrets_into_config("telegram", &no_store, "test-owner", &mut updates).await;
+        inject_channel_secrets_into_config("testchan", &no_store, "test-owner", &mut updates).await;
 
         unsafe {
             std::env::remove_var("XMPP_PASSWORD");
@@ -722,6 +711,6 @@ mod tests {
             updates.get("xmpp_password"),
             Some(&serde_json::Value::String("xmpp-pw".to_string()))
         );
-        assert_eq!(updates.len(), 1, "telegram has no secret mapping");
+        assert_eq!(updates.len(), 1, "testchan has no secret mapping");
     }
 }

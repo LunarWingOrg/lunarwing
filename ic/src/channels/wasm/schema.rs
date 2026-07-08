@@ -286,7 +286,7 @@ pub struct WebhookSchema {
     /// HTTP header name for secret validation.
     ///
     /// Examples:
-    /// - Telegram: "X-Telegram-Bot-Api-Secret-Token"
+    /// - XMPP: "X-XMPP-Bot-Api-Secret-Token"
     /// - GitHub: "X-Hub-Signature-256"
     /// - Generic: "X-Webhook-Secret"
     #[serde(default)]
@@ -333,7 +333,7 @@ pub struct SetupSchema {
 /// Configuration for a secret required during setup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecretSetupSchema {
-    /// Secret name in the secrets store (e.g., "telegram_bot_token").
+    /// Secret name in the secrets store (e.g., "xmpp_password").
     pub name: String,
 
     /// Prompt to show the user during setup.
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn test_parse_with_polling() {
         let json = r#"{
-            "name": "telegram",
+            "name": "xmpp",
             "capabilities": {
                 "channel": {
                     "allowed_paths": [],
@@ -597,13 +597,13 @@ mod tests {
     #[test]
     fn test_webhook_schema() {
         let json = r#"{
-            "name": "telegram",
+            "name": "xmpp",
             "capabilities": {
                 "channel": {
-                    "allowed_paths": ["/webhook/telegram"],
+                    "allowed_paths": ["/webhook/xmpp"],
                     "webhook": {
-                        "secret_header": "X-Telegram-Bot-Api-Secret-Token",
-                        "secret_name": "telegram_webhook_secret"
+                        "secret_header": "X-XMPP-Bot-Api-Secret-Token",
+                        "secret_name": "xmpp_webhook_secret"
                     }
                 }
             }
@@ -612,9 +612,9 @@ mod tests {
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
         assert_eq!(
             file.webhook_secret_header(),
-            Some("X-Telegram-Bot-Api-Secret-Token")
+            Some("X-XMPP-Bot-Api-Secret-Token")
         );
-        assert_eq!(file.webhook_secret_name(), "telegram_webhook_secret");
+        assert_eq!(file.webhook_secret_name(), "xmpp_webhook_secret");
     }
 
     #[test]
@@ -632,16 +632,16 @@ mod tests {
     #[test]
     fn test_setup_schema() {
         let json = r#"{
-            "name": "telegram",
+            "name": "xmpp",
             "setup": {
                 "required_secrets": [
                     {
-                        "name": "telegram_bot_token",
-                        "prompt": "Enter your Telegram Bot Token",
+                        "name": "xmpp_password",
+                        "prompt": "Enter your XMPP Bot Token",
                         "validation": "^[0-9]+:[A-Za-z0-9_-]+$"
                     },
                     {
-                        "name": "telegram_webhook_secret",
+                        "name": "xmpp_webhook_secret",
                         "prompt": "Webhook secret (leave empty to auto-generate)",
                         "optional": true,
                         "auto_generate": { "length": 64 }
@@ -653,14 +653,14 @@ mod tests {
                         "prompt": "Bridge URL"
                     }
                 ],
-                "validation_endpoint": "https://api.telegram.org/bot{telegram_bot_token}/getMe"
+                "validation_endpoint": "https://xmpp.example.test/verify?token={xmpp_password}"
             }
         }"#;
 
         let file = ChannelCapabilitiesFile::from_json(json).unwrap();
         assert_eq!(file.setup.required_secrets.len(), 2);
         assert_eq!(file.setup.required_fields.len(), 1);
-        assert_eq!(file.setup.required_secrets[0].name, "telegram_bot_token");
+        assert_eq!(file.setup.required_secrets[0].name, "xmpp_password");
         assert!(!file.setup.required_secrets[0].optional);
         assert!(file.setup.required_secrets[1].optional);
         assert_eq!(file.setup.required_fields[0].name, "bridge_url");
@@ -756,12 +756,12 @@ mod tests {
     #[test]
     fn test_signature_key_secret_name_none_when_missing() {
         let json = r#"{
-            "name": "telegram",
+            "name": "xmpp",
             "capabilities": {
                 "channel": {
-                    "allowed_paths": ["/webhook/telegram"],
+                    "allowed_paths": ["/webhook/xmpp"],
                     "webhook": {
-                        "secret_header": "X-Telegram-Bot-Api-Secret-Token"
+                        "secret_header": "X-XMPP-Bot-Api-Secret-Token"
                     }
                 }
             }

@@ -749,8 +749,8 @@ mod tests {
 
     #[test]
     fn cli_notify_config_defaults_to_runtime_target_resolution() {
-        let notify = cli_notify_config(Some("telegram".to_string()));
-        assert_eq!(notify.channel.as_deref(), Some("telegram")); // safety: test-only assertion
+        let notify = cli_notify_config(Some("xmpp".to_string()));
+        assert_eq!(notify.channel.as_deref(), Some("xmpp")); // safety: test-only assertion
         assert_eq!(notify.user, None); // safety: test-only assertion
         assert!(notify.on_attention); // safety: test-only assertion
         assert!(notify.on_failure); // safety: test-only assertion

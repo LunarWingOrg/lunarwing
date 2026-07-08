@@ -15,7 +15,7 @@
 #   -t, --target DIR  Override CARGO_TARGET_DIR
 #   -r, --repo DIR    Override repo root path
 #   --profile MODE    Build profile: release (default) or debug   PRO TIP DONT USE DEBUG LOL
-#   --wasm            Also build Telegram WASM channel (separate target dir)
+#   --wasm            Accepted for compatibility; supported WASM artifacts build elsewhere
 #   --no-kill         Don't kill stale cargo/rustc processes
 #   -v, --verbose     Show cargo output in real-time
 #   -h, --help        Show this help message
@@ -258,35 +258,7 @@ run_wasm_build() {
         return
     fi
 
-    local wasm_cargo_toml="$IC_DIR/channels-src/telegram/Cargo.toml"
-    if [ ! -f "$wasm_cargo_toml" ]; then
-        log_warn "WASM channel Cargo.toml not found at $wasm_cargo_toml — skipping WASM build"
-        return
-    fi
-
-    local log_file="/tmp/cargo_wasm_build_$(date +%Y%m%d_%H%M%S).log"
-    local start_time
-    start_time=$(date +%s)
-
-    echo ""
-    log_info "Building Telegram WASM channel (separate target: $WASM_TARGET_DIR)"
-
-    set +e
-    (cd "$IC_DIR" && CARGO_TARGET_DIR="$WASM_TARGET_DIR" \
-        cargo build -j "$JOBS" --release --target wasm32-wasip2 \
-        --manifest-path "$wasm_cargo_toml" > "$log_file" 2>&1)
-    local exit_code=$?
-    set -e
-    local end_time
-    end_time=$(date +%s)
-    local elapsed=$((end_time - start_time))
-
-    if [ "$exit_code" -eq 0 ]; then
-        log_ok "WASM build succeeded (${elapsed}s)"
-    else
-        log_warn "WASM build failed — main build is still usable"
-        log_warn "Log: $log_file"
-    fi
+    log_warn "--wasm no longer builds proprietary channel artifacts; build supported WASM extensions through mt-admin or their own build scripts"
 }
 
 # ── Parse arguments ────────────────────────────────────────

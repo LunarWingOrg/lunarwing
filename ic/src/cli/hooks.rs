@@ -404,8 +404,8 @@ mod tests {
                 }
             }
         });
-        let mut f = std::fs::File::create(dir.path().join("telegram.capabilities.json"))
-            .expect("create file");
+        let mut f =
+            std::fs::File::create(dir.path().join("xmpp.capabilities.json")).expect("create file");
         f.write_all(serde_json::to_string(&caps).unwrap().as_bytes())
             .expect("write");
 
@@ -413,9 +413,9 @@ mod tests {
         collect_plugin_hooks(&mut hooks, dir.path(), "channel").await;
 
         assert_eq!(hooks.len(), 1);
-        assert_eq!(hooks[0].name, "plugin.channel:telegram::filter-spam");
+        assert_eq!(hooks[0].name, "plugin.channel:xmpp::filter-spam");
         assert_eq!(hooks[0].kind, "reject");
-        assert_eq!(hooks[0].source, "plugin.channel:telegram");
+        assert_eq!(hooks[0].source, "plugin.channel:xmpp");
     }
 
     #[tokio::test]

@@ -551,7 +551,7 @@ mod tests {
             .resolve_thread("user-1", "gateway", Some("thread-x"))
             .await;
         let (_, t2) = manager
-            .resolve_thread("user-1", "telegram", Some("thread-x"))
+            .resolve_thread("user-1", "xmpp", Some("thread-x"))
             .await;
 
         // Same user + same external ID but different channels = different threads
@@ -800,7 +800,7 @@ mod tests {
         // Resolve on a different channel with the same UUID string should NOT
         // find the registered thread (channel is part of the key)
         let (_, resolved) = manager
-            .resolve_thread("user-cross", "telegram", Some(&tid.to_string()))
+            .resolve_thread("user-cross", "xmpp", Some(&tid.to_string()))
             .await;
         assert_ne!(resolved, tid);
     }
@@ -891,7 +891,7 @@ mod tests {
     #[tokio::test]
     async fn concurrent_resolve_thread_same_user_different_channels() {
         let manager = Arc::new(SessionManager::new());
-        let channels = ["gateway", "telegram", "xmpp", "cli", "repl"];
+        let channels = ["gateway", "weechat", "xmpp", "cli", "repl"];
 
         let handles: Vec<_> = channels
             .iter()

@@ -8,6 +8,6 @@ Here's what I can do right now:
 
 **Persistent Memory** — Keep useful context across sessions so we do not start from zero.
 
-**Talk to me where you are** — Connect channels like Telegram, XMPP, Signal, or WeeChat.
+**Talk to me where you are** — Connect channels like XMPP, Signal, or WeeChat.
 
 What do you want to tackle first? And what would you like me to call you?

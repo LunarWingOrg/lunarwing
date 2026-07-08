@@ -224,7 +224,7 @@ pub enum Command {
     #[command(
         subcommand,
         about = "Manage DM pairing",
-        long_about = "Approve or manage pairing requests.\nExamples:\n  lunarwing pairing list telegram\n  lunarwing pairing approve telegram ABC12345"
+        long_about = "Approve or manage pairing requests.\nExamples:\n  lunarwing pairing list xmpp\n  lunarwing pairing approve xmpp ABC12345"
     )]
     Pairing(PairingCommand),
 

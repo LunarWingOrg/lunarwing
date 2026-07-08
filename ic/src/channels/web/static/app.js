@@ -1352,11 +1352,6 @@ function humanizeToolName(rawName) {
     .trim();
 }
 
-function shouldShowChannelConnectedMessage(extensionName, success) {
-  if (!success || !extensionName) return false;
-  return String(extensionName).toLowerCase().includes('telegram');
-}
-
 function showApproval(data) {
   // Avoid duplicate cards on reconnect/history refresh.
   const existing = document.querySelector('.approval-card[data-request-id="' + CSS.escape(data.request_id) + '"]');
@@ -1504,9 +1499,6 @@ function handleAuthCompleted(data) {
     return;
   }
   setAuthFlowPending(false);
-  if (shouldShowChannelConnectedMessage(data.extension_name, data.success)) {
-    addMessage('system', 'Telegram is now connected. You can message me there and I can send you notifications.');
-  }
   if (currentTab === 'settings') refreshCurrentSettingsTab();
   enableChatInput();
 }
@@ -3070,10 +3062,8 @@ function renderConfigureModal(name, secrets, setupFields) {
   const overlay = document.createElement('div');
   overlay.className = 'configure-overlay';
   overlay.setAttribute('data-extension-name', name);
-  overlay.dataset.telegramVerificationState = 'idle';
   overlay.addEventListener('click', (e) => {
     if (e.target !== overlay) return;
-    if (name === 'telegram' && overlay.dataset.telegramVerificationState === 'waiting') return;
     closeConfigureModal();
   });
 
@@ -3083,13 +3073,6 @@ function renderConfigureModal(name, secrets, setupFields) {
   const header = document.createElement('h3');
   header.textContent = I18n.t('config.title', { name: name });
   modal.appendChild(header);
-
-  if (name === 'telegram') {
-    const hint = document.createElement('div');
-    hint.className = 'configure-hint';
-    hint.textContent = I18n.t('config.telegramOwnerHint');
-    modal.appendChild(hint);
-  }
 
   const form = document.createElement('div');
   form.className = 'configure-form';
@@ -3214,67 +3197,6 @@ function renderConfigureModal(name, secrets, setupFields) {
   if (fields.length > 0) fields[0].input.focus();
 }
 
-function renderTelegramVerificationChallenge(overlay, verification) {
-  if (!overlay || !verification) return;
-  const modal = overlay.querySelector('.configure-modal');
-  if (!modal) return;
-  const telegramField = modal.querySelector('.configure-field[data-secret-name="telegram_bot_token"]');
-
-  let panel = modal.querySelector('.configure-verification');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.className = 'configure-verification';
-  }
-  if (telegramField && telegramField.parentNode) {
-    telegramField.insertAdjacentElement('afterend', panel);
-  } else {
-    modal.insertBefore(
-      panel,
-      modal.querySelector('.configure-inline-error') || modal.querySelector('.configure-actions')
-    );
-  }
-
-  panel.innerHTML = '';
-
-  const title = document.createElement('div');
-  title.className = 'configure-verification-title';
-  title.textContent = I18n.t('config.telegramChallengeTitle');
-  panel.appendChild(title);
-
-  const instructions = document.createElement('div');
-  instructions.className = 'configure-verification-instructions';
-  instructions.textContent = verification.instructions;
-  panel.appendChild(instructions);
-
-  const commandLabel = document.createElement('div');
-  commandLabel.className = 'configure-verification-instructions';
-  commandLabel.textContent = I18n.t('config.telegramCommandLabel');
-  panel.appendChild(commandLabel);
-
-  const command = document.createElement('code');
-  command.className = 'configure-verification-code';
-  command.textContent = '/start ' + verification.code;
-  panel.appendChild(command);
-
-  if (verification.deep_link) {
-    const link = document.createElement('a');
-    link.className = 'configure-verification-link';
-    link.href = verification.deep_link;
-    link.target = '_blank';
-    link.rel = 'noreferrer noopener';
-    link.textContent = I18n.t('config.telegramOpenBot');
-    panel.appendChild(link);
-  }
-}
-
-function getConfigurePrimaryButton(overlay) {
-  return overlay && overlay.querySelector('.configure-actions button.btn-ext.activate');
-}
-
-function getConfigureCancelButton(overlay) {
-  return overlay && overlay.querySelector('.configure-actions button.btn-ext.remove');
-}
-
 function setConfigureInlineError(overlay, message) {
   const error = overlay && overlay.querySelector('.configure-inline-error');
   if (!error) return;
@@ -3284,36 +3206,6 @@ function setConfigureInlineError(overlay, message) {
 
 function clearConfigureInlineError(overlay) {
   setConfigureInlineError(overlay, '');
-}
-
-function setConfigureInlineStatus(overlay, message) {
-  const status = overlay && overlay.querySelector('.configure-inline-status');
-  if (!status) return;
-  status.textContent = message || '';
-  status.style.display = message ? 'block' : 'none';
-}
-
-function setTelegramConfigureState(overlay, fields, state) {
-  if (!overlay) return;
-  overlay.dataset.telegramVerificationState = state;
-
-  const primaryBtn = getConfigurePrimaryButton(overlay);
-  const cancelBtn = getConfigureCancelButton(overlay);
-  const waiting = state === 'waiting';
-  const retry = state === 'retry';
-
-  setConfigureInlineStatus(overlay, waiting ? I18n.t('config.telegramOwnerWaiting') : '');
-
-  if (primaryBtn) {
-    primaryBtn.style.display = waiting ? 'none' : '';
-    primaryBtn.disabled = false;
-    primaryBtn.textContent = retry ? I18n.t('config.telegramStartOver') : I18n.t('config.save');
-  }
-  if (cancelBtn) cancelBtn.disabled = waiting;
-}
-
-function startTelegramAutoVerify(name, fields) {
-  window.setTimeout(() => submitConfigureModal(name, fields, { telegramAutoVerify: true }), 0);
 }
 
 function submitConfigureModal(name, fields, options) {
@@ -3333,15 +3225,11 @@ function submitConfigureModal(name, fields, options) {
   }
 
   const overlay = getConfigureOverlay(name) || document.querySelector('.configure-overlay');
-  const isTelegram = name === 'telegram';
   clearConfigureInlineError(overlay);
 
   // Disable buttons to prevent double-submit
   var btns = overlay ? overlay.querySelectorAll('.configure-actions button') : [];
   btns.forEach(function(b) { b.disabled = true; });
-  if (overlay && isTelegram) {
-    setTelegramConfigureState(overlay, fields, 'waiting');
-  }
 
   apiFetch('/api/extensions/' + encodeURIComponent(name) + '/setup', {
     method: 'POST',
@@ -3349,23 +3237,6 @@ function submitConfigureModal(name, fields, options) {
   })
     .then((res) => {
       if (res.success) {
-        if (res.verification && isTelegram) {
-          renderTelegramVerificationChallenge(overlay, res.verification);
-          fields.forEach(function(f) { f.input.value = ''; });
-          setTelegramConfigureState(overlay, fields, 'waiting');
-          // Once the verification challenge is rendered inline, the global auth lock
-          // should not keep the chat composer disabled for this setup-driven flow.
-          setAuthFlowPending(false);
-          enableChatInput();
-          if (!options.telegramAutoVerify) {
-            startTelegramAutoVerify(name, fields);
-            return;
-          }
-          setTelegramConfigureState(overlay, fields, 'retry');
-          setConfigureInlineError(overlay, I18n.t('config.telegramStartOverHint'));
-          return;
-        }
-
         closeConfigureModal();
         if (res.auth_url) {
           showAuthCard({
@@ -3384,28 +3255,12 @@ function submitConfigureModal(name, fields, options) {
         // Keep modal open so the user can correct their input and retry.
         btns.forEach(function(b) { b.disabled = false; });
         setConfigureInlineError(overlay, res.message || 'Configuration failed');
-        if (isTelegram) {
-          const hasVerification = overlay && overlay.querySelector('.configure-verification');
-          if (options.telegramAutoVerify || hasVerification) {
-            setTelegramConfigureState(overlay, fields, 'retry');
-          } else {
-            setTelegramConfigureState(overlay, fields, 'idle');
-          }
-        }
         showToast(res.message || 'Configuration failed', 'error');
       }
     })
     .catch((err) => {
       btns.forEach(function(b) { b.disabled = false; });
       setConfigureInlineError(overlay, 'Configuration failed: ' + err.message);
-      if (isTelegram) {
-        const hasVerification = overlay && overlay.querySelector('.configure-verification');
-        if (options.telegramAutoVerify || hasVerification) {
-          setTelegramConfigureState(overlay, fields, 'retry');
-        } else {
-          setTelegramConfigureState(overlay, fields, 'idle');
-        }
-      }
       showToast('Configuration failed: ' + err.message, 'error');
     });
 }

@@ -205,7 +205,7 @@ mod tests {
             result: Ok("Hello world".to_string()),
         }));
 
-        let mut msg = IncomingMessage::new("telegram", "user1", "[Voice note]")
+        let mut msg = IncomingMessage::new("xmpp", "user1", "[Voice note]")
             .with_attachments(vec![voice_attachment(vec![1, 2, 3])]);
 
         middleware.process(&mut msg).await;
@@ -223,7 +223,7 @@ mod tests {
             result: Ok("Should not be called".to_string()),
         }));
 
-        let mut msg = IncomingMessage::new("telegram", "user1", "text message")
+        let mut msg = IncomingMessage::new("xmpp", "user1", "text message")
             .with_attachments(vec![voice_attachment(Vec::new())]);
 
         middleware.process(&mut msg).await;
@@ -241,8 +241,7 @@ mod tests {
         let mut attachment = voice_attachment(vec![1, 2, 3]);
         attachment.extracted_text = Some("Already done".to_string());
 
-        let mut msg =
-            IncomingMessage::new("telegram", "user1", "").with_attachments(vec![attachment]);
+        let mut msg = IncomingMessage::new("xmpp", "user1", "").with_attachments(vec![attachment]);
 
         middleware.process(&mut msg).await;
 
@@ -258,7 +257,7 @@ mod tests {
             result: Ok("Transcription".to_string()),
         }));
 
-        let mut msg = IncomingMessage::new("telegram", "user1", "User typed this")
+        let mut msg = IncomingMessage::new("xmpp", "user1", "User typed this")
             .with_attachments(vec![voice_attachment(vec![1, 2, 3])]);
 
         middleware.process(&mut msg).await;

@@ -38,7 +38,7 @@ body:
     id: feature-area
     attributes:
       label: Feature Area
-      description: What part of the app? (e.g. Google Suite extension, Telegram pairing, auth flow)
+      description: What part of the app? (e.g. Google Suite extension, XMPP pairing, auth flow)
       placeholder: "e.g. Extensions → Google Suite install"
     validations:
       required: true

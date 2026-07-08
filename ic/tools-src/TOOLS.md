@@ -21,7 +21,6 @@ Status of all WASM tool sources in `ic/tools-src/`.
 For all messengers: receive notifications of new messages, read contacts, groups and 1:1 messages, send messages on behalf of the user. This is different from the channel because operates from the specific user's account. Be careful with accessing user's messages, make sure messages are kept unread.
 
 - [x] Slack (`slack/`) - post messages, read channels, manage conversations
-- [x] Telegram (`telegram/`) - user-mode via direct MTProto over HTTPS (contacts, messages, send, search, forward, delete); no Docker needed
 - [ ] Signal - messaging (note: no official public API exists)
 
 ## Transportation

@@ -1517,25 +1517,25 @@ mod tests {
     #[test]
     fn test_detect_auth_awaiting_positive() {
         let result: Result<String, Error> = Ok(serde_json::json!({
-            "name": "telegram",
+            "name": "xmpp",
             "kind": "WasmTool",
             "awaiting_token": true,
             "status": "awaiting_token",
-            "instructions": "Please provide your Telegram Bot API token."
+            "instructions": "Please provide your XMPP channel token."
         })
         .to_string());
 
         let detected = check_auth_required("tool_auth", &result);
         assert!(detected.is_some());
         let (name, instructions) = detected.unwrap();
-        assert_eq!(name, "telegram");
-        assert!(instructions.contains("Telegram Bot API"));
+        assert_eq!(name, "xmpp");
+        assert!(instructions.contains("XMPP channel"));
     }
 
     #[test]
     fn test_detect_auth_awaiting_not_awaiting() {
         let result: Result<String, Error> = Ok(serde_json::json!({
-            "name": "telegram",
+            "name": "xmpp",
             "kind": "WasmTool",
             "awaiting_token": false,
             "status": "authenticated"
@@ -1548,7 +1548,7 @@ mod tests {
     #[test]
     fn test_detect_auth_awaiting_wrong_tool() {
         let result: Result<String, Error> = Ok(serde_json::json!({
-            "name": "telegram",
+            "name": "xmpp",
             "awaiting_token": true,
         })
         .to_string());

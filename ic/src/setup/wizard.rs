@@ -2821,7 +2821,7 @@ impl SetupWizard {
         }
 
         // Notify channel
-        let notify_channel = optional_input("Notify channel on findings", Some("e.g., telegram"))
+        let notify_channel = optional_input("Notify channel on findings", Some("e.g., xmpp"))
             .map_err(SetupError::Io)?;
         self.settings.heartbeat.notify_channel = notify_channel;
 
@@ -3728,7 +3728,7 @@ mod tests {
 
     #[test]
     fn test_capitalize_first() {
-        assert_eq!(capitalize_first("telegram"), "Telegram");
+        assert_eq!(capitalize_first("weechat"), "Weechat");
         assert_eq!(capitalize_first("CAPS"), "CAPS");
         assert_eq!(capitalize_first(""), "");
     }
@@ -3748,11 +3748,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_install_missing_bundled_channels_installs_telegram() {
+    async fn test_install_missing_bundled_channels_installs_xmpp() {
         // WASM artifacts only exist in dev builds (not CI). Skip gracefully
-        // rather than fail when the telegram channel hasn't been compiled.
-        if !available_channel_names().contains(&"telegram") {
-            eprintln!("skipping: telegram WASM artifacts not built");
+        // rather than fail when the xmpp channel hasn't been compiled.
+        if !available_channel_names().contains(&"xmpp") {
+            eprintln!("skipping: xmpp WASM artifacts not built");
             return;
         }
 
@@ -3763,8 +3763,8 @@ mod tests {
             .await
             .unwrap(); // safety: test-only assertion
 
-        assert!(dir.path().join("telegram.wasm").exists());
-        assert!(dir.path().join("telegram.capabilities.json").exists());
+        assert!(dir.path().join("xmpp.wasm").exists());
+        assert!(dir.path().join("xmpp.capabilities.json").exists());
     }
 
     #[test]
@@ -3784,13 +3784,13 @@ mod tests {
 
     #[test]
     fn test_build_channel_options_dedupes_available() {
-        let discovered = vec![(String::from("telegram"), ChannelCapabilitiesFile::default())];
+        let discovered = vec![(String::from("xmpp"), ChannelCapabilitiesFile::default())];
         let options = build_channel_options(&discovered);
-        // telegram should appear exactly once despite being both discovered and available
+        // xmpp should appear exactly once despite being both discovered and available
         assert_eq!(
-            options.iter().filter(|n| *n == "telegram").count(),
+            options.iter().filter(|n| *n == "xmpp").count(),
             1,
-            "telegram should not be duplicated"
+            "xmpp should not be duplicated"
         );
     }
 

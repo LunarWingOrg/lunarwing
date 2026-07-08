@@ -524,11 +524,11 @@ mod tests {
     fn test_heartbeat_config_builders() {
         let config = HeartbeatConfig::default()
             .with_interval(Duration::from_secs(60))
-            .with_notify("user1", "telegram");
+            .with_notify("user1", "xmpp");
 
         assert_eq!(config.interval, Duration::from_secs(60));
         assert_eq!(config.notify_user_id, Some("user1".to_string()));
-        assert_eq!(config.notify_channel, Some("telegram".to_string()));
+        assert_eq!(config.notify_channel, Some("xmpp".to_string()));
 
         let disabled = HeartbeatConfig::default().disabled();
         assert!(!disabled.enabled);

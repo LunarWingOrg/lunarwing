@@ -40,7 +40,7 @@ pub struct WasmChannelRouter {
     path_to_channel: RwLock<HashMap<String, String>>,
     /// Expected webhook secrets by channel name.
     secrets: RwLock<HashMap<String, String>>,
-    /// Webhook secret header names by channel name (e.g., "X-Telegram-Bot-Api-Secret-Token").
+    /// Webhook secret header names by channel name (e.g., "X-XMPP-Bot-Api-Secret-Token").
     secret_headers: RwLock<HashMap<String, String>>,
     /// Ed25519 public keys for signature verification by channel name (hex-encoded).
     signature_keys: RwLock<HashMap<String, String>>,
@@ -68,7 +68,7 @@ impl WasmChannelRouter {
     /// * `endpoints` - HTTP endpoints to register for this channel
     /// * `secret` - Optional webhook secret for validation
     /// * `secret_header` - Optional HTTP header name for secret validation
-    ///   (e.g., "X-Telegram-Bot-Api-Secret-Token"). Defaults to "X-Webhook-Secret".
+    ///   (e.g., "X-XMPP-Bot-Api-Secret-Token"). Defaults to "X-Webhook-Secret".
     pub async fn register(
         &self,
         channel: Arc<WasmChannel>,
@@ -699,7 +699,7 @@ mod tests {
         assert_eq!(found.unwrap().channel_name(), "weechat");
 
         // Should not find non-existent path
-        let not_found = router.get_channel_for_path("/webhook/telegram").await;
+        let not_found = router.get_channel_for_path("/webhook/xmpp").await;
         assert!(not_found.is_none());
     }
 
@@ -719,9 +719,9 @@ mod tests {
         assert!(!router.validate_secret("weechat", "wrong").await);
 
         // Channel without secret always validates
-        let channel2 = create_test_channel("telegram");
+        let channel2 = create_test_channel("xmpp");
         router.register(channel2, vec![], None, None).await;
-        assert!(router.validate_secret("telegram", "anything").await);
+        assert!(router.validate_secret("xmpp", "anything").await);
     }
 
     #[tokio::test]
@@ -763,7 +763,7 @@ mod tests {
         let router = WasmChannelRouter::new();
 
         let channel1 = create_test_channel("weechat");
-        let channel2 = create_test_channel("telegram");
+        let channel2 = create_test_channel("xmpp");
 
         router.register(channel1, vec![], None, None).await;
         router.register(channel2, vec![], None, None).await;
@@ -771,13 +771,13 @@ mod tests {
         let channels = router.list_channels().await;
         assert_eq!(channels.len(), 2);
         assert!(channels.contains(&"weechat".to_string()));
-        assert!(channels.contains(&"telegram".to_string()));
+        assert!(channels.contains(&"xmpp".to_string()));
     }
 
     #[tokio::test]
     async fn test_router_secret_header() {
         let router = WasmChannelRouter::new();
-        let channel = create_test_channel("telegram");
+        let channel = create_test_channel("xmpp");
 
         // Register with custom secret header
         router
@@ -785,14 +785,14 @@ mod tests {
                 channel,
                 vec![],
                 Some("secret123".to_string()),
-                Some("X-Telegram-Bot-Api-Secret-Token".to_string()),
+                Some("X-XMPP-Bot-Api-Secret-Token".to_string()),
             )
             .await;
 
         // Should return the custom header
         assert_eq!(
-            router.get_secret_header("telegram").await,
-            "X-Telegram-Bot-Api-Secret-Token"
+            router.get_secret_header("xmpp").await,
+            "X-XMPP-Bot-Api-Secret-Token"
         );
 
         // Channel without custom header should use default

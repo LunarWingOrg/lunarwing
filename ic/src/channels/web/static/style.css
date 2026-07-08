@@ -3906,7 +3906,6 @@ mark {
 
 .thread-badge-routine { background: var(--accent-subtle); color: var(--accent); }
 .thread-badge-heartbeat { background: var(--warning-subtle); color: var(--warning); }
-.thread-badge-telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
 .thread-badge-signal { background: rgba(59, 118, 240, 0.15); color: #3b76f0; }
 .thread-badge-slack { background: rgba(74, 21, 75, 0.15); color: #e01e5a; }
 

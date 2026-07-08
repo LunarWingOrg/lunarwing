@@ -22,7 +22,7 @@ pub struct ChannelsConfig {
     /// Whether WASM channels are enabled.
     pub wasm_channels_enabled: bool,
     /// Per-channel owner user IDs. When set, the channel only responds to this user.
-    /// Key: channel name (e.g., "telegram"), Value: owner user ID.
+    /// Key: channel name (e.g., "xmpp"), Value: owner user ID.
     pub wasm_channel_owner_ids: HashMap<String, i64>,
 }
 
@@ -459,20 +459,7 @@ impl ChannelsConfig {
                 "WASM_CHANNELS_ENABLED",
                 cs.wasm_channels_enabled,
             )?,
-            wasm_channel_owner_ids: {
-                let mut ids = cs.wasm_channel_owner_ids.clone();
-                // Backwards compat: TELEGRAM_OWNER_ID env var
-                if let Some(id_str) = optional_env("TELEGRAM_OWNER_ID")? {
-                    let id: i64 = id_str.parse().map_err(|e: std::num::ParseIntError| {
-                        ConfigError::InvalidValue {
-                            key: "TELEGRAM_OWNER_ID".to_string(),
-                            message: format!("must be an integer: {e}"),
-                        }
-                    })?;
-                    ids.insert("telegram".to_string(), id);
-                }
-                ids
-            },
+            wasm_channel_owner_ids: cs.wasm_channel_owner_ids.clone(),
         })
     }
 }
@@ -631,7 +618,7 @@ mod tests {
     #[test]
     fn channels_config_with_owner_ids() {
         let mut ids = HashMap::new();
-        ids.insert("telegram".to_string(), 12345_i64);
+        ids.insert("xmpp".to_string(), 12345_i64);
         ids.insert("weechat".to_string(), 67890_i64);
 
         let cfg = ChannelsConfig {
@@ -644,7 +631,7 @@ mod tests {
             wasm_channels_enabled: false,
             wasm_channel_owner_ids: ids,
         };
-        assert_eq!(cfg.wasm_channel_owner_ids.get("telegram"), Some(&12345));
+        assert_eq!(cfg.wasm_channel_owner_ids.get("xmpp"), Some(&12345));
         assert_eq!(cfg.wasm_channel_owner_ids.get("weechat"), Some(&67890));
         assert!(!cfg.wasm_channels_enabled);
     }

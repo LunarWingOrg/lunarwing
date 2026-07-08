@@ -267,14 +267,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         // Flat .wasm files — matches real loader (load_from_dir)
         std::fs::File::create(tmp.path().join("weechat.wasm")).unwrap();
-        std::fs::File::create(tmp.path().join("telegram.wasm")).unwrap();
+        std::fs::File::create(tmp.path().join("xmpp.wasm")).unwrap();
         // Non-.wasm files should be skipped
         std::fs::File::create(tmp.path().join("readme.txt")).unwrap();
         // Directories should be skipped
         std::fs::create_dir(tmp.path().join("somedir")).unwrap();
 
         let result = discover_wasm_channels(tmp.path()).await;
-        assert_eq!(result, vec!["telegram", "weechat"]);
+        assert_eq!(result, vec!["weechat", "xmpp"]);
     }
 
     #[test]

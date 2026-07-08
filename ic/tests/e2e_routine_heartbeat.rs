@@ -639,7 +639,7 @@ mod tests {
         engine.refresh_event_cache().await;
 
         let guest_msg = make_message(
-            "telegram",
+            "xmpp",
             "guest",
             "default",
             "guest-sender",
@@ -664,7 +664,7 @@ mod tests {
         );
 
         let owner_msg = make_message(
-            "telegram",
+            "xmpp",
             "default",
             "default",
             "owner-sender",

@@ -132,7 +132,7 @@ impl ConversationEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationSurface {
     pub id: ConversationId,
-    /// Which channel this conversation is on (e.g. "telegram", "web", "cli").
+    /// Which channel this conversation is on (e.g. "xmpp", "web", "cli").
     pub channel: String,
     /// The user who owns this conversation.
     pub user_id: String,
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn conversation_lifecycle() {
-        let mut conv = ConversationSurface::new("telegram", "user_123");
+        let mut conv = ConversationSurface::new("xmpp", "user_123");
         assert!(conv.entries.is_empty());
         assert!(conv.active_threads.is_empty());
 

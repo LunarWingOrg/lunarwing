@@ -1550,14 +1550,14 @@ mod tests {
     -> (Worker, Arc<MessageTool>, BroadcastCapture, BroadcastCapture) {
         let channel_manager = ChannelManager::new();
         let (gateway, gateway_captures) = RecordingBroadcastChannel::new("gateway");
-        let (telegram, telegram_captures) = RecordingBroadcastChannel::new("telegram");
+        let (xmpp, xmpp_captures) = RecordingBroadcastChannel::new("xmpp");
         channel_manager.add(Box::new(gateway)).await;
-        channel_manager.add(Box::new(telegram)).await;
+        channel_manager.add(Box::new(xmpp)).await;
 
         let message_tool = Arc::new(MessageTool::new(Arc::new(channel_manager)));
         let worker = make_worker(vec![message_tool.clone()]).await;
 
-        (worker, message_tool, gateway_captures, telegram_captures)
+        (worker, message_tool, gateway_captures, xmpp_captures)
     }
 
     #[test]
@@ -2170,9 +2170,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn autonomous_message_tool_ignores_stale_gateway_context_when_routine_metadata_targets_telegram()
+    async fn autonomous_message_tool_ignores_stale_gateway_context_when_routine_metadata_targets_xmpp()
      {
-        let (worker, message_tool, gateway_captures, telegram_captures) =
+        let (worker, message_tool, gateway_captures, xmpp_captures) =
             make_worker_with_message_tool().await;
 
         message_tool
@@ -2185,9 +2185,9 @@ mod tests {
         worker
             .context_manager()
             .update_context(worker.job_id, |ctx| {
-                ctx.user_id = "telegram".to_string();
+                ctx.user_id = "xmpp".to_string();
                 ctx.metadata = serde_json::json!({
-                    "notify_channel": "telegram",
+                    "notify_channel": "xmpp",
                     "owner_id": "owner-scope",
                 });
                 Ok::<(), String>(())
@@ -2204,14 +2204,14 @@ mod tests {
             .await
             .unwrap(); // safety: test
         assert!(
-            result.contains("telegram:owner-scope"),
-            "expected telegram owner-scope routing, got: {result}"
+            result.contains("xmpp:owner-scope"),
+            "expected xmpp owner-scope routing, got: {result}"
         );
 
         assert!(gateway_captures.lock().await.is_empty());
-        let telegram = telegram_captures.lock().await.clone();
-        assert_eq!(telegram.len(), 1);
-        assert_eq!(telegram[0].0, "owner-scope");
-        assert_eq!(telegram[0].1.content, "hello from routine");
+        let xmpp = xmpp_captures.lock().await.clone();
+        assert_eq!(xmpp.len(), 1);
+        assert_eq!(xmpp[0].0, "owner-scope");
+        assert_eq!(xmpp[0].1.content, "hello from routine");
     }
 }

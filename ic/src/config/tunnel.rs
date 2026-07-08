@@ -5,7 +5,7 @@ use crate::settings::Settings;
 /// Tunnel configuration for exposing the agent to the internet.
 ///
 /// Used by channels and tools that need public webhook endpoints.
-/// The tunnel URL is shared across all channels (Telegram, XMPP, etc.).
+/// The tunnel URL is shared across all channels (XMPP, etc.).
 ///
 /// Two modes:
 /// - **Static URL** (`TUNNEL_URL`): set the public URL directly (manual tunnel)
@@ -184,8 +184,8 @@ mod tests {
             provider: None,
         };
         assert_eq!(
-            cfg.webhook_url("/webhook/telegram"),
-            Some("https://abc.ngrok.io/webhook/telegram".to_string())
+            cfg.webhook_url("/webhook/xmpp"),
+            Some("https://abc.ngrok.io/webhook/xmpp".to_string())
         );
     }
 

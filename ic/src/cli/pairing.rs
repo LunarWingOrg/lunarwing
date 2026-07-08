@@ -1,6 +1,6 @@
 //! DM pairing CLI commands.
 //!
-//! Manage pairing requests for channels (Telegram, XMPP, etc.).
+//! Manage pairing requests for channels (XMPP, etc.).
 
 use clap::Subcommand;
 
@@ -11,7 +11,7 @@ use crate::pairing::PairingStore;
 pub enum PairingCommand {
     /// List pending pairing requests
     List {
-        /// Channel name (e.g., telegram, xmpp)
+        /// Channel name (e.g., xmpp, xmpp)
         #[arg(required = true)]
         channel: String,
 
@@ -22,7 +22,7 @@ pub enum PairingCommand {
 
     /// Approve a pairing request by code
     Approve {
-        /// Channel name (e.g., telegram, xmpp)
+        /// Channel name (e.g., xmpp, xmpp)
         #[arg(required = true)]
         channel: String,
 
@@ -117,7 +117,7 @@ mod tests {
         let result = run_pairing_command_with_store(
             &store,
             PairingCommand::List {
-                channel: "telegram".to_string(),
+                channel: "xmpp".to_string(),
                 json: false,
             },
         );
@@ -130,7 +130,7 @@ mod tests {
         let result = run_pairing_command_with_store(
             &store,
             PairingCommand::List {
-                channel: "telegram".to_string(),
+                channel: "xmpp".to_string(),
                 json: true,
             },
         );
@@ -141,12 +141,12 @@ mod tests {
     fn test_approve_invalid_code_returns_err() {
         let (store, _) = test_store();
         // Create a pending request so the pairing file exists, then approve with wrong code
-        store.upsert_request("telegram", "user1", None).unwrap();
+        store.upsert_request("xmpp", "user1", None).unwrap();
 
         let result = run_pairing_command_with_store(
             &store,
             PairingCommand::Approve {
-                channel: "telegram".to_string(),
+                channel: "xmpp".to_string(),
                 code: "BADCODE1".to_string(),
             },
         );
@@ -157,13 +157,13 @@ mod tests {
     #[test]
     fn test_approve_valid_code_returns_ok() {
         let (store, _) = test_store();
-        let r = store.upsert_request("telegram", "user1", None).unwrap();
+        let r = store.upsert_request("xmpp", "user1", None).unwrap();
         assert!(r.created);
 
         let result = run_pairing_command_with_store(
             &store,
             PairingCommand::Approve {
-                channel: "telegram".to_string(),
+                channel: "xmpp".to_string(),
                 code: r.code,
             },
         );
@@ -173,12 +173,12 @@ mod tests {
     #[test]
     fn test_list_with_pending_returns_ok() {
         let (store, _) = test_store();
-        store.upsert_request("telegram", "user1", None).unwrap();
+        store.upsert_request("xmpp", "user1", None).unwrap();
 
         let result = run_pairing_command_with_store(
             &store,
             PairingCommand::List {
-                channel: "telegram".to_string(),
+                channel: "xmpp".to_string(),
                 json: false,
             },
         );

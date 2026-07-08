@@ -15,7 +15,7 @@ LunarWing operates across four trust boundaries:
 | **Local user** | Fully trusted | TUI, web gateway (loopback), CLI commands |
 | **Browser client** | Authenticated | Web UI connected via bearer token; subject to CORS, Origin validation, CSRF protections |
 | **Docker containers** | Untrusted (sandboxed) | Worker containers executing user jobs; isolated via per-job tokens, allowlisted egress, dropped capabilities |
-| **External services** | Untrusted | Webhook senders (Telegram, XMPP bridge); authenticated via shared secret |
+| **External services** | Untrusted | Webhook senders (XMPP bridge); authenticated via shared secret |
 
 **Key assumptions:**
 
@@ -136,7 +136,7 @@ Shutdown is triggered via a `oneshot::Sender` stored in `GatewayState::shutdown_
 
 Configurable via `HTTP_HOST` (default `0.0.0.0`) and `HTTP_PORT` (default `8080`).
 
-**WARNING:** The default bind address is `0.0.0.0`, meaning the webhook server listens on **all interfaces** by default. This is intentional (webhooks must be reachable from external services like Telegram), but operators should be aware of the exposure.
+**WARNING:** The default bind address is `0.0.0.0`, meaning the webhook server listens on **all interfaces** by default. This is intentional (webhooks must be reachable from external services like XMPP), but operators should be aware of the exposure.
 
 **Reference:** `src/config.rs` — `http_host` default (`"0.0.0.0"`), `http_port` default (`8080`)
 

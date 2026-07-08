@@ -643,7 +643,7 @@ impl Channel for ReplChannel {
                         // Ctrl+D in interactive mode: graceful shutdown.
                         // In daemon mode (stdin = /dev/null, no TTY), EOF arrives
                         // immediately — just drop the REPL thread silently so other
-                        // channels (gateway, telegram, …) keep running.
+                        // channels (gateway, xmpp, …) keep running.
                         if std::io::stdin().is_terminal() {
                             let msg = IncomingMessage::new("repl", &user_id, "/quit")
                                 .with_timezone(&sys_tz);

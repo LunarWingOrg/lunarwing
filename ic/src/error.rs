@@ -518,11 +518,11 @@ mod tests {
     #[test]
     fn channel_error_display() {
         let err = ChannelError::StartupFailed {
-            name: "telegram".to_string(),
+            name: "xmpp".to_string(),
             reason: "invalid token".to_string(),
         };
         let msg = err.to_string();
-        assert!(msg.contains("telegram"), "Should mention channel: {msg}");
+        assert!(msg.contains("xmpp"), "Should mention channel: {msg}");
         assert!(
             msg.contains("invalid token"),
             "Should mention reason: {msg}"
