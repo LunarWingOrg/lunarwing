@@ -7,6 +7,8 @@ networks:
 
 volumes:
   nanocode_logs:
+  opencode_logs:
+  pebble_logs:
   orchestrator_data:
 
 services:
@@ -66,6 +68,42 @@ services:
     volumes: [nanocode_logs:/logs]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Opencode Worker ────────────────────
+  opencode_worker:
+    build:
+      context: ../opencode4lunarwing
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+      - TENSORZERO_API_KEY=${MOCK_API_KEY:-test-key}
+      - WS_PORT=9090
+    ports: ["8445:8443", "9091:9090"]
+    networks: [test_harness]
+    volumes: [opencode_logs:/logs]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8443/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Pebble Worker ────────────────────
+  pebble_worker:
+    build:
+      context: ../pebble4lunarwing
+      dockerfile: Dockerfile
+    environment:
+      - AGENT_AUTH_TOKEN=${HARNESS_AUTH_TOKEN:-test-token}
+      - WS_PORT=9090
+      - HEALTH_PORT=8443
+    ports: ["8446:8443", "9092:9090"]
+    networks: [test_harness]
+    volumes: [pebble_logs:/logs]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8443/health"]
       interval: 5s
       timeout: 3s
       retries: 12

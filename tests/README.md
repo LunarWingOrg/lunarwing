@@ -7,6 +7,8 @@ Matrix test suite for LunarWing worker types:
 | Worker | Source | Docker Service | Description |
 |--------|--------|----------------|-------------|
 | **Nanocode** | `lunarcode4lunarwing/` | `nanocode_worker` | NanoGPT community Nanocode worker container |
+| **Opencode** | `opencode4lunarwing/` | `opencode_worker` | Opencode (sst/opencode) coding-agent worker |
+| **Pebble** | `pebble4lunarwing/` | `pebble_worker` | Pebble Rust-based coding-agent worker container |
 | **Built-in** | `ic/src/worker/` | `builtin_worker` | Native worker inside the LunarWing daemon |
 | **Sandbox** | `ic/src/sandbox/` | `sandbox_worker` | Docker-isolated execution sandbox |
 
@@ -31,7 +33,7 @@ python runner.py --worker nanocode   # single worker type
 
 - Docker and Docker Compose
 - Python 3.10+
-- Dependencies: `requests`, `websocket-client`, `pyyaml`, `pytest`
+- Dependencies: `requests`, `websocket-client`, `pyyaml`, `websockets`, `pytest`
 
 ## Architecture
 
@@ -129,6 +131,8 @@ Scenarios with `chaos: true` only run in `--mode full`. These test error paths l
 | `orchestrator` | `python:3.12-slim` | 8080 | default | Mock HTTP API |
 | `ws_hub` | `python:3.12-slim` | 9000 | default | Mock WebSocket hub |
 | `nanocode_worker` | Built from `lunarcode4lunarwing/` | 8444, 9090 | default | Nanocode worker under test |
+| `opencode_worker` | Built from `opencode4lunarwing/` | 8445, 9091 | default | Opencode worker under test |
+| `pebble_worker` | Built from `pebble4lunarwing/` | 8446, 9092 | default | Pebble worker under test |
 | `builtin_worker` | `lunarwing:latest` | -- | `full` | Built-in worker (requires binary) |
 | `sandbox_worker` | `lunarwing:latest` | -- | `full` | Sandbox worker (requires binary + Docker socket) |
 
