@@ -78,7 +78,7 @@ def main():
     args = p.parse_args()
 
     srv = HTTPServer((args.host, args.port), Orchestrator)
-    print(f"[mock-orch] listening on {args.host}:args.port}")
+    print(f"[mock-orch] listening on {args.host}:{args.port}")
     srv.serve_forever()
 
 

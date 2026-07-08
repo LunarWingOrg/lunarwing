@@ -45,6 +45,8 @@ The original functional smoke tests—now grouped under a dedicated section.
 #### Workers
 
 - [ ] **Nanocode external worker** – submit job, verify execution + completion signaling
+- [ ] **Opencode external worker** – submit job, verify WebSocket protocol + completion signaling
+- [ ] **Pebble external worker** – submit job, verify NDJSON event streaming + completion signaling
 - [ ] **Docker sandbox worker** – submit job, verify execution + result return
 
 #### Tools

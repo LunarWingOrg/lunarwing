@@ -27,6 +27,48 @@ workers:
           first_message: ready
           payload_has: [worker_id, version, mode]
 
+  opencode:
+    deploy: opencode_worker
+    health_port: 8445
+    ws_port: 9091
+    auth_token: test-token
+    scenarios:
+      - name: health
+        type: http
+        method: GET
+        path: /health
+        expect:
+          status_code: 200
+      - name: ready
+        type: http
+        method: GET
+        path: /ready
+        expect:
+          status_code: 200
+      - name: ws_handshake
+        type: ws_handshake
+        expect:
+          first_message: ready
+          payload_has: [worker_id, version, mode]
+
+  pebble:
+    deploy: pebble_worker
+    health_port: 8446
+    ws_port: 9092
+    auth_token: test-token
+    scenarios:
+      - name: health
+        type: http
+        method: GET
+        path: /health
+        expect:
+          status_code: 200
+      - name: ws_handshake
+        type: ws_handshake
+        expect:
+          first_message: ready
+          payload_has: [worker_id, version, mode]
+
   builtin:
     deploy: builtin_worker
     health_port: 8080    # via orchestrator health
