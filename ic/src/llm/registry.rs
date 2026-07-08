@@ -145,7 +145,7 @@ mod unsupported_params_de {
 pub struct ProviderDefinition {
     /// Unique identifier used in `LLM_BACKEND` (e.g., "groq", "tinfoil").
     pub id: String,
-    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["open_ai"]).
+    /// Alternative names accepted in `LLM_BACKEND` (e.g., ["compatible"]).
     #[serde(default)]
     pub aliases: Vec<String>,
     /// Which API protocol to use.
@@ -153,7 +153,7 @@ pub struct ProviderDefinition {
     /// Default base URL. `None` means use the rig-core default for the protocol.
     #[serde(default)]
     pub default_base_url: Option<String>,
-    /// Env var for base URL override (e.g., "OPENAI_BASE_URL").
+    /// Env var for base URL override (e.g., "LLM_BASE_URL").
     #[serde(default)]
     pub base_url_env: Option<String>,
     /// Whether a base URL is required (for generic openai_compatible).
@@ -326,8 +326,28 @@ mod tests {
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
         assert!(
-            registry.all().len() >= 3,
-            "should have at least 3 built-in providers"
+            registry.all().len() >= 2,
+            "should have at least 2 built-in providers"
+        );
+    }
+
+    #[test]
+    fn test_direct_openai_builtin_removed() {
+        let registry = ProviderRegistry::new(
+            serde_json::from_str(include_str!("../../providers.json")).unwrap(),
+        );
+
+        assert!(
+            registry.find("openai").is_none(),
+            "direct OpenAI must not be a built-in LLM provider"
+        );
+        assert!(
+            registry.find("open_ai").is_none(),
+            "direct OpenAI alias must not be a built-in LLM provider"
+        );
+        assert!(
+            registry.find("openai_compatible").is_some(),
+            "OpenAI-compatible provider must remain available"
         );
     }
 
@@ -336,9 +356,11 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        let openai = registry.find("openai").expect("openai should exist");
-        assert_eq!(openai.id, "openai");
-        assert_eq!(openai.protocol, ProviderProtocol::OpenAiCompletions);
+        let provider = registry
+            .find("openai_compatible")
+            .expect("openai_compatible should exist");
+        assert_eq!(provider.id, "openai_compatible");
+        assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
     }
 
     #[test]
@@ -346,10 +368,10 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        let openai = registry
-            .find("open_ai")
-            .expect("alias open_ai should resolve");
-        assert_eq!(openai.id, "openai");
+        let provider = registry
+            .find("compatible")
+            .expect("alias compatible should resolve");
+        assert_eq!(provider.id, "openai_compatible");
     }
 
     #[test]
@@ -357,7 +379,7 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        assert!(registry.find("OpenAI").is_some());
+        assert!(registry.find("OpenAI").is_none());
         assert!(registry.find("OLLAMA").is_some());
         assert!(registry.find("OPENAI_COMPATIBLE").is_some());
     }
@@ -433,7 +455,6 @@ mod tests {
         let registry = ProviderRegistry::new(
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
-        assert_eq!(registry.model_env_var("openai"), "OPENAI_MODEL");
         assert_eq!(registry.model_env_var("ollama"), "OLLAMA_MODEL");
         assert_eq!(registry.model_env_var("openai_compatible"), "LLM_MODEL");
     }
@@ -452,8 +473,9 @@ mod tests {
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
         assert!(registry.is_known("lunarwing_cloud"));
-        assert!(registry.is_known("openai"));
+        assert!(!registry.is_known("openai"));
         assert!(registry.is_known("ollama"));
+        assert!(registry.is_known("openai_compatible"));
         assert!(!registry.is_known("nonexistent"));
     }
 
@@ -482,9 +504,7 @@ mod tests {
         let providers: Vec<ProviderDefinition> =
             serde_json::from_str(include_str!("../../providers.json")).unwrap();
         for def in &providers {
-            if def.protocol == ProviderProtocol::OpenAiCompletions
-                && def.id != "openai"
-                && def.id != "openai_compatible"
+            if def.protocol == ProviderProtocol::OpenAiCompletions && def.id != "openai_compatible"
             {
                 assert!(
                     def.default_base_url.is_some(),
@@ -501,14 +521,16 @@ mod tests {
             serde_json::from_str(include_str!("../../providers.json")).unwrap(),
         );
 
-        let openai = registry.find("openai").expect("openai should exist");
+        let openai_compatible = registry
+            .find("openai_compatible")
+            .expect("openai_compatible should exist");
         assert!(
-            openai
+            openai_compatible
                 .setup
                 .as_ref()
                 .and_then(|s| s.models_filter())
                 .is_none(),
-            "openai should not have models_filter"
+            "openai_compatible should not have models_filter"
         );
 
         let ollama = registry.find("ollama").expect("ollama should exist");
@@ -776,15 +798,6 @@ mod tests {
     fn test_unsupported_params_deserialized() {
         let providers: Vec<ProviderDefinition> =
             serde_json::from_str(include_str!("../../providers.json")).unwrap();
-
-        // OpenAI should have temperature in unsupported_params
-        let openai = providers.iter().find(|p| p.id == "openai").unwrap();
-        assert!(
-            openai
-                .unsupported_params
-                .contains(&"temperature".to_string()),
-            "openai should have 'temperature' in unsupported_params"
-        );
 
         // Providers without the field in JSON should deserialize to empty vec
         let ollama = providers.iter().find(|p| p.id == "ollama").unwrap();

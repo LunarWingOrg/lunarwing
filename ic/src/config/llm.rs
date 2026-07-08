@@ -80,6 +80,15 @@ impl LlmConfig {
         let is_openai_codex = backend_lower == "openai_codex"
             || backend_lower == "openai-codex"
             || backend_lower == "codex";
+        if matches!(backend_lower.as_str(), "openai" | "open_ai") {
+            return Err(ConfigError::InvalidValue {
+                key: "LLM_BACKEND".to_string(),
+                message: format!(
+                    "LLM_BACKEND={backend} is no longer a built-in provider. Use \
+                     LLM_BACKEND=openai_compatible with LLM_BASE_URL and LLM_API_KEY instead."
+                ),
+            });
+        }
 
         if !is_lunarwing_cloud && !is_openai_codex && registry.find(&backend_lower).is_none() {
             tracing::warn!(
@@ -706,34 +715,25 @@ mod tests {
     }
 
     #[test]
-    fn registry_provider_resolves_openai() {
+    fn direct_openai_backend_is_rejected_even_when_compatible_config_exists() {
         let _guard = lock_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("OPENAI_MODEL");
-            std::env::remove_var("OPENAI_BASE_URL");
-        }
+        clear_openai_compatible_env();
 
         let settings = Settings {
             llm_backend: Some("openai".to_string()),
-            selected_model: Some("gpt-5-mini".to_string()),
             ..Default::default()
         };
 
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "openai");
-        let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "openai");
-        assert_eq!(provider.model, "gpt-5-mini");
-        assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
-        assert!(
-            provider
-                .unsupported_params
-                .contains(&"temperature".to_string()),
-            "openai should propagate unsupported_params from registry"
-        );
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::set_var("LLM_BASE_URL", "http://localhost:8080/v1");
+            std::env::set_var("LLM_API_KEY", TEST_API_KEY);
+        }
+
+        let err = LlmConfig::resolve(&settings).expect_err("openai backend must be rejected");
+        let message = err.to_string();
+        assert!(message.contains("LLM_BACKEND=openai"), "{message}");
+        assert!(message.contains("openai_compatible"), "{message}");
     }
 
     #[test]
@@ -759,28 +759,25 @@ mod tests {
     }
 
     #[test]
-    fn registry_provider_alias_resolves_openai_alias() {
+    fn direct_openai_alias_is_rejected_even_when_compatible_config_exists() {
         let _guard = lock_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("OPENAI_API_KEY");
-            std::env::remove_var("OPENAI_MODEL");
-            std::env::remove_var("OPENAI_BASE_URL");
-        }
+        clear_openai_compatible_env();
 
         let settings = Settings {
             llm_backend: Some("open_ai".to_string()),
-            selected_model: Some("gpt-5-mini".to_string()),
             ..Default::default()
         };
 
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "openai");
-        let provider = cfg.provider.expect("provider config should be present");
-        assert_eq!(provider.provider_id, "openai");
-        assert_eq!(provider.model, "gpt-5-mini");
-        assert_eq!(provider.protocol, ProviderProtocol::OpenAiCompletions);
+        // SAFETY: Under ENV_MUTEX.
+        unsafe {
+            std::env::set_var("LLM_BASE_URL", "http://localhost:8080/v1");
+            std::env::set_var("LLM_API_KEY", TEST_API_KEY);
+        }
+
+        let err = LlmConfig::resolve(&settings).expect_err("open_ai alias must be rejected");
+        let message = err.to_string();
+        assert!(message.contains("LLM_BACKEND=open_ai"), "{message}");
+        assert!(message.contains("openai_compatible"), "{message}");
     }
 
     #[test]
@@ -803,23 +800,23 @@ mod tests {
         clear_openai_compatible_env();
         // SAFETY: Under ENV_MUTEX.
         unsafe {
-            std::env::set_var("LLM_BACKEND", "open_ai");
-            std::env::set_var("OPENAI_API_KEY", TEST_API_KEY);
+            std::env::set_var("LLM_BACKEND", "compatible");
+            std::env::set_var("LLM_BASE_URL", "http://localhost:8080/v1");
         }
 
         let settings = Settings::default();
         let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
         assert_eq!(
-            cfg.backend, "openai",
-            "alias 'open_ai' should be normalized to canonical 'openai'"
+            cfg.backend, "openai_compatible",
+            "alias 'compatible' should be normalized to canonical 'openai_compatible'"
         );
         let provider = cfg.provider.expect("should have provider config");
-        assert_eq!(provider.provider_id, "openai");
+        assert_eq!(provider.provider_id, "openai_compatible");
 
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("OPENAI_API_KEY");
+            std::env::remove_var("LLM_BASE_URL");
         }
     }
 

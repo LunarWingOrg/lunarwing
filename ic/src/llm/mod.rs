@@ -2,9 +2,8 @@
 //!
 //! Supports multiple backends:
 //! - **LunarWing Cloud** (default): Session token or API key auth via Chat Completions API
-//! - **OpenAI**: Direct API access with your own key
 //! - **Ollama**: Local model inference
-//! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI API
+//! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI Chat Completions API
 
 pub mod circuit_breaker;
 pub(crate) mod codex_auth;
@@ -676,7 +675,7 @@ mod tests {
     fn test_create_cheap_llm_provider_lunarwing_cloud_cheap_ignored_for_non_lunarwing_cloud_backend()
      {
         let mut config = test_llm_config();
-        config.backend = "openai".to_string();
+        config.backend = "openai_compatible".to_string();
         config.lunarwing_cloud.cheap_model = Some("cheap-test-model".to_string());
 
         let session = Arc::new(SessionManager::new(SessionConfig::default()));
@@ -704,7 +703,7 @@ mod tests {
 
         // LunarWing Cloud ignored for non-lunarwing_cloud backend
         let mut config = test_llm_config();
-        config.backend = "openai".to_string();
+        config.backend = "openai_compatible".to_string();
         config.lunarwing_cloud.cheap_model = Some("lunarwing_cloud".to_string());
         assert_eq!(config.cheap_model_name(), None);
 
