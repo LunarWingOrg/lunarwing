@@ -114,6 +114,45 @@ Upgrade flags:
 | `--force` | Continue even if preflight fails |
 | `--yes` | Forward non-interactive confirmation to the shell upgrade script |
 
+### Kawarimi tenant export (cross-host migration)
+
+Export mode defaults to dry-run. It wraps `ic/scripts/export-tenant.sh`,
+which stops the tenant, takes a `pg_dump`, bundles secrets manifests and
+workspace state into a single `0600` tar file suitable for
+`import-tenant.sh` on a target host.
+
+Interactive dry-run:
+
+```bash
+sudo python3 -m lunarwing_mt_onboard export
+```
+
+Non-interactive dry-run:
+
+```bash
+sudo python3 -m lunarwing_mt_onboard export \
+  --tenant ruffles \
+  --non-interactive
+```
+
+Apply an export (stops the tenant and writes the bundle):
+
+```bash
+sudo python3 -m lunarwing_mt_onboard export \
+  --tenant ruffles \
+  --apply \
+  --non-interactive
+```
+
+Export flags:
+
+| Flag | Description |
+|------|-------------|
+| `--tenant NAME` | Existing tenant to export |
+| `--out-dir DIR` | Directory for the migration bundle (default: `/var/lib/lunarwing-migrate`) |
+| `--apply` | Execute the export; omitted means dry-run |
+| `--no-quiesce` | Skip auto-stopping services (you must have already stopped them) |
+
 ## Module layout
 
 ```
@@ -125,10 +164,13 @@ lunarwing_mt_onboard/
 ├── provisioner.py     # subprocess wrapper around mt-admin.sh
 ├── upgrade.py         # subprocess wrapper around upgrade scripts
 ├── upgrade_cli.py     # interactive upgrade prompts + display
+├── export.py          # subprocess wrapper around export-tenant.sh
+├── export_cli.py      # interactive export prompts + display
 ├── secrets.py         # master-key generation + validation
 ├── verify.py          # post-start health checks
 ├── tests.py           # unit tests (config, secrets, validation)
 ├── upgrade_tests.py   # unit tests for in-place upgrades
+├── export_tests.py    # unit tests for Kawarimi export
 └── requirements.txt   # rich, questionary
 ```
 
