@@ -67,17 +67,33 @@ make_test_scripts() {
   local work="$1"
   mkdir -p "$work/scripts" "$work/bin" "$work/home/kawarimi/lunarwing/env"
   cp "$IMPORT_SRC" "$work/scripts/import-tenant.sh"
-  cp "$IC_DIR/scripts/lunarwing-weechat-preflight.sh" "$work/scripts/lunarwing-weechat-preflight.sh"
-  chmod +x "$work/scripts/import-tenant.sh" "$work/scripts/lunarwing-weechat-preflight.sh"
 
   cat >"$work/scripts/lunarwing-mt-admin.sh" <<'MT'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >> "${KAWARIMI_TEST_WORK:?}/mt-admin.log"
 case "${1:-}" in
+  owner-scopes)
+    if [[ -f "$KAWARIMI_TEST_WORK/scope-migrated" ]]; then
+      printf 'kawarimi\t12\n'
+    else
+      printf 'default\t12\n'
+    fi
+    ;;
+  migrate-owner-scope)
+    touch "$KAWARIMI_TEST_WORK/scope-migrated"
+    exit 0
+    ;;
   restore-tenant) exit 0 ;;
   *) exit 0 ;;
 esac
 MT
   chmod +x "$work/scripts/lunarwing-mt-admin.sh"
+
+  cat >"$work/scripts/lunarwing-weechat-preflight.sh" <<'PREFLIGHT'
+#!/usr/bin/env bash
+printf 'preflight %s\n' "${1:-}" >> "${KAWARIMI_TEST_WORK:?}/preflight.log"
+PREFLIGHT
+  chmod +x "$work/scripts/import-tenant.sh" "$work/scripts/lunarwing-weechat-preflight.sh"
 
   cat >"$work/bin/id" <<'ID'
 #!/usr/bin/env bash
@@ -110,6 +126,7 @@ printf '{"tenants":{}}\n' >"$tmp/ports.json"
 output="$(
   PATH="$tmp/bin:$PATH" \
   LUNARWING_PORTS_REGISTRY="$tmp/ports.json" \
+  KAWARIMI_TEST_WORK="$tmp" \
   bash "$tmp/scripts/import-tenant.sh" "$tmp/kawarimi.tar" \
     --dry-run --yes --start --old-stopped \
     --docker-group \
@@ -128,6 +145,47 @@ assert_contains "passes --tensorzero-url to add-tenant" "$output" "--tensorzero-
 assert_contains "builds vision sidecar when requested" "$output" "build-vision-sidecar"
 assert_contains "injects vision manifest" "$output" "manifest-vision.env ->"
 assert_contains "runs WeeChat preflight before start" "$output" "lunarwing-weechat-preflight.sh kawarimi"
+
+echo "=== import-tenant explicit owner-scope dry-run ==="
+explicit_output="$(
+  PATH="$tmp/bin:$PATH" \
+  LUNARWING_PORTS_REGISTRY="$tmp/ports.json" \
+  KAWARIMI_TEST_WORK="$tmp" \
+  bash "$tmp/scripts/import-tenant.sh" "$tmp/kawarimi.tar" \
+    --dry-run --yes --owner-scope legacy-scope \
+    2>&1
+)" || {
+  status=$?
+  printf '%s\n' "$explicit_output"
+  fail "explicit owner-scope dry-run exited successfully"
+  exit "$status"
+}
+assert_contains "plans explicit owner-scope rekey" "$explicit_output" "migrate-owner-scope kawarimi --from legacy-scope"
+
+echo "=== import-tenant auto owner-scope migration ==="
+rm -f "$tmp/mt-admin.log" "$tmp/scope-migrated"
+cat >"$tmp/home/kawarimi/lunarwing/env/lunarwing.env" <<'ENV'
+SECRETS_MASTER_KEY=throwaway-master-key
+ENV
+cat >"$tmp/home/kawarimi/lunarwing/env/xmpp-bridge.env" <<'ENV'
+XMPP_JID=throwaway@example.test
+ENV
+cat >"$tmp/home/kawarimi/lunarwing/env/vision.env" <<'ENV'
+VL_MODEL=throwaway
+ENV
+auto_output="$(
+  PATH="$tmp/bin:$PATH" \
+  LUNARWING_PORTS_REGISTRY="$tmp/ports.json" \
+  KAWARIMI_TEST_WORK="$tmp" \
+  bash "$tmp/scripts/import-tenant.sh" "$tmp/kawarimi.tar" --yes \
+    2>&1
+)" || {
+  status=$?
+  printf '%s\n' "$auto_output"
+  fail "auto owner-scope import exited successfully"
+  exit "$status"
+}
+assert_file_contains "auto-migrates default owner scope" "$tmp/mt-admin.log" "migrate-owner-scope kawarimi --from default"
 
 echo "=== export-tenant vision manifest coverage ==="
 assert_file_contains "export writes a vision manifest" "$EXPORT_SRC" "manifest-vision.env"

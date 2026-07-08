@@ -334,6 +334,7 @@ Commands:
   migrate-owner-scope <name>       Rekey DB data from 'default' to tenant scope
     --from <old_scope>             Old owner_id (default: 'default')
                                    (run after patch-env adds LUNARWING_OWNER_ID)
+  owner-scopes <name>              Print restored owner scopes and row counts
 
   list-tenants                     Show all tenants with ports and status
   status <name>                    Detailed status for one tenant
@@ -2967,6 +2968,41 @@ patch_tenant_env() {
 # existing tenant-scoped row and copying content from the old row if the new
 # one is empty.
 #
+owner_scope_tables() {
+  printf '%s\n' \
+    settings conversations memory_documents routines agent_jobs api_tokens \
+    heartbeat_state reflex_patterns user_identities secrets wasm_tools \
+    tool_rate_limit_state secret_usage_log leak_detection_events wasm_channels
+}
+
+# Print aggregate owner-scope counts as: <user_id><tab><row_count>
+owner_scope_rows() {
+  local name="$1"
+  name="$(sanitize_name "$name")"
+  tenant_exists_in_registry "$name" || die "tenant '$name' not found in registry"
+  ensure_container_runtime
+
+  local container_name="lunarwing-pg-$name"
+  _ctr "$name" inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null | grep -q true \
+    || die "PostgreSQL not running for '$name' — start the tenant's pg container first"
+
+  local psql_cmd="psql -U lunarwing -d lunarwing"
+  local selects="" sep="" tbl exists
+  while IFS= read -r tbl; do
+    exists="$(cd / && _ctr "$name" exec "$container_name" $psql_cmd -tAc \
+      "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='$tbl' AND column_name='user_id'" 2>/dev/null || true)"
+    [[ "$exists" == "1" ]] || continue
+    selects+="${sep}SELECT user_id, count(*)::bigint AS row_count FROM $tbl GROUP BY user_id"
+    sep=" UNION ALL "
+  done < <(owner_scope_tables)
+
+  [[ -n "$selects" ]] || return 0
+  local sql
+  sql="SELECT user_id, sum(row_count)::bigint FROM ($selects) s GROUP BY user_id ORDER BY user_id;"
+  cd / && _ctr "$name" exec "$container_name" \
+    psql -U lunarwing -d lunarwing -tA -F $'\t' -c "$sql"
+}
+
 # Check whether a tenant's DB has orphaned old-scope rows that need migration.
 # Returns 0 (needs migration) or 1 (already clean / DB unreachable).
 # Usage: _owner_scope_needs_migration <name> [old_scope]
@@ -3029,7 +3065,8 @@ migrate_owner_scope() {
   # Tables with a user_id column (base tables only, not views).
   # Discovered via information_schema — kept as a static list so the migration
   # is deterministic and doesn't break if a view is added/renamed.
-  local tables="settings conversations memory_documents routines agent_jobs api_tokens heartbeat_state reflex_patterns user_identities secrets tool_rate_limit_state secret_usage_log wasm_channels"
+  local tables
+  tables="$(owner_scope_tables)"
 
   # Stop the daemon first so it doesn't re-create 'default' rows mid-migration.
   ensure_init_system
@@ -3085,6 +3122,11 @@ migrate_owner_scope() {
         sql="DELETE FROM secrets d USING secrets t
                WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
              UPDATE secrets SET user_id='$name' WHERE user_id='$old_scope';" ;;
+      wasm_tools)  # UNIQUE (user_id, name, version)
+        sql="DELETE FROM wasm_tools d USING wasm_tools t
+               WHERE d.user_id='$old_scope' AND t.user_id='$name'
+                 AND d.name=t.name AND d.version=t.version;
+             UPDATE wasm_tools SET user_id='$name' WHERE user_id='$old_scope';" ;;
       routines)  # UNIQUE (user_id, name)
         sql="DELETE FROM routines d USING routines t
                WHERE d.user_id='$old_scope' AND t.user_id='$name' AND d.name=t.name;
@@ -3119,7 +3161,7 @@ migrate_owner_scope() {
                  AND d.metadata->>'thread_type'='heartbeat'
                  AND t.metadata->>'thread_type'='heartbeat';
              UPDATE conversations SET user_id='$name' WHERE user_id='$old_scope';" ;;
-      *)  # agent_jobs, api_tokens, user_identities, secret_usage_log: no user_id-bearing unique key
+      *)  # agent_jobs, api_tokens, user_identities, secret_usage_log, leak_detection_events: no user_id-bearing unique key
         sql="UPDATE $tbl SET user_id='$name' WHERE user_id='$old_scope';" ;;
     esac
 
@@ -6918,6 +6960,14 @@ main() {
       [[ -n "$name" ]] || die "usage: migrate-owner-scope <name> [--from <old_scope>]"
       ports_registry_init
       migrate_owner_scope "$name" "$old_scope"
+      ;;
+
+    owner-scopes)
+      require_root
+      local name="${1:-}"
+      [[ -n "$name" ]] || die "usage: owner-scopes <name>"
+      ports_registry_init
+      owner_scope_rows "$name"
       ;;
 
     backup-tenant)
