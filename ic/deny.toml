@@ -50,8 +50,12 @@ multiple-versions = "allow"
 wildcards = "allow"
 
 [sources]
-unknown-registry = "deny"
 unknown-git = "deny"
+unknown-registry = "deny"
+allow-git = [
+    "https://github.com/pydantic/monty.git",
+    "https://github.com/astral-sh/ruff.git",
+]
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
 
