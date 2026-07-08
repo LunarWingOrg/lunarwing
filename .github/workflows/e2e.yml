@@ -13,8 +13,8 @@ on:
     branches:
       - main
     paths:
-      - "src/channels/web/**"
-      - "tests/e2e/**"
+      - "ic/src/channels/web/**"
+      - "ic/tests/e2e/**"
 
 permissions:
   contents: read
@@ -29,6 +29,9 @@ jobs:
     name: Build lunarwing (libsql)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ic
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -40,9 +43,9 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
-            target
+            ic/target
             ~/.cargo/registry
-          key: e2e-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          key: e2e-${{ runner.os }}-${{ hashFiles('ic/Cargo.lock') }}
 
       - name: Build
         run: cargo build --no-default-features --features libsql
@@ -51,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: lunarwing-e2e-binary
-          path: target/debug/lunarwing
+          path: ic/target/debug/lunarwing
           retention-days: 1
 
   # ── Step 2: run test slices in parallel ───────────────────────────────────
@@ -72,6 +75,9 @@ jobs:
             files: "tests/e2e/scenarios/test_extensions.py tests/e2e/scenarios/test_extension_oauth.py tests/e2e/scenarios/test_oauth_url_parameters.py tests/e2e/scenarios/test_wasm_lifecycle.py tests/e2e/scenarios/test_tool_execution.py tests/e2e/scenarios/test_agent_loop_recovery.py tests/e2e/scenarios/test_pairing.py tests/e2e/scenarios/test_mcp_auth_flow.py tests/e2e/scenarios/test_oauth_credential_fallback.py tests/e2e/scenarios/test_routine_oauth_credential_injection.py"
           - group: routines
             files: "tests/e2e/scenarios/test_owner_scope.py tests/e2e/scenarios/test_routine_event_batch.py"
+    defaults:
+      run:
+        working-directory: ic
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -82,7 +88,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: lunarwing-e2e-binary
-          path: target/debug/
+          path: ic/target/debug/
 
       - name: Make binary executable
         run: chmod +x target/debug/lunarwing
@@ -105,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-screenshots-${{ matrix.group }}
-          path: tests/e2e/screenshots/
+          path: ic/tests/e2e/screenshots/
           if-no-files-found: ignore
 
   # ── Roll-up for branch protection ────────────────────────────────────────
