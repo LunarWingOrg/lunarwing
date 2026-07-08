@@ -287,7 +287,7 @@ impl RegistryCatalog {
     /// then searches by bare name ("github").
     ///
     /// If a bare name matches more than one prefix, returns `None`.
-    /// Use a qualified key ("tools/github", "channels/telegram") to
+    /// Use a qualified key ("tools/github", "channels/xmpp") to
     /// disambiguate.
     pub fn get(&self, name: &str) -> Option<&ExtensionManifest> {
         // Try exact key first
@@ -350,7 +350,7 @@ impl RegistryCatalog {
         }
     }
 
-    /// Get the full key ("tools/github", "channels/telegram") for a manifest.
+    /// Get the full key ("tools/github", "channels/xmpp") for a manifest.
     pub fn key_for(&self, name: &str) -> Option<String> {
         if self.manifests.contains_key(name) {
             return Some(name.to_string());
@@ -559,17 +559,17 @@ mod tests {
         .unwrap();
 
         fs::write(
-            channels_dir.join("telegram.json"),
+            channels_dir.join("xmpp.json"),
             r#"{
-                "name": "telegram",
-                "display_name": "Telegram",
+                "name": "xmpp",
+                "display_name": "XMPP",
                 "kind": "channel",
                 "version": "0.1.0",
-                "description": "Telegram Bot API channel",
+                "description": "XMPP channel",
                 "source": {
-                    "dir": "channels-src/telegram",
-                    "capabilities": "telegram.capabilities.json",
-                    "crate_name": "telegram-channel"
+                    "dir": "channels-src/xmpp",
+                    "capabilities": "xmpp.capabilities.json",
+                    "crate_name": "xmpp-channel"
                 },
                 "tags": ["messaging"]
             }"#,
@@ -596,11 +596,11 @@ mod tests {
                 "bundles": {
                     "default": {
                         "display_name": "Recommended",
-                        "extensions": ["tools/gotify", "tools/web-search", "channels/telegram"]
+                        "extensions": ["tools/gotify", "tools/web-search", "channels/xmpp"]
                     },
                     "messaging": {
                         "display_name": "Messaging",
-                        "extensions": ["tools/gotify", "channels/telegram"],
+                        "extensions": ["tools/gotify", "channels/xmpp"],
                         "shared_auth": null
                     }
                 }
@@ -644,7 +644,7 @@ mod tests {
         assert_eq!(defaults.len(), 2);
 
         let messaging = catalog.list(None, Some("messaging"));
-        assert_eq!(messaging.len(), 2); // gotify (tool) and telegram (channel) both have "messaging" tag
+        assert_eq!(messaging.len(), 2); // gotify (tool) and xmpp (channel) both have "messaging" tag
     }
 
     #[test]
@@ -660,7 +660,7 @@ mod tests {
 
         // Bare name
         assert!(catalog.get("gotify").is_some());
-        assert!(catalog.get("telegram").is_some());
+        assert!(catalog.get("xmpp").is_some());
         assert!(catalog.get("notion").is_some());
         assert!(catalog.get("web-search").is_some());
 

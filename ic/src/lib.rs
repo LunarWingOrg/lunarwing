@@ -8,7 +8,7 @@
 //! ┌─────────────────────────────────────────────────────────────────────────────────┐
 //! │                              User Interaction Layer                              │
 //! │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                         │
-//! │  │   CLI    │  │   XMPP   │  │ Telegram │  │   HTTP   │                         │
+//! │  │   CLI    │  │   XMPP   │  │ WeeChat  │  │   HTTP   │                         │
 //! │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘                         │
 //! │       └─────────────┴────────────┬┴─────────────┘                               │
 //! └──────────────────────────────────┼──────────────────────────────────────────────┘
@@ -31,7 +31,7 @@
 //!
 //! # Features
 //!
-//! - **Multi-channel interaction** - CLI, XMPP, Telegram, HTTP webhooks
+//! - **Multi-channel interaction** - CLI, XMPP, WeeChat, HTTP webhooks
 //! - **Parallel job execution** - Run multiple jobs with isolated contexts
 //! - **Pluggable tools** - MCP, 3rd party services, dynamic tools
 //! - **Self-repair** - Detect and fix stuck jobs and broken tools

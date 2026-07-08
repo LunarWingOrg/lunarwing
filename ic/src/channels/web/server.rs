@@ -2726,9 +2726,9 @@ mod tests {
     #[test]
     fn test_wasm_channel_activation_status_owner_bound_counts_as_active() -> Result<(), String> {
         let ext = InstalledExtension {
-            name: "telegram".to_string(),
+            name: "xmpp".to_string(),
             kind: ExtensionKind::WasmChannel,
-            display_name: Some("Telegram".to_string()),
+            display_name: Some("XMPP".to_string()),
             description: None,
             url: None,
             authenticated: true,
@@ -2886,103 +2886,6 @@ mod tests {
             "expected activation failure in message: {:?}",
             parsed
         );
-    }
-
-    #[tokio::test]
-    async fn test_extensions_setup_submit_telegram_verification_does_not_broadcast_auth_required() {
-        use axum::body::Body;
-        use tokio::time::{Duration, timeout};
-        use tower::ServiceExt;
-
-        let secrets = test_secrets_store();
-        let (ext_mgr, _wasm_tools_dir, wasm_channels_dir) = test_ext_mgr(secrets);
-
-        std::fs::write(
-            wasm_channels_dir.path().join("telegram.wasm"),
-            b"\0asm fake",
-        )
-        .expect("write fake telegram wasm");
-        let caps = serde_json::json!({
-            "type": "channel",
-            "name": "telegram",
-            "setup": {
-                "required_secrets": [
-                    {
-                        "name": "telegram_bot_token",
-                        "prompt": "Enter your Telegram Bot API token (from @BotFather)"
-                    }
-                ]
-            }
-        });
-        std::fs::write(
-            wasm_channels_dir.path().join("telegram.capabilities.json"),
-            serde_json::to_string(&caps).expect("serialize telegram caps"),
-        )
-        .expect("write telegram caps");
-
-        ext_mgr
-            .set_test_telegram_pending_verification("iclaw-7qk2m9", Some("test_hot_bot"))
-            .await;
-
-        let state = test_gateway_state(Some(ext_mgr));
-        let mut receiver = state.sse.sender().subscribe();
-        let app = Router::new()
-            .route(
-                "/api/extensions/{name}/setup",
-                post(extensions_setup_submit_handler),
-            )
-            .with_state(state);
-
-        let req_body = serde_json::json!({
-            "secrets": {
-                "telegram_bot_token": "123456789:ABCdefGhI"
-            }
-        });
-        let mut req = axum::http::Request::builder()
-            .method("POST")
-            .uri("/api/extensions/telegram/setup")
-            .header("content-type", "application/json")
-            .body(Body::from(req_body.to_string()))
-            .expect("request");
-        // Inject AuthenticatedUser so the handler's extractor succeeds
-        // without needing the full auth middleware layer.
-        req.extensions_mut().insert(UserIdentity {
-            user_id: "test".to_string(),
-            workspace_read_scopes: Vec::new(),
-        });
-
-        let resp = ServiceExt::<axum::http::Request<Body>>::oneshot(app, req)
-            .await
-            .expect("response");
-        assert_eq!(resp.status(), StatusCode::OK);
-
-        let body = axum::body::to_bytes(resp.into_body(), 1024 * 64)
-            .await
-            .expect("body");
-        let parsed: serde_json::Value = serde_json::from_slice(&body).expect("json response");
-        assert_eq!(parsed["success"], serde_json::Value::Bool(true));
-        assert_eq!(parsed["activated"], serde_json::Value::Bool(false));
-        assert_eq!(parsed["verification"]["code"], "iclaw-7qk2m9");
-
-        let deadline = tokio::time::Instant::now() + Duration::from_millis(100);
-        loop {
-            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if remaining.is_zero() {
-                break;
-            }
-            match timeout(remaining, receiver.recv()).await {
-                Ok(Ok(scoped))
-                    if matches!(
-                        scoped.event,
-                        crate::channels::web::types::SseEvent::AuthRequired { .. }
-                    ) =>
-                {
-                    panic!("verification responses should not emit auth_required SSE events")
-                }
-                Ok(Ok(_)) => continue,
-                Ok(Err(_)) | Err(_) => break,
-            }
-        }
     }
 
     fn expired_flow_created_at() -> Option<std::time::Instant> {

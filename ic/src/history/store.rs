@@ -1602,7 +1602,7 @@ pub struct ConversationSummary {
     pub last_activity: DateTime<Utc>,
     /// Thread type extracted from metadata (e.g. "assistant", "thread").
     pub thread_type: Option<String>,
-    /// Channel that owns this conversation (e.g. "gateway", "telegram", "routine").
+    /// Channel that owns this conversation (e.g. "gateway", "xmpp", "routine").
     pub channel: String,
 }
 
@@ -2905,14 +2905,14 @@ mod tests {
             started_at: Utc::now(),
             last_activity: Utc::now(),
             thread_type: Some("thread".to_string()),
-            channel: "telegram".to_string(),
+            channel: "xmpp".to_string(),
         };
-        assert_eq!(summary.channel, "telegram");
+        assert_eq!(summary.channel, "xmpp");
     }
 
     #[test]
     fn test_conversation_summary_channel_various_values() {
-        for ch in ["gateway", "routine", "heartbeat", "telegram", "signal"] {
+        for ch in ["gateway", "routine", "heartbeat", "xmpp", "signal"] {
             let summary = ConversationSummary {
                 id: Uuid::nil(),
                 title: None,

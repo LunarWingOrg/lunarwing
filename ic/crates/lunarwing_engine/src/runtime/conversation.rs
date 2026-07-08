@@ -625,11 +625,11 @@ mod tests {
     async fn get_or_create_conversation() {
         let (_, cm) = make_conv_manager();
         let c1 = cm
-            .get_or_create_conversation("telegram", "user1")
+            .get_or_create_conversation("xmpp", "user1")
             .await
             .unwrap();
         let c2 = cm
-            .get_or_create_conversation("telegram", "user1")
+            .get_or_create_conversation("xmpp", "user1")
             .await
             .unwrap();
         assert_eq!(c1, c2); // same channel+user returns same conversation
@@ -768,7 +768,7 @@ mod tests {
     async fn list_conversations_filters_by_user() {
         let (_, cm) = make_conv_manager();
         cm.get_or_create_conversation("web", "alice").await.unwrap();
-        cm.get_or_create_conversation("telegram", "alice")
+        cm.get_or_create_conversation("xmpp", "alice")
             .await
             .unwrap();
         cm.get_or_create_conversation("web", "bob").await.unwrap();

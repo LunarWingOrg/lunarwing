@@ -256,7 +256,7 @@ mod tests {
 
         assert!(caps.is_path_allowed("/webhook/weechat"));
         assert!(caps.is_path_allowed("/webhook/weechat/events"));
-        assert!(!caps.is_path_allowed("/webhook/telegram"));
+        assert!(!caps.is_path_allowed("/webhook/xmpp"));
     }
 
     #[test]

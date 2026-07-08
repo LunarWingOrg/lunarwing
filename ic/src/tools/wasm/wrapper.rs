@@ -156,7 +156,7 @@ struct StoreData {
     wasi: WasiCtx,
     table: ResourceTable,
     /// Injected credentials for URL/header placeholder substitution.
-    /// Keys are placeholder names like "TELEGRAM_BOT_TOKEN".
+    /// Keys are placeholder names like "XMPP_PASSWORD".
     credentials: HashMap<String, String>,
     /// Pre-resolved credentials for automatic host-based injection.
     /// Applied by matching URL host against each credential's host_patterns.
@@ -336,7 +336,7 @@ impl lunarwing::agent::host::Host for StoreData {
         body: Option<Vec<u8>>,
         timeout_ms: Option<u32>,
     ) -> Result<lunarwing::agent::host::HttpResponse, String> {
-        // Inject credentials into URL (e.g., replace {TELEGRAM_BOT_TOKEN})
+        // Inject credentials into URL (e.g., replace {XMPP_PASSWORD})
         let injected_url = self.inject_credentials(&url, "url");
 
         // Check HTTP allowlist

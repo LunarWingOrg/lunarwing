@@ -19,7 +19,6 @@ const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 /// Known channel names and their crate names (for locating build artifacts).
 const KNOWN_CHANNELS: &[(&str, &str)] = &[
     ("darkirc", "darkirc_channel"),
-    ("telegram", "telegram_channel"),
     ("weechat", "weechat_relay_channel"),
     ("xmpp", "xmpp_channel"),
 ];
@@ -148,7 +147,6 @@ mod tests {
     fn test_known_channels_includes_all() {
         let names = bundled_channel_names();
         assert!(names.contains(&"darkirc"));
-        assert!(names.contains(&"telegram"));
         assert!(names.contains(&"weechat"));
         assert!(names.contains(&"xmpp"));
     }
@@ -167,10 +165,10 @@ mod tests {
     #[tokio::test]
     async fn test_install_refuses_overwrite_without_force() {
         let dir = tempdir().unwrap();
-        let wasm_path = dir.path().join("telegram.wasm");
+        let wasm_path = dir.path().join("weechat.wasm");
         fs::write(&wasm_path, b"custom").await.unwrap();
 
-        let result = install_bundled_channel("telegram", dir.path(), false).await;
+        let result = install_bundled_channel("weechat", dir.path(), false).await;
         // Either fails because artifacts missing OR because file exists
         assert!(result.is_err());
 

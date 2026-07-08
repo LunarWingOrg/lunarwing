@@ -27,7 +27,7 @@
                 "tool_permissions": ["message", "http"]
               },
               "delivery": {
-                "channel": "telegram",
+                "channel": "xmpp",
                 "user": "ops-team"
               },
               "advanced": {

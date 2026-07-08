@@ -260,12 +260,12 @@ async def test_channel_filter_applied_correctly(
         pattern="alert",
         channel="http",
     )
-    telegram_routine = await _create_event_routine(
+    xmpp_routine = await _create_event_routine(
         page,
         lunarwing_server,
         name=f"evt-{uuid.uuid4().hex[:8]}",
         pattern="alert",
-        channel="telegram",
+        channel="xmpp",
     )
 
     await _post_http_message(
@@ -280,10 +280,10 @@ async def test_channel_filter_applied_correctly(
     )
     http_run = await _wait_for_completed_run(lunarwing_server, http_routine["id"])
     await asyncio.sleep(2)
-    telegram_runs = await _get_routine_runs(lunarwing_server, telegram_routine["id"])
+    xmpp_runs = await _get_routine_runs(lunarwing_server, xmpp_routine["id"])
 
     assert http_run["status"].lower() == "attention"
-    assert telegram_runs == []
+    assert xmpp_runs == []
 
 
 @pytest.mark.asyncio

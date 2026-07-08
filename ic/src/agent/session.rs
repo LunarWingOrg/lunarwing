@@ -799,10 +799,10 @@ mod tests {
         let mut thread = Thread::new(Uuid::new_v4());
         assert!(thread.pending_auth.is_none());
 
-        thread.enter_auth_mode("telegram".to_string());
+        thread.enter_auth_mode("xmpp".to_string());
         assert!(thread.pending_auth.is_some());
         let pending = thread.pending_auth.as_ref().unwrap();
-        assert_eq!(pending.extension_name, "telegram");
+        assert_eq!(pending.extension_name, "xmpp");
         assert!(pending.created_at >= before);
         assert!(!pending.is_expired());
     }

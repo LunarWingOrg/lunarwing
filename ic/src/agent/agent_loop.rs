@@ -1752,8 +1752,8 @@ mod tests {
 
     #[test]
     fn chat_tool_execution_metadata_prefers_message_routing_target() {
-        let message = IncomingMessage::new("telegram", "owner-scope", "hello")
-            .with_sender_id("telegram-user")
+        let message = IncomingMessage::new("xmpp", "owner-scope", "hello")
+            .with_sender_id("xmpp-user")
             .with_thread("thread-7")
             .with_metadata(serde_json::json!({
                 "chat_id": 424242,
@@ -1763,7 +1763,7 @@ mod tests {
         let metadata = chat_tool_execution_metadata(&message);
         assert_eq!(
             metadata.get("notify_channel").and_then(|v| v.as_str()),
-            Some("telegram")
+            Some("xmpp")
         ); // safety: test-only assertion
         assert_eq!(
             metadata.get("notify_user").and_then(|v| v.as_str()),
@@ -1797,8 +1797,8 @@ mod tests {
     #[test]
     fn targeted_routine_notifications_do_not_fallback_without_owner_route() {
         let error = ChannelError::MissingRoutingTarget {
-            name: "telegram".to_string(),
-            reason: "No stored owner routing target for channel 'telegram'.".to_string(),
+            name: "xmpp".to_string(),
+            reason: "No stored owner routing target for channel 'xmpp'.".to_string(),
         };
 
         assert!(!should_fallback_routine_notification(&error)); // safety: test-only assertion
@@ -1807,7 +1807,7 @@ mod tests {
     #[test]
     fn targeted_routine_notifications_may_fallback_for_other_errors() {
         let error = ChannelError::SendFailed {
-            name: "telegram".to_string(),
+            name: "xmpp".to_string(),
             reason: "timeout talking to channel".to_string(),
         };
 

@@ -101,7 +101,7 @@ async fn resolve_channel_fallback_target(
     ctx_user_id: &str,
 ) -> Option<String> {
     // Prefer an explicit channel binding when the extension manager knows the
-    // durable delivery target (for example, a bound Telegram chat ID).
+    // durable delivery target (for example, a bound XMPP chat ID).
     if let Some(channel_name) = channel
         && let Some(extension_manager) = extension_manager
         && let Some(target) = extension_manager
@@ -185,9 +185,9 @@ impl Tool for MessageTool {
          channel and sender/group. Use to proactively message users on any connected channel. \
          Supports file attachments: first download the file with the http tool using save_to \
          (e.g., http GET https://picsum.photos/800/600 save_to=/tmp/photo.jpg), then pass \
-         the file path in the attachments array. Images are sent as photos on Telegram. \
+         the file path in the attachments array. Images are sent as photos on XMPP. \
          - Signal: target accepts E.164 (+1234567890) or group ID \
-         - Telegram: target accepts username or chat ID \
+         - XMPP: target accepts username or chat ID \
          - XMPP: target accepts bare JID (user@domain.tld)"
     }
 
@@ -409,7 +409,7 @@ impl Tool for MessageTool {
 
     fn requires_approval(&self, _params: &serde_json::Value) -> ApprovalRequirement {
         // Message tool only delivers to channels the user has configured
-        // (TUI, Telegram, XMPP, web gateway, etc.) via ChannelManager::broadcast.
+        // (TUI, XMPP, web gateway, etc.) via ChannelManager::broadcast.
         ApprovalRequirement::Never
     }
 
@@ -431,14 +431,14 @@ mod tests {
     -> (MessageTool, BroadcastCapture, BroadcastCapture) {
         let channel_manager = ChannelManager::new();
         let (gateway, gateway_captures) = RecordingBroadcastChannel::new("gateway");
-        let (telegram, telegram_captures) = RecordingBroadcastChannel::new("telegram");
+        let (xmpp, xmpp_captures) = RecordingBroadcastChannel::new("xmpp");
         channel_manager.add(Box::new(gateway)).await;
-        channel_manager.add(Box::new(telegram)).await;
+        channel_manager.add(Box::new(xmpp)).await;
 
         (
             MessageTool::new(Arc::new(channel_manager)),
             gateway_captures,
-            telegram_captures,
+            xmpp_captures,
         )
     }
 
@@ -519,7 +519,7 @@ mod tests {
             .execute(
                 serde_json::json!({
                     "content": "hello",
-                    "channel": "telegram",
+                    "channel": "xmpp",
                     "target": "@username"
                 }),
                 &ctx,
@@ -529,8 +529,8 @@ mod tests {
         // Will fail because channel doesn't exist
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        // Should reference telegram, not signal
-        assert!(err.contains("telegram") || err.contains("No channels connected"));
+        // Should reference xmpp, not signal
+        assert!(err.contains("xmpp") || err.contains("No channels connected"));
     }
 
     #[tokio::test]
@@ -599,7 +599,7 @@ mod tests {
         use std::fs;
 
         let tool = MessageTool::new(Arc::new(ChannelManager::new()));
-        tool.set_context(Some("telegram".to_string()), Some("12345".to_string()))
+        tool.set_context(Some("xmpp".to_string()), Some("12345".to_string()))
             .await;
 
         // Create temp files under /tmp (allowed as secondary attachment dir)
@@ -780,7 +780,7 @@ mod tests {
             ApprovalRequirement::Never,
         );
         assert_eq!(
-            tool.requires_approval(&serde_json::json!({"content": "hi", "channel": "telegram"})),
+            tool.requires_approval(&serde_json::json!({"content": "hi", "channel": "xmpp"})),
             ApprovalRequirement::Never,
         );
     }
@@ -794,7 +794,7 @@ mod tests {
 
         let mut ctx = crate::context::JobContext::new("routine-job", "price alert");
         ctx.metadata = serde_json::json!({
-            "notify_channel": "telegram",
+            "notify_channel": "xmpp",
             "notify_user": "123456789",
         });
 
@@ -821,13 +821,11 @@ mod tests {
 
     #[tokio::test]
     async fn message_tool_falls_back_to_owner_scope_when_channel_known() {
-        let (tool, gateway_captures, telegram_captures) =
-            message_tool_with_recording_channels().await;
+        let (tool, gateway_captures, xmpp_captures) = message_tool_with_recording_channels().await;
 
-        let mut ctx =
-            crate::context::JobContext::with_user("telegram", "routine-job", "price alert");
+        let mut ctx = crate::context::JobContext::with_user("xmpp", "routine-job", "price alert");
         ctx.metadata = serde_json::json!({
-            "notify_channel": "telegram",
+            "notify_channel": "xmpp",
             "owner_id": "owner-scope",
         });
 
@@ -838,19 +836,18 @@ mod tests {
 
         assert_eq!(
             result.result.as_str(),
-            Some("Sent message to telegram:owner-scope")
+            Some("Sent message to xmpp:owner-scope")
         );
         assert!(gateway_captures.lock().await.is_empty());
-        let telegram = telegram_captures.lock().await.clone();
-        assert_eq!(telegram.len(), 1);
-        assert_eq!(telegram[0].0, "owner-scope");
-        assert_eq!(telegram[0].1.content, "NEAR price is $5");
+        let xmpp = xmpp_captures.lock().await.clone();
+        assert_eq!(xmpp.len(), 1);
+        assert_eq!(xmpp[0].0, "owner-scope");
+        assert_eq!(xmpp[0].1.content, "NEAR price is $5");
     }
 
     #[tokio::test]
     async fn message_tool_falls_back_to_ctx_user_when_owner_scope_absent() {
-        let (tool, gateway_captures, telegram_captures) =
-            message_tool_with_recording_channels().await;
+        let (tool, gateway_captures, xmpp_captures) = message_tool_with_recording_channels().await;
 
         let mut ctx = crate::context::JobContext::with_user(
             "interactive-chat-user",
@@ -858,7 +855,7 @@ mod tests {
             "price alert",
         );
         ctx.metadata = serde_json::json!({
-            "notify_channel": "telegram",
+            "notify_channel": "xmpp",
         });
 
         let result = tool
@@ -870,13 +867,13 @@ mod tests {
 
         assert_eq!(
             result.result.as_str(),
-            Some("Sent message to telegram:interactive-chat-user")
+            Some("Sent message to xmpp:interactive-chat-user")
         );
         assert!(gateway_captures.lock().await.is_empty());
-        let telegram = telegram_captures.lock().await.clone();
-        assert_eq!(telegram.len(), 1);
-        assert_eq!(telegram[0].0, "interactive-chat-user");
-        assert_eq!(telegram[0].1.content, "NEAR price is $5");
+        let xmpp = xmpp_captures.lock().await.clone();
+        assert_eq!(xmpp.len(), 1);
+        assert_eq!(xmpp[0].0, "interactive-chat-user");
+        assert_eq!(xmpp[0].1.content, "NEAR price is $5");
     }
 
     #[tokio::test]
@@ -933,8 +930,7 @@ mod tests {
 
     #[tokio::test]
     async fn message_tool_prefers_metadata_over_stale_default_context() {
-        let (tool, gateway_captures, telegram_captures) =
-            message_tool_with_recording_channels().await;
+        let (tool, gateway_captures, xmpp_captures) = message_tool_with_recording_channels().await;
         tool.set_context(
             Some("gateway".to_string()),
             Some("stale-gateway-target".to_string()),
@@ -943,30 +939,26 @@ mod tests {
 
         let mut ctx = crate::context::JobContext::with_user("owner-scope", "test", "test");
         ctx.metadata = serde_json::json!({
-            "notify_channel": "telegram",
+            "notify_channel": "xmpp",
             "notify_user": "424242",
         });
 
         let result = tool
             .execute(serde_json::json!({"content": "hello"}), &ctx)
             .await
-            .expect("message tool should use telegram metadata routing");
-        assert_eq!(
-            result.result.as_str(),
-            Some("Sent message to telegram:424242")
-        );
+            .expect("message tool should use xmpp metadata routing");
+        assert_eq!(result.result.as_str(), Some("Sent message to xmpp:424242"));
 
         assert!(gateway_captures.lock().await.is_empty());
-        let telegram = telegram_captures.lock().await.clone();
-        assert_eq!(telegram.len(), 1);
-        assert_eq!(telegram[0].0, "424242");
-        assert_eq!(telegram[0].1.content, "hello");
+        let xmpp = xmpp_captures.lock().await.clone();
+        assert_eq!(xmpp.len(), 1);
+        assert_eq!(xmpp[0].0, "424242");
+        assert_eq!(xmpp[0].1.content, "hello");
     }
 
     #[tokio::test]
     async fn message_tool_notify_user_only_metadata_does_not_reuse_stale_default_channel() {
-        let (tool, gateway_captures, telegram_captures) =
-            message_tool_with_recording_channels().await;
+        let (tool, gateway_captures, xmpp_captures) = message_tool_with_recording_channels().await;
         tool.set_context(
             Some("gateway".to_string()),
             Some("stale-gateway-target".to_string()),
@@ -994,16 +986,15 @@ mod tests {
         assert_eq!(gateway[0].0, "424242");
         assert_eq!(gateway[0].1.content, "hello");
 
-        let telegram = telegram_captures.lock().await.clone();
-        assert_eq!(telegram.len(), 1);
-        assert_eq!(telegram[0].0, "424242");
-        assert_eq!(telegram[0].1.content, "hello");
+        let xmpp = xmpp_captures.lock().await.clone();
+        assert_eq!(xmpp.len(), 1);
+        assert_eq!(xmpp[0].0, "424242");
+        assert_eq!(xmpp[0].1.content, "hello");
     }
 
     #[tokio::test]
     async fn message_tool_applies_notify_thread_id_for_gateway_delivery() {
-        let (tool, gateway_captures, telegram_captures) =
-            message_tool_with_recording_channels().await;
+        let (tool, gateway_captures, xmpp_captures) = message_tool_with_recording_channels().await;
 
         let mut ctx = crate::context::JobContext::with_user("owner-scope", "test", "test");
         ctx.metadata = serde_json::json!({
@@ -1016,7 +1007,7 @@ mod tests {
             .await
             .expect("gateway routing with thread id should succeed");
 
-        assert!(telegram_captures.lock().await.is_empty());
+        assert!(xmpp_captures.lock().await.is_empty());
         let gateway = gateway_captures.lock().await.clone();
         assert_eq!(gateway.len(), 1);
         assert_eq!(gateway[0].0, "owner-scope");

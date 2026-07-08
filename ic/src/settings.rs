@@ -426,7 +426,7 @@ pub struct ChannelSettings {
     pub xmpp_max_messages_per_hour: Option<u32>,
 
     /// Per-channel owner user IDs. When set, the channel only responds to this user.
-    /// Key: channel name (e.g., "telegram"), Value: owner user ID.
+    /// Key: channel name (e.g., "xmpp"), Value: owner user ID.
     #[serde(default)]
     pub wasm_channel_owner_ids: std::collections::HashMap<String, i64>,
 
@@ -1607,12 +1607,12 @@ mod tests {
         settings
             .channels
             .wasm_channel_owner_ids
-            .insert("telegram".to_string(), 123456789);
+            .insert("xmpp".to_string(), 123456789);
 
         let map = settings.to_db_map();
         let restored = Settings::from_db_map(&map);
         assert_eq!(
-            restored.channels.wasm_channel_owner_ids.get("telegram"),
+            restored.channels.wasm_channel_owner_ids.get("xmpp"),
             Some(&123456789)
         );
     }
@@ -1627,10 +1627,10 @@ mod tests {
     fn test_wasm_channel_owner_ids_via_set() {
         let mut settings = Settings::default();
         settings
-            .set("channels.wasm_channel_owner_ids.telegram", "987654321")
+            .set("channels.wasm_channel_owner_ids.xmpp", "987654321")
             .unwrap();
         assert_eq!(
-            settings.channels.wasm_channel_owner_ids.get("telegram"),
+            settings.channels.wasm_channel_owner_ids.get("xmpp"),
             Some(&987654321)
         );
     }
@@ -2159,7 +2159,7 @@ timeout_ms = 300000
                 http_port: Some(9090),
                 wasm_channel_owner_ids: {
                     let mut m = std::collections::HashMap::new();
-                    m.insert("telegram".to_string(), 12345);
+                    m.insert("xmpp".to_string(), 12345);
                     m
                 },
                 ..Default::default()
@@ -2228,7 +2228,7 @@ timeout_ms = 300000
         assert!(restored.channels.http_enabled, "http_enabled lost");
         assert_eq!(restored.channels.http_port, Some(9090), "http_port lost");
         assert_eq!(
-            restored.channels.wasm_channel_owner_ids.get("telegram"),
+            restored.channels.wasm_channel_owner_ids.get("xmpp"),
             Some(&12345),
             "wasm_channel_owner_ids lost"
         );
@@ -2383,7 +2383,7 @@ timeout_ms = 300000
                 http_port: Some(8080),
                 signal_enabled: true,
                 signal_account: Some("+1234567890".to_string()),
-                wasm_channels: vec!["telegram".to_string()],
+                wasm_channels: vec!["xmpp".to_string()],
                 ..Default::default()
             },
             heartbeat: HeartbeatSettings {
@@ -2416,7 +2416,7 @@ timeout_ms = 300000
         assert!(current.channels.signal_enabled, "Signal must survive");
         assert_eq!(
             current.channels.wasm_channels,
-            vec!["telegram".to_string()],
+            vec!["xmpp".to_string()],
             "WASM channels must survive"
         );
         assert!(current.embeddings.enabled, "Embeddings must survive");
@@ -2454,7 +2454,7 @@ timeout_ms = 300000
             },
             channels: ChannelSettings {
                 http_enabled: false,
-                wasm_channels: vec!["telegram".to_string()],
+                wasm_channels: vec!["xmpp".to_string()],
                 ..Default::default()
             },
             ..Default::default()
@@ -2467,7 +2467,7 @@ timeout_ms = 300000
         // Simulate step_channels: user enables HTTP and adds weechat
         current.channels.http_enabled = true;
         current.channels.http_port = Some(9090);
-        current.channels.wasm_channels = vec!["telegram".to_string(), "weechat".to_string()];
+        current.channels.wasm_channels = vec!["xmpp".to_string(), "weechat".to_string()];
 
         // Verify: channels changed
         assert!(current.channels.http_enabled);
@@ -2499,7 +2499,7 @@ timeout_ms = 300000
                 http_enabled: true,
                 http_port: Some(8080),
                 signal_enabled: true,
-                wasm_channels: vec!["telegram".to_string()],
+                wasm_channels: vec!["xmpp".to_string()],
                 ..Default::default()
             },
             embeddings: EmbeddingsSettings {
@@ -2554,7 +2554,7 @@ timeout_ms = 300000
         );
         assert_eq!(
             current.channels.wasm_channels,
-            vec!["telegram".to_string()],
+            vec!["xmpp".to_string()],
             "WASM channels must survive quick mode re-run"
         );
         assert!(

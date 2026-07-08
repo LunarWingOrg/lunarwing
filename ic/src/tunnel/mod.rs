@@ -189,7 +189,7 @@ pub fn create_tunnel(config: &TunnelProviderConfig) -> Result<Option<Box<dyn Tun
 /// Determine which local address the tunnel should forward traffic to.
 ///
 /// Prefers the webhook server (`HTTP_PORT`) since that's where webhook routes
-/// (Telegram, etc.) are served. Falls back to the gateway port if configured,
+/// (XMPP, etc.) are served. Falls back to the gateway port if configured,
 /// otherwise defaults to 0.0.0.0:8080 (the same fallback the webhook server
 /// uses in main.rs when no HTTP config is present).
 fn resolve_tunnel_target(channels: &crate::config::ChannelsConfig) -> (&str, u16) {

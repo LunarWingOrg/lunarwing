@@ -892,7 +892,7 @@ pub struct ActionResponse {
     /// Whether a restart is required for the new configuration to take effect.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub needs_restart: Option<bool>,
-    /// Pending manual verification challenge (for Telegram owner binding, etc.).
+    /// Pending manual verification challenge (for XMPP owner binding, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verification: Option<crate::extensions::VerificationChallenge>,
 }
@@ -1575,17 +1575,17 @@ mod tests {
 
     #[test]
     fn test_auth_token_request_deserialize() {
-        let json = r#"{"extension_name":"telegram","token":"bot12345"}"#;
+        let json = r#"{"extension_name":"xmpp","token":"bot12345"}"#;
         let req: AuthTokenRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.extension_name, "telegram");
+        assert_eq!(req.extension_name, "xmpp");
         assert_eq!(req.token, "bot12345");
     }
 
     #[test]
     fn test_auth_cancel_request_deserialize() {
-        let json = r#"{"extension_name":"telegram"}"#;
+        let json = r#"{"extension_name":"xmpp"}"#;
         let req: AuthCancelRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.extension_name, "telegram");
+        assert_eq!(req.extension_name, "xmpp");
     }
 
     #[test]
@@ -1634,11 +1634,11 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".to_string(),
             title: None,
             thread_type: None,
-            channel: Some("telegram".to_string()),
+            channel: Some("xmpp".to_string()),
         };
         let json = serde_json::to_string(&info).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed["channel"], "telegram");
+        assert_eq!(parsed["channel"], "xmpp");
     }
 
     #[test]

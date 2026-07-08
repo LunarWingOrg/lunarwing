@@ -84,7 +84,7 @@ no operator action — workers and daemon negotiate automatically.
 there; a tenant reaching 2.0.0 with un-rerendered units will have adapter
 services pointing at paths that no longer exist.
 
-## Caveat: render-units footgun (fix scheduled v1.2.3)
+## Caveat: render-units footgun (fix scheduled v2.0.3)
 
 A per-tenant WeeChat health-glob gate / service-flap footgun exists
 around `render-units` (writeup: `docs/proposals/RENDER_UNITS_SMALL_BUG.md`;

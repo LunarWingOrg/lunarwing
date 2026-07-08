@@ -275,7 +275,7 @@ mod tests {
             channels: vec![
                 "repl".to_string(),
                 "gateway".to_string(),
-                "telegram".to_string(),
+                "xmpp".to_string(),
             ],
             tunnel_url: Some("https://abc123.ngrok.io".to_string()),
             tunnel_provider: Some("ngrok".to_string()),

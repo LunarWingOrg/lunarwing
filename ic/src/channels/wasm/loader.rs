@@ -184,8 +184,8 @@ impl WasmChannelLoader {
     /// channels/
     /// ├── weechat.wasm                <- Channel WASM component
     /// ├── weechat.capabilities.json   <- Capabilities (optional)
-    /// ├── telegram.wasm
-    /// └── telegram.capabilities.json
+    /// ├── xmpp.wasm
+    /// └── xmpp.capabilities.json
     /// ```
     pub async fn load_from_dir(&self, dir: &Path) -> Result<LoadResults, WasmChannelError> {
         match fs::metadata(dir).await {
@@ -451,14 +451,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
 
         // Create wasm and capabilities files
-        std::fs::File::create(dir.path().join("telegram.wasm")).unwrap();
+        std::fs::File::create(dir.path().join("xmpp.wasm")).unwrap();
         let mut cap_file =
-            std::fs::File::create(dir.path().join("telegram.capabilities.json")).unwrap();
+            std::fs::File::create(dir.path().join("xmpp.capabilities.json")).unwrap();
         cap_file.write_all(b"{}").unwrap();
 
         let channels = discover_channels(dir.path()).await.unwrap();
         assert_eq!(channels.len(), 1);
-        assert!(channels["telegram"].capabilities_path.is_some());
+        assert!(channels["xmpp"].capabilities_path.is_some());
     }
 
     #[tokio::test]

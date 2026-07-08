@@ -29,7 +29,7 @@ pub struct PlatformInfo {
     pub model_name: Option<String>,
     /// Database backend (e.g. "libsql", "postgres").
     pub database_backend: Option<String>,
-    /// Active channel names (e.g. ["telegram", "cli"]).
+    /// Active channel names (e.g. ["xmpp", "cli"]).
     pub active_channels: Vec<String>,
     /// Owner identifier.
     pub owner_id: Option<String>,
@@ -292,7 +292,7 @@ mod tests {
             llm_backend: Some("lunarwing_cloud".into()),
             model_name: Some("qwen3-235b".into()),
             database_backend: Some("libsql".into()),
-            active_channels: vec!["telegram".into(), "cli".into()],
+            active_channels: vec!["xmpp".into(), "cli".into()],
             owner_id: Some("alice.near".into()),
             repo_url: Some("https://github.com/LunarWingOrg/lunarwing".into()),
         };
@@ -303,7 +303,7 @@ mod tests {
         assert!(prompt.contains("lunarwing_cloud"));
         assert!(prompt.contains("qwen3-235b"));
         assert!(prompt.contains("libsql"));
-        assert!(prompt.contains("telegram"));
+        assert!(prompt.contains("xmpp"));
         assert!(prompt.contains("alice.near"));
         assert!(prompt.contains("github.com/LunarWingOrg/lunarwing"));
     }

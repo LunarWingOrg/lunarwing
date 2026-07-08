@@ -3,8 +3,6 @@
 //! This catches the class of bugs where `required` keys aren't in `properties`,
 //! properties are missing `type` (intentional freeform is allowed), or nested
 //! objects/arrays are malformed.
-//!
-//! See: <https://github.com/nearai/ironclaw/issues/352> (QA plan, item 1.1)
 
 use lunarwing::tools::validate_tool_schema;
 use lunarwing::tools::{Tool, ToolRegistry};

@@ -2407,7 +2407,7 @@ mod tests {
     #[test]
     fn test_build_lightweight_prompt_explains_delivery_and_disabled_tools() {
         let notify = NotifyConfig {
-            channel: Some("telegram".to_string()),
+            channel: Some("xmpp".to_string()),
             user: Some("default".to_string()),
             on_attention: true,
             on_failure: true,
@@ -2415,7 +2415,7 @@ mod tests {
         };
 
         let prompt = super::build_lightweight_prompt(
-            "Send a Telegram reminder message to the user.",
+            "Send a XMPP reminder message to the user.",
             &[],
             None,
             &notify,
@@ -2427,8 +2427,8 @@ mod tests {
             "delivery guidance should explain host delivery: {prompt}",
         );
         assert!(
-            prompt.contains("configured delivery channel for this routine is `telegram`"),
-            "delivery guidance should mention telegram channel: {prompt}",
+            prompt.contains("configured delivery channel for this routine is `xmpp`"),
+            "delivery guidance should mention xmpp channel: {prompt}",
         );
         assert!(
             prompt.contains("Do not claim you lack messaging integrations"),
@@ -2558,7 +2558,7 @@ mod tests {
     }
 
     /// Regression test for issue #1051: event triggers used case-sensitive
-    /// channel comparison, so "Telegram" != "telegram" caused silent mismatch.
+    /// channel comparison, so "XMPP" != "xmpp" caused silent mismatch.
     /// Tests the actual `routine_matches_message` function used in `check_event_triggers`.
     #[test]
     fn test_channel_filter_is_case_insensitive() {
@@ -2566,16 +2566,16 @@ mod tests {
             "user1",
             Trigger::Event {
                 pattern: ".*".to_string(),
-                channel: Some("Telegram".to_string()),
+                channel: Some("XMPP".to_string()),
             },
         );
-        let msg = make_message("user1", "telegram", "hello");
+        let msg = make_message("user1", "xmpp", "hello");
 
         // Case-insensitive channel match must succeed
         assert!(super::routine_matches_message(&routine, &msg));
 
         // Exact case must also work
-        let msg_exact = make_message("user1", "Telegram", "hello");
+        let msg_exact = make_message("user1", "XMPP", "hello");
         assert!(super::routine_matches_message(&routine, &msg_exact));
 
         // Different channel must not match
@@ -2597,11 +2597,11 @@ mod tests {
         );
 
         // Different user must not match
-        let msg_bob = make_message("bob", "telegram", "hello");
+        let msg_bob = make_message("bob", "xmpp", "hello");
         assert!(!super::routine_matches_message(&routine, &msg_bob));
 
         // Same user must match
-        let msg_alice = make_message("alice", "telegram", "hello");
+        let msg_alice = make_message("alice", "xmpp", "hello");
         assert!(super::routine_matches_message(&routine, &msg_alice));
     }
 

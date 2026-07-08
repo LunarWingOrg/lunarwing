@@ -506,7 +506,6 @@ mod tests {
     }
 
     /// Adversarial tests for SafetyLayer truncation at multi-byte boundaries.
-    /// See <https://github.com/nearai/ironclaw/issues/1025>.
     mod adversarial {
         use super::*;
 

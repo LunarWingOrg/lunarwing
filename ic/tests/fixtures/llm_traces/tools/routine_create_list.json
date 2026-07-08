@@ -26,7 +26,7 @@
               "use_tools": true,
               "max_tool_rounds": 2,
               "cooldown_secs": 600,
-              "notify_channel": "telegram",
+              "notify_channel": "xmpp",
               "notify_user": "ops-team"
             }
           }

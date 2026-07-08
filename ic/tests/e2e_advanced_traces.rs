@@ -407,83 +407,7 @@ mod advanced {
     }
 
     // -----------------------------------------------------------------------
-    // 6b. Event routine: Telegram-scoped trigger fires on matching message
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn routine_event_trigger_telegram_channel_fires() {
-        let trace = LlmTrace::from_file(format!("{FIXTURES}/routine_event_telegram.json")).unwrap();
-        let rig = TestRigBuilder::new()
-            .with_trace(trace.clone())
-            .with_routines()
-            .with_auto_approve_tools(true)
-            .build()
-            .await;
-
-        rig.send_message(
-            "Create a routine that watches Telegram messages starting with 'bug:' and alerts me.",
-        )
-        .await;
-        let create_responses = rig.wait_for_responses(1, TIMEOUT).await;
-        rig.verify_trace_expects(&trace, &create_responses);
-
-        let routine = rig
-            .database()
-            .get_routine_by_name("test-user", "telegram-bug-watcher")
-            .await
-            .expect("get_routine_by_name")
-            .expect("telegram-bug-watcher should exist");
-
-        match &routine.trigger {
-            Trigger::Event { channel, pattern } => {
-                assert_eq!(channel.as_deref(), Some("telegram"));
-                assert_eq!(pattern, "^bug\\b");
-            }
-            other => panic!("expected event trigger, got {other:?}"),
-        }
-
-        rig.clear().await;
-        let llm_calls_before = rig.llm_call_count();
-
-        rig.send_incoming(IncomingMessage::new(
-            "telegram",
-            "test-user",
-            "bug: home button broken",
-        ))
-        .await;
-
-        let runs = wait_for_routine_run(rig.database(), routine.id, TIMEOUT).await;
-        assert_eq!(runs[0].trigger_type, "event");
-        assert_eq!(
-            rig.llm_call_count(),
-            llm_calls_before + 1,
-            "matching event message should only trigger the routine LLM call"
-        );
-
-        let responses = rig.wait_for_responses(1, TIMEOUT).await;
-        assert_eq!(
-            responses.len(),
-            1,
-            "expected only the routine notification after the matching event"
-        );
-        assert!(
-            responses.iter().any(|response| {
-                response
-                    .metadata
-                    .get("source")
-                    .and_then(|value| value.as_str())
-                    == Some("routine")
-                    && response.content.contains("telegram-bug-watcher")
-                    && response.content.contains("Bug report detected")
-            }),
-            "expected routine notification in responses: {responses:?}"
-        );
-
-        rig.shutdown();
-    }
-
-    // -----------------------------------------------------------------------
-    // 6c. Event routine without channel filter still fires on Telegram
+    // 6b. Event routine without channel filter still fires on XMPP
     // -----------------------------------------------------------------------
 
     #[tokio::test]
@@ -522,7 +446,7 @@ mod advanced {
         let llm_calls_before = rig.llm_call_count();
 
         rig.send_incoming(IncomingMessage::new(
-            "telegram",
+            "xmpp",
             "test-user",
             "bug: login button broken",
         ))

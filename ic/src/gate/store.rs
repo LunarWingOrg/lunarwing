@@ -23,7 +23,6 @@ pub const TRUSTED_GATE_CHANNELS: &[&str] = &["web", "gateway"];
 pub const RESERVED_CHANNEL_NAMES: &[&str] = &[
     "web",
     "gateway",
-    "telegram",
     "signal",
     "repl",
     "cli",
@@ -327,15 +326,12 @@ mod tests {
     #[tokio::test]
     async fn test_insert_and_take_verified_roundtrip() {
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("xmpp");
         let key = gate.key();
         let request_id = gate.request_id;
         store.insert(gate).await.unwrap();
 
-        let taken = store
-            .take_verified(&key, request_id, "telegram")
-            .await
-            .unwrap();
+        let taken = store.take_verified(&key, request_id, "xmpp").await.unwrap();
         assert_eq!(taken.action_name, "shell");
     }
 
@@ -357,13 +353,13 @@ mod tests {
     #[tokio::test]
     async fn test_take_verified_request_id_mismatch() {
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("xmpp");
         let key = gate.key();
         store.insert(gate).await.unwrap();
 
         let wrong_id = Uuid::new_v4();
         assert!(matches!(
-            store.take_verified(&key, wrong_id, "telegram").await,
+            store.take_verified(&key, wrong_id, "xmpp").await,
             Err(GateStoreError::RequestIdMismatch)
         ));
     }
@@ -372,19 +368,16 @@ mod tests {
     async fn test_request_id_mismatch_never_drops_pending_gate() {
         // Regression: 74cbe5c2 — wrong request_id must NOT consume the gate
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("xmpp");
         let key = gate.key();
         let correct_id = gate.request_id;
         store.insert(gate).await.unwrap();
 
         // Wrong ID → error
-        let _ = store.take_verified(&key, Uuid::new_v4(), "telegram").await;
+        let _ = store.take_verified(&key, Uuid::new_v4(), "xmpp").await;
 
         // Correct ID → still works (gate was not consumed)
-        let taken = store
-            .take_verified(&key, correct_id, "telegram")
-            .await
-            .unwrap();
+        let taken = store.take_verified(&key, correct_id, "xmpp").await.unwrap();
         assert_eq!(taken.action_name, "shell");
     }
 
@@ -425,7 +418,7 @@ mod tests {
     async fn test_take_verified_channel_mismatch() {
         // Regression: 5d1d504e — cross-channel hijacking
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("weechat");
         let key = gate.key();
         let request_id = gate.request_id;
         store.insert(gate).await.unwrap();
@@ -437,10 +430,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_http_channel_cannot_approve_telegram_thread() {
+    async fn test_http_channel_cannot_approve_xmpp_thread() {
         // Regression: 5d1d504e
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("xmpp");
         let key = gate.key();
         let request_id = gate.request_id;
         store.insert(gate).await.unwrap();
@@ -455,7 +448,7 @@ mod tests {
     async fn test_take_verified_trusted_channel_bypasses() {
         // Regression: 427f908e — web gateway is trusted
         let store = PendingGateStore::in_memory();
-        let gate = sample_gate("telegram");
+        let gate = sample_gate("xmpp");
         let key = gate.key();
         let request_id = gate.request_id;
         store.insert(gate).await.unwrap();
@@ -465,7 +458,7 @@ mod tests {
             .take_verified(&key, request_id, "gateway")
             .await
             .unwrap();
-        assert_eq!(taken.source_channel, "telegram");
+        assert_eq!(taken.source_channel, "xmpp");
     }
 
     #[tokio::test]
@@ -657,12 +650,6 @@ mod tests {
     }
 
     // ── Reserved channel names ───────────────────────────────
-
-    #[test]
-    fn test_wasm_channel_cannot_claim_telegram_name() {
-        // Regression: 92138b8c
-        assert!(PendingGateStore::is_channel_reserved("telegram"));
-    }
 
     #[test]
     fn test_wasm_channel_cannot_register_as_bootstrap() {

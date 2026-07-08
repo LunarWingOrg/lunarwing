@@ -337,15 +337,15 @@ mod tests {
     #[test]
     fn test_parse_channel_manifest() {
         let json = r#"{
-            "name": "telegram",
-            "display_name": "Telegram",
+            "name": "xmpp",
+            "display_name": "XMPP",
             "kind": "channel",
             "version": "0.1.0",
-            "description": "Telegram Bot API channel",
+            "description": "XMPP channel",
             "source": {
-                "dir": "channels-src/telegram",
-                "capabilities": "telegram.capabilities.json",
-                "crate_name": "telegram-channel"
+                "dir": "channels-src/xmpp",
+                "capabilities": "xmpp.capabilities.json",
+                "crate_name": "xmpp-channel"
             },
             "tags": ["messaging"]
         }"#;
@@ -488,16 +488,8 @@ mod tests {
                 include_str!("../../registry/tools/web-search.json"),
             ),
             (
-                "tools/telegram",
-                include_str!("../../registry/tools/telegram.json"),
-            ),
-            (
                 "tools/llm-context",
                 include_str!("../../registry/tools/llm-context.json"),
-            ),
-            (
-                "channels/telegram",
-                include_str!("../../registry/channels/telegram.json"),
             ),
         ] {
             let manifest: ExtensionManifest = serde_json::from_str(json).expect(name);

@@ -879,7 +879,7 @@ async def test_auth_required_does_not_reopen_existing_configure_modal(page):
         """() => {
             const overlay = document.createElement('div');
             overlay.className = 'configure-overlay';
-            overlay.setAttribute('data-extension-name', 'telegram');
+            overlay.setAttribute('data-extension-name', 'xmpp');
             document.body.appendChild(overlay);
 
             const originalShowConfigureModal = window.showConfigureModal;
@@ -890,7 +890,7 @@ async def test_auth_required_does_not_reopen_existing_configure_modal(page):
             window.showConfigureModal = () => { showCalls += 1; };
             window.setAuthFlowPending = () => { pendingCalls += 1; };
 
-            handleAuthRequired({ extension_name: 'telegram', instructions: 'pending', auth_url: null });
+            handleAuthRequired({ extension_name: 'xmpp', instructions: 'pending', auth_url: null });
 
             window.showConfigureModal = originalShowConfigureModal;
             window.setAuthFlowPending = originalSetAuthFlowPending;

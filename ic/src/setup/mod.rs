@@ -6,7 +6,7 @@
 //! 3. Inference provider selection
 //! 4. Model selection
 //! 5. Embeddings
-//! 6. Channel configuration (HTTP, Telegram, etc.)
+//! 6. Channel configuration (HTTP, XMPP, etc.)
 //! 7. Extensions (tool installation from registry)
 //! 8. Heartbeat (background tasks)
 //!

@@ -1371,7 +1371,7 @@ _arguments "${_arguments_options[@]}" : \
 '--supervised[Enable supervised mode — every tool action requires human approval regardless of the tool'\''s normal tier]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-':channel -- Channel name (e.g., telegram, xmpp):_default' \
+':channel -- Channel name (e.g., xmpp, weechat):_default' \
 && ret=0
 ;;
 (approve)
@@ -1387,7 +1387,7 @@ _arguments "${_arguments_options[@]}" : \
 '--supervised[Enable supervised mode — every tool action requires human approval regardless of the tool'\''s normal tier]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-':channel -- Channel name (e.g., telegram, xmpp):_default' \
+':channel -- Channel name (e.g., xmpp, weechat):_default' \
 ':code -- Pairing code (e.g., ABC12345):_default' \
 && ret=0
 ;;

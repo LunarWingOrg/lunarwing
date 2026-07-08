@@ -878,15 +878,15 @@ mod tests {
     fn test_parse_url_path_credential() {
         let json = r#"{
             "http": {
-                "allowlist": [{ "host": "api.telegram.org" }],
+                "allowlist": [{ "host": "xmpp.example.test" }],
                 "credentials": {
-                    "telegram_bot": {
-                        "secret_name": "telegram_bot_token",
+                    "XMPP_PASSWORD_CREDENTIAL": {
+                        "secret_name": "xmpp_password",
                         "location": {
                             "type": "url_path",
-                            "placeholder": "{TELEGRAM_BOT_TOKEN}"
+                            "placeholder": "{XMPP_PASSWORD}"
                         },
-                        "host_patterns": ["api.telegram.org"]
+                        "host_patterns": ["xmpp.example.test"]
                     }
                 }
             }
@@ -894,10 +894,10 @@ mod tests {
 
         let caps = CapabilitiesFile::from_json(json).unwrap();
         let http = caps.http.unwrap();
-        let cred = http.credentials.get("telegram_bot").unwrap();
+        let cred = http.credentials.get("XMPP_PASSWORD_CREDENTIAL").unwrap();
         match &cred.location {
             CredentialLocationSchema::UrlPath { placeholder } => {
-                assert_eq!(placeholder, "{TELEGRAM_BOT_TOKEN}");
+                assert_eq!(placeholder, "{XMPP_PASSWORD}");
             }
             _ => panic!("Expected UrlPath location"),
         }

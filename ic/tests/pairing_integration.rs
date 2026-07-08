@@ -16,7 +16,7 @@ fn test_store() -> (PairingStore, TempDir) {
 #[test]
 fn test_pairing_flow_unknown_user_to_approved() {
     let (store, _) = test_store();
-    let channel = "telegram";
+    let channel = "xmpp";
 
     // 1. Unknown user sends first message -> upsert creates request
     let r1 = store
@@ -75,37 +75,33 @@ fn test_pairing_flow_unknown_user_to_approved() {
 #[test]
 fn test_pairing_flow_cli_approve() {
     let (store, _) = test_store();
-    store.upsert_request("telegram", "user_999", None).unwrap();
-    let pending = store.list_pending("telegram").unwrap();
+    store.upsert_request("xmpp", "user_999", None).unwrap();
+    let pending = store.list_pending("xmpp").unwrap();
     let code = pending[0].code.clone();
 
     let result = run_pairing_command_with_store(
         &store,
         PairingCommand::Approve {
-            channel: "telegram".to_string(),
+            channel: "xmpp".to_string(),
             code,
         },
     );
     assert!(result.is_ok());
-    assert!(
-        store
-            .is_sender_allowed("telegram", "user_999", None)
-            .unwrap()
-    );
+    assert!(store.is_sender_allowed("xmpp", "user_999", None).unwrap());
 }
 
 #[test]
 fn test_pairing_reject_invalid_code() {
     let (store, _) = test_store();
-    store.upsert_request("telegram", "user_1", None).unwrap();
+    store.upsert_request("xmpp", "user_1", None).unwrap();
 
-    let result = store.approve("telegram", "INVALID1");
+    let result = store.approve("xmpp", "INVALID1");
     assert!(result.unwrap().is_none());
 
     let result = run_pairing_command_with_store(
         &store,
         PairingCommand::Approve {
-            channel: "telegram".to_string(),
+            channel: "xmpp".to_string(),
             code: "BADCODE1".to_string(),
         },
     );
@@ -116,16 +112,16 @@ fn test_pairing_reject_invalid_code() {
 fn test_pairing_multiple_channels_isolated() {
     let (store, _) = test_store();
 
-    let r_telegram = store.upsert_request("telegram", "user_a", None).unwrap();
+    let r_weechat = store.upsert_request("weechat", "user_a", None).unwrap();
     let r_xmpp = store.upsert_request("xmpp", "user_b", None).unwrap();
 
     // Each channel has its own pending
-    assert_eq!(store.list_pending("telegram").unwrap().len(), 1);
+    assert_eq!(store.list_pending("weechat").unwrap().len(), 1);
     assert_eq!(store.list_pending("xmpp").unwrap().len(), 1);
 
     // Approve in one channel doesn't affect the other
-    store.approve("telegram", &r_telegram.code).unwrap();
-    assert!(store.is_sender_allowed("telegram", "user_a", None).unwrap());
+    store.approve("weechat", &r_weechat.code).unwrap();
+    assert!(store.is_sender_allowed("weechat", "user_a", None).unwrap());
     assert!(!store.is_sender_allowed("xmpp", "user_a", None).unwrap());
 
     store.approve("xmpp", &r_xmpp.code).unwrap();

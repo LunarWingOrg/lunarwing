@@ -1,4 +1,4 @@
-//! E2E spot-check tests adapted from nearai/benchmarks SpotSuite tasks.jsonl.
+//! E2E spot-check tests adapted from SpotSuite tasks.jsonl.
 //!
 //! Each test replays an LLM trace through the real agent loop and validates
 //! the result using declarative `expects` from the fixture JSON plus any

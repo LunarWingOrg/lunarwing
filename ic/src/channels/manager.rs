@@ -151,7 +151,7 @@ impl ChannelManager {
 
     /// Send a status update to a specific channel.
     ///
-    /// The metadata contains channel-specific routing info (e.g., Telegram chat_id)
+    /// The metadata contains channel-specific routing info (e.g., XMPP chat_id)
     /// needed to deliver the status to the correct destination.
     pub async fn send_status(
         &self,

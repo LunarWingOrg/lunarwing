@@ -62,10 +62,7 @@ pub const TEST_GOOGLE_OAUTH_LEGACY: &str = "ya29.legacy-token";
 /// GitHub personal access token (test).
 pub const TEST_GITHUB_TOKEN: &str = "ghp_test123";
 
-// ── Telegram ────────────────────────────────────────────────────────────
-
-/// Telegram bot token for credential redaction tests.
-pub const TEST_TELEGRAM_BOT_TOKEN: &str = "telegram-test-bot-token-not-a-real-token";
+pub const TEST_COLON_FORMAT_TOKEN: &str = "123456789:test-token-with-colon";
 
 // ── OAuth client credentials ────────────────────────────────────────────
 

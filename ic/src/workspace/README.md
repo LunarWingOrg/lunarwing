@@ -128,7 +128,7 @@ use crate::agent::{HeartbeatConfig, spawn_heartbeat};
 
 let config = HeartbeatConfig::default()
     .with_interval(Duration::from_secs(60 * 30))
-    .with_notify("user_123", "telegram");
+    .with_notify("user_123", "xmpp");
 
 spawn_heartbeat(config, workspace, llm, response_tx);
 ```

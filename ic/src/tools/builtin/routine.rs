@@ -366,7 +366,7 @@ fn routine_create_examples() -> Vec<Value> {
                 "timezone": "UTC"
             },
             "delivery": {
-                "channel": "telegram",
+                "channel": "xmpp",
                 "user": "ops-team"
             }
         }),
@@ -1810,7 +1810,7 @@ mod tests {
                 "mode": "full_job"
             },
             "delivery": {
-                "channel": "telegram",
+                "channel": "xmpp",
                 "user": "ops-team"
             },
             "advanced": {
@@ -1832,7 +1832,7 @@ mod tests {
             matches!(parsed.execution.mode, NormalizedExecutionMode::FullJob),
             "expected full_job execution mode",
         );
-        assert_eq!(parsed.delivery.channel.as_deref(), Some("telegram"));
+        assert_eq!(parsed.delivery.channel.as_deref(), Some("xmpp"));
         assert_eq!(parsed.delivery.user.as_deref(), Some("ops-team"));
         assert_eq!(parsed.cooldown_secs, 30);
     }
@@ -2031,9 +2031,9 @@ mod tests {
             "prompt": "Legacy create path.",
             "trigger_type": "event",
             "event_pattern": "hello",
-            "event_channel": "telegram",
+            "event_channel": "xmpp",
             "action_type": "full_job",
-            "notify_channel": "telegram",
+            "notify_channel": "xmpp",
             "notify_user": "123"
         });
 
@@ -2043,7 +2043,7 @@ mod tests {
             matches!(
                 parsed.trigger,
                 NormalizedTriggerRequest::MessageEvent { ref pattern, ref channel }
-                if pattern == "hello" && channel.as_deref() == Some("telegram")
+                if pattern == "hello" && channel.as_deref() == Some("xmpp")
             ),
             "expected legacy message_event trigger",
         );
@@ -2051,7 +2051,7 @@ mod tests {
             matches!(parsed.execution.mode, NormalizedExecutionMode::FullJob),
             "expected full_job execution mode",
         );
-        assert_eq!(parsed.delivery.channel.as_deref(), Some("telegram"));
+        assert_eq!(parsed.delivery.channel.as_deref(), Some("xmpp"));
         assert_eq!(parsed.delivery.user.as_deref(), Some("123"));
     }
 

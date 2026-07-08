@@ -1,7 +1,7 @@
 //! Shared assertion helpers for E2E tests.
 //!
 //! Extracted from `e2e_spot_checks.rs` so they can be reused across all E2E
-//! test files. Mirrors the assertion types from `nearai/benchmarks` SpotSuite.
+//! test files.
 
 #![allow(dead_code)]
 

@@ -2,7 +2,7 @@
 /// - HTTP URLs pointing at anything other than localhost/127.0.0.1/::1
 ///
 /// This is intended for config-time validation of base URLs like
-/// `OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, `NEARAI_BASE_URL`, etc.
+/// `OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, `LUNARWING_CLOUD_BASE_URL`, etc.
 pub(crate) fn validate_base_url(url: &str, field_name: &str) -> Result<(), ConfigError> {
     use std::net::{IpAddr, Ipv4Addr};
 

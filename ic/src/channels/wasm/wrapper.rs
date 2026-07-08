@@ -95,7 +95,7 @@ struct ChannelStoreData {
     wasi: WasiCtx,
     table: ResourceTable,
     /// Injected credentials for URL substitution (e.g., bot tokens).
-    /// Keys are placeholder names like "TELEGRAM_BOT_TOKEN".
+    /// Keys are placeholder names like "XMPP_PASSWORD".
     credentials: HashMap<String, String>,
     /// Pre-resolved credentials for automatic host-based injection.
     /// Applied per-request by matching the URL host against host_patterns.
@@ -133,7 +133,7 @@ impl ChannelStoreData {
 
     /// Inject credentials into a string by replacing placeholders.
     ///
-    /// Replaces patterns like `{TELEGRAM_BOT_TOKEN}` or `{API_TOKEN}`
+    /// Replaces patterns like `{XMPP_PASSWORD}` or `{API_TOKEN}`
     /// with actual values from the injected credentials map. This allows WASM
     /// channels to reference credentials without ever seeing the actual values.
     ///
@@ -308,7 +308,7 @@ impl lunarwing::agent::channel_host::Host for ChannelStoreData {
             "WASM http_request called"
         );
 
-        // Inject credentials into URL (e.g., replace {TELEGRAM_BOT_TOKEN} with actual token)
+        // Inject credentials into URL (e.g., replace {XMPP_PASSWORD} with actual token)
         let injected_url = self.inject_credentials(&url, "url");
 
         // Log whether injection happened (without revealing the token)
@@ -493,12 +493,6 @@ impl lunarwing::agent::channel_host::Host for ChannelStoreData {
             }
 
             // Leak detection on response body (best-effort).
-            //
-            // Telegram `getUpdates` is special: it is inbound polling data, so
-            // user-pasted secrets can legitimately appear in the response body.
-            // Those messages are still checked later by the inbound message
-            // safety layer before they reach the LLM, so we allow the polling
-            // response to continue here to avoid poisoning the offset state.
             if let Ok(body_str) = std::str::from_utf8(&body)
                 && !should_skip_response_leak_scan(&url)
             {
@@ -704,12 +698,12 @@ pub struct WasmChannel {
     endpoints: RwLock<Vec<RegisteredEndpoint>>,
 
     /// Injected credentials for HTTP requests (e.g., bot tokens).
-    /// Keys are placeholder names like "TELEGRAM_BOT_TOKEN".
+    /// Keys are placeholder names like "XMPP_PASSWORD".
     /// Wrapped in Arc for sharing with the polling task.
     credentials: Arc<RwLock<HashMap<String, String>>>,
 
     /// Background task that repeats typing indicators every 4 seconds.
-    /// Telegram's "typing..." indicator expires after ~5s, so we refresh it.
+    /// Transient typing indicators can expire quickly, so we refresh them.
     typing_task: RwLock<Option<tokio::task::JoinHandle<()>>>,
 
     /// Pairing store for DM pairing (guest access control).
@@ -1958,7 +1952,7 @@ impl WasmChannel {
     /// Handle a status update, managing the typing repeat timer.
     ///
     /// On Thinking: fires on_status once, then spawns a background task
-    /// that repeats the call every 4 seconds (Telegram's typing indicator
+    /// that repeats the call every 4 seconds (some typing indicators
     /// expires after ~5s).
     ///
     /// On terminal or user-action-required states: cancels the repeat task,
@@ -2060,7 +2054,7 @@ impl WasmChannel {
                 allow_always,
                 ..
             } => {
-                // WASM channels (Telegram, XMPP, etc.) cannot render
+                // WASM channels (XMPP, WeeChat, etc.) cannot render
                 // interactive approval overlays.  Send the approval prompt
                 // as an actual message so the user can reply yes/no.
                 self.cancel_typing_task().await;
@@ -2450,7 +2444,7 @@ impl WasmChannel {
     ///
     /// Returns any emitted messages from the callback. Pending workspace writes
     /// are committed to the shared `ChannelWorkspaceStore` so state persists
-    /// across poll ticks (e.g., Telegram polling offset).
+    /// across poll ticks (e.g., channel polling offset).
     #[allow(clippy::too_many_arguments)]
     async fn execute_poll(
         channel_name: &str,
@@ -2790,7 +2784,7 @@ impl Channel for WasmChannel {
 
         // Call WASM on_respond
         // IMPORTANT: Use the ORIGINAL message's metadata, not the response's metadata.
-        // The original metadata contains channel-specific routing info (e.g., Telegram chat_id)
+        // The original metadata contains channel-specific routing info.
         // that the WASM channel needs to send the reply to the correct destination.
         let metadata_json = serde_json::to_string(&msg.metadata).unwrap_or_default();
         // Store for owner-target routing (chat_id etc.) only when the configured
@@ -3111,7 +3105,7 @@ fn status_to_wit(
         StatusUpdate::Status(msg) => {
             // Map well-known status strings to WIT types (case-insensitive
             // to stay consistent with is_terminal_text_status and the
-            // Telegram-side classify_status_update).
+            // channel-side classify_status_update).
             let trimmed = msg.trim();
             let status_type = if trimmed.eq_ignore_ascii_case("done") {
                 wit_channel::StatusType::Done
@@ -3305,18 +3299,6 @@ fn extract_host_from_url(url: &str) -> Option<String> {
 
 fn should_skip_response_leak_scan(url: &str) -> bool {
     url::Url::parse(url).is_ok_and(|parsed| {
-        // Telegram getUpdates: inbound polling data where user-pasted secrets
-        // can legitimately appear. Messages are still checked later by the
-        // inbound message safety layer before they reach the LLM.
-        let is_telegram_poll = matches!(parsed.scheme(), "http" | "https")
-            && parsed
-                .host_str()
-                .is_some_and(|host| host.eq_ignore_ascii_case("api.telegram.org"))
-            && parsed
-                .path_segments()
-                .and_then(|segments| segments.rev().find(|segment| !segment.is_empty()))
-                .is_some_and(|segment| segment == "getUpdates");
-
         // Loopback endpoints (127.0.0.1, localhost): trusted local services
         // like xmpp-bridge. Their responses can contain base64-encoded
         // attachment data that triggers false-positive secret pattern matches
@@ -3329,7 +3311,7 @@ fn should_skip_response_leak_scan(url: &str) -> bool {
                 host.eq_ignore_ascii_case("127.0.0.1") || host.eq_ignore_ascii_case("localhost")
             });
 
-        is_telegram_poll || is_loopback
+        is_loopback
     })
 }
 
@@ -3507,7 +3489,7 @@ mod tests {
         EmitDispatchContext, HttpResponse, WasmChannel, uses_owner_broadcast_target,
     };
     use crate::pairing::PairingStore;
-    use crate::testing::credentials::TEST_TELEGRAM_BOT_TOKEN;
+    use crate::testing::credentials::TEST_COLON_FORMAT_TOKEN;
     use crate::tools::wasm::ResourceLimits;
 
     fn create_test_channel() -> WasmChannel {
@@ -4641,8 +4623,8 @@ mod tests {
 
         let mut creds = std::collections::HashMap::new();
         creds.insert(
-            "TELEGRAM_BOT_TOKEN".to_string(),
-            TEST_TELEGRAM_BOT_TOKEN.to_string(),
+            "COLON_FORMAT_TOKEN".to_string(),
+            TEST_COLON_FORMAT_TOKEN.to_string(),
         );
         creds.insert("OTHER_SECRET".to_string(), "s3cret".to_string());
 
@@ -4657,17 +4639,17 @@ mod tests {
 
         let error = format!(
             "HTTP request failed: error sending request for url \
-            (https://api.telegram.org/bot{TEST_TELEGRAM_BOT_TOKEN}/getUpdates)"
+            (https://api.example.test/bot/{TEST_COLON_FORMAT_TOKEN}/updates)"
         );
 
         let redacted = store.redact_credentials(&error);
 
         assert!(
-            !redacted.contains(TEST_TELEGRAM_BOT_TOKEN),
+            !redacted.contains(TEST_COLON_FORMAT_TOKEN),
             "credential value should be redacted"
         );
         assert!(
-            redacted.contains("[REDACTED:TELEGRAM_BOT_TOKEN]"),
+            redacted.contains("[REDACTED:COLON_FORMAT_TOKEN]"),
             "redacted text should contain placeholder name"
         );
         assert!(
@@ -4758,15 +4740,11 @@ mod tests {
     }
 
     #[test]
-    fn test_should_skip_response_leak_scan_telegram_and_loopback() {
+    fn test_should_skip_response_leak_scan_loopback_only() {
         use super::should_skip_response_leak_scan;
 
-        // Telegram getUpdates is still exempted
-        assert!(should_skip_response_leak_scan(
-            "https://api.telegram.org/bot123/getUpdates?offset=1"
-        ));
         assert!(!should_skip_response_leak_scan(
-            "https://api.telegram.org/bot123/sendMessage"
+            "https://api.example.test/bot123/updates?offset=1"
         ));
 
         // Loopback endpoints are exempted (trusted local services like xmpp-bridge)
@@ -4819,7 +4797,7 @@ mod tests {
                     .build()
                     .expect("failed to build client");
                 let resp = client
-                    .get("https://api.telegram.org/bot000/getMe")
+                    .get("https://httpbin.org/status/404")
                     .timeout(std::time::Duration::from_secs(10))
                     .send()
                     .await;
@@ -4832,7 +4810,6 @@ mod tests {
         })
         .await
         .expect("spawn_blocking panicked");
-        // 404 because "000" is not a valid bot token
         assert_eq!(result, 404);
     }
 
@@ -4855,7 +4832,7 @@ mod tests {
                 mime_type: "image/jpeg".to_string(),
                 filename: Some("cat.jpg".to_string()),
                 size_bytes: Some(50_000),
-                source_url: Some("https://api.telegram.org/file/photo123".to_string()),
+                source_url: Some("https://files.example.test/photo123".to_string()),
                 storage_key: None,
                 extracted_text: None,
                 data: Vec::new(),
@@ -4905,7 +4882,7 @@ mod tests {
         assert_eq!(msg.attachments[0].size_bytes, Some(50_000)); // safety: test-only assertion
         assert_eq!(
             msg.attachments[0].source_url,
-            Some("https://api.telegram.org/file/photo123".to_string())
+            Some("https://files.example.test/photo123".to_string())
         ); // safety: test-only assertion
 
         // Verify second attachment
@@ -4935,15 +4912,15 @@ mod tests {
         let last_broadcast_metadata = Arc::new(tokio::sync::RwLock::new(None));
 
         let messages = vec![
-            EmittedMessage::new("telegram-owner", "Hello from owner")
+            EmittedMessage::new("xmpp-owner", "Hello from owner")
                 .with_metadata(r#"{"chat_id":12345}"#),
         ];
 
         let result = WasmChannel::dispatch_emitted_messages(
             EmitDispatchContext {
-                channel_name: "telegram",
+                channel_name: "xmpp",
                 owner_scope_id: "owner-scope",
-                owner_actor_id: Some("telegram-owner"),
+                owner_actor_id: Some("xmpp-owner"),
                 message_tx: &message_tx,
                 rate_limiter: &rate_limiter,
                 last_broadcast_metadata: &last_broadcast_metadata,
@@ -4958,7 +4935,7 @@ mod tests {
         let msg = rx.try_recv().expect("Should receive message"); // safety: test-only assertion
         assert_eq!(msg.user_id, "owner-scope"); // safety: test-only assertion
         assert_eq!(msg.owner_id, "owner-scope"); // safety: test-only assertion
-        assert_eq!(msg.sender_id, "telegram-owner"); // safety: test-only assertion
+        assert_eq!(msg.sender_id, "xmpp-owner"); // safety: test-only assertion
         assert_eq!(msg.conversation_scope(), Some("12345")); // safety: test-only assertion
         let stored_metadata = last_broadcast_metadata.read().await.clone();
         assert_eq!(stored_metadata.as_deref(), Some(r#"{"chat_id":12345}"#)); // safety: test-only assertion
@@ -4983,9 +4960,9 @@ mod tests {
 
         let result = WasmChannel::dispatch_emitted_messages(
             EmitDispatchContext {
-                channel_name: "telegram",
+                channel_name: "xmpp",
                 owner_scope_id: "owner-scope",
-                owner_actor_id: Some("telegram-owner"),
+                owner_actor_id: Some("xmpp-owner"),
                 message_tx: &message_tx,
                 rate_limiter: &rate_limiter,
                 last_broadcast_metadata: &last_broadcast_metadata,
@@ -5050,7 +5027,7 @@ mod tests {
     #[tokio::test]
     async fn test_broadcast_owner_scope_uses_stored_owner_metadata() {
         let channel = create_test_channel_with_owner_scope("owner-scope")
-            .with_owner_actor_id(Some("telegram-owner".to_string()));
+            .with_owner_actor_id(Some("xmpp-owner".to_string()));
 
         *channel.last_broadcast_metadata.write().await = Some(r#"{"chat_id":12345}"#.to_string());
 
@@ -5073,7 +5050,7 @@ mod tests {
     #[tokio::test]
     async fn test_broadcast_owner_scope_requires_stored_metadata() {
         let channel = create_test_channel_with_owner_scope("owner-scope")
-            .with_owner_actor_id(Some("telegram-owner".to_string()));
+            .with_owner_actor_id(Some("xmpp-owner".to_string()));
 
         let result = channel
             .broadcast(

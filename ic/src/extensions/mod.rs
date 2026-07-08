@@ -2,7 +2,7 @@
 //! and activation of channels, tools, and MCP servers.
 //!
 //! Extensions are the user-facing abstraction that unifies three runtime kinds:
-//! - **Channels** (Telegram, XMPP) — messaging integrations (WASM)
+//! - **Channels** (XMPP) — messaging integrations (WASM)
 //! - **Tools** — sandboxed capabilities (WASM)
 //! - **MCP servers** — external API integrations via Model Context Protocol
 //!
@@ -10,10 +10,10 @@
 //! authenticate, and activate extensions at runtime without CLI commands.
 //!
 //! ```text
-//!  User: "add telegram"
-//!    -> tool_search("telegram")    -> finds channel in registry
-//!    -> tool_install("telegram")   -> copies bundled WASM to channels dir
-//!    -> tool_activate("telegram")  -> configures credentials, starts channel
+//!  User: "add xmpp"
+//!    -> tool_search("xmpp")    -> finds channel in registry
+//!    -> tool_install("xmpp")   -> copies bundled WASM to channels dir
+//!    -> tool_activate("xmpp")  -> configures credentials, starts channel
 //! ```
 
 pub mod discovery;
@@ -53,7 +53,7 @@ impl std::fmt::Display for ExtensionKind {
 /// A registry entry describing a known or discovered extension.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryEntry {
-    /// Unique identifier (e.g., "notion", "weather", "telegram").
+    /// Unique identifier (e.g., "notion", "weather", "xmpp").
     pub name: String,
     /// Human-readable name (e.g., "Notion", "Weather Tool").
     pub display_name: String,
@@ -473,7 +473,7 @@ pub struct ConfigureResult {
     pub restart_required: bool,
     /// OAuth authorization URL (if OAuth flow was started).
     pub auth_url: Option<String>,
-    /// Pending manual verification challenge (for Telegram owner binding, etc.).
+    /// Pending manual verification challenge (for XMPP owner binding, etc.).
     pub verification: Option<VerificationChallenge>,
 }
 
@@ -486,7 +486,7 @@ fn default_true() -> bool {
 pub struct InstalledExtension {
     pub name: String,
     pub kind: ExtensionKind,
-    /// Human-readable display name (e.g. "Telegram Channel" vs "Telegram Tool").
+    /// Human-readable display name (e.g. "XMPP Channel" vs "XMPP Tool").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -619,7 +619,7 @@ mod tests {
     #[test]
     fn auth_result_awaiting_token_round_trip() {
         let result = AuthResult::awaiting_token(
-            "telegram",
+            "xmpp",
             ExtensionKind::WasmChannel,
             "Enter your bot token".to_string(),
             None,

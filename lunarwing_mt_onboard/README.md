@@ -1,7 +1,7 @@
 # lunarwing_mt_onboard
 
-Interactive multi-tenant onboarding CLI for LunarWing. Implements item #11 of
-`docs/ops/GOALS_1.1.9.md`.
+Interactive multi-tenant onboarding CLI for LunarWing. Implements the multi-tenant
+onboarding work tracked for LunarWing 1.1.9.
 
 ## Overview
 
@@ -18,6 +18,10 @@ Guides an operator through the full provisioning lifecycle for a new tenant:
 The CLI is a **thin wrapper** around `ic/scripts/lunarwing-mt-admin.sh` — it
 does not duplicate provisioning logic. `mt-admin` remains the source of truth
 for port allocation, env rendering, and service units.
+
+It also provides an `upgrade` subcommand for in-place upgrades of existing
+multi-tenant installs. That path is a thin wrapper around
+`ic/scripts/upgrade-preflight.sh` and `ic/scripts/upgrade-tenant-version.sh`.
 
 ## Requirements
 
@@ -65,6 +69,51 @@ Flags:
 | `--skip-build` | Only run `add-tenant` |
 | `--skip-start` | Run `add-tenant` + `build-tenant`, skip `start-tenant` |
 
+### In-place tenant upgrade
+
+Upgrade mode is dry-run by default. It is intended for existing PostgreSQL,
+rootful-Docker tenants on older 1.1.x releases such as 1.1.6, 1.1.7, and 1.1.8.
+The underlying shell scripts remain the authority for compatibility checks and
+will stop on unsupported layouts.
+
+Interactive dry-run:
+
+```bash
+sudo python3 -m lunarwing_mt_onboard upgrade
+```
+
+Non-interactive dry-run:
+
+```bash
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --non-interactive
+```
+
+Apply an upgrade after reviewing the dry-run/preflight output:
+
+```bash
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --apply \
+  --yes \
+  --non-interactive
+```
+
+Upgrade flags:
+
+| Flag | Description |
+|------|-------------|
+| `--tenant NAME` | Existing tenant to upgrade |
+| `--target TAG` | Exact release tag such as `v1.1.9`; empty uses the script default |
+| `--source-version-override TAG` | Override source-version detection, for example `v1.1.7` |
+| `--apply` | Execute the upgrade; omitted means dry-run |
+| `--no-preflight` | Skip `upgrade-preflight.sh` |
+| `--force` | Continue even if preflight fails |
+| `--yes` | Forward non-interactive confirmation to the shell upgrade script |
+
 ## Module layout
 
 ```
@@ -74,9 +123,12 @@ lunarwing_mt_onboard/
 ├── cli.py             # interactive prompts + argparse
 ├── config.py          # TenantConfig dataclass, JSON serialization
 ├── provisioner.py     # subprocess wrapper around mt-admin.sh
+├── upgrade.py         # subprocess wrapper around upgrade scripts
+├── upgrade_cli.py     # interactive upgrade prompts + display
 ├── secrets.py         # master-key generation + validation
 ├── verify.py          # post-start health checks
 ├── tests.py           # unit tests (config, secrets, validation)
+├── upgrade_tests.py   # unit tests for in-place upgrades
 └── requirements.txt   # rich, questionary
 ```
 

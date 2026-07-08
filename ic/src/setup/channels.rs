@@ -168,7 +168,7 @@ pub async fn setup_tunnel(settings: &Settings) -> Result<TunnelSettings, Channel
     println!();
     print_info("Tunnel Configuration (for webhook endpoints):");
     print_info("A tunnel exposes your local agent to the internet, enabling:");
-    print_info("  - Instant Telegram message delivery (instead of polling)");
+    print_info("  - Instant XMPP message delivery (instead of polling)");
     print_info("  - GitHub webhooks");
     println!();
 
@@ -1260,7 +1260,7 @@ mod tests {
         let secrets = test_secrets_context();
         secrets
             .save_secret(
-                "telegram_bot_token",
+                "xmpp_password",
                 &secrecy::SecretString::from("abc123".to_string()),
             )
             .await
@@ -1275,7 +1275,7 @@ mod tests {
 
         let resolved = substitute_validation_placeholders(
             &secrets,
-            "https://api.example.com/{workspace_id}/verify?token={telegram_bot_token}",
+            "https://api.example.com/{workspace_id}/verify?token={xmpp_password}",
         )
         .await
         .unwrap();
@@ -1291,7 +1291,7 @@ mod tests {
         let secrets = test_secrets_context();
         secrets
             .save_secret(
-                "telegram_bot_token",
+                "xmpp_password",
                 &secrecy::SecretString::from("abc123?foo=1&bar=#baz/slash".to_string()),
             )
             .await
@@ -1299,7 +1299,7 @@ mod tests {
 
         let resolved = substitute_validation_placeholders(
             &secrets,
-            "https://api.example.com/verify?token={telegram_bot_token}",
+            "https://api.example.com/verify?token={xmpp_password}",
         )
         .await
         .unwrap();

@@ -68,7 +68,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | HTTP webhook | ✅ | ✅ | - | axum with secret validation |
 | REPL (simple) | ✅ | ✅ | - | For testing |
 | WASM channels | ❌ | ✅ | - | LunarWing innovation; host resolves owner scope vs sender identity |
-| Telegram | ✅ | ✅ | - | WASM channel(MTProto), DM pairing, caption, /start, bot_username, DM topics, setup-time owner auto-verification, owner-scoped persistence |
+| Telegram | ✅ | ❌ | - | Removed from LunarWing; proprietary channels are intentionally unsupported |
 | Signal | ✅ | ✅ | P2 | signal-cli daemonPC, SSE listener HTTP/JSON-R, user/group allowlists, DM pairing |
 | XMPP | ❌ | 🚧 | P3 | Installable WASM channel plus local `xmpp-bridge`; DM/MUC routing and setup-time secrets/fields work, configured rooms are auto-joined on connect with zero-history MUC presence, and `encrypted_rooms` now add fail-closed encrypted-room handling with disco validation (`muc_nonanonymous` + `muc_membersonly`), member/admin/owner list retrieval, occupant real-JID tracking from MUC presence, bridge status reporting for encrypted-room readiness, and outbound/inbound encrypted groupchat on the current legacy-compatible OMEMO path. Bridge-owned DM OMEMO also has in-tree session bootstrap/decrypt/persisted-session coverage, initial availability presence is sent on connect so roster presence reflects online state, outbound OMEMO IQ responses are matched even when peers omit `from`, reply routing preserves the sender OMEMO device ID when an established session exists, device-list/bundle fetches prefer the latest published item, legacy OMEMO prekey bundles now use registration ID `0` for external-client interop, and the bridge can now live-toggle/reset the outbound hourly XMPP message cap via `/v1/outbound-rate-limit` without a restart. Remaining gaps are full OMEMO 2/SCE room interop validation and broader external-client interoperability validation |
 | Slack | ✅ | ❌ | - | Removed — proprietary, not aligned with fork goals |
@@ -113,7 +113,7 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 | Mention-based activation | ✅ | ✅ | bot_username + respond_to_all_group_messages |
 | Per-group tool policies | ✅ | ❌ | Allow/deny specific tools |
 | Thread isolation | ✅ | ✅ | Separate sessions per thread/topic |
-| Per-channel media limits | ✅ | 🚧 | Caption support plus `mediaMaxMb` enforcement for Telegram and Discord |
+| Per-channel media limits | ✅ | 🚧 | Caption support plus `mediaMaxMb` enforcement for proprietary channels is not carried |
 | Typing indicators | ✅ | 🚧 | TUI + channel typing, with configurable silence timeout; richer parity pending |
 | Per-channel ackReaction config | ✅ | ❌ | Customizable acknowledgement reactions/scopes |
 | Group session priming | ✅ | ❌ | Member roster injected for context |
@@ -513,7 +513,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 - ✅ Gateway control plane + WebSocket
 - ✅ Web Control UI (chat, memory, jobs, logs, extensions, routines)
 - ✅ WebChat channel (web gateway)
-- ✅ Telegram channel (WASM tool, MTProto)
 - ✅ Docker sandbox (orchestrator/worker)
 - ✅ Cron job scheduling (routines)
 - ✅ CLI subcommands (onboard, config, status, memory)
@@ -527,7 +526,6 @@ This document tracks feature parity between LunarWing (Rust implementation) and 
 
 ### P1 - High Priority
 
-- ✅ Telegram channel (WASM, DM pairing, caption, /start)
 - ✅ Multi-provider failover (`FailoverProvider` with retryable error classification)
 - ✅ Hooks system (core lifecycle hooks + bundled/plugin/workspace hooks + outbound webhooks)
 

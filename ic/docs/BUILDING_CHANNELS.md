@@ -4,7 +4,7 @@ This guide covers how to build WASM channel modules for LunarWing.
 
 ## Overview
 
-Channels are WASM components that handle communication with external messaging platforms (Telegram, Slack, XMPP, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
+Channels are WASM components that handle communication with external messaging platforms (XMPP, WeeChat, DarkIRC, etc.). They run in a sandboxed environment and communicate with the host via the WIT (WebAssembly Interface Types) interface.
 
 ## Directory Structure
 
@@ -177,11 +177,11 @@ fn on_respond(response: AgentResponse) -> Result<(), String> {
 
 **Never hardcode credentials!** Use placeholders that the host replaces:
 
-### URL Placeholders (Telegram-style)
+### URL Placeholders
 
 ```rust
-// The host replaces {TELEGRAM_BOT_TOKEN} with the actual token
-let url = "https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage";
+// The host replaces {MY_CHANNEL_API_TOKEN} with the actual token
+let url = "https://api.my-platform.com/send?token={MY_CHANNEL_API_TOKEN}";
 channel_host::http_request("POST", url, &headers_json, Some(&body));
 ```
 
@@ -281,9 +281,9 @@ secrets store.
 
 **Do not commit compiled WASM binaries.** They are a supply chain risk — the binary in a PR may not match the source. LunarWing builds channels from source:
 
-- `cargo build` automatically builds `telegram.wasm` via `build.rs`
-- The built binary is in `.gitignore` and is not committed
-- CI should run `cargo build` (or `./scripts/build-all.sh`) to produce releases
+- Channel artifacts are built by their own source-tree scripts or by deployment tooling.
+- Built binaries are in `.gitignore` and are not committed.
+- CI should run `cargo build` for the host and explicit channel build commands for release artifacts.
 
 **Reproducible build:**
 ```bash
@@ -291,22 +291,6 @@ cargo build --release
 ```
 
 Prerequisites: `rustup target add wasm32-wasip2`, `cargo install wasm-tools` (optional; fallback copies raw WASM if unavailable).
-
-### Telegram Channel (Manual Build)
-
-```bash
-# Add WASM target if needed
-rustup target add wasm32-wasip2
-
-# Build Telegram channel
-./channels-src/telegram/build.sh
-
-# Install (or use lunarwing onboard to install bundled channel)
-mkdir -p ~/.lunarwing/channels
-cp channels-src/telegram/telegram.wasm channels-src/telegram/telegram.capabilities.json ~/.lunarwing/channels/
-```
-
-**Note**: The main LunarWing binary bundles `telegram.wasm` via `include_bytes!`. When modifying the Telegram channel source, run `./channels-src/telegram/build.sh` **before** building the main crate, so the updated WASM is included.
 
 ### Other Channels
 

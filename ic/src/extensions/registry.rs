@@ -26,8 +26,8 @@ impl ExtensionRegistry {
 
     /// Create a new registry merging builtin entries with catalog-provided entries.
     ///
-    /// Deduplicates by `(name, kind)` pair -- a builtin MCP "telegram" and a registry
-    /// WASM "telegram" can coexist since they're different kinds.
+    /// Deduplicates by `(name, kind)` pair -- a builtin MCP "shared" and a registry
+    /// WASM "shared" can coexist since they're different kinds.
     pub fn new_with_catalog(catalog_entries: Vec<RegistryEntry>) -> Self {
         let mut entries = builtin_entries();
         for entry in catalog_entries {
@@ -450,15 +450,15 @@ mod tests {
     async fn test_new_with_catalog() {
         let catalog_entries = vec![
             RegistryEntry {
-                name: "telegram".to_string(),
-                display_name: "Telegram".to_string(),
+                name: "shared".to_string(),
+                display_name: "Shared".to_string(),
                 kind: ExtensionKind::WasmChannel,
-                description: "Telegram Bot API channel".to_string(),
+                description: "Shared Bot API channel".to_string(),
                 keywords: vec!["messaging".into(), "bot".into()],
                 source: ExtensionSource::WasmBuildable {
-                    source_dir: "channels-src/telegram".to_string(),
-                    build_dir: Some("channels-src/telegram".to_string()),
-                    crate_name: Some("telegram-channel".to_string()),
+                    source_dir: "channels-src/shared-channel".to_string(),
+                    build_dir: Some("channels-src/shared-channel".to_string()),
+                    crate_name: Some("shared-channel".to_string()),
                 },
                 fallback_source: None,
                 auth_hint: AuthHint::CapabilitiesAuth,
@@ -500,10 +500,10 @@ mod tests {
 
         let registry = ExtensionRegistry::new_with_catalog(catalog_entries);
 
-        // Should find the new telegram entry
-        let results = registry.search("telegram").await;
-        assert!(!results.is_empty(), "Should find telegram from catalog");
-        assert_eq!(results[0].entry.name, "telegram");
+        // Should find the new shared entry
+        let results = registry.search("shared").await;
+        assert!(!results.is_empty(), "Should find shared from catalog");
+        assert_eq!(results[0].entry.name, "shared");
 
         // Should have both MCP and WASM entries with the same name
         let results = registry.search("dual-ext").await;
@@ -561,18 +561,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_with_kind_resolves_collision() {
-        // Two entries with the same name but different kinds (the telegram collision scenario)
+        // Two entries with the same name but different kinds (the shared collision scenario)
         let catalog_entries = vec![
             RegistryEntry {
-                name: "telegram".to_string(),
-                display_name: "Telegram Tool".to_string(),
+                name: "shared".to_string(),
+                display_name: "Shared Tool".to_string(),
                 kind: ExtensionKind::WasmTool,
-                description: "Telegram MTProto tool".to_string(),
+                description: "Shared MTProto tool".to_string(),
                 keywords: vec!["messaging".into()],
                 source: ExtensionSource::WasmBuildable {
-                    source_dir: "tools-src/telegram".to_string(),
-                    build_dir: Some("tools-src/telegram".to_string()),
-                    crate_name: Some("telegram-tool".to_string()),
+                    source_dir: "tools-src/shared-tool".to_string(),
+                    build_dir: Some("tools-src/shared-tool".to_string()),
+                    crate_name: Some("shared-tool".to_string()),
                 },
                 fallback_source: None,
                 auth_hint: AuthHint::CapabilitiesAuth,
@@ -580,15 +580,15 @@ mod tests {
                 hidden: None,
             },
             RegistryEntry {
-                name: "telegram".to_string(),
-                display_name: "Telegram Channel".to_string(),
+                name: "shared".to_string(),
+                display_name: "Shared Channel".to_string(),
                 kind: ExtensionKind::WasmChannel,
-                description: "Telegram Bot API channel".to_string(),
+                description: "Shared Bot API channel".to_string(),
                 keywords: vec!["messaging".into(), "bot".into()],
                 source: ExtensionSource::WasmBuildable {
-                    source_dir: "channels-src/telegram".to_string(),
-                    build_dir: Some("channels-src/telegram".to_string()),
-                    crate_name: Some("telegram-channel".to_string()),
+                    source_dir: "channels-src/shared-channel".to_string(),
+                    build_dir: Some("channels-src/shared-channel".to_string()),
+                    crate_name: Some("shared-channel".to_string()),
                 },
                 fallback_source: None,
                 auth_hint: AuthHint::CapabilitiesAuth,
@@ -600,37 +600,37 @@ mod tests {
         let registry = ExtensionRegistry::new_with_catalog(catalog_entries);
 
         // Without kind hint, get() returns the first match (WasmTool)
-        let entry = registry.get("telegram").await;
+        let entry = registry.get("shared").await;
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().kind, ExtensionKind::WasmTool);
 
         // With kind hint for WasmChannel, get_with_kind() returns the channel entry
         let entry = registry
-            .get_with_kind("telegram", Some(ExtensionKind::WasmChannel))
+            .get_with_kind("shared", Some(ExtensionKind::WasmChannel))
             .await;
         assert!(entry.is_some());
         let entry = entry.unwrap();
         assert_eq!(entry.kind, ExtensionKind::WasmChannel);
-        assert_eq!(entry.display_name, "Telegram Channel");
+        assert_eq!(entry.display_name, "Shared Channel");
 
         // With kind hint for WasmTool, get_with_kind() returns the tool entry
         let entry = registry
-            .get_with_kind("telegram", Some(ExtensionKind::WasmTool))
+            .get_with_kind("shared", Some(ExtensionKind::WasmTool))
             .await;
         assert!(entry.is_some());
         let entry = entry.unwrap();
         assert_eq!(entry.kind, ExtensionKind::WasmTool);
-        assert_eq!(entry.display_name, "Telegram Tool");
+        assert_eq!(entry.display_name, "Shared Tool");
 
         // Without kind hint (None), get_with_kind() falls back to first match
-        let entry = registry.get_with_kind("telegram", None).await;
+        let entry = registry.get_with_kind("shared", None).await;
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().kind, ExtensionKind::WasmTool);
 
-        // Kind mismatch: no McpServer named "telegram" exists — must return None,
+        // Kind mismatch: no McpServer named "shared" exists — must return None,
         // not silently fall back to the WasmTool entry.
         let entry = registry
-            .get_with_kind("telegram", Some(ExtensionKind::McpServer))
+            .get_with_kind("shared", Some(ExtensionKind::McpServer))
             .await;
         assert!(
             entry.is_none(),
@@ -695,7 +695,7 @@ mod tests {
         assert_eq!(entry.unwrap().display_name, "Cached Tool");
     }
 
-    // Channel tests (telegram) require the embedded catalog
+    // Channel tests (shared) require the embedded catalog
     // to be loaded via new_with_catalog(). See test_new_with_catalog for catalog coverage.
 
     // === QA Plan P2 - 2.4: Extension registry collision tests ===
@@ -705,13 +705,13 @@ mod tests {
         // A WASM channel and WASM tool with the same name must coexist.
         let catalog_entries = vec![
             RegistryEntry {
-                name: "telegram".to_string(),
-                display_name: "Telegram Channel".to_string(),
+                name: "shared".to_string(),
+                display_name: "Shared Channel".to_string(),
                 kind: ExtensionKind::WasmChannel,
-                description: "Telegram messaging channel".to_string(),
+                description: "Shared messaging channel".to_string(),
                 keywords: vec!["messaging".into()],
                 source: ExtensionSource::WasmBuildable {
-                    source_dir: "channels-src/telegram".to_string(),
+                    source_dir: "channels-src/shared-channel".to_string(),
                     build_dir: None,
                     crate_name: None,
                 },
@@ -721,13 +721,13 @@ mod tests {
                 hidden: None,
             },
             RegistryEntry {
-                name: "telegram".to_string(),
-                display_name: "Telegram Tool".to_string(),
+                name: "shared".to_string(),
+                display_name: "Shared Tool".to_string(),
                 kind: ExtensionKind::WasmTool,
-                description: "Telegram API tool".to_string(),
+                description: "Shared API tool".to_string(),
                 keywords: vec!["messaging".into()],
                 source: ExtensionSource::WasmBuildable {
-                    source_dir: "tools-src/telegram".to_string(),
+                    source_dir: "tools-src/shared-tool".to_string(),
                     build_dir: None,
                     crate_name: None,
                 },
@@ -744,22 +744,22 @@ mod tests {
         // Both should exist since they have different kinds.
         let channel = all
             .iter()
-            .find(|e| e.name == "telegram" && e.kind == ExtensionKind::WasmChannel);
+            .find(|e| e.name == "shared" && e.kind == ExtensionKind::WasmChannel);
         let tool = all
             .iter()
-            .find(|e| e.name == "telegram" && e.kind == ExtensionKind::WasmTool);
+            .find(|e| e.name == "shared" && e.kind == ExtensionKind::WasmTool);
 
         assert!(channel.is_some(), "Channel entry missing");
         assert!(tool.is_some(), "Tool entry missing");
 
         // Search should return both.
-        let results = registry.search("telegram").await;
+        let results = registry.search("shared").await;
         let channel_hit = results
             .iter()
-            .any(|r| r.entry.name == "telegram" && r.entry.kind == ExtensionKind::WasmChannel);
+            .any(|r| r.entry.name == "shared" && r.entry.kind == ExtensionKind::WasmChannel);
         let tool_hit = results
             .iter()
-            .any(|r| r.entry.name == "telegram" && r.entry.kind == ExtensionKind::WasmTool);
+            .any(|r| r.entry.name == "shared" && r.entry.kind == ExtensionKind::WasmTool);
         assert!(channel_hit, "Search should find channel");
         assert!(tool_hit, "Search should find tool");
     }

@@ -401,7 +401,7 @@ key first, then falls back to the standard env var.
 
 **Module:** `wizard.rs` → `step_channels()`, delegating to `channels.rs`
 
-**Goal:** Enable input channels (TUI, HTTP, Telegram, etc.).
+**Goal:** Enable input channels (TUI, HTTP, XMPP, etc.).
 
 **Sub-steps:**
 
@@ -444,8 +444,8 @@ key first, then falls back to the standard env var.
 - Channel setup fields are used for non-secret bridge/runtime config such as
   `bridge_url`, `xmpp_jid`, policy flags, and persistence directories
 
-**Telegram special case** (`setup_telegram`):
-- Validates bot token via Telegram `getMe` API
+**XMPP special case** (`setup_xmpp`):
+- Validates bot token via XMPP `getMe` API
 - Owner binding: polls `getUpdates` for 120s to capture sender's user ID
 - Optional webhook secret generation
 
@@ -647,7 +647,7 @@ pub struct Settings {
 
     // Step 6: Channels
     pub tunnel: TunnelSettings,              // provider, public_url
-    pub channels: ChannelSettings,           // http config, telegram owner, etc.
+    pub channels: ChannelSettings,           // http config, xmpp owner, etc.
 
     // Step 7: Heartbeat
     pub heartbeat: HeartbeatSettings,        // enabled, interval, notify
@@ -691,8 +691,8 @@ Secrets are encrypted with AES-256-GCM using the master key, then stored
 in the database `secrets` table. The wizard writes secrets like:
 
 ```
-telegram_bot_token    → encrypted bot token
-telegram_webhook_secret → encrypted webhook HMAC secret
+xmpp_password    → encrypted bot token
+xmpp_webhook_secret → encrypted webhook HMAC secret
 llm_anthropic_api_key → encrypted API key
 ```
 
@@ -768,11 +768,11 @@ and falls back to `http://127.0.0.1:{OAUTH_CALLBACK_PORT}`.
 - `.env` values must be double-quoted to preserve `#`
 - Display masked: `postgres://user:****@host/db`
 
-### Telegram API
+### XMPP API
 
 - Bot token format: `123456:ABC-DEF...`
-- Token goes in URL path: `https://api.telegram.org/bot{TOKEN}/method`
-- Webhook secret header: `X-Telegram-Bot-Api-Secret-Token`
+- Token goes in URL path: `https://xmpp.example.test/bot{TOKEN}/method`
+- Webhook secret header: `X-XMPP-Bot-Api-Secret-Token`
 - Owner binding polls `getUpdates` (must delete webhook first)
 
 ---

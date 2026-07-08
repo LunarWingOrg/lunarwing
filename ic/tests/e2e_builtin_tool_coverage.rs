@@ -156,7 +156,7 @@ mod tests {
             other => panic!("expected lightweight routine action, got {other:?}"),
         }
 
-        assert_eq!(routine.notify.channel.as_deref(), Some("telegram"));
+        assert_eq!(routine.notify.channel.as_deref(), Some("xmpp"));
         assert_eq!(routine.notify.user.as_deref(), Some("ops-team"));
         assert_eq!(routine.guardrails.cooldown.as_secs(), 600);
 
@@ -452,7 +452,7 @@ mod tests {
             other => panic!("expected full_job action, got {other:?}"),
         }
 
-        assert_eq!(routine.notify.channel.as_deref(), Some("telegram"));
+        assert_eq!(routine.notify.channel.as_deref(), Some("xmpp"));
         assert_eq!(routine.notify.user.as_deref(), Some("ops-team"));
         assert_eq!(routine.guardrails.cooldown.as_secs(), 30);
 

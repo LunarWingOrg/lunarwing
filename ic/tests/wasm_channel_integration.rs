@@ -154,7 +154,7 @@ mod router_tests {
         let runtime = create_test_runtime();
 
         // Register multiple channels
-        for name in &["weechat", "telegram", "darkirc"] {
+        for name in &["weechat", "xmpp", "darkirc"] {
             let channel = Arc::new(create_test_channel(
                 Arc::clone(&runtime),
                 name,
@@ -175,11 +175,11 @@ mod router_tests {
         let channels = router.list_channels().await;
         assert_eq!(channels.len(), 3);
         assert!(channels.contains(&"weechat".to_string()));
-        assert!(channels.contains(&"telegram".to_string()));
+        assert!(channels.contains(&"xmpp".to_string()));
         assert!(channels.contains(&"darkirc".to_string()));
 
         // Verify all paths work
-        for name in &["weechat", "telegram", "darkirc"] {
+        for name in &["weechat", "xmpp", "darkirc"] {
             let found = router
                 .get_channel_for_path(&format!("/webhook/{}", name))
                 .await;
@@ -260,7 +260,7 @@ mod loader_tests {
 
         // Create fake WASM files
         std::fs::File::create(dir.path().join("weechat.wasm")).expect("Failed to create file");
-        std::fs::File::create(dir.path().join("telegram.wasm")).expect("Failed to create file");
+        std::fs::File::create(dir.path().join("xmpp.wasm")).expect("Failed to create file");
 
         let channels = lunarwing::channels::wasm::discover_channels(dir.path())
             .await
@@ -268,7 +268,7 @@ mod loader_tests {
 
         assert_eq!(channels.len(), 2);
         assert!(channels.contains_key("weechat"));
-        assert!(channels.contains_key("telegram"));
+        assert!(channels.contains_key("xmpp"));
     }
 
     #[tokio::test]

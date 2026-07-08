@@ -93,7 +93,7 @@ pub fn select_one(prompt: &str, options: &[&str]) -> io::Result<usize> {
 /// let selected = select_many("Select channels:", &[
 ///     ("CLI/TUI", true),
 ///     ("HTTP webhook", false),
-///     ("Telegram", false),
+///     ("XMPP", false),
 /// ])?;
 /// ```
 pub fn select_many(prompt: &str, options: &[(&str, bool)]) -> io::Result<Vec<usize>> {
@@ -278,7 +278,7 @@ fn read_secret_line() -> io::Result<SecretString> {
 /// # Example
 ///
 /// ```ignore
-/// if confirm("Enable Telegram channel?", false)? {
+/// if confirm("Enable XMPP channel?", false)? {
 ///     // ...
 /// }
 /// ```

@@ -38,7 +38,7 @@ impl AttachmentKind {
 /// A file or media attachment on an incoming message.
 #[derive(Debug, Clone)]
 pub struct IncomingAttachment {
-    /// Unique identifier within the channel (e.g., Telegram file_id).
+    /// Unique identifier within the channel (e.g., attachment-123).
     pub id: String,
     /// What kind of content this is.
     pub kind: AttachmentKind,
@@ -409,7 +409,7 @@ impl StatusUpdate {
 /// a unified format. They also handle sending responses back.
 #[async_trait]
 pub trait Channel: Send + Sync {
-    /// Get the channel name (e.g., "cli", "xmpp", "telegram", "http").
+    /// Get the channel name (e.g., "cli", "xmpp", "signal", "http").
     fn name(&self) -> &str;
 
     /// Start listening for messages.
@@ -430,7 +430,7 @@ pub trait Channel: Send + Sync {
 
     /// Send a status update (thinking, tool execution, etc.).
     ///
-    /// The metadata contains channel-specific routing info (e.g., Telegram chat_id)
+    /// The metadata contains channel-specific routing info (e.g., XMPP chat_id)
     /// needed to deliver the status to the correct destination.
     ///
     /// Default implementation does nothing (for channels that don't support status).

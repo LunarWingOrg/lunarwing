@@ -120,7 +120,7 @@ mod tests {
             user_id: "user1".into(),
             thread_id: ThreadId::new(),
             conversation_id: lunarwing_engine::ConversationId::new(),
-            source_channel: "telegram".into(),
+            source_channel: "xmpp".into(),
             action_name: "shell".into(),
             call_id: "call_1".into(),
             parameters: serde_json::json!({"command": "ls"}),

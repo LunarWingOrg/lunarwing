@@ -1058,13 +1058,8 @@ mod tests {
         );
 
         // Channel manifest with tools-src/ prefix should be rejected
-        let manifest = test_manifest_with_kind(
-            "telegram",
-            "tools-src/telegram",
-            None,
-            None,
-            ManifestKind::Channel,
-        );
+        let manifest =
+            test_manifest_with_kind("xmpp", "tools-src/xmpp", None, None, ManifestKind::Channel);
 
         let result = installer.install_from_source(&manifest, false).await;
         match result {
@@ -1088,8 +1083,8 @@ mod tests {
         // Channel manifest with channels-src/ prefix should pass validation
         // (will fail later because source dir doesn't exist, which is fine)
         let manifest = test_manifest_with_kind(
-            "telegram",
-            "channels-src/telegram",
+            "xmpp",
+            "channels-src/xmpp",
             None,
             None,
             ManifestKind::Channel,
