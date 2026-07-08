@@ -73,8 +73,8 @@ impl Agent for SshAgent {
         Box::new(futures::future::ready((self, true)))
     }
 
-    fn confirm_request(&self, _msg: MessageType) -> impl Future<Output = bool> + Send {
-        async { true }
+    async fn confirm_request(&self, _msg: MessageType) -> bool {
+        true
     }
 }
 

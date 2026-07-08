@@ -3306,12 +3306,10 @@ fn should_skip_response_leak_scan(url: &str) -> bool {
         // bytes). The leak scanner exists to prevent exfiltration to external
         // services; loopback is not an exfiltration vector. Inbound messages
         // are still checked by the safety layer before reaching the LLM.
-        let is_loopback = matches!(parsed.scheme(), "http" | "https")
+        matches!(parsed.scheme(), "http" | "https")
             && parsed.host_str().is_some_and(|host| {
                 host.eq_ignore_ascii_case("127.0.0.1") || host.eq_ignore_ascii_case("localhost")
-            });
-
-        is_loopback
+            })
     })
 }
 
