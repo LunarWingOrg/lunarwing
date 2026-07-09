@@ -107,32 +107,97 @@ Our core team uses a self-hosted Vikunja kanban board to track tasks. Additional
 
 ## Instance Setup
 
-There are two ways to run LunarWing: a **single local instance** (the fastest way to try it) and **multi-tenant production** (the way it is deployed for real, with per-tenant OS isolation). The multi-tenant path is the maintained, primary deployment model. As of v1.1.9, the interactive `lunarwing_mt_onboard` CLI can automate the full multi-tenant provisioning lifecycle.
+The primary deployment model is **multi-tenant production** — each tenant is a real OS user with its own home, repo clone, release build, rootless Podman container store, per-tenant PostgreSQL, per-tenant secrets, a 10-port block, and per-tenant systemd (or OpenRC) service units.
 
-### Quick local instance (We strongly recommend the multi-tenant approach below as this method is not currently maintained and probably does not work at the moment)
+As of v1.1.9, the recommended way to get started is the **`lunarwing_mt_onboard` interactive CLI** (the "MT Admin CLI wrapper"), which automates the full provisioning lifecycle end to end. Under the hood it wraps `ic/scripts/lunarwing-mt-admin.sh`, which remains the source of truth and is available directly for operators who need full control over every flag.
 
-The fastest way to a running agent is to build the release binary and let the onboarding wizard configure everything. On first run with no database configured, `lunarwing run` auto-triggers **quick onboarding**, which defaults every non-LLM choice (embedded libSQL at `~/.lunarwing/lunarwing.db`, keychain-or-env secrets) and only prompts for the inference provider and model.
+### Getting Started: MT Admin CLI Wrapper (`lunarwing_mt_onboard`)
 
-```bash
-cd ic
-cargo build --release
-./target/release/lunarwing run          # auto-triggers quick onboarding on first run
-# or explicitly:
-./target/release/lunarwing onboard --quick
-```
+The `lunarwing_mt_onboard` CLI (new in v1.1.9) walks an operator through the full tenant provisioning lifecycle: tenant identity, port allocation, secrets generation, LLM and channel configuration, external worker selection, build, and start/verify. It is a thin interactive wrapper around `lunarwing-mt-admin.sh` — it does not duplicate provisioning logic.
 
-If you want to run a local instance repeatedly without rebuilding, `ic/run.sh` wraps the release binary with sane dev defaults (`HTTP_PORT=9098`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `AGENT_NAME=lunarwing`, 2s start delay). It does **not** inject LLM URL or model defaults — those come from `config.toml` or env vars:
+**Requirements:** Python 3.10+, `rich` and `questionary` (see `requirements.txt`), root/sudo.
+
+**Install dependencies:**
 
 ```bash
-cd ic
-LUNARWING_BASE_DIR=/path/to/instance ./run.sh
+pip install -r lunarwing_mt_onboard/requirements.txt
 ```
 
-`run.sh` bridges `LUNARWING_BASE_DIR` to the legacy `IRONCLAW_BASE_DIR` for older code paths. macOS prefers keychain storage for secrets by default; on Linux, `lunarwing onboard --quick` generates and persists a `SECRETS_MASTER_KEY` automatically when one is missing.
+**Interactive provisioning (recommended for first-time setup):**
 
-### Multi-tenant production (`lunarwing-mt-admin.sh`) — primary path
+```bash
+sudo python3 -m lunarwing_mt_onboard
+```
 
-This is how LunarWing is actually deployed. Each tenant is a real OS user with its own home, repo clone, release build, rootless Podman container store, per-tenant PostgreSQL, per-tenant secrets, a 10-port block, and per-tenant systemd (or OpenRC) service units. Full walkthrough: [docs/guides/MT-ADMIN-QUICKSTART.md](docs/guides/MT-ADMIN-QUICKSTART.md). Production reference: [docs/ops/MULTITENANCY-PRODUCTION.md](docs/ops/MULTITENANCY-PRODUCTION.md).
+This launches a guided session that collects all tenant configuration (name, LLM provider/model, XMPP, Gotify, workers, SSH, health checks), then runs `add-tenant` → `build-tenant` → `start-tenant` with live log output and post-start verification.
+
+**Resume a saved session:**
+
+```bash
+sudo python3 -m lunarwing_mt_onboard --resume /path/to/tenant.json
+```
+
+**Non-interactive (CI / bulk provisioning):**
+
+```bash
+sudo python3 -m lunarwing_mt_onboard \
+  --non-interactive \
+  --resume tenant.json \
+  --save result.json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--non-interactive` | Skip all prompts; requires `--resume` |
+| `--accept-defaults` | Accept default values for any unspecified fields |
+| `--resume FILE` | Load a previously saved `TenantConfig` JSON |
+| `--save FILE` | Save the collected config to JSON before provisioning |
+| `--skip-build` | Only run `add-tenant` |
+| `--skip-start` | Run `add-tenant` + `build-tenant`, skip `start-tenant` |
+
+**In-place tenant upgrade:**
+
+The `upgrade` subcommand wraps `upgrade-preflight.sh` and `upgrade-tenant-version.sh` for same-host version bumps of existing tenants. Dry-run by default.
+
+```bash
+# Interactive dry-run
+sudo python3 -m lunarwing_mt_onboard upgrade
+
+# Non-interactive dry-run
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --non-interactive
+
+# Apply the upgrade
+sudo python3 -m lunarwing_mt_onboard upgrade \
+  --tenant ruffles \
+  --target v1.1.9 \
+  --apply \
+  --yes \
+  --non-interactive
+```
+
+**Kawarimi tenant export (cross-host migration):**
+
+The `export` subcommand wraps `export-tenant.sh` for cross-host migration. Dry-run by default.
+
+```bash
+# Interactive dry-run
+sudo python3 -m lunarwing_mt_onboard export
+
+# Apply (stops tenant and writes bundle)
+sudo python3 -m lunarwing_mt_onboard export \
+  --tenant ruffles \
+  --apply \
+  --non-interactive
+```
+
+See [lunarwing_mt_onboard/README.md](lunarwing_mt_onboard/README.md) for the full CLI reference, configuration file format, and module layout.
+
+### Manual Multi-Tenant Path (`lunarwing-mt-admin.sh`)
+
+For operators who need direct control over every flag, `lunarwing-mt-admin.sh` is the underlying provisioning tool. Full walkthrough: [docs/guides/MT-ADMIN-QUICKSTART.md](docs/guides/MT-ADMIN-QUICKSTART.md). Production reference: [docs/ops/MULTITENANCY-PRODUCTION.md](docs/ops/MULTITENANCY-PRODUCTION.md).
 
 Prerequisites: root/sudo, Docker **or** Podman, `jq`, `git`. No host Rust toolchain needed — `add-tenant` installs a per-tenant rustup toolchain with WASM targets.
 
@@ -160,15 +225,30 @@ The gateway binds `127.0.0.1` by default; for remote access, tunnel the HTTP por
 
 Additional worker containers (nanocode, pebble, opencode) can be attached at build time with `--with-nanocode` / `--with-pebble` / `--with-opencode`. DarkIRC is opt-in (`--enable-darkirc` + `build-darkirc`). See the quickstart for the full flag reference.
 
-### Interactive MT Onboarding CLI (new in v1.1.9)
+### Local single-instance (unmaintained)
 
-For a guided, end-to-end tenant provisioning experience, the repo ships `lunarwing_mt_onboard/` — an interactive CLI that walks through the full lifecycle (tenant identity, port allocation, secrets generation, LLM and channel configuration, worker selection, build, and start/verify) and wraps `lunarwing-mt-admin.sh` under the hood. See [docs/proposals/MT-ONBOARDING-CLI.md](docs/proposals/MT-ONBOARDING-CLI.md) for the design proposal.
+For quick local testing without multi-tenant isolation, build the release binary and let the onboarding wizard configure everything. On first run with no database configured, `lunarwing run` auto-triggers **quick onboarding**, which defaults every non-LLM choice (embedded libSQL at `~/.lunarwing/lunarwing.db`, keychain-or-env secrets) and only prompts for the inference provider and model.
 
-### Preseeding persona files before first run (optional)
+> **Note:** This path is not actively maintained and may not work reliably. The multi-tenant CLI above is the supported path.
 
-LunarWing supports a preseeded workspace layout: you can give an agent a custom identity and memories *before* its first interaction. At runtime, workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` before the generic built-in seeds, so the persona and memory files under [ic/deploy/workspace-template/](ic/deploy/workspace-template/) can be customized per instance: `SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, `USER.md`, `MEMORY.md`, `HEARTBEAT.md`.
+```bash
+cd ic
+cargo build --release
+./target/release/lunarwing run          # auto-triggers quick onboarding on first run
+# or explicitly:
+./target/release/lunarwing onboard --quick
+```
 
-`ic/scripts/setup-instance.sh` is a legacy helper that writes `config.toml`, `.env`, and copies the workspace template, then invokes onboarding. It still functions, but is **not actively maintained** — the maintained paths are the onboarding wizard (single instance), `lunarwing-mt-admin.sh` (multi-tenant), and the new interactive `lunarwing_mt_onboard` CLI (v1.1.9+; see above). If you only need to preseed persona files, copy them into `$LUNARWING_BASE_DIR/workspace-template/` manually and run `lunarwing onboard --quick`.
+`ic/run.sh` wraps the release binary with sane dev defaults (`HTTP_PORT=9098`, `ALLOW_PRIVATE_IPS=1`, `PGSSLMODE=disable`, `AGENT_NAME=lunarwing`, 2s start delay):
+
+```bash
+cd ic
+LUNARWING_BASE_DIR=/path/to/instance ./run.sh
+```
+
+### Preseeding persona files (optional)
+
+You can give an agent a custom identity and memories *before* its first interaction. Workspace files are imported from `$LUNARWING_BASE_DIR/workspace-template/` at runtime. Copy persona files (`SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, `USER.md`, `MEMORY.md`, `HEARTBEAT.md`) from [ic/deploy/workspace-template/](ic/deploy/workspace-template/) into that directory, customize them, then run onboarding.
 
 ### Config defaults
 
@@ -254,68 +334,6 @@ sudo LUNARWING_WATCHDOG_SCHEDULER=hourly ic/scripts/install-lunarwing-watchdog.s
 ```
 
 Use `LUNARWING_WATCHDOG_CRON_DIR=/path/to/hourly-dir` for nonstandard directory layouts.
-
-## Fresh Recreate Recipes
-
-### PostgreSQL + XMPP + systemd
-
-See the documented recipe in [ic/testing/lunarwing-xmpp/README.md](ic/testing/lunarwing-xmpp/README.md).
-
-### libSQL with Custom Gateway Token
-
-> **Note:** `setup-instance.sh` is deprecated as of v1.1.9 and not actively maintained. For single instances use `lunarwing onboard --quick`; for production use the multi-tenant path. The recipe below is kept for reference.
-
-```bash
-cd ic
-
-export BASE=/tmp/lunarwing-libsql
-export GATEWAY_TOKEN='replace-me-gateway-token'
-export LLM_API_KEY='unneeded'
-
-rm -rf "$BASE"
-
-scripts/setup-instance.sh \
-  --base-dir "$BASE" \
-  --database libsql \
-  --libsql-path "$BASE/lunarwing.db" \
-  --llm-base-url http://127.0.0.1:3002/openai/v1 \
-  --llm-model tensorzero::function_name::lunarwing \
-  --llm-api-key "$LLM_API_KEY" \
-  --agent-name lunarwing \
-  --run-onboard
-
-python3 - <<'PY'
-import os
-from pathlib import Path
-
-path = Path(os.environ["BASE"]) / ".env"
-values = {
-    "LUNARWING_BASE_DIR": os.environ["BASE"],
-    "GATEWAY_ENABLED": "true",
-    "GATEWAY_HOST": "127.0.0.1",
-    "GATEWAY_PORT": "8765",
-    "GATEWAY_AUTH_TOKEN": os.environ["GATEWAY_TOKEN"],
-}
-
-lines = path.read_text().splitlines()
-seen = set()
-out = []
-for line in lines:
-    if "=" in line and not line.lstrip().startswith("#"):
-        key, _ = line.split("=", 1)
-        if key in values:
-            out.append(f"{key}={values[key]}")
-            seen.add(key)
-            continue
-    out.append(line)
-for key, value in values.items():
-    if key not in seen:
-        out.append(f"{key}={value}")
-path.write_text("\n".join(out) + "\n")
-PY
-
-LUNARWING_BASE_DIR="$BASE" ./target/debug/lunarwing run
-```
 
 ## Further Reading
 
