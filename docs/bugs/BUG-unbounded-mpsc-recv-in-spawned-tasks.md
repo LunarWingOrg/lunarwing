@@ -1,6 +1,6 @@
 # BUG: Unbounded mpsc recv() in spawned notification tasks
 
-> **STATUS: OPEN (confirmed 2026-06-07)** — the two `ic/src/agent/agent_loop.rs` forwarders remain (now ~lines 613 and 741). The third site (`channels/relay/channel.rs`) no longer exists — the relay subsystem was removed in v1.1.1.
+> **STATUS: OPEN (confirmed 2026-07-09)** — the two `ic/src/agent/agent_loop.rs` forwarders remain (lines 624 and 752). The relay subsystem (`channels/relay/channel.rs`) was removed in v1.1.1.
 
 ## Severity: MEDIUM
 
@@ -11,7 +11,7 @@ Several spawned background tasks use `while let Some(response) = notify_rx.recv(
 ## Affected locations
 
 ### 1. Heartbeat notification forwarder
-**File:** `ic/src/agent/agent_loop.rs` (~lines 602-629)
+**File:** `ic/src/agent/agent_loop.rs` (line 624)
 
 ```rust
 tokio::spawn(async move {
@@ -22,7 +22,7 @@ tokio::spawn(async move {
 ```
 
 ### 2. Routine engine notification forwarder
-**File:** `ic/src/agent/agent_loop.rs` (~lines 689-717)
+**File:** `ic/src/agent/agent_loop.rs` (line 752)
 
 ```rust
 tokio::spawn(async move {
@@ -32,16 +32,9 @@ tokio::spawn(async move {
 });
 ```
 
-### 3. Relay channel webhook event reader
-**File:** `ic/src/channels/relay/channel.rs` (~line 157)
+### 3. ~~Relay channel webhook event reader~~ (removed in v1.1.1)
 
-```rust
-tokio::spawn(async move {
-    while let Some(event) = event_rx.recv().await {
-        // process webhook events...
-    }
-});
-```
+The relay subsystem (`ic/src/channels/relay/`) was removed in v1.1.1. This site no longer exists.
 
 ## Impact
 

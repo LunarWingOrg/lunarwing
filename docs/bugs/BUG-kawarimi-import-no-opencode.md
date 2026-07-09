@@ -2,7 +2,7 @@
 
 **Severity:** Low
 **Found:** 2026-07-03 during v1.1.8 migration testing (tenant `starforce`)
-**Status:** Open
+**Status:** FIXED (2026-07-09) — `--with-opencode` is now accepted by `import-tenant.sh` (line 60, wired into `build_args` at line 251). Original report retained below.
 **Affects:** `ic/scripts/import-tenant.sh` — cross-machine migration import path
 
 ## Symptoms
