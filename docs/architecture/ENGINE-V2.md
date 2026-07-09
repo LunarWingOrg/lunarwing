@@ -126,7 +126,7 @@ The orchestrator (`executor/orchestrator.rs`) is a self-modifiable Python execut
 - Can be patched by the self-improvement mission and versioned in the Store
 - Falls back to compiled-in default (v0) if disabled or patches fail (3+ consecutive failures triggers rollback)
 - Async dispatch of tool calls with `asyncio.gather()` for parallel execution
-- Default orchestrator source: `ic/orchestrator/default.py`
+- Default orchestrator source: `ic/crates/lunarwing_engine/orchestrator/default.py`
 
 ## Capability Leases
 

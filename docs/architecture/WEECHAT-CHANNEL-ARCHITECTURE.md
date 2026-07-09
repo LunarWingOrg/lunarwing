@@ -342,8 +342,8 @@ The adapter and WASM must update **together** (the WASM probes `/api/health` for
 - `WEECHAT-MULTITENANT-PORT-BUG.md` — the per-tenant port/password fix and the
   env-sourced-fields mechanism (archived to `docs/internal/history/archive/ops/`).
 - `docs/proposals/WEECHAT_WS_ADAPTER_SYNC_PROTOCOL.md`,
-  `docs/proposals/WEECHAT_LOCAL_WS_ADAPTER_ISSUE.md` — the adapter sync protocol and adapter
-  port history.
+   `docs/proposals/WEECHAT_WS_ADAPTER_MISSING_DEPENDENCY_AND_AUTOMATION.md` — the adapter sync protocol,
+   dependency + automation.
 - `ic/scripts/lunarwing-weechat-preflight.sh` — read-only env-vs-registry pre-flight.
 - Code: `lunarwing_weechat_wss/weechat_relay/src/lib.rs`, `…/ws_adapter.py`,
   `ic/src/channels/wasm/{setup,wrapper,runtime,loader}.rs`.

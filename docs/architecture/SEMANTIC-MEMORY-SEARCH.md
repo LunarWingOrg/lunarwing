@@ -312,17 +312,17 @@ The v2 engine's `RetrievalEngine` is a lighter-weight system that retrieves rele
 
 | File | Purpose |
 |------|---------|
-| `src/workspace/mod.rs` | Workspace API, document/chunk CRUD, search orchestration |
-| `src/workspace/repository.rs` | PostgreSQL FTS + vector search implementation |
-| `src/workspace/embeddings.rs` | EmbeddingProvider trait, 4 implementations |
-| `src/workspace/embedding_cache.rs` | LRU caching wrapper |
-| `src/workspace/search.rs` | RRF + WeightedScore fusion algorithms |
-| `src/workspace/chunker.rs` | Document chunking with overlap |
-| `src/workspace/document.rs` | Core types (MemoryDocument, MemoryChunk, well-known paths) |
-| `src/workspace/layer.rs` | Memory layers (scoped access, sensitivity classification) |
-| `src/workspace/privacy.rs` | Privacy classifier trait for sensitive content detection |
-| `src/tools/builtin/memory.rs` | Agent-facing tools (search, read, write, tree) |
-| `src/config/embeddings.rs` | Configuration resolver |
-| `src/db/libsql/workspace.rs` | libSQL FTS5 + vector search |
-| `migrations/V1__initial.sql` | PostgreSQL base schema |
-| `migrations/V9__flexible_embedding_dimension.sql` | Flexible vector dimensions |
+| `ic/src/workspace/mod.rs` | Workspace API, document/chunk CRUD, search orchestration |
+| `ic/src/workspace/repository.rs` | PostgreSQL FTS + vector search implementation |
+| `ic/src/workspace/embeddings.rs` | EmbeddingProvider trait, 4 implementations |
+| `ic/src/workspace/embedding_cache.rs` | LRU caching wrapper |
+| `ic/src/workspace/search.rs` | RRF + WeightedScore fusion algorithms |
+| `ic/src/workspace/chunker.rs` | Document chunking with overlap |
+| `ic/src/workspace/document.rs` | Core types (MemoryDocument, MemoryChunk, well-known paths) |
+| `ic/src/workspace/layer.rs` | Memory layers (scoped access, sensitivity classification) |
+| `ic/src/workspace/privacy.rs` | Privacy classifier trait for sensitive content detection |
+| `ic/src/tools/builtin/memory.rs` | Agent-facing tools (search, read, write, tree) |
+| `ic/src/config/embeddings.rs` | Configuration resolver |
+| `ic/src/db/libsql/workspace.rs` | libSQL FTS5 + vector search |
+| `ic/migrations/V1__initial.sql` | PostgreSQL base schema |
+| `ic/migrations/V9__flexible_embedding_dimension.sql` | Flexible vector dimensions |
