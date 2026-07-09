@@ -12,7 +12,7 @@ NOTE: TODO: edit dev autonomous loop routine to use this file. ensure that check
 5. [x] Go thru all the issues and make a report in docs/ops of the status of each issue and see if each is solved already or not https://github.com/LunarWingOrg/lunarwing/issues
 6. [x] inspect status of cargo crates and create documented report of any crates that might still need to be updated
 7. [x] inspect recent changes made to cargo crates sinced 1.1.8 and attempt to identify any problems in the builds of the binaries OR the WASM tools and channels. Document all findings to a document in docs.
-8. [x] Go through all documents under architecture directory in docs/ and update all outdated documentation. Then, consolidate documents.
+8. [ ] Finish going through all the documents under architecture directory in docs/ and update all outdated documentation. Then, consolidate documents if possible.
 9. [ ] Go through all documents under bugs directory in docs/ and update all outdated documentation. Then, consolidate documents.
 10. [ ] Go through all documents under guides directory in docs/ and update all outdated documentation. Then, consolidate documents.
 11. [ ] Go through all documents under internal directory in docs/ and update all outdated documentation. Then, consolidate documents.
