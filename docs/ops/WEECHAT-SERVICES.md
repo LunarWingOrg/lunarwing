@@ -366,3 +366,35 @@ The `RELAY_PASSWORD` in `lunarwing.env` must exactly match the value set inside 
 ```
 
 If they differ, update one to match the other and restart the adapter.
+
+### CLI pairing approve fails with "no pairing file"
+
+**Symptom**: `lunarwing pairing approve weechat <CODE>` returns `Invalid channel: no pairing file`, even though the pairing request is visible via IRC and the gateway API works.
+
+The CLI resolves the pairing store from `LUNARWING_BASE_DIR`. In multi-tenant deployments this is set per-tenant in `lunarwing.env` (typically `/home/<name>/lunarwing/state`), but it is not exported into the tenant user's shell environment. Running `sudo -u <name> lunarwing pairing approve ...` without that variable causes the CLI to look in the wrong directory.
+
+Either source the env file first, or pass `LUNARWING_BASE_DIR` explicitly:
+
+```bash
+# Option A: pass the variable inline
+sudo -u <name> LUNARWING_BASE_DIR=/home/<name>/lunarwing/state \
+  lunarwing pairing approve weechat <CODE>
+
+# Option B: source the env file
+sudo -u <name> bash -c '
+  set -a
+  source /home/<name>/lunarwing/env/lunarwing.env
+  set +a
+  lunarwing pairing approve weechat <CODE>
+'
+```
+
+Alternatively, use the gateway API (no env vars needed):
+
+```bash
+curl -sf -X POST http://127.0.0.1:<gateway_port>/api/pairing/weechat/approve \
+  -H "Authorization: Bearer <GATEWAY_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"<CODE>"}'
+```
+
