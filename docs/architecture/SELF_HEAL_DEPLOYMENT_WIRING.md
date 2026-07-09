@@ -1,24 +1,23 @@
 # Infrastructure Self-Healing — Deployment & Provisioning Wiring
 
-**Date:** 2026-06-13
+**Date:** 2026-06-13 (updated 2026-07-09)
 **Status:** Reference (as-is) — documents current behavior, not a proposal
 **Related:** `ic-infrastructure-health-check/README.md`, `docs/ops/MULTITENANCY-PRODUCTION.md`, `docs/internal/history/proposals/CHAOS_ENGINEERING_TEST_PLAN.md`
 
 ## Summary
 
 The infrastructure health-check + self-heal pipeline (`ic-infrastructure-health-check/`)
-is a **host-level** facility installed by a **separate, manual** step. It is
-**not** part of tenant provisioning: creating a tenant with
-`lunarwing-mt-admin.sh add-tenant` installs none of it. Once set up at the host
-level it covers all tenants automatically (registry / init-scan discovery), so
-it is intentionally a once-per-host concern, not a per-tenant one.
+is a **host-level** facility that covers all tenants automatically (registry /
+init-scan discovery). As of v1.1.9, `lunarwing-mt-admin.sh add-tenant` calls
+`ensure_health_pipeline()` which installs the pipeline scripts, writes a config
+env file, and schedules the pipeline (systemd timer or OpenRC cron) in one step.
+It can be opted out with `--no-health`.
 
-Two caveats matter in practice (see [Gaps](#known-gaps)):
-
-1. The watchdog installer **copies** the self-heal scripts but does **not
-   schedule** them; there is no shipped health-check timer unit.
-2. Therefore a freshly provisioned host has self-healing **dormant** until
-   someone separately installs the watchdog *and* schedules the health cron.
+The watchdog installer (`install-lunarwing-watchdog.sh`) is a separate,
+manually-run host-level step focused on the **service-level watchdog** (restarts
+`lunarwing.service` if down). It also copies the self-heal scripts into
+`/usr/local/sbin` but does **not** schedule them — that scheduling is now handled
+by the `add-tenant` `ensure_health_pipeline()` flow.
 
 ## Two distinct "watchdogs" (don't conflate them)
 
@@ -26,8 +25,8 @@ Two caveats matter in practice (see [Gaps](#known-gaps)):
 |---|---|---|
 | Code | `ic/scripts/lunarwing-watchdog*.sh` | `ic-infrastructure-health-check/lunarwing-self-heal.sh` |
 | Scope | Restarts the base `lunarwing.service` if down | Reads health-check reports, remediates any unhealthy component/unit (incl. per-tenant), with grace / backoff / flap-guard / escalation |
-| Scheduled by | `lunarwing-watchdog.timer` (enabled by the installer) | **Nothing by default** — see Gaps |
-| Unit | `ic/systemd/lunarwing-watchdog.{service,timer}`; `ExecStart=/usr/local/sbin/lunarwing-watchdog` | (no shipped unit) |
+| Scheduled by | `lunarwing-watchdog.timer` (enabled by the installer) | `lunarwing-mt-health.timer` / managed cron (scheduled by `add-tenant` via `ensure_health_pipeline()`) |
+| Unit | `ic/systemd/lunarwing-watchdog.{service,timer}`; `ExecStart=/usr/local/sbin/lunarwing-watchdog` | `lunarwing-mt-health.{service,timer}` (systemd) or managed fcron/crontab entry (OpenRC) |
 
 The self-heal pipeline is the subject of the chaos test suite in
 `ic-infrastructure-health-check/tests/`.
@@ -49,9 +48,35 @@ self-heal so a partial report can still drive remediation.
 
 ## How it actually gets onto a host
 
+There are two installation paths:
+
+### Path 1: `mt-admin.sh add-tenant` (primary, automatic)
+
+`lunarwing-mt-admin.sh add-tenant <name>` calls `ensure_health_pipeline()` as part
+of tenant provisioning (unless `--no-health` is passed). This function:
+
+1. Copies the pipeline scripts from `ic-infrastructure-health-check/` to a stable
+   lib dir (`$HEALTH_LIB_DIR`) that survives repo/worktree moves.
+2. Creates the host-level report/state dir.
+3. Writes a config env file (`/etc/lunarwing/health.env`, mode 0600) if absent —
+   includes `LUNARWING_BASE_DIR`, `LUNARWING_SERVICE_MANAGER`, tenant registry
+   path, and MT-hardening flags. If the file already exists, only the
+   `LUNARWING_SERVICE_MANAGER` line is reconciled (preserving operator edits).
+4. Writes a launcher script that sources the env file and execs `cron-wrapper.sh`.
+5. Schedules the launcher:
+   - **systemd**: installs + enables `lunarwing-mt-health.{service,timer}`
+     (default: every 15 min, configurable via `LUNARWING_MT_HEALTH_INTERVAL_MIN`).
+   - **OpenRC**: installs a managed `fcron`/`crontab` entry (managed block).
+
+Because the pipeline is host-global and auto-discovers tenants, the scheduling
+is idempotent — subsequent `add-tenant` calls re-run `ensure_health_pipeline()`
+without duplicating the schedule.
+
+### Path 2: `install-lunarwing-watchdog.sh` (manual, complementary)
+
 `ic/scripts/install-lunarwing-watchdog.sh` (run as root, **once per host**;
-auto-detects systemd / OpenRC / launchd) is the only installer that touches the
-self-heal pieces. On systemd it:
+auto-detects systemd / OpenRC / launchd) is the installer for the **service-level
+watchdog**. On systemd it:
 
 - installs + `enable --now`s `lunarwing-watchdog.timer` and the
   `lunarwing-watchdog.service` → `/usr/local/sbin/lunarwing-watchdog`
@@ -60,19 +85,17 @@ self-heal pieces. On systemd it:
   - `lunarwing-self-heal.sh` → `/usr/local/sbin/lunarwing-self-heal`
   - `cron-wrapper.sh`        → `/usr/local/sbin/lunarwing-health-cron`
 
-The OpenRC path mirrors this. **Note what is absent:** the installer does not
-create or enable any timer/cron for `lunarwing-health-cron`. The watchdog timer
-it enables runs `/usr/local/sbin/lunarwing-watchdog`, i.e. the service-level
-watchdog — not the health → self-heal pipeline.
+The OpenRC path mirrors this. **Note:** the watchdog installer does **not**
+create or enable a timer for the health-cron — that scheduling is now handled by
+the `add-tenant` `ensure_health_pipeline()` flow (Path 1 above). On hosts where
+`add-tenant` hasn't run, scheduling `cron-wrapper.sh` remains a **manual** step
+documented in `ic-infrastructure-health-check/README.md`.
 
-Scheduling `cron-wrapper.sh` is a **manual** step, documented in
-`ic-infrastructure-health-check/README.md` ("Cron / Timer Setup": a user-level
-systemd timer, an hourly `cron.hourly` drop-in, or a crontab line).
+## Multi-tenant provisioning now installs it
 
-## Multi-tenant provisioning does NOT install it
-
-`lunarwing-mt-admin.sh add-tenant <name>` performs exactly these steps
-(`add_tenant()`):
+`lunarwing-mt-admin.sh add-tenant <name>` calls `ensure_health_pipeline()` as
+the final step of tenant provisioning (unless `--no-health` is passed). The full
+`add_tenant()` flow:
 
 1. Allocate a port block (registry)
 2. Create the tenant OS user
@@ -81,10 +104,11 @@ systemd timer, an hourly `cron.hourly` drop-in, or a crontab line).
 5. Start the per-tenant PostgreSQL container
 6. Render the per-tenant init units (`lunarwing-<name>`, `xmpp-bridge-<name>`,
    `lunarwing-proxy-<name>`, weechat adapter, …)
+7. **Call `ensure_health_pipeline()`** — installs + schedules the host-global
+   health-check → self-heal pipeline (covers all tenants automatically).
 
-Neither `lunarwing-mt-admin.sh` nor `ic/scripts/setup-instance.sh` references
-`watchdog`, `self-heal`, `health-check`, or `cron-wrapper`. Tenant lifecycle and
-host-level self-healing are deliberately separate concerns.
+`ic/scripts/setup-instance.sh` (the deprecated single-instance helper) does not
+reference the health pipeline — it predates the MT integration.
 
 ## Coverage model — one host install covers all tenants
 
@@ -102,26 +126,30 @@ installed per tenant:
 
 ## Net effect on a fresh MT host
 
-Self-healing is **off** until a host operator, **once**, does both:
+When provisioning a tenant via `lunarwing-mt-admin.sh add-tenant` (the default,
+no `--no-health`), the host-global health-check → self-heal pipeline is installed
+and scheduled in one step: the operator does not need to separately schedule it.
+The pipeline auto-discovers all current and future tenants, so adding or removing
+tenants requires no self-heal changes.
 
-1. `sudo ic/scripts/install-lunarwing-watchdog.sh` — installs the service-level
-   watchdog and drops the self-heal / health-cron scripts into `/usr/local/sbin`.
-2. Schedules `cron-wrapper.sh` (the health → self-heal loop) on a timer/cron per
-   the health-check README.
+The watchdog installer (`install-lunarwing-watchdog.sh`) remains a separate,
+manually-run step for the **service-level watchdog** (restarts `lunarwing.service`
+if down). It also copies the self-heal scripts but does not schedule them —
+that is handled by `add-tenant`. On hosts that have not run `add-tenant` (e.g.
+single-instance setups), the operator must schedule the pipeline manually per
+`ic-infrastructure-health-check/README.md`.
 
-After that, every current and future tenant on the host is covered automatically;
-adding or removing tenants requires no self-heal changes.
+## Historical gaps (resolved in v1.1.9)
 
-## Known gaps
+The following gaps were documented before `ensure_health_pipeline()` was added
+to `add-tenant`:
 
 - **G1 — self-heal installed but not scheduled.** `install-lunarwing-watchdog.sh`
   copies `lunarwing-self-heal` and `lunarwing-health-cron` to `/usr/local/sbin`
-  but enables no timer for them, and the repo ships no health-check
-  `.timer`/`.service` unit. Running the installer alone leaves the pipeline
-  dormant. A follow-up could ship a `lunarwing-health-check.{service,timer}`
-  (calling `lunarwing-health-cron`) and have the installer enable it.
-- **G2 — no provisioning hook.** There is no `mt-admin` flag (e.g.
-  `--with-self-heal`) or host-bootstrap step that runs the watchdog installer, so
-  the host-level setup is easy to forget when standing up a new MT box.
-
-These are recorded as observations, not commitments.
+  but enables no timer for them. **Resolved:** `add-tenant` now calls
+  `ensure_health_pipeline()` which schedules the pipeline via systemd timer
+  or OpenRC cron.
+- **G2 — no provisioning hook.** There was no `mt-admin` flag or host-bootstrap
+  step that ran the watchdog installer or scheduled the health pipeline.
+  **Resolved:** `add-tenant` now calls `ensure_health_pipeline()` automatically;
+  `--no-health` can opt out.
