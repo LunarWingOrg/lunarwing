@@ -1,7 +1,4 @@
-# Refine
+# Refine libSQL Migration Guide
 
-* Refine actual guide
-
-# Scripts
-
-* make agnostic scripts that anyone can run easily!
+> **TODO.** Refine the libSQL migration guide (`docs/guides/`) and make the
+> migration scripts runtime-agnostic so anyone can run them easily.

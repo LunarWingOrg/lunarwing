@@ -1,14 +1,17 @@
 # Human Delay Mode - Testing Guide
 
+> **Last updated: 2026-07-09.** Supervised mode (`--supervised`) shipped in v1.1.9.
+> Phase 2 features (timeout expiration, gate pipeline full integration, modify UI) remain planned.
+
 ## Quick Start
 
 ### Prerequisites
 
-You need a Rust environment with Cargo. Minimum recommended:
+You need a Rust environment with Cargo. Minimum recommended (as of v1.1.9):
 
 ```bash
-rustc >= 1.75
-cargo >= 1.75
+rustc >= 1.92  # MSRV for LunarWing
+cargo >= 1.92
 ```
 
 Check your version:

@@ -146,7 +146,7 @@ Agent-driven plan and spec documents produced by the superpowers workflow.
 
 Active and forward-looking feature proposals, design docs, and planning. Shipped or superseded
 proposals were archived under [`internal/history/proposals/`](internal/history/proposals/) during
-the reorg.
+the reorg. *(Updated 2026-07-09: reviewed and refreshed for v1.1.9 accuracy.)*
 
 | File | Description |
 |------|-------------|
@@ -203,6 +203,11 @@ the reorg.
 | [`SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md`](proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md) | Session audit: MT admin, DarkIRC, external worker (2026-06-23) |
 | [`UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md`](proposals/UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md) | Upgrade/migrate issues found |
 | [`OLDPROJECT_PORT_ANALYSES/`](proposals/OLDPROJECT_PORT_ANALYSES/) | Pre-fork IronClaw 0.28–0.29 port analyses (5 docs; kept for reference) |
+| [`MT-ONBOARDING-CLI.md`](proposals/MT-ONBOARDING-CLI.md) | MT onboarding CLI (`lunarwing_mt_onboard`) — shipped v1.1.9 (design record) |
+| [`SUPERGATEWAY_MCP.md`](proposals/SUPERGATEWAY_MCP.md) | MCP stdio support gap + supergateway workaround |
+| [`PASEO.MD`](proposals/PASEO.MD) | Paseo support (stub) |
+| [`PAST.MD`](proposals/PAST.MD) | PAST+SS (stub idea) |
+| [`ports_expansion.txt`](proposals/ports_expansion.txt) | Port allocation notes (vision sidecar health, SSH socket) |
 
 ---
 

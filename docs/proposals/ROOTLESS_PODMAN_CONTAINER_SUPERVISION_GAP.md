@@ -2,9 +2,9 @@
 
 *Drafted 2026-06-16, on the experimental rootless-podman + OpenRC multi-tenant
 leg (the `eris` deploy). Companion to
-[`ROOTLESS_WORKER_OPENRC_UNITS.md`](./ROOTLESS_WORKER_OPENRC_UNITS.md) and the
-self-healing series ([`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEMENTS_1.md),
-[`SELF_HEALING_IMPROVEMENTS_2.md`](./SELF_HEALING_IMPROVEMENTS_2.md)).*
+[`ROOTLESS_WORKER_OPENRC_UNITS.md`](../internal/history/proposals/ROOTLESS_WORKER_OPENRC_UNITS.md)
+and the self-healing series (archived under
+[`../internal/history/proposals/`](../internal/history/proposals/)).*
 
 > **Status:** proposal / analysis. **OpenRC leg: still open.** The systemd leg has
 > since closed the equivalent gap (see Status update below).
@@ -23,7 +23,7 @@ self-healing series ([`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEME
 
 The **systemd leg has since closed this exact gap** via **Quadlet `.container`
 units** (`render_pg_quadlet` / `render_worker_quadlet` in `lunarwing-mt-admin.sh`,
-commits `a919de20` / `8b028205`, WS2 of [`MT_SYSTEMD_PARITY.md`](./MT_SYSTEMD_PARITY.md)):
+commits `a919de20` / `8b028205`, WS2 of [`MT_SYSTEMD_PARITY.md`](../internal/history/proposals/MT_SYSTEMD_PARITY.md), archived):
 on systemd + rootless podman the Quadlet-generated `.service` owns the container
 lifecycle with **`Restart=on-failure`** + a start-limit, and the PG Quadlet adds
 **`HealthCmd=pg_isready`** — i.e. systemd-native supervision *and* a real DB-level
@@ -369,12 +369,12 @@ Extend the self-heal harness with a container-specific scenario:
 
 ## 10. Relationship to other docs
 
-- [`ROOTLESS_WORKER_OPENRC_UNITS.md`](./ROOTLESS_WORKER_OPENRC_UNITS.md) — created
+- [`ROOTLESS_WORKER_OPENRC_UNITS.md`](../internal/history/proposals/ROOTLESS_WORKER_OPENRC_UNITS.md) — created
   the worker units this proposal then supervises. That doc closed the
   *visibility* gap (units exist, sweep can see them); this one closes the
   *latency/supervision* gap (recover in seconds, not on the next sweep).
-- [`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEMENTS_1.md) /
-  [`SELF_HEALING_IMPROVEMENTS_2.md`](./SELF_HEALING_IMPROVEMENTS_2.md) — the
+- The self-healing series (`SELF_HEALING_IMPROVEMENTS_1/2.md`, archived under
+  [`../internal/history/proposals/`](../internal/history/proposals/)) — the
   sweep-based engine that remains the backstop here.
 - The broader in-flight review (Map → Recommend → Verify → Synthesize) over the
   whole OpenRC health-check + self-heal + rootless-podman system is expected to

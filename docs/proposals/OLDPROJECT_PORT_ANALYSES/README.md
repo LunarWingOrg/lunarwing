@@ -1,5 +1,10 @@
 # IronClaw Port-Analysis Backlog — Status Index
 
+> **Note:** These are pre-fork IronClaw (upstream) port analyses, kept for reference.
+> LunarWing diverged from IronClaw in February 2026 and is not affiliated with NearAI.
+> Many items listed as "open/deferred" may have been independently implemented or
+> obsoleted by LunarWing's own architecture changes since the fork.
+
 Consolidated status across the four upstream port analyses, **reconciled 2026-06-07** against the
 LunarWing tree. Each analysis file carries its own per-item detail; this is the at-a-glance view.
 Per the v1.1.1 release decision, **all remaining code-level ports are deferred** — see the

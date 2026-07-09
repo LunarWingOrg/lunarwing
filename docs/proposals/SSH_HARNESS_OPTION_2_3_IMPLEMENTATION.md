@@ -237,17 +237,17 @@ No change to `AppComponents` (the `ssh_bridge` field already exists at `app.rs:6
 
 ### 1. Why raw SSH cannot run in the WASM sandbox
 
-WASM tools are `wasm32-wasip2` components under wasmtime with an **empty `WasiCtx`** (`WasiCtxBuilder::new().build()`, `wrapper.rs:180`) — **no filesystem, no env, no network sockets.** The only host capabilities are the 6 functions in the `near:agent/host` WIT interface (`wit/tool.wit:18` — log, now-millis, workspace-read, http-request, tool-invoke, secret-exists); **there is no raw-socket primitive.** Additionally `russh`/`russh-keys` cannot compile to `wasm32` (ring/aws-lc crypto + tokio). SSH needs a bidirectional TCP stream to port 22 plus the ssh-agent Unix socket — **the guest can reach neither.**
+WASM tools are `wasm32-wasip2` components under wasmtime with an **empty `WasiCtx`** (`WasiCtxBuilder::new().build()`, `wrapper.rs:180`) — **no filesystem, no env, no network sockets.** The only host capabilities are the 6 functions in the `lunarwing:agent/host` WIT interface (`wit/tool.wit:18` — log, now-millis, workspace-read, http-request, tool-invoke, secret-exists); **there is no raw-socket primitive.** Additionally `russh`/`russh-keys` cannot compile to `wasm32` (ring/aws-lc crypto + tokio). SSH needs a bidirectional TCP stream to port 22 plus the ssh-agent Unix socket — **the guest can reach neither.**
 
 Therefore the only viable design is: **guest = thin RPC shim; host = the real SSH work.** Add a **new custom host function** (`ssh-exec`) whose implementation drives the *exact same Option 2 `ssh_client.rs`* host-side. The guest just serializes `{host, command}` and calls it.
 
 **Split:**
-- **Guest** (`tools-src/ssh/`): ~50 lines — parse `{host, command}` params, call `near::agent::host::ssh_exec(...)`, marshal the result into the tool `response`.
+- **Guest** (`tools-src/ssh/`): ~50 lines — parse `{host, command}` params, call `lunarwing::agent::host::ssh_exec(...)`, marshal the result into the tool `response`.
 - **Host** (`wrapper.rs`/`host.rs`): resolve the alias against the per-tenant `SSHBridge`, run russh via `ssh_client::connect_and_exec`, verify host key with `HostKeyVerifier`, leak-scan output, return across the boundary. **Keys and the agent never cross into the guest.**
 
 ### 2. New host function, WIT, allowlist, guest
 
-**WIT addition — `ic/wit/tool.wit`, `host` interface (`tool.wit:18`), package `near:agent@0.3.0`:**
+**WIT addition — `ic/wit/tool.wit`, `host` interface (`tool.wit:18`), package `lunarwing:agent@0.3.0`:**
 
 ```wit
 ssh-exec: func(host: string, command: string) -> result<ssh-result, string>;
@@ -256,7 +256,7 @@ record ssh-result { exit-code: s32, stdout: list<u8>, stderr: list<u8> }
 ```
 This is a **breaking interface bump** — every guest tool and the sibling `channel.wit` world regenerate bindings.
 
-**Host impl — `ic/src/tools/wasm/wrapper.rs`, `impl near::agent::host::Host for StoreData`** (follow the `http_request` pattern at `wrapper.rs:326-563`): validate `host` against a new SSH allowlist capability (mirror `http_request`'s `check_http_allowed` → `AllowlistValidator`, `host.rs:255`), then run the SSH exchange on a dedicated current-thread runtime inside `spawn_blocking` (as `http_request` does, `wrapper.rs:475-563`), calling `ssh_client::connect_and_exec`. **Leak-scan `stdout`/`stderr`** before returning (same as HTTP responses, `wrapper.rs:551-556`).
+**Host impl — `ic/src/tools/wasm/wrapper.rs`, `impl lunarwing::agent::host::Host for StoreData`** (follow the `http_request` pattern at `wrapper.rs:326-563`): validate `host` against a new SSH allowlist capability (mirror `http_request`'s `check_http_allowed` → `AllowlistValidator`, `host.rs:255`), then run the SSH exchange on a dedicated current-thread runtime inside `spawn_blocking` (as `http_request` does, `wrapper.rs:475-563`), calling `ssh_client::connect_and_exec`. **Leak-scan `stdout`/`stderr`** before returning (same as HTTP responses, `wrapper.rs:551-556`).
 
 **Plumbing:** thread an `Arc<tokio::sync::RwLock<SSHBridge>>` into `StoreData`/`HostState` at instantiation (analogous to how `host_credentials`/secrets are threaded today), plus a new `SshCapability` in `Capabilities`, populated from a `capabilities.json` `ssh` block by the loader (`loader.rs:221-266`). The allowlist should reuse the `[[ssh.hosts]]` aliases as the reachable set.
 
@@ -266,7 +266,7 @@ This is a **breaking interface bump** — every guest tool and the sibling `chan
 
 **New:** `wit/tool.wit` addition; host impl in `wrapper.rs` + capability plumbing in `host.rs`/`loader.rs`; `tools-src/ssh/` (guest crate + capabilities); `registry/tools/ssh.json`; **reuses** Option 2's `ssh_client.rs` verbatim host-side.
 
-**Data flow:** guest `execute` → `near::agent::host::ssh_exec(host, command)` → host validates alias against SSH allowlist → resolves `SSHHostConfig` (`ssh.rs:404`) + loads key (`ssh_secrets.rs:121`) → `ssh_client::connect_and_exec` (russh, `check_server_key` → `HostKeyVerifier` `ssh_hostkeys.rs:267`) → leak-scan → `ssh-result` back across the boundary → guest marshals to `response`.
+**Data flow:** guest `execute` → `lunarwing::agent::host::ssh_exec(host, command)` → host validates alias against SSH allowlist → resolves `SSHHostConfig` (`ssh.rs:404`) + loads key (`ssh_secrets.rs:121`) → `ssh_client::connect_and_exec` (russh, `check_server_key` → `HostKeyVerifier` `ssh_hostkeys.rs:267`) → leak-scan → `ssh-result` back across the boundary → guest marshals to `response`.
 
 **Security:** the guest has no key access, no socket, no agent — all privileged work is host-side (mirrors `credential_injector.rs`'s zero-exposure model, `credential_injector.rs:274`). Egress is gated by the new SSH allowlist (reusing configured aliases). Approval `Always` is enforced on the *outer* WASM tool wrapper (same `Tool` machinery). Honest caveat from research: **the WASM sandbox provides essentially no isolation for the actual SSH operation** — it only sandboxes argument marshalling, because russh must run host-side regardless.
 

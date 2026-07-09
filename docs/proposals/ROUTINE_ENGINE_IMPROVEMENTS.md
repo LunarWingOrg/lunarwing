@@ -1,8 +1,10 @@
 # Routine Engine Improvements
 
+> **Last updated: 2026-07-09 (v1.1.9)**
+
 ## Overview
 
-Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) identified 8 improvement areas. Three have been implemented (#1, #2, #3); the remaining five are open proposals.
+Systematic review of the routine engine (`ic/src/agent/routine_engine.rs`) identified 8 improvement areas. Three have been implemented in v1.1.9 (#1, #2, #3); the remaining five are open proposals.
 
 ## Completed
 

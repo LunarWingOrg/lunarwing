@@ -1,5 +1,10 @@
 # External Worker Security Audit (2026-06-23)
 
+> **Last updated: 2026-07-09 (v1.1.9).** The Codex worker (`codex4lunarwing/`) was removed
+> in v1.1.9; this audit is retained for historical reference. The orchestrator-side fixes
+> (TaskContext population, credential cleanup audit) apply to the remaining workers
+> (nanocode, pebble, opencode).
+
 ## Context
 External worker enhancement implementation revealed four problems:
 1. **Pool release gap** – connections never returned to pool after task completion

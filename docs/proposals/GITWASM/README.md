@@ -1,6 +1,11 @@
-# ironclaw-md-git - Complete WASM Tool Code (Gitoxide Version)
+# Git WASM Tool Proposal (Gitoxide Version)
 
-## There are actually two versions of this tool, but I have not commited them to the repo yet.
+> **Note:** This proposal uses the pre-fork crate name `ironclaw-md-git`.
+> If implemented, the crate should be renamed to `lunarwing-md-git` or
+> placed under `ic/tools-src/git/` following the current naming conventions.
+> The WASM tool interface should use `lunarwing:agent` (not `near:agent`).
+
+## There are actually two versions of this tool, but I have not committed them to the repo yet.
 
 
 ## Cargo.toml
