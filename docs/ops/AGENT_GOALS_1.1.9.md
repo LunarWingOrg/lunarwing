@@ -14,7 +14,7 @@ NOTE: TODO: edit dev autonomous loop routine to use this file. ensure that check
 7. [x] inspect recent changes made to cargo crates sinced 1.1.8 and attempt to identify any problems in the builds of the binaries OR the WASM tools and channels. Document all findings to a document in docs.
 8. [x] Finish going through all the documents under architecture directory in docs/ and update all outdated documentation. Then, consolidate documents if possible.
 9. [x] Go through all documents under bugs directory in docs/ and update all outdated documentation. Then, consolidate documents.
-10. [ ] Update README.md - purge all outdated sections. Include the new MT Admin CLI wrapper into the README.md as part of the new, improved up to date getting started section. You may also refer to the actual mt admin setup script which the new CLI wrapper references since it offers far greater control.
+10. [x] Update README.md - purge all outdated sections. Include the new MT Admin CLI wrapper into the README.md as part of the new, improved up to date getting started section. You may also refer to the actual mt admin setup script which the new CLI wrapper references since it offers far greater control.
 11. [ ] Improve accuracy of RELEASE-v1.1.9.0.md (from item #15)
 12. [ ] Go through all documents under proposals directory in docs/ and update all outdated documentation. Then, consolidate documents.
 13. [ ] Go through all documents under reviews directory in docs/ and update all outdated documentation. Then, consolidate documents.
