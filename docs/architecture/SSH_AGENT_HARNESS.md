@@ -1,6 +1,6 @@
 # SSH Agent Harness
 
-**Status:** As-built for 1.1.8 (verified against source 2026-07-01)
+**Status:** As-built (verified against source 2026-07-01; reviewed for 1.1.9)
 **Code:** `ic/src/bridge/ssh*.rs`, `ic/src/config/ssh.rs`
 **Operator guide:** [`docs/ops/SSH-HARNESS-SETUP.md`](../ops/SSH-HARNESS-SETUP.md)
 **Delivery mechanisms** (how the agent actually runs SSH work — worker mode, the `ssh`/`ssh_git` built-in tools, the WASM `ssh` tool): [`SSH_DELIVERY_MECHANISMS.md`](SSH_DELIVERY_MECHANISMS.md)
