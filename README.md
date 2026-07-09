@@ -341,6 +341,10 @@ Full documentation index: [docs/README.md](docs/README.md)
 
 [![Chat on IRC](https://img.shields.io/badge/IRC-%23lunarwing-00b0aa?style=for-the-badge&labelColor=000000)](https://web.libera.chat/?channel=#lunarwing)
 
+## Blog (Announcements for the LunarWing project, Philosophy, Discussion regarding Technology and Agorism)
+
+https://blog.lunarwing.org/
+
 ## Codeberg
 
 Mirrored to Codeberg as of 2026-07-07
