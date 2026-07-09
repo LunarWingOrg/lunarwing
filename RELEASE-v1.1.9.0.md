@@ -2,13 +2,11 @@
 
 **Release Date:** TBD
 
-> Codename *Kiyome* (きよめ/清め) means purification or cleansing. v1.1.9.0 is an odd-numbered cleanup release: it removes stale branding, unsupported provider and channel surfaces, dead vendored code, and several upgrade hazards while keeping the v1 line stable for operators.
+> Codename *Kiyome* (きよめ/清め) means purification or cleansing. v1.1.9.0 is a mainly a cleanup release: it removes stale branding, unsupported provider and channel surfaces, dead vendored code, and several upgrade hazards while keeping the v1 line stable for operators. It does, however, introduce a new interactive tenant management system that allows new users as well as existing ones to manage new and existing multi-tenant agents in a far simpler manner. In the future, a web based version of this will also be added. This greatly simplifies the onboarding process for new users and will help ensure upgrades are easier as well! 
 
 ## Overview
 
 v1.1.9.0 is the first release to use the four-part release-note version. The Rust crates and package manifests remain at `1.1.9`; the release itself is documented as `1.1.9.0` because any `1.1.9.x` releases will be small hotfixes, and the `1.1.9.x` line is the final LunarWing v1 release line before LunarWing v2.
-
-This release follows the odd-release cadence from `docs/ops/RELEASE_CADENCE.md`: bug fixes, security hardening, polish, migration support, and cleanup rather than a broad feature release.
 
 ## Highlights
 
@@ -95,9 +93,9 @@ This release follows the odd-release cadence from `docs/ops/RELEASE_CADENCE.md`:
 - Added `ic/scripts/branch-test-loop.sh` for branch testing with snapshot-based WASM reuse.
 - Updated old worker test scripts and documented their status in `docs/ops/TEST-SCRIPTS-STATUS.md`.
 - Added the Codeberg mirror workflow.
-- Docker image publishing was repointed to the `ggmethos` namespace.
+- Old docker image publishing replaced
 - Obsolete GCP VM bootstrap files were removed.
-- The release-plz `nearai` owner guard was removed.
+- Obsolete owner guard was removed.
 
 ### Dependency and Crate Updates
 
@@ -122,8 +120,8 @@ This release follows the odd-release cadence from `docs/ops/RELEASE_CADENCE.md`:
 
 1. Back up PostgreSQL before upgrading. v1.1.9.0 has a small data migration, not a broad schema expansion, but DB backup remains required practice.
 2. Re-render tenant units after upgrading to pick up renamed WeeChat and DarkIRC paths. The old root symlinks are a v1.1.9 compatibility bridge only.
-3. Reconfigure removed LLM providers through `openai_compatible`, `ollama`, LunarWing Cloud, OpenAI Codex, or a user provider override.
-4. Do not confuse the removed `codex4lunarwing/` external worker with the still-present `openai_codex` LLM backend.
+3. Reconfigure removed LLM providers through `openai_compatible`, `ollama`, `LunarWing Cloud`, OpenAI Codex, or a user provider override.
+4. Do not confuse the removed `codex4lunarwing/` external worker with the still-present `openai_codex` LLM backend (pending removal) 
 5. New tenants do not get the TensorZero proxy by default. Use `--enable-proxy` only when you intentionally want the per-tenant proxy service.
 6. Nanocode worker builds now need network access to clone upstream Nanocode unless your build environment provides a cached or mirrored source path.
 7. Use `python3 -m lunarwing_mt_onboard` for new multi-tenant provisioning. `setup-instance.sh` now warns that it is deprecated unless `LUNARWING_ONBOARD_LEGACY_OK=1` is set.
@@ -151,7 +149,6 @@ This list is the release-note view of the important carried issues. Some older d
 - `ssh_git` AcceptFirst pinning is not durable because its known-hosts file is ephemeral. Prefer `Strict` with a pinned `known_host_key`.
 - XMPP inbound file transfer has implementation coverage, but live end-to-end validation against real clients is still pending.
 - OMEMO device trust may still require trusting the agent device from a client.
-- The WeeChat render-units / health-glob footgun remains: optional or stopped WeeChat backend services can be classified as critical and flap under self-heal.
 - Rootless worker workspace ownership still relies on permissive workspace permissions; UID pinning remains deferred.
 - `podman save | load` image distribution remains slow for worker images.
 - Rootless container crash recovery still depends on health/self-heal cadence rather than immediate parent supervision.
@@ -161,11 +158,4 @@ This list is the release-note view of the important carried issues. Some older d
 - Kawarimi cross-host migration remains PostgreSQL-only and is a cutover with tenant downtime.
 - `/api/logs/download` exists as a backend endpoint, but the gateway UI still lacks a download button.
 - DarkIRC remains opt-in and still has the carried PM length limitation from DarkFi event metering.
-- Multica remains experimental.
-
-## Verification Notes
-
-- Release notes were drafted from the current tree against `v1.1.8..HEAD`.
-- Provider, worker, Telegram, SSH, migration, and known-issue claims were checked against current code/manifests/scripts where docs were stale.
-- No cargo build, cargo check, or cargo test was run for this docs-only change.
-
+- Multica bridge remains experimental.
