@@ -16,7 +16,7 @@ NOTE: TODO: edit dev autonomous loop routine to use this file. ensure that check
 9. [x] Go through all documents under bugs directory in docs/ and update all outdated documentation. Then, consolidate documents.
 10. [x] Update README.md - purge all outdated sections. Include the new MT Admin CLI wrapper into the README.md as part of the new, improved up to date getting started section. You may also refer to the actual mt admin setup script which the new CLI wrapper references since it offers far greater control.
 11. [x] Improve accuracy of RELEASE-v1.1.9.0.md (from item #15)
-12. [ ] Go through all documents under proposals directory in docs/ and update all outdated documentation. Then, consolidate documents if deemed necessary. 
+12. [x] Go through all documents under proposals directory in docs/ and update all outdated documentation. Then, consolidate documents if deemed necessary. 
 13. [ ] Go through all documents under reviews directory in docs/ and update all outdated documentation. Then, consolidate documents.
 14. [ ] Go through all documents under guides directory in docs/ and update all outdated documentation. Then, consolidate documents.
 15. [x] Write up FIRST DRAFT release notes (at root of repo) for v1.1.9.0 (note the version schema change) explaining all relevant changes since v1.1.8 as well as revising and including an ACCURATE VERSION OF `known issues list`. Use previous release notes in docs/release for reference as to how to write up this document. The codename for this release is: `Kiyome (きよめ/清め)` - The file you write will be RELEASE-v1.1.9.0.md and should be written to the ROOT of the repo.

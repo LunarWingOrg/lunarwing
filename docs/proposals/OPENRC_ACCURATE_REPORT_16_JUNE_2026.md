@@ -3,8 +3,8 @@
 *2026-06-16. Recalibrated from a 49-agent automated review against **read-only
 verification of the live host**. Companion to
 [`ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md`](./ROOTLESS_PODMAN_CONTAINER_SUPERVISION_GAP.md)
-and the self-healing series ([`SELF_HEALING_IMPROVEMENTS_1.md`](./SELF_HEALING_IMPROVEMENTS_1.md),
-[`SELF_HEALING_IMPROVEMENTS_2.md`](./SELF_HEALING_IMPROVEMENTS_2.md)).*
+and the self-healing series (archived under
+[`../internal/history/proposals/`](../internal/history/proposals/)).*
 
 > **Status:** analysis / proposal. No code changed by this document.
 > **Scope:** the experimental rootless-podman + OpenRC multi-tenant leg (`eris`,
@@ -70,8 +70,8 @@ report's proposals:**
   on `MT_ROOTLESS` so it runs on the OpenRC leg too). This is most of **Rank 11**;
   the per-tenant `sudo -u <t> podman info` *store* check is still missing.
 
-**systemd-only — does NOT change the OpenRC leg, but closes the same gaps on the
-other leg** (see [`MT_SYSTEMD_PARITY.md`](./MT_SYSTEMD_PARITY.md)):
+**systemd-only — does NOT change the OpenRC leg, but closes the same gaps on
+the other leg** (see [`MT_SYSTEMD_PARITY.md`](../internal/history/proposals/MT_SYSTEMD_PARITY.md), archived):
 
 - **Quadlet `.container` supervision** (`render_pg_quadlet` / `render_worker_quadlet`,
   `Restart=on-failure` + start-limit) — the systemd analog of **Rank 30** and of

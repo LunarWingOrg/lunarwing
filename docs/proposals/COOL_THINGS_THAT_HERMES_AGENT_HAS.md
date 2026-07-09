@@ -3,6 +3,17 @@
 > Compiled by Kumogakure  
 > Based on a thorough read of the v1.0.8-dev STAGING codebase on 2026-05-27.
 > Written for sun and Baud.
+>
+> **Update 2026-07-09:** Several suggestions from this document have since been
+> implemented in LunarWing:
+> - **E-1 Human Delay / Approval Mode** → shipped as `--supervised` mode (v1.1.9).
+> - **D-1 Self-Healing Infrastructure Watchdog** → shipped: auto-scheduled
+>   infrastructure health-check + self-heal pipeline (host-level, as of v1.1.9).
+> - **A-2 Outbound URL Allowlist** → partially addressed: the WASM sandbox proxy
+>   already has `DomainAllowlist`; the built-in HTTP tool SSRF protections are
+>   documented in `HTTP_TOOL_SSRF_PROTECTIONS.md`.
+>
+> The suggestions below remain valid as a roadmap document.
 
 ---
 

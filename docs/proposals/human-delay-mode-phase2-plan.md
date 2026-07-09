@@ -1,6 +1,6 @@
 # Human Delay Mode - Phase 2 Plan
 
-**Status**: Planned, pending Phase 1 verification first.
+**Status**: Planned, pending Phase 1 verification first. *(As of v1.1.9, Phase 1 supervised mode `--supervised` is shipped and live. Phase 2 remains planned.)*
 **Goal**: Complete the supervised mode experience with timeout integration, UI options, and robust testing.
 
 ## Phase 2 Scope

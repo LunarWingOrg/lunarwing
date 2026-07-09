@@ -1,7 +1,9 @@
 # MT Onboarding CLI — Interactive Multi-Tenant Provisioning
 
 **Date:** 2026-07-06
-**Status:** Design proposal, pending review
+**Status:** ✅ **Shipped in v1.1.9.** The `lunarwing_mt_onboard` CLI is live.
+See `README.md` → *Instance Setup* for the current usage guide.
+This document is retained as the original design record.
 **Target:** New directory `lunarwing_mt_onboard/` at repo root
 **Origin:** Item #11 of `docs/ops/GOALS_1.1.9.md` — enhance onboarding process for new users and fresh tenants with an interactive CLI application.
 

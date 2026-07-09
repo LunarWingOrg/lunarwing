@@ -1,6 +1,6 @@
 # Multi-Tenant Upgrade: v1.1.0 → v1.1.4 ("Phoenix") on systemd
 
-**Status:** Proposal / runbook for the **rootless-adopt v1.1.0 → v1.1.4 flip** — still **pending operator go-ahead / not yet live-validated**. (Separately, the *same-host* v1.0.9 → v1.1.2 upgrade via `ic/scripts/upgrade-tenant-version.sh` has been **live-validated on a production tenant** — that is a different mechanism from the rootful → rootless flip this proposal covers.)
+**Status:** Proposal / runbook for the **rootless-adopt v1.1.0 → v1.1.4 flip** — still **pending operator go-ahead / not yet live-validated**. (Separately, the *same-host* v1.0.9 → v1.1.2 upgrade via `ic/scripts/upgrade-tenant-version.sh` has been **live-validated on a production tenant** — that is a different mechanism from the rootful → rootless flip this proposal covers.) *(Note: as of v1.1.9, the port schema has advanced to v11; the v5→v6 migration described here was the state at v1.1.4.)*
 **Date:** 2026-06-18
 **Source version:** `v1.1.0` (`17d0feb1`)
 **Target version:** `v1.1.4` (`700406d9`, = `release/v1.1.4`; contained in `staging`)
