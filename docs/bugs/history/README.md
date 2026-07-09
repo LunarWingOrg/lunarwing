@@ -7,7 +7,7 @@ active bug tracker index is at [`../README.md`](../README.md).
 |-----|------------|
 | [BUG-FIXED-LAPSE.md](BUG-FIXED-LAPSE.md) | `<function=NAME>` tool-call dialect recovered before response cleaning (`reasoning.rs`, commit `7a9aca2c`) |
 | [BUG-FIXED-wasm-tools-not-found-on-build.md](BUG-FIXED-wasm-tools-not-found-on-build.md) | MT `build-tenant --with-wasm` now resolves the tenant's `~/.cargo/bin/wasm-tools` instead of root's PATH |
-| [BUG-FIXED-WEECHAT-WARNINGS.md](BUG-FIXED-WEECHAT-WARNINGS.md) | WeeChat relay crate warnings resolved |
+| [BUG-FIXED-WEECHAT-WARNINGS.md](BUG-FIXED-WEECHAT-WARNINGS.md) | Unused import fixed; `rand_check` stub (Low) still open |
 | [BUG-FIXED-workspace-concurrency-fixes-v1.1.0.md](BUG-FIXED-workspace-concurrency-fixes-v1.1.0.md) | Fixed in v1.1.0 (migration V21 + atomic workspace ops) |
 | [WEECHAT-NO-SECRET-ACCESS.md](WEECHAT-NO-SECRET-ACCESS.md) | Channel messages resolve under the owner credential scope (`resolve_message_scope`, `wrapper.rs:768`) |
 | [XMPP-OMEMO-BUG-TO-DO.md](XMPP-OMEMO-BUG-TO-DO.md) | OMEMO MUC fallback-spam / stuck-loop appear resolved; reopen if they recur |

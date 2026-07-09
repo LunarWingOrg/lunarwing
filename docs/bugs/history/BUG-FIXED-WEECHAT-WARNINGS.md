@@ -1,19 +1,18 @@
-# BUG: WeeChat relay crate — pre-existing warnings + `rand_check` latent bug
+# BUG: WeeChat relay crate — unused import (fixed) + `rand_check` latent bug (open)
 
-**Status:** Open (Low) — verified 2026-06-19
-**Crate:** `ironclaw_weechat_wss/weechat_relay` (WeeChat WSS WASM channel source)
+**Status:** Partially fixed (verified 2026-07-09) — the unused `HttpEndpointConfig` import has
+been removed. The `rand_check` stub remains (see below).
+**Crate:** `lunarwing_weechat_wss/weechat_relay` (WeeChat WSS WASM channel source)
 
-Two pre-existing issues in `ironclaw_weechat_wss/weechat_relay/src/lib.rs`, originally noticed
-in passing during an unrelated change and left as out-of-scope.
+## 1. ~~Unused import~~ (fixed)
 
-## 1. Unused import (cosmetic)
-
-`HttpEndpointConfig` is imported (around line 47) but not otherwise used in the file, producing
-an `unused_imports` warning. Remove it from the `use` list.
+~~`HttpEndpointConfig` is imported but not otherwise used in the file, producing an
+`unused_imports` warning.~~ **Fixed** — the import has been removed from
+`lunarwing_weechat_wss/weechat_relay/src/lib.rs`.
 
 ## 2. `rand_check` ignores its argument (latent bug)
 
-`rand_check(probability: f64) -> bool` (line ~1766) never reads `probability`; the body is a
+`rand_check(probability: f64) -> bool` (line ~1762) never reads `probability`; the body is a
 stub that unconditionally returns `false`:
 
 ```rust

@@ -12,11 +12,11 @@
 
 ## Symptoms
 
-All 6 tests error during the `installed_gmail` fixture setup. The fixture attempts to install the `gmail` WASM extension via the `/api/extensions/install` endpoint, which tries to download the WASM artifact from `https://github.com/nearai/ironclaw/releases/download/v0.18.0/gmail-0.2.0-wasm32-wasip2.tar.gz`. The download fails because the test environment cannot reach the internet without a proxy.
+All 6 tests error during the `installed_gmail` fixture setup. The fixture attempts to install the `gmail` WASM extension via the `/api/extensions/install` endpoint, which tries to download the WASM artifact. The download fails because the test environment cannot reach the internet without a proxy.
 
 ```
 AssertionError: Install failed: Primary install failed: Download failed: error sending request
-for url (https://github.com/nearai/ironclaw/releases/download/v0.18.0/gmail-0.2.0-wasm32-wasip2.tar.gz);
+for url (WASM artifact download URL);
 fallback install also failed: Installation failed: 'gmail' requires building from source.
 ```
 
@@ -24,7 +24,7 @@ The tests themselves validate OAuth URL parameter formatting (client_id format, 
 
 ## Root Cause
 
-Same as the `test_wasm_lifecycle.py` failures: the lunarwing daemon started by conftest.py does not have proxy access (`ext_proxy`) configured, so all WASM artifact downloads from GitHub fail. The fallback build-from-source path also fails because `wasm-tools` / `cargo-component` are not installed.
+Same as the `test_wasm_lifecycle.py` failures: the lunarwing daemon started by conftest.py does not have proxy access (`ext_proxy`) configured, so all WASM artifact downloads fail. The fallback build-from-source path also fails because `wasm-tools` / `cargo-component` are not installed.
 
 ## Possible Fixes
 
