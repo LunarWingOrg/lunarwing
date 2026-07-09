@@ -111,7 +111,7 @@ pub struct Settings {
     pub secrets_master_key_hex: Option<String>,
 
     // === Step 3: Inference Provider ===
-    /// LLM backend: "lunarwing_cloud", "ollama", "openai_compatible", "openai_codex".
+    /// LLM backend: "lunarwing_cloud", "ollama", "openai_compatible".
     #[serde(default)]
     pub llm_backend: Option<String>,
 

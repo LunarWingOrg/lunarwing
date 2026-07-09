@@ -1363,14 +1363,9 @@ impl SetupWizard {
             println!();
 
             let is_known = current == "lunarwing_cloud"
-                || current == "openai_codex"
                 || registry.is_known(&current);
 
             if is_known && confirm("Keep current provider?", true).map_err(SetupError::Io)? {
-                if current == "openai_codex" {
-                    print_info("Keeping existing OpenAI Codex configuration.");
-                    return Ok(());
-                }
                 return self.run_provider_setup(&current, &registry).await;
             }
 
@@ -1430,16 +1425,6 @@ impl SetupWizard {
                 .unwrap_or(false),
         });
 
-        entries.push(ProviderEntry {
-            id: "openai_codex".to_string(),
-            label: make_label(
-                "openai_codex",
-                "OpenAI Codex",
-                "ChatGPT subscription (Plus/Pro/Max)",
-            ),
-            detected: false,
-        });
-
         for def in &selectable {
             let display_name = def
                 .setup
@@ -1483,10 +1468,6 @@ impl SetupWizard {
     ) -> Result<(), SetupError> {
         if provider_id == "lunarwing_cloud" {
             return self.setup_lunarwing_cloud().await;
-        }
-
-        if provider_id == "openai_codex" {
-            return self.setup_openai_codex().await;
         }
 
         let def = registry
@@ -1712,29 +1693,6 @@ impl SetupWizard {
         self.llm_api_key = Some(SecretString::from(key_str.to_string()));
 
         print_success(&format!("{display_name} configured"));
-        Ok(())
-    }
-
-    /// OpenAI Codex (ChatGPT subscription) setup: device code OAuth flow.
-    async fn setup_openai_codex(&mut self) -> Result<(), SetupError> {
-        self.settings.llm_backend = Some("openai_codex".to_string());
-        if self.settings.selected_model.is_some() {
-            self.settings.selected_model = None;
-        }
-
-        use crate::config::OpenAiCodexConfig;
-        use crate::llm::OpenAiCodexSessionManager;
-
-        let config = OpenAiCodexConfig::default();
-
-        let mgr = OpenAiCodexSessionManager::new(config).map_err(|e| {
-            SetupError::Config(format!("OpenAI Codex session manager init failed: {}", e))
-        })?;
-        mgr.device_code_login().await.map_err(|e| {
-            SetupError::Config(format!("OpenAI Codex authentication failed: {}", e))
-        })?;
-
-        print_success("OpenAI Codex configured (ChatGPT subscription)");
         Ok(())
     }
 
@@ -3100,7 +3058,6 @@ impl SetupWizard {
             Some("lunarwing_cloud") => "LunarWing Cloud".to_string(),
             Some("ollama") => "Ollama".to_string(),
             Some("openai_compatible") => "OpenAI-compatible".to_string(),
-            Some("openai_codex") => "OpenAI Codex".to_string(),
             Some(other) => other.to_string(),
             None => "unknown".to_string(),
         };

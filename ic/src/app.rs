@@ -857,11 +857,11 @@ impl AppBuilder {
         self.init_secrets().await?;
 
         // Post-init validation: backends with dedicated config (lunarwing_cloud,
-        // bedrock, openai_codex) handle their own credential resolution. For registry-based
+        // bedrock) handle their own credential resolution. For registry-based
         // backends, fail early if no provider config was resolved.
         if !matches!(
             self.config.llm.backend.as_str(),
-            "lunarwing_cloud" | "bedrock" | "openai_codex"
+            "lunarwing_cloud" | "bedrock"
         ) && self.config.llm.provider.is_none()
         {
             let backend = &self.config.llm.backend;

@@ -310,7 +310,7 @@ pub enum Command {
     /// Authenticate with a provider (re-login)
     #[command(
         about = "Authenticate with a provider",
-        long_about = "Re-authenticate with an LLM provider.\nExample: lunarwing login --openai-codex"
+        long_about = "Re-authenticate with an LLM provider."
     )]
     Login {
         /// Authenticate with OpenAI Codex (ChatGPT subscription)

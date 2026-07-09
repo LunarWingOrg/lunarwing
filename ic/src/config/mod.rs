@@ -62,7 +62,7 @@ pub use self::tunnel::TunnelConfig;
 pub use self::wasm::WasmConfig;
 pub use self::workspace::WorkspaceConfig;
 pub use crate::llm::config::{
-    LlmConfig, LunarWingCloudConfig, OpenAiCodexConfig, RegistryProviderConfig,
+    LlmConfig, LunarWingCloudConfig, RegistryProviderConfig,
 };
 pub use crate::llm::session::SessionConfig;
 
