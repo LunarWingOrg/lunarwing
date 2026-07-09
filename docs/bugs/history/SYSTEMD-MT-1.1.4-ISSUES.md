@@ -32,7 +32,7 @@ crash-loop chaos case + `SubState` mock, and a new `tests/test-health-systemd.sh
 | F4 | Medium | `add-tenant` is **not idempotent/resumable** — a mid-flow failure can't be re-run (`already has ports allocated`) | 🟢 `ports_allocate` reuses existing block (resume) |
 | F5 | Low–Med | self-heal `is-active` post-restart **verify false-positives** on a crash-looping (auto-restart) unit | 🟢 verify rejects `auto-restart`/`failed` substate |
 | F6 | Medium | `remove-tenant --purge` **falsely reports user removal** — `userdel` races session teardown, failure swallowed | 🟢 fixed + **live-validated** — terminate-user + wait + honest exit-code check; `--purge` now actually removes the user + home (verified: account & `/home/<t>` gone) |
-| F7 | Low | `--with-wasm` build breaks on the `telegram` tool — `core2 0.4.0` is **yanked** (transitive via `glass_pumpkin`); Telegram is an unsupported channel | 🔴 open (upstream dep) |
+| F7 | Low | `--with-wasm` build breaks on the `telegram` tool — `core2 0.4.0` is **yanked** (transitive via `glass_pumpkin`); Telegram is an unsupported channel | 🟢 moot — the `telegram` tool source directory (`ic/tools-src/telegram`) has been removed; this issue no longer applies |
 | F8 | Medium | nanocode/pebble worker image build fails under podman — the build-RUN container's `apt` can't reach the internet (host has no IPv6 route; the default build network can't route IPv4 out) | 🟢 fixed — `--network=host` on the podman worker builds; both images now build (apt reaches the net via the host netns) |
 | F9 | — | ~~`build-tenant` exits 0 on a worker-build failure~~ — **NOT a bug**: `build-tenant` `die`s (exit 1) and propagates correctly. The observed "exit 0" was a test-harness artifact (a trailing `echo "...$?"` in the background wrapper masked the real exit). | 🟢 invalid |
 | F10 | Medium | `_ctr` runs `sudo -u <tenant>` without a tenant-traversable CWD → "cannot chdir" → the rootless pg readiness gate **always** times out (spurious 120s WARNING) | 🟢 fixed — `cd /` in `_ctr` (gate now ~3s, "ready via quadlet") |
@@ -295,8 +295,8 @@ surfaced **F11** (6 GB nanocode image / `save\|load` distribution under disk pre
 succeeded on retry) and **F12** (worker Quadlet `KillMode=process` rejected by the
 generator → no `.service`). With F8 + F12 fixed (and the images distributed), the **full
 tenant is all-green: 8/8 units healthy** — `pg`, `proxy`, daemon, `weechat`,
-`weechat-adapter`, `xmpp-bridge`, **nanocode**, **pebble**. Only F7 (telegram, unsupported)
-and the F11 image-size follow-up remain.
+`weechat-adapter`, `xmpp-bridge`, **nanocode**, **pebble**. F7 (telegram) is now moot — the
+telegram tool source was removed. Only the F11 image-size follow-up remains.
 
 ## Validation plan for the fixes
 

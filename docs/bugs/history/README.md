@@ -19,5 +19,5 @@ status in the doc (🟢 fixed · 🟡 workaround · 🔴 open).
 
 | Doc | Scope | Open items remaining |
 |-----|-------|----------------------|
-| [SYSTEMD-MT-1.1.4-ISSUES.md](SYSTEMD-MT-1.1.4-ISSUES.md) | Arch / systemd rootless-podman Quadlet MT pass (F1–F12) | F7 only — `telegram` tool build (yanked `core2` dep; channel is unsupported) |
+| [SYSTEMD-MT-1.1.4-ISSUES.md](SYSTEMD-MT-1.1.4-ISSUES.md) | Arch / systemd rootless-podman Quadlet MT pass (F1–F12) | none (F7 telegram tool removed → moot; all others fixed/documented) |
 | [OPENRC-MT-1.1.4-ISSUES.md](OPENRC-MT-1.1.4-ISSUES.md) | Gentoo / OpenRC rootless-podman MT fresh-machine pass (O1–O5) | none (all fixed / documented) |
