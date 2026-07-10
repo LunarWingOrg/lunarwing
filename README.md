@@ -365,8 +365,22 @@ Full documentation index: [docs/README.md](docs/README.md)
 
 https://blog.lunarwing.org/
 
-## Codeberg
+## Important Information
+
+This is the v1 branch of LunarWing, which will be supported and updated for at least some period of time.
+
+However, going forward, new features will be carried forth in version 2:
+
+Development repo for version 2 can be found [here](https://codeberg.org/LunarWing/LunarWing_v2)
+
+Upgrades to v2 from v1 (1.1.9.0+) will be completely supported.
+
+## LunarWing v1 mirrored to Codeberg
 
 Mirrored to Codeberg as of 2026-07-07
 
 https://codeberg.org/LunarWing/lunarwing
+
+## LunarWing v2 mirrored to Github
+
+Actual development for v2 is on [Codeberg](https://codeberg.org/LunarWing/LunarWing_v2) but a Github mirror can be found [here](https://github.com/LunarWingOrg/lunarwing2)
