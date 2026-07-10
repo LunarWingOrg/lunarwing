@@ -129,6 +129,5 @@ pub(crate) fn build_lunarwing_cloud_model_fetch_config() -> crate::config::LlmCo
         llm_turn_budget_secs: 270,
         cheap_model: None,
         smart_routing_cascade: false,
-        openai_codex: None,
     }
 }

@@ -239,14 +239,7 @@ async fn add_server(args: McpAddArgs) -> anyhow::Result<()> {
         config = config.with_oauth(oauth);
     }
 
-    // Validate
-    config.validate()?;
-
-    // Save (DB if available, else disk)
-    let db = connect_db().await;
-    let mut servers = load_servers(db.as_deref()).await?;
-    servers.upsert(config);
-    save_servers(db.as_deref(), &servers).await?;
+    persist_server(config, true).await?;
 
     println!();
     println!("  ✓ Added MCP server '{}'", name);
@@ -634,6 +627,23 @@ async fn save_servers(
     } else {
         config::save_mcp_servers(servers).await
     }
+}
+
+/// Persist an MCP server configuration using the CLI's database-or-disk rules.
+pub(super) async fn persist_server(config: McpServerConfig, overwrite: bool) -> anyhow::Result<()> {
+    config.validate()?;
+
+    let db = connect_db().await;
+    let mut servers = load_servers(db.as_deref()).await?;
+    if !overwrite && servers.get(&config.name).is_some() {
+        anyhow::bail!(
+            "MCP server '{}' is already configured. Use --force to overwrite.",
+            config.name
+        );
+    }
+    servers.upsert(config);
+    save_servers(db.as_deref(), &servers).await?;
+    Ok(())
 }
 
 /// Initialize and return the secrets store.

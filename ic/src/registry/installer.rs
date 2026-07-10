@@ -837,6 +837,7 @@ mod tests {
             tags: Vec::new(),
             hidden: None,
             url: None,
+            transport: None,
             auth: None,
         }
     }

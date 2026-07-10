@@ -203,6 +203,7 @@ the reorg. *(Updated 2026-07-09: reviewed and refreshed for v1.1.9 accuracy.)*
 | [`SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md`](proposals/SESSION-AUDIT-MT-DARKIRC-EWE-2026-06-23.md) | Session audit: MT admin, DarkIRC, external worker (2026-06-23) |
 | [`UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md`](proposals/UPGRADE_AND_MIGRATION_ISSUES_TO_FIX.md) | Upgrade/migrate issues found |
 | [`OLDPROJECT_PORT_ANALYSES/`](proposals/OLDPROJECT_PORT_ANALYSES/) | Pre-fork IronClaw 0.28–0.29 port analyses (5 docs; kept for reference) |
+| [`IRONCLAW_ADDITION_CANDIDATES.md`](proposals/IRONCLAW_ADDITION_CANDIDATES.md) | Filtered IronClaw additions for current LunarWing, with priorities and adaptation notes |
 | [`MT-ONBOARDING-CLI.md`](proposals/MT-ONBOARDING-CLI.md) | MT onboarding CLI (`lunarwing_mt_onboard`) — shipped v1.1.9 (design record) |
 | [`SUPERGATEWAY_MCP.md`](proposals/SUPERGATEWAY_MCP.md) | MCP stdio support gap + supergateway workaround |
 | [`PASEO.MD`](proposals/PASEO.MD) | Paseo support (stub) |
@@ -243,6 +244,7 @@ Dated implementation plans and design specs produced by the superpowers agentic 
 | [`plans/2026-06-30-vision-analyze-tool-wiring.md`](superpowers/plans/2026-06-30-vision-analyze-tool-wiring.md) | Vision-analyze WASM tool wiring: re-register with WASM toolset, end-to-end integration |
 | [`plans/2026-07-01-mt-admin-ssh-streamlining.md`](superpowers/plans/2026-07-01-mt-admin-ssh-streamlining.md) | `mt-admin` SSH streamlining: key upload, daemon bounce, worker startup ordering |
 | [`plans/2026-07-02-mt-admin-runtime-persistence.md`](superpowers/plans/2026-07-02-mt-admin-runtime-persistence.md) | `mt-admin` runtime persistence: state file management, idempotent operations |
+| [`plans/2026-07-10-cross-version-diverged-branch-integration.md`](superpowers/plans/2026-07-10-cross-version-diverged-branch-integration.md) | Corrected cross-version port of serde, Codex-provider removal, lockfile, CLI, and proposal changes |
 
 #### Design Specs
 
@@ -252,6 +254,7 @@ Dated implementation plans and design specs produced by the superpowers agentic 
 | [`specs/2026-06-30-vision-analyze-tool-wiring-design.md`](superpowers/specs/2026-06-30-vision-analyze-tool-wiring-design.md) | Design spec for vision-analyze tool wiring |
 | [`specs/2026-07-01-mt-admin-ssh-streamlining-design.md`](superpowers/specs/2026-07-01-mt-admin-ssh-streamlining-design.md) | Design spec for mt-admin SSH streamlining |
 | [`specs/2026-07-02-mt-admin-runtime-persistence-design.md`](superpowers/specs/2026-07-02-mt-admin-runtime-persistence-design.md) | Design spec for mt-admin runtime persistence |
+| [`specs/2026-07-10-cross-version-diverged-branch-integration-design.md`](superpowers/specs/2026-07-10-cross-version-diverged-branch-integration-design.md) | Design spec for corrected branch integration across LunarWing V1 and V2 |
 
 ---
 

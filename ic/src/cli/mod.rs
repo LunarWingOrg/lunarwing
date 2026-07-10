@@ -307,16 +307,12 @@ pub enum Command {
     )]
     Import(ImportCommand),
 
-    /// Authenticate with a provider (re-login)
+    /// Explain how to reconfigure an LLM provider.
     #[command(
-        about = "Authenticate with a provider",
-        long_about = "Re-authenticate with an LLM provider.\nExample: lunarwing login --openai-codex"
+        about = "Reconfigure an LLM provider",
+        long_about = "Standalone provider login is no longer available. Use `lunarwing onboard --provider-only` to reconfigure the active provider."
     )]
-    Login {
-        /// Authenticate with OpenAI Codex (ChatGPT subscription)
-        #[arg(long)]
-        openai_codex: bool,
-    },
+    Login,
 
     /// Run as a sandboxed worker inside a Docker container (internal use).
     /// This is invoked automatically by the orchestrator, not by users directly.
@@ -442,6 +438,18 @@ mod tests {
             cmd.get_version().unwrap_or("unknown"),
             env!("CARGO_PKG_VERSION")
         );
+    }
+
+    #[test]
+    fn login_compat_command_remains_available() {
+        let cli = Cli::try_parse_from(["lunarwing", "login"]).expect("login should parse");
+        assert!(cli.command.is_some());
+    }
+
+    #[test]
+    fn removed_openai_codex_login_flag_is_rejected() {
+        let result = Cli::try_parse_from(["lunarwing", "login", "--openai-codex"]);
+        assert!(result.is_err());
     }
 
     #[test]

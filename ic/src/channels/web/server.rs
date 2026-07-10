@@ -1868,6 +1868,8 @@ async fn extensions_list_handler(
                 kind: ext.kind.to_string(),
                 description: ext.description,
                 url: ext.url,
+                transport: ext.transport,
+                command: ext.command,
                 authenticated: ext.authenticated,
                 active: ext.active,
                 tools: ext.tools,
@@ -1934,17 +1936,32 @@ async fn extensions_install_handler(
         )));
     };
 
-    let kind_hint = req.kind.as_deref().and_then(|k| match k {
-        "mcp_server" => Some(crate::extensions::ExtensionKind::McpServer),
-        "wasm_tool" => Some(crate::extensions::ExtensionKind::WasmTool),
-        "wasm_channel" => Some(crate::extensions::ExtensionKind::WasmChannel),
-        _ => None,
-    });
+    let kind_hint = req
+        .kind
+        .as_deref()
+        .and_then(|k| match k {
+            "mcp_server" => Some(crate::extensions::ExtensionKind::McpServer),
+            "wasm_tool" => Some(crate::extensions::ExtensionKind::WasmTool),
+            "wasm_channel" => Some(crate::extensions::ExtensionKind::WasmChannel),
+            _ => None,
+        })
+        .or_else(|| {
+            req.transport
+                .as_ref()
+                .map(|_| crate::extensions::ExtensionKind::McpServer)
+        });
 
-    match ext_mgr
-        .install(&req.name, req.url.as_deref(), kind_hint, &user.user_id)
-        .await
-    {
+    let install_result = match req.mcp_config() {
+        Ok(Some(config)) => ext_mgr.install_mcp_config(config, &user.user_id).await,
+        Ok(None) => {
+            ext_mgr
+                .install(&req.name, req.url.as_deref(), kind_hint, &user.user_id)
+                .await
+        }
+        Err(e) => return Ok(Json(ActionResponse::fail(e))),
+    };
+
+    match install_result {
         Ok(result) => {
             let mut resp = ActionResponse::ok(result.message);
 
@@ -2731,6 +2748,8 @@ mod tests {
             display_name: Some("XMPP".to_string()),
             description: None,
             url: None,
+            transport: None,
+            command: None,
             authenticated: true,
             active: true,
             tools: Vec::new(),

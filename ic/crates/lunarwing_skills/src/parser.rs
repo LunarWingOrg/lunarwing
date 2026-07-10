@@ -74,8 +74,8 @@ pub fn parse_skill_md(content: &str) -> Result<ParsedSkill, SkillParseError> {
     let yaml_str = &after_first_line[..yaml_end];
 
     // Parse YAML frontmatter
-    let mut manifest: SkillManifest =
-        serde_yml::from_str(yaml_str).map_err(|e| SkillParseError::InvalidYaml(e.to_string()))?;
+    let mut manifest: SkillManifest = serde_norway::from_str(yaml_str)
+        .map_err(|e| SkillParseError::InvalidYaml(e.to_string()))?;
 
     // Validate skill name
     if !validate_skill_name(&manifest.name) {
@@ -161,6 +161,13 @@ You are a writing assistant. When the user asks to write or edit...
         assert_eq!(result.manifest.name, "minimal");
         assert_eq!(result.manifest.version, "0.0.0"); // default
         assert_eq!(result.prompt_content.trim(), "Hello world.");
+    }
+
+    #[test]
+    fn serde_norway_parses_skill_manifest_frontmatter() {
+        let yaml = "name: norway-parser\n";
+        let manifest: SkillManifest = serde_norway::from_str(yaml).expect("parse failed");
+        assert_eq!(manifest.name, "norway-parser");
     }
 
     #[test]

@@ -2767,6 +2767,15 @@ function renderMcpServerCard(entry, installedExt) {
   desc.textContent = entry.description;
   card.appendChild(desc);
 
+  if (installedExt && installedExt.transport) {
+    var endpoint = document.createElement('div');
+    endpoint.className = 'ext-url';
+    endpoint.textContent = installedExt.url ||
+      (installedExt.transport + (installedExt.command ? ': ' + installedExt.command : ''));
+    endpoint.title = endpoint.textContent;
+    card.appendChild(endpoint);
+  }
+
   var actions = document.createElement('div');
   actions.className = 'ext-actions';
 
@@ -2893,6 +2902,12 @@ function renderExtensionCard(ext) {
     url.textContent = ext.url;
     url.title = ext.url;
     card.appendChild(url);
+  } else if (ext.kind === 'mcp_server' && ext.transport) {
+    const endpoint = document.createElement('div');
+    endpoint.className = 'ext-url';
+    endpoint.textContent = ext.transport + (ext.command ? ': ' + ext.command : '');
+    endpoint.title = endpoint.textContent;
+    card.appendChild(endpoint);
   }
 
   if (ext.tools && ext.tools.length > 0) {
@@ -4431,20 +4446,58 @@ function addMcpServer() {
     showToast('Server name is required', 'error');
     return;
   }
-  var url = document.getElementById('mcp-install-url').value.trim();
-  if (!url) {
-    showToast('MCP server URL is required', 'error');
-    return;
+
+  var activeTransport = document.querySelector('.mcp-transport-option.active');
+  var transport = activeTransport ? activeTransport.dataset.mcpTransport : 'http';
+  var body = { name: name, kind: 'mcp_server', transport: transport };
+
+  if (transport === 'http') {
+    var url = document.getElementById('mcp-install-url').value.trim();
+    if (!url) {
+      showToast('MCP server URL is required', 'error');
+      return;
+    }
+    body.url = url;
+  } else {
+    var command = document.getElementById('mcp-install-command').value.trim();
+    if (!command) {
+      showToast('MCP server command is required', 'error');
+      return;
+    }
+
+    var args = document.getElementById('mcp-install-args').value
+      .split(/\r?\n/)
+      .map(function(line) { return line.trim(); })
+      .filter(Boolean);
+    var env = {};
+    var envLines = document.getElementById('mcp-install-env').value.split(/\r?\n/);
+    for (var i = 0; i < envLines.length; i++) {
+      var line = envLines[i].trim();
+      if (!line) continue;
+      var separator = line.indexOf('=');
+      var key = separator >= 0 ? line.slice(0, separator).trim() : '';
+      if (!key) {
+        showToast('Environment line ' + (i + 1) + ' must use KEY=VALUE', 'error');
+        return;
+      }
+      if (Object.prototype.hasOwnProperty.call(env, key)) {
+        showToast('Environment variable ' + key + ' is duplicated', 'error');
+        return;
+      }
+      env[key] = line.slice(separator + 1);
+    }
+    body.command = command;
+    body.args = args;
+    body.env = env;
   }
 
   apiFetch('/api/extensions/install', {
     method: 'POST',
-    body: { name: name, url: url, kind: 'mcp_server' },
+    body: body,
   }).then(function(res) {
     if (res.success) {
       showToast('Added MCP server ' + name, 'success');
-      document.getElementById('mcp-install-name').value = '';
-      document.getElementById('mcp-install-url').value = '';
+      resetMcpInstallForm();
       loadMcpServers();
     } else {
       showToast('Failed to add MCP server: ' + (res.message || 'unknown error'), 'error');
@@ -4452,6 +4505,22 @@ function addMcpServer() {
   }).catch(function(err) {
     showToast('Failed to add MCP server: ' + err.message, 'error');
   });
+}
+
+function setMcpInstallTransport(transport) {
+  document.querySelectorAll('.mcp-transport-option').forEach(function(button) {
+    var selected = button.dataset.mcpTransport === transport;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+  document.getElementById('mcp-http-fields').hidden = transport !== 'http';
+  document.getElementById('mcp-stdio-fields').hidden = transport !== 'stdio';
+}
+
+function resetMcpInstallForm() {
+  ['mcp-install-name', 'mcp-install-url', 'mcp-install-command', 'mcp-install-args', 'mcp-install-env']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  setMcpInstallTransport('http');
 }
 
 // --- Skills ---
@@ -5816,6 +5885,11 @@ document.getElementById('logs-pause-btn').addEventListener('click', () => toggle
 document.getElementById('logs-clear-btn').addEventListener('click', () => clearLogs());
 document.getElementById('wasm-install-btn').addEventListener('click', () => installWasmExtension());
 document.getElementById('mcp-add-btn').addEventListener('click', () => addMcpServer());
+document.querySelectorAll('.mcp-transport-option').forEach(function(button) {
+  button.addEventListener('click', function() {
+    setMcpInstallTransport(button.dataset.mcpTransport);
+  });
+});
 document.getElementById('skill-search-btn').addEventListener('click', () => searchClawHub());
 document.getElementById('skill-install-btn').addEventListener('click', () => installSkillFromForm());
 document.getElementById('settings-export-btn').addEventListener('click', () => exportSettings());

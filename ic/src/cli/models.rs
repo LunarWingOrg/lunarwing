@@ -190,9 +190,6 @@ async fn try_fetch_models(provider_id: &str, config_path: Option<&Path>) -> Opti
                 api_key: api_key.map(secrecy::SecretString::from),
                 base_url,
                 extra_headers: Vec::new(),
-                is_codex_chatgpt: false,
-                refresh_token: None,
-                auth_path: None,
                 unsupported_params: def.unsupported_params.clone(),
             });
         }

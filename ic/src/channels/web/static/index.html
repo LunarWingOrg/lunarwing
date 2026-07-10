@@ -360,9 +360,21 @@
                   <div class="empty-state" data-i18n="common.loading">Loading...</div>
                 </div>
                 <h4 data-i18n="mcp.addCustom">Add Custom MCP Server</h4>
-                <div class="ext-install-form">
+                <div class="ext-install-form mcp-install-form">
                   <input type="text" id="mcp-install-name" data-i18n-placeholder="common.name" placeholder="Server name">
-                  <input type="text" id="mcp-install-url" placeholder="MCP server URL (https://...)">
+                  <div class="mcp-transport-control" role="group" data-i18n="mcp.transport" data-i18n-attr="aria-label" aria-label="MCP transport">
+                    <button type="button" class="mcp-transport-option active" data-mcp-transport="http" aria-pressed="true" data-i18n="mcp.http">HTTP</button>
+                    <button type="button" class="mcp-transport-option" data-mcp-transport="stdio" aria-pressed="false" data-i18n="mcp.stdio">stdio</button>
+                  </div>
+                  <div class="mcp-mode-fields" id="mcp-http-fields">
+                    <input type="text" id="mcp-install-url" data-i18n-placeholder="mcp.urlPlaceholder" placeholder="MCP server URL (https://...)">
+                  </div>
+                  <div class="mcp-mode-fields" id="mcp-stdio-fields" hidden>
+                    <input type="text" id="mcp-install-command" data-i18n-placeholder="mcp.commandPlaceholder" placeholder="Executable command">
+                    <textarea id="mcp-install-args" rows="3" data-i18n-placeholder="mcp.argsPlaceholder" placeholder="Arguments, one per line"></textarea>
+                    <textarea id="mcp-install-env" rows="3" data-i18n-placeholder="mcp.envPlaceholder" placeholder="Non-secret environment, KEY=VALUE per line"></textarea>
+                    <div class="mcp-env-note" data-i18n="mcp.envNonSecret">Environment values are stored as plain configuration. Do not enter secrets.</div>
+                  </div>
                   <button id="mcp-add-btn" data-i18n="mcp.add">Add</button>
                 </div>
               </div>

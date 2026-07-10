@@ -1,8 +1,19 @@
-Finding: LunarWing MCP Tool Layer — No stdio Support (Feature Gap)
+# Historical Finding: LunarWing MCP Installation Lacked stdio Surfaces
 
 Date: 2026-07-09
 
-Issue: LunarWing's MCP server installation (tool_install with kind: mcp_server) only supports remote HTTP/SSE endpoints. It cannot install or launch stdio-based MCP servers (e.g. npx -y @nanogpt/mcp).
+Status: Superseded on 2026-07-09. LunarWing's core MCP runtime already supported
+stdio child processes, and the registry, conversational `tool_install`, web API,
+web settings, and registry CLI installation surfaces now accept structured stdio
+configuration. Installation is host-local and activation remains explicit.
+
+Supergateway remains a valid operational choice when an HTTP boundary, independent
+process supervision, or remote access is desirable. It is no longer required only
+to make a local stdio MCP server usable by LunarWing.
+
+Original issue: LunarWing's MCP server installation (`tool_install` with
+`kind: mcp_server`) only exposed remote HTTP/SSE endpoints. It could not install a
+stdio command even though the lower-level runtime could launch one.
 
 Affected servers: Any MCP server distributed as a local stdio process — NanoGPT, and potentially many others in the MCP ecosystem.
 
@@ -26,4 +37,4 @@ Prerequisites for workaround:
     NanoGPT API key (from nano-gpt.com/settings/api-keys)
     Persistent process management (systemd) so bridge survives reboots
 
-Status: Workaround not yet implemented. Awaiting Christopher's API key and host confirmation.
+Historical workaround status: Not implemented as part of the original attempt.

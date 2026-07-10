@@ -170,11 +170,30 @@ impl McpServerConfig {
                     });
                 }
             }
-            EffectiveTransport::Stdio { command, .. } => {
+            EffectiveTransport::Stdio { command, args, env } => {
                 if command.is_empty() {
                     return Err(ConfigError::InvalidConfig {
                         reason: "Stdio transport command cannot be empty".to_string(),
                     });
+                }
+                if command.contains('\0') || args.iter().any(|arg| arg.contains('\0')) {
+                    return Err(ConfigError::InvalidConfig {
+                        reason: "Stdio command and arguments cannot contain NUL bytes".to_string(),
+                    });
+                }
+                for (name, value) in env {
+                    if name.is_empty() || name.contains(['=', '\0']) {
+                        return Err(ConfigError::InvalidConfig {
+                            reason: format!("Invalid stdio environment variable name '{name}'"),
+                        });
+                    }
+                    if value.contains('\0') {
+                        return Err(ConfigError::InvalidConfig {
+                            reason: format!(
+                                "Stdio environment variable '{name}' contains a NUL byte"
+                            ),
+                        });
+                    }
                 }
             }
             EffectiveTransport::Unix { socket_path } => {
@@ -863,6 +882,25 @@ mod tests {
         // Invalid: empty name
         let config = McpServerConfig::new_stdio("", "npx", vec![], HashMap::new());
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_stdio_validation_rejects_invalid_environment() {
+        let invalid_name = McpServerConfig::new_stdio(
+            "server",
+            "npx",
+            vec![],
+            HashMap::from([("BAD=NAME".to_string(), "value".to_string())]),
+        );
+        assert!(invalid_name.validate().is_err());
+
+        let invalid_value = McpServerConfig::new_stdio(
+            "server",
+            "npx",
+            vec![],
+            HashMap::from([("GOOD_NAME".to_string(), "bad\0value".to_string())]),
+        );
+        assert!(invalid_value.validate().is_err());
     }
 
     #[test]

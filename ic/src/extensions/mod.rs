@@ -87,6 +87,14 @@ pub struct RegistryEntry {
 pub enum ExtensionSource {
     /// URL to a hosted MCP server.
     McpUrl { url: String },
+    /// Host-local MCP server launched as a stdio child process.
+    McpStdio {
+        command: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: std::collections::HashMap<String, String>,
+    },
     /// Downloadable WASM binary.
     WasmDownload {
         wasm_url: String,
@@ -494,6 +502,12 @@ pub struct InstalledExtension {
     /// Server or source URL (e.g. MCP server endpoint).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// MCP transport for installed MCP servers (`http`, `stdio`, or `unix`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    /// Host-local stdio executable. Arguments and environment are intentionally omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
     pub authenticated: bool,
     pub active: bool,
     /// Tool names if active.
@@ -941,6 +955,8 @@ mod tests {
         assert!(ext.display_name.is_none());
         assert!(ext.description.is_none());
         assert!(ext.url.is_none());
+        assert!(ext.transport.is_none());
+        assert!(ext.command.is_none());
         assert!(ext.activation_error.is_none());
     }
 
@@ -952,6 +968,8 @@ mod tests {
             display_name: Some("Gmail Tool".to_string()),
             description: Some("Read and send emails".to_string()),
             url: Some("https://gmail.example.com".to_string()),
+            transport: None,
+            command: None,
             authenticated: true,
             active: true,
             tools: vec!["send_email".to_string(), "read_inbox".to_string()],

@@ -9,6 +9,7 @@ use async_trait::async_trait;
 
 use crate::context::JobContext;
 use crate::extensions::{ExtensionKind, ExtensionManager};
+use crate::tools::mcp::McpServerConfig;
 use crate::tools::tool::{ApprovalRequirement, Tool, ToolError, ToolOutput, require_str};
 
 // ── tool_search ──────────────────────────────────────────────────────────
@@ -92,6 +93,78 @@ impl ToolInstallTool {
     pub fn new(manager: Arc<ExtensionManager>) -> Self {
         Self { manager }
     }
+
+    fn mcp_config(
+        params: &serde_json::Value,
+        name: &str,
+    ) -> Result<Option<McpServerConfig>, ToolError> {
+        let kind = params.get("kind").and_then(|v| v.as_str());
+        let transport = params.get("transport").and_then(|v| v.as_str());
+        if kind != Some("mcp_server") && transport.is_none() {
+            return Ok(None);
+        }
+        let config = match transport {
+            Some("stdio") => {
+                let command = params
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ToolError::InvalidParameters(
+                            "MCP server command is required for stdio transport".to_string(),
+                        )
+                    })?;
+                let args = params
+                    .get("args")
+                    .map(|value| serde_json::from_value(value.clone()))
+                    .transpose()
+                    .map_err(|e| {
+                        ToolError::InvalidParameters(format!(
+                            "MCP stdio args must be an array of strings: {e}"
+                        ))
+                    })?
+                    .unwrap_or_default();
+                let env = params
+                    .get("env")
+                    .map(|value| serde_json::from_value(value.clone()))
+                    .transpose()
+                    .map_err(|e| {
+                        ToolError::InvalidParameters(format!(
+                            "MCP stdio env must be an object of string values: {e}"
+                        ))
+                    })?
+                    .unwrap_or_default();
+                McpServerConfig::new_stdio(name, command, args, env)
+            }
+            Some("http") => {
+                if params.get("url").and_then(|v| v.as_str()).is_none() {
+                    return Err(ToolError::InvalidParameters(
+                        "MCP server URL is required for HTTP transport".to_string(),
+                    ));
+                }
+                return Ok(None);
+            }
+            Some(other) => {
+                return Err(ToolError::InvalidParameters(format!(
+                    "Unsupported MCP transport '{other}'"
+                )));
+            }
+            None if params.get("command").is_some()
+                || params.get("args").is_some()
+                || params.get("env").is_some() =>
+            {
+                return Err(ToolError::InvalidParameters(
+                    "MCP transport must be 'stdio' when command, args, or env are provided"
+                        .to_string(),
+                ));
+            }
+            None => return Ok(None),
+        };
+
+        config
+            .validate()
+            .map_err(|e| ToolError::InvalidParameters(e.to_string()))?;
+        Ok(Some(config))
+    }
 }
 
 #[async_trait]
@@ -102,7 +175,8 @@ impl Tool for ToolInstallTool {
 
     fn description(&self) -> &str {
         "Install an extension (channel, tool, or MCP server). \
-         Use the name from tool_search results, or provide an explicit URL."
+         Use the name from tool_search results, provide an explicit URL, or configure \
+         a host-local stdio MCP server with a command and structured arguments."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -116,6 +190,25 @@ impl Tool for ToolInstallTool {
                 "url": {
                     "type": "string",
                     "description": "Explicit URL (for extensions not in the registry)"
+                },
+                "transport": {
+                    "type": "string",
+                    "enum": ["http", "stdio"],
+                    "description": "MCP transport. Defaults to http when url is provided."
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Executable command for a host-local stdio MCP server"
+                },
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Structured command arguments for a stdio MCP server"
+                },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "Non-secret environment variables for a stdio MCP server"
                 },
                 "kind": {
                     "type": "string",
@@ -146,13 +239,23 @@ impl Tool for ToolInstallTool {
                 "wasm_tool" => Some(ExtensionKind::WasmTool),
                 "wasm_channel" => Some(ExtensionKind::WasmChannel),
                 _ => None,
+            })
+            .or_else(|| {
+                params
+                    .get("transport")
+                    .and_then(|v| v.as_str())
+                    .map(|_| ExtensionKind::McpServer)
             });
 
-        let result = self
-            .manager
-            .install(name, url, kind_hint, &ctx.user_id)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
+        let result = match Self::mcp_config(&params, name)? {
+            Some(config) => self.manager.install_mcp_config(config, &ctx.user_id).await,
+            None => {
+                self.manager
+                    .install(name, url, kind_hint, &ctx.user_id)
+                    .await
+            }
+        }
+        .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
 
         let output = serde_json::to_value(&result)
             .unwrap_or_else(|_| serde_json::json!({"error": "serialization failed"}));
@@ -648,6 +751,84 @@ mod tests {
         let schema = tool.parameters_schema();
         assert!(schema["properties"].get("name").is_some());
         assert!(schema["properties"].get("url").is_some());
+        assert!(schema["properties"].get("transport").is_some());
+        assert!(schema["properties"].get("command").is_some());
+        assert!(schema["properties"].get("args").is_some());
+        assert!(schema["properties"].get("env").is_some());
+    }
+
+    #[test]
+    fn test_tool_install_builds_stdio_mcp_config() {
+        use crate::tools::mcp::config::EffectiveTransport;
+
+        let params = serde_json::json!({
+            "name": "local-files",
+            "kind": "mcp_server",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/srv/data"],
+            "env": {"LOG_LEVEL": "warn"}
+        });
+
+        let config = ToolInstallTool::mcp_config(&params, "local-files")
+            .expect("valid request")
+            .expect("MCP config");
+        match config.effective_transport() {
+            EffectiveTransport::Stdio { command, args, env } => {
+                assert_eq!(command, "npx");
+                assert_eq!(
+                    args,
+                    ["-y", "@modelcontextprotocol/server-filesystem", "/srv/data"]
+                );
+                assert_eq!(env.get("LOG_LEVEL").map(String::as_str), Some("warn"));
+            }
+            other => panic!("expected stdio transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tool_install_rejects_non_string_stdio_env_values() {
+        let params = serde_json::json!({
+            "name": "local-files",
+            "kind": "mcp_server",
+            "transport": "stdio",
+            "command": "local-files-mcp",
+            "env": {"PORT": 3000}
+        });
+
+        let err = ToolInstallTool::mcp_config(&params, "local-files")
+            .expect_err("numeric env value must fail");
+        assert!(err.to_string().contains("object of string values"));
+    }
+
+    #[test]
+    fn test_tool_install_defers_registry_mcp_install() {
+        let params = serde_json::json!({
+            "name": "local-files",
+            "kind": "mcp_server"
+        });
+
+        assert!(
+            ToolInstallTool::mcp_config(&params, "local-files")
+                .expect("valid registry request")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_tool_install_defers_http_mcp_install() {
+        let params = serde_json::json!({
+            "name": "hosted-server",
+            "kind": "mcp_server",
+            "transport": "http",
+            "url": "https://example.com/mcp"
+        });
+
+        assert!(
+            ToolInstallTool::mcp_config(&params, "hosted-server")
+                .expect("valid HTTP request")
+                .is_none()
+        );
     }
 
     #[test]

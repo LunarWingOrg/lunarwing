@@ -634,7 +634,7 @@ pub struct Settings {
     pub secrets_master_key_source: KeySource, // Keychain | Env | None
 
     // Step 3: Inference
-    pub llm_backend: Option<String>,         // "lunarwing_cloud" | "ollama" | "openai_compatible" | "openai_codex"
+    pub llm_backend: Option<String>,         // "lunarwing_cloud" | "ollama" | "openai_compatible"
     pub ollama_base_url: Option<String>,
     pub openai_compatible_base_url: Option<String>,
 

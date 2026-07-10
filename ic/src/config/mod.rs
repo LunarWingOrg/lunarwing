@@ -61,9 +61,7 @@ pub use self::transcription::TranscriptionConfig;
 pub use self::tunnel::TunnelConfig;
 pub use self::wasm::WasmConfig;
 pub use self::workspace::WorkspaceConfig;
-pub use crate::llm::config::{
-    LlmConfig, LunarWingCloudConfig, OpenAiCodexConfig, RegistryProviderConfig,
-};
+pub use crate::llm::config::{LlmConfig, LunarWingCloudConfig, RegistryProviderConfig};
 pub use crate::llm::session::SessionConfig;
 
 // Thread-safe env var override helpers (replaces unsafe `std::env::set_var`

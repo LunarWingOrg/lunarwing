@@ -5,11 +5,8 @@
 //! extracted into a standalone crate. Resolution logic (reading env vars,
 //! settings) lives in `crate::config::llm`.
 
-use std::path::PathBuf;
-
 use secrecy::SecretString;
 
-use crate::bootstrap::lunarwing_base_dir;
 use crate::llm::registry::ProviderProtocol;
 use crate::llm::session::SessionConfig;
 
@@ -33,13 +30,6 @@ pub struct RegistryProviderConfig {
     pub model: String,
     /// Extra HTTP headers injected into every request.
     pub extra_headers: Vec<(String, String)>,
-    /// When true, route OpenAI-compatible traffic to the Codex ChatGPT
-    /// Responses API provider instead of rig-core's Chat Completions path.
-    pub is_codex_chatgpt: bool,
-    /// OAuth refresh token for Codex ChatGPT token refresh.
-    pub refresh_token: Option<SecretString>,
-    /// Path to Codex auth.json for persisting refreshed tokens.
-    pub auth_path: Option<PathBuf>,
     /// Parameter names that this provider does not support (e.g., `["temperature"]`).
     /// Supported keys: `"temperature"`, `"max_tokens"`, `"stop_sequences"`.
     /// Listed parameters are stripped from requests before sending to avoid 400 errors.
@@ -52,36 +42,6 @@ pub enum CacheRetention {
     None,
     Short,
     Long,
-}
-
-/// Configuration for OpenAI Codex (ChatGPT subscription OAuth).
-#[derive(Debug, Clone)]
-pub struct OpenAiCodexConfig {
-    /// Model to use (default: "gpt-5.3-codex").
-    pub model: String,
-    /// OAuth authorization server (default: "https://auth.openai.com").
-    pub auth_endpoint: String,
-    /// Responses API base URL (default: "https://chatgpt.com/backend-api/codex").
-    pub api_base_url: String,
-    /// OAuth client ID (default: OpenAI's public Codex client).
-    pub client_id: String,
-    /// Path to session file (default: ~/.lunarwing/openai_codex_session.json).
-    pub session_path: PathBuf,
-    /// Seconds before expiry to proactively refresh (default: 300).
-    pub token_refresh_margin_secs: u64,
-}
-
-impl Default for OpenAiCodexConfig {
-    fn default() -> Self {
-        Self {
-            model: "gpt-5.3-codex".to_string(),
-            auth_endpoint: "https://auth.openai.com".to_string(),
-            api_base_url: "https://chatgpt.com/backend-api/codex".to_string(),
-            client_id: "app_EMoamEEZ73f0CkXaXp7hrann".to_string(),
-            session_path: lunarwing_base_dir().join("openai_codex_session.json"),
-            token_refresh_margin_secs: 300,
-        }
-    }
 }
 
 /// LLM provider configuration.
@@ -101,8 +61,6 @@ pub struct LlmConfig {
     /// Resolved provider config for registry-based providers.
     /// `None` when backend is "lunarwing_cloud".
     pub provider: Option<RegistryProviderConfig>,
-    /// OpenAI Codex config (populated when backend=openai_codex).
-    pub openai_codex: Option<OpenAiCodexConfig>,
     /// HTTP request timeout in seconds for LLM API calls.
     /// Default: 120. Increase for local LLMs (Ollama, vLLM, LM Studio) that
     /// need more time for prompt evaluation on consumer hardware.

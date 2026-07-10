@@ -168,6 +168,14 @@ I18n.register('zh-CN', {
   'mcp.addCustom': '添加自定义 MCP 服务器',
   'mcp.add': '添加',
   'mcp.addedSuccess': '已添加 MCP 服务器 {name}',
+  'mcp.transport': 'MCP 传输方式',
+  'mcp.http': 'HTTP',
+  'mcp.stdio': 'stdio',
+  'mcp.urlPlaceholder': 'MCP 服务器 URL (https://...)',
+  'mcp.commandPlaceholder': '可执行命令',
+  'mcp.argsPlaceholder': '参数，每行一个',
+  'mcp.envPlaceholder': '非机密环境变量，每行 KEY=VALUE',
+  'mcp.envNonSecret': '环境变量值将以普通配置形式存储。请勿输入机密信息。',
 
 
   // 技能标签页

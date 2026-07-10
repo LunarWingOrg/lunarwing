@@ -168,6 +168,14 @@ I18n.register('en', {
   'mcp.addCustom': 'Add Custom MCP Server',
   'mcp.add': 'Add',
   'mcp.addedSuccess': 'Added MCP server {name}',
+  'mcp.transport': 'MCP transport',
+  'mcp.http': 'HTTP',
+  'mcp.stdio': 'stdio',
+  'mcp.urlPlaceholder': 'MCP server URL (https://...)',
+  'mcp.commandPlaceholder': 'Executable command',
+  'mcp.argsPlaceholder': 'Arguments, one per line',
+  'mcp.envPlaceholder': 'Non-secret environment, KEY=VALUE per line',
+  'mcp.envNonSecret': 'Environment values are stored as plain configuration. Do not enter secrets.',
 
 
   // Skills Tab

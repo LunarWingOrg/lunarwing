@@ -3,8 +3,6 @@ unmaintained = "workspace"
 yanked = "deny"
 ignore = [
     # Pre-existing advisories — tracked for upgrade in separate PRs
-    # serde_yml unsound/unmaintained — direct dep, upgrade tracked separately
-    "RUSTSEC-2025-0068",
     # rustls-webpki CRL distributionPoint matching — 0.102.8 pinned by libsql transitive dep
     "RUSTSEC-2026-0049",
     { id = "RUSTSEC-2019-0036", reason = "failure crate EOL; vendored libsignal-protocol dependency, no patch" },

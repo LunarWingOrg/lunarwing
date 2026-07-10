@@ -1970,7 +1970,6 @@ _arguments "${_arguments_options[@]}" : \
 '--message=[Single message mode - send one message and exit]:MESSAGE:_default' \
 '-c+[Configuration file path (optional, uses env vars by default)]:CONFIG:_files' \
 '--config=[Configuration file path (optional, uses env vars by default)]:CONFIG:_files' \
-'--openai-codex[Authenticate with OpenAI Codex (ChatGPT subscription)]' \
 '--cli-only[Run in interactive CLI mode only (disable other channels)]' \
 '--no-db[Skip database connection (for testing)]' \
 '--no-onboard[Skip first-run onboarding check]' \
@@ -2717,7 +2716,7 @@ _lunarwing_commands() {
 'logs:View and manage gateway logs' \
 'status:Show system status' \
 'completion:Generate completions' \
-'login:Authenticate with a provider' \
+'login:Reconfigure an LLM provider' \
 'worker:Run as a sandboxed worker inside a Docker container (internal use). This is invoked automatically by the orchestrator, not by users directly' \
 'acp:Manage ACP agents' \
 'acp-bridge:Run as an ACP bridge inside a Docker container (internal use)' \
@@ -2964,7 +2963,7 @@ _lunarwing__subcmd__help_commands() {
 'logs:View and manage gateway logs' \
 'status:Show system status' \
 'completion:Generate completions' \
-'login:Authenticate with a provider' \
+'login:Reconfigure an LLM provider' \
 'worker:Run as a sandboxed worker inside a Docker container (internal use). This is invoked automatically by the orchestrator, not by users directly' \
 'acp:Manage ACP agents' \
 'acp-bridge:Run as an ACP bridge inside a Docker container (internal use)' \

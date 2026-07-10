@@ -53,7 +53,7 @@ complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "doctor" -d 'Run
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "logs" -d 'View and manage gateway logs'
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "status" -d 'Show system status'
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "completion" -d 'Generate completions'
-complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "login" -d 'Authenticate with a provider'
+complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "login" -d 'Reconfigure an LLM provider'
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "worker" -d 'Run as a sandboxed worker inside a Docker container (internal use). This is invoked automatically by the orchestrator, not by users directly'
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "acp" -d 'Manage ACP agents'
 complete -c lunarwing -n "__fish_lunarwing_needs_command" -f -a "acp-bridge" -d 'Run as an ACP bridge inside a Docker container (internal use)'
@@ -897,7 +897,6 @@ complete -c lunarwing -n "__fish_lunarwing_using_subcommand completion" -l super
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand completion" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -s m -l message -d 'Single message mode - send one message and exit' -r
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -s c -l config -d 'Configuration file path (optional, uses env vars by default)' -r -F
-complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -l openai-codex -d 'Authenticate with OpenAI Codex (ChatGPT subscription)'
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -l cli-only -d 'Run in interactive CLI mode only (disable other channels)'
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -l no-db -d 'Skip database connection (for testing)'
 complete -c lunarwing -n "__fish_lunarwing_using_subcommand login" -l no-onboard -d 'Skip first-run onboarding check'

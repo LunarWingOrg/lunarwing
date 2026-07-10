@@ -56,10 +56,27 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub url: Option<String>,
 
+    /// Host-local MCP transport. Mutually exclusive with `url`.
+    #[serde(default)]
+    pub transport: Option<McpManifestTransport>,
+
     /// MCP auth method: "dcr", "oauth_pre_configured:<setup_url>", or "none".
     /// Only present for `McpServer` manifests.
     #[serde(default)]
     pub auth: Option<String>,
+}
+
+/// Host-local transport declared by an MCP registry manifest.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum McpManifestTransport {
+    Stdio {
+        command: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: std::collections::HashMap<String, String>,
+    },
 }
 
 /// Extension kind as declared in manifests.
@@ -174,7 +191,7 @@ impl ExtensionManifest {
     /// Convert this manifest into a [`RegistryEntry`] for use with the in-chat
     /// extension discovery system.
     ///
-    /// Returns `None` for MCP server manifests missing a `url` field.
+    /// Returns `None` for MCP server manifests missing both `url` and `transport`.
     pub fn to_registry_entry(&self) -> Option<RegistryEntry> {
         if self.kind == ManifestKind::McpServer {
             return self.to_mcp_registry_entry();
@@ -185,18 +202,32 @@ impl ExtensionManifest {
 
     /// Build a [`RegistryEntry`] for an MCP server manifest.
     fn to_mcp_registry_entry(&self) -> Option<RegistryEntry> {
-        let url = match &self.url {
-            Some(u) => u.clone(),
-            None => {
+        let source = match (&self.url, &self.transport) {
+            (Some(url), None) => ExtensionSource::McpUrl { url: url.clone() },
+            (None, Some(McpManifestTransport::Stdio { command, args, env })) => {
+                ExtensionSource::McpStdio {
+                    command: command.clone(),
+                    args: args.clone(),
+                    env: env.clone(),
+                }
+            }
+            (Some(_), Some(_)) => {
                 tracing::warn!(
-                    "MCP server manifest '{}' is missing 'url' field, skipping",
+                    "MCP server manifest '{}' declares both 'url' and 'transport', skipping",
+                    self.name
+                );
+                return None;
+            }
+            (None, None) => {
+                tracing::warn!(
+                    "MCP server manifest '{}' is missing 'url' or 'transport', skipping",
                     self.name
                 );
                 return None;
             }
         };
         let auth_hint = match self.auth.as_deref() {
-            Some("dcr") | None => AuthHint::Dcr,
+            Some("dcr") | None if matches!(source, ExtensionSource::McpUrl { .. }) => AuthHint::Dcr,
             Some("none") => AuthHint::None,
             Some(other) if other.starts_with("oauth_pre_configured:") => {
                 AuthHint::OAuthPreConfigured {
@@ -206,7 +237,8 @@ impl ExtensionManifest {
                         .to_string(),
                 }
             }
-            _ => AuthHint::Dcr,
+            _ if matches!(source, ExtensionSource::McpUrl { .. }) => AuthHint::Dcr,
+            _ => AuthHint::None,
         };
 
         Some(RegistryEntry {
@@ -215,7 +247,7 @@ impl ExtensionManifest {
             kind: ExtensionKind::McpServer,
             description: self.description.clone(),
             keywords: self.keywords.clone(),
-            source: ExtensionSource::McpUrl { url },
+            source,
             fallback_source: None,
             auth_hint,
             version: self.version.clone(),
@@ -577,6 +609,37 @@ mod tests {
         );
         assert!(matches!(&entry.auth_hint, AuthHint::Dcr));
         assert!(entry.fallback_source.is_none());
+    }
+
+    #[test]
+    fn test_parse_stdio_mcp_server_manifest() {
+        let json = r#"{
+            "name": "filesystem",
+            "display_name": "Filesystem",
+            "kind": "mcp_server",
+            "description": "Local filesystem MCP server",
+            "keywords": ["files", "local"],
+            "transport": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+                "env": {"NODE_ENV": "production"}
+            },
+            "auth": "none"
+        }"#;
+
+        let manifest: ExtensionManifest = serde_json::from_str(json).expect("parse manifest");
+        let entry = manifest.to_registry_entry().expect("stdio MCP entry");
+
+        assert_eq!(entry.kind, ExtensionKind::McpServer);
+        assert!(matches!(
+            &entry.source,
+            ExtensionSource::McpStdio { command, args, env }
+                if command == "npx"
+                    && args == &["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+                    && env.get("NODE_ENV").map(String::as_str) == Some("production")
+        ));
+        assert!(matches!(&entry.auth_hint, AuthHint::None));
     }
 
     #[test]

@@ -790,6 +790,10 @@ pub struct ExtensionInfo {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
     pub authenticated: bool,
     pub active: bool,
     pub tools: Vec<String>,
@@ -831,6 +835,52 @@ pub struct InstallExtensionRequest {
     pub name: String,
     pub url: Option<String>,
     pub kind: Option<String>,
+    #[serde(default)]
+    pub transport: Option<String>,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+}
+
+impl InstallExtensionRequest {
+    pub fn mcp_config(&self) -> Result<Option<crate::tools::mcp::McpServerConfig>, String> {
+        if self.kind.as_deref() != Some("mcp_server") {
+            return Ok(None);
+        }
+        let config = match self.transport.as_deref() {
+            Some("stdio") => {
+                let command = self.command.as_deref().ok_or_else(|| {
+                    "MCP server command is required for stdio transport".to_string()
+                })?;
+                crate::tools::mcp::McpServerConfig::new_stdio(
+                    &self.name,
+                    command,
+                    self.args.clone(),
+                    self.env.clone(),
+                )
+            }
+            Some("http") => {
+                if self.url.is_none() {
+                    return Err("MCP server URL is required for HTTP transport".to_string());
+                }
+                return Ok(None);
+            }
+            Some(other) => return Err(format!("Unsupported MCP transport '{other}'")),
+            None if self.command.is_some() || !self.args.is_empty() || !self.env.is_empty() => {
+                return Err(
+                    "MCP transport must be 'stdio' when command, args, or env are provided"
+                        .to_string(),
+                );
+            }
+            None => return Ok(None),
+        };
+
+        config.validate().map_err(|e| e.to_string())?;
+        Ok(Some(config))
+    }
 }
 
 // --- Extension Setup ---
@@ -1594,6 +1644,70 @@ mod tests {
         let req: ExtensionSetupRequest = serde_json::from_str(json).unwrap();
         assert!(req.secrets.is_empty());
         assert!(req.fields.is_empty());
+    }
+
+    #[test]
+    fn test_install_extension_request_builds_stdio_mcp_config() {
+        use crate::tools::mcp::config::{EffectiveTransport, McpServerConfig};
+
+        let json = r#"{
+            "name": "filesystem",
+            "kind": "mcp_server",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+            "env": {"NODE_ENV": "production"}
+        }"#;
+        let req: InstallExtensionRequest = serde_json::from_str(json).expect("request");
+        let config: McpServerConfig = req
+            .mcp_config()
+            .expect("valid stdio request")
+            .expect("explicit MCP config");
+
+        assert!(matches!(
+            config.effective_transport(),
+            EffectiveTransport::Stdio { command, args, env }
+                if command == "npx"
+                    && args == ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+                    && env.get("NODE_ENV").map(String::as_str) == Some("production")
+        ));
+    }
+
+    #[test]
+    fn test_install_extension_request_rejects_unknown_mcp_transport() {
+        let json = r#"{
+            "name": "bad",
+            "kind": "mcp_server",
+            "transport": "socket"
+        }"#;
+        let req: InstallExtensionRequest = serde_json::from_str(json).expect("request");
+        let error = req.mcp_config().expect_err("unknown transport must fail");
+
+        assert!(error.contains("Unsupported MCP transport"));
+    }
+
+    #[test]
+    fn test_install_extension_request_defers_registry_mcp_install() {
+        let json = r#"{
+            "name": "local-files",
+            "kind": "mcp_server"
+        }"#;
+        let req: InstallExtensionRequest = serde_json::from_str(json).expect("request");
+
+        assert!(req.mcp_config().expect("valid registry request").is_none());
+    }
+
+    #[test]
+    fn test_install_extension_request_defers_http_mcp_install() {
+        let json = r#"{
+            "name": "hosted-server",
+            "kind": "mcp_server",
+            "transport": "http",
+            "url": "https://example.com/mcp"
+        }"#;
+        let req: InstallExtensionRequest = serde_json::from_str(json).expect("request");
+
+        assert!(req.mcp_config().expect("valid HTTP request").is_none());
     }
 
     #[test]

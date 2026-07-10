@@ -872,8 +872,35 @@ impl ExtensionManager {
                             kind: ExtensionKind::McpServer,
                             display_name,
                             description: server.description.clone(),
-                            url: Some(server.url.clone()),
-                            authenticated,
+                            url: match server.effective_transport() {
+                                crate::tools::mcp::config::EffectiveTransport::Http => {
+                                    Some(server.url.clone())
+                                }
+                                _ => None,
+                            },
+                            transport: Some(
+                                match server.effective_transport() {
+                                    crate::tools::mcp::config::EffectiveTransport::Http => "http",
+                                    crate::tools::mcp::config::EffectiveTransport::Stdio {
+                                        ..
+                                    } => "stdio",
+                                    crate::tools::mcp::config::EffectiveTransport::Unix {
+                                        ..
+                                    } => "unix",
+                                }
+                                .to_string(),
+                            ),
+                            command: match server.effective_transport() {
+                                crate::tools::mcp::config::EffectiveTransport::Stdio {
+                                    command,
+                                    ..
+                                } => Some(command.to_string()),
+                                _ => None,
+                            },
+                            authenticated: !matches!(
+                                server.effective_transport(),
+                                crate::tools::mcp::config::EffectiveTransport::Http
+                            ) || authenticated,
                             active,
                             tools,
                             needs_setup: false,
@@ -924,6 +951,8 @@ impl ExtensionManager {
                             display_name,
                             description: None,
                             url: None,
+                            transport: None,
+                            command: None,
                             authenticated: auth_state == ToolAuthState::Ready,
                             active,
                             tools: if active { vec![name] } else { Vec::new() },
@@ -980,6 +1009,8 @@ impl ExtensionManager {
                             display_name,
                             description: None,
                             url: None,
+                            transport: None,
+                            command: None,
                             authenticated: auth_state == ToolAuthState::Ready,
                             active,
                             tools: Vec::new(),
@@ -1019,6 +1050,8 @@ impl ExtensionManager {
                     display_name: Some(entry.display_name),
                     description: Some(entry.description),
                     url: None,
+                    transport: None,
+                    command: None,
                     authenticated: false,
                     active: false,
                     tools: Vec::new(),
@@ -1069,6 +1102,10 @@ impl ExtensionManager {
 
                 // Remove MCP client
                 self.mcp_clients.write().await.remove(name);
+
+                self.mcp_process_manager.shutdown(name).await.map_err(|e| {
+                    ExtensionError::Other(format!("Failed to stop MCP server '{name}': {e}"))
+                })?;
 
                 // Remove from config
                 self.remove_mcp_server(name, user_id)
@@ -1543,16 +1580,21 @@ impl ExtensionManager {
     ) -> Result<InstallResult, ExtensionError> {
         match entry.kind {
             ExtensionKind::McpServer => {
-                let url = match source {
-                    ExtensionSource::McpUrl { url } => url.clone(),
-                    ExtensionSource::Discovered { url } => url.clone(),
+                let mut config = match source {
+                    ExtensionSource::McpUrl { url } | ExtensionSource::Discovered { url } => {
+                        McpServerConfig::new(&entry.name, url)
+                    }
+                    ExtensionSource::McpStdio { command, args, env } => {
+                        McpServerConfig::new_stdio(&entry.name, command, args.clone(), env.clone())
+                    }
                     _ => {
                         return Err(ExtensionError::InstallFailed(
-                            "Registry entry for MCP server has no URL".to_string(),
+                            "Registry entry for MCP server has no supported transport".to_string(),
                         ));
                     }
                 };
-                self.install_mcp_from_url(&entry.name, &url, user_id).await
+                config.description = Some(entry.description.clone());
+                self.install_mcp_config(config, user_id).await
             }
             ExtensionKind::WasmTool => match source {
                 ExtensionSource::WasmDownload {
@@ -1623,28 +1665,41 @@ impl ExtensionManager {
         url: &str,
         user_id: &str,
     ) -> Result<InstallResult, ExtensionError> {
-        // Check if already installed
-        if self.get_mcp_server(name, user_id).await.is_ok() {
-            return Err(ExtensionError::AlreadyInstalled(name.to_string()));
+        self.install_mcp_config(McpServerConfig::new(name, url), user_id)
+            .await
+    }
+
+    /// Install a complete MCP server configuration without starting it.
+    pub async fn install_mcp_config(
+        &self,
+        config: McpServerConfig,
+        user_id: &str,
+    ) -> Result<InstallResult, ExtensionError> {
+        Self::validate_extension_name(&config.name)?;
+        if self.get_mcp_server(&config.name, user_id).await.is_ok() {
+            return Err(ExtensionError::AlreadyInstalled(config.name));
         }
 
-        let config = McpServerConfig::new(name, url);
         config
             .validate()
-            .map_err(|e| ExtensionError::InvalidUrl(e.to_string()))?;
+            .map_err(|e| ExtensionError::Config(e.to_string()))?;
+        let name = config.name.clone();
+        let transport = match config.effective_transport() {
+            crate::tools::mcp::config::EffectiveTransport::Http => "HTTP",
+            crate::tools::mcp::config::EffectiveTransport::Stdio { .. } => "stdio",
+            crate::tools::mcp::config::EffectiveTransport::Unix { .. } => "Unix socket",
+        };
 
         self.add_mcp_server(config, user_id)
             .await
             .map_err(|e| ExtensionError::Config(e.to_string()))?;
 
-        tracing::info!("Installed MCP server '{}' at {}", name, url);
-
+        tracing::info!(server = %name, transport, "Installed MCP server");
         Ok(InstallResult {
-            name: name.to_string(),
+            name: name.clone(),
             kind: ExtensionKind::McpServer,
             message: format!(
-                "MCP server '{}' installed. Run auth next to authenticate.",
-                name
+                "MCP server '{name}' installed with {transport} transport. Run activate to connect."
             ),
         })
     }
@@ -1998,6 +2053,13 @@ impl ExtensionManager {
             .get_mcp_server(name, user_id)
             .await
             .map_err(|e| ExtensionError::NotInstalled(e.to_string()))?;
+
+        if !matches!(
+            server.effective_transport(),
+            crate::tools::mcp::config::EffectiveTransport::Http
+        ) {
+            return Ok(AuthResult::no_auth_required(name, ExtensionKind::McpServer));
+        }
 
         // Check if already authenticated
         if is_authenticated(&server, &self.secrets, user_id).await {
@@ -4988,6 +5050,115 @@ mod tests {
         )
         .expect("capabilities");
         tools_dir
+    }
+
+    #[tokio::test]
+    async fn test_install_stdio_mcp_config_persists_and_needs_no_auth() {
+        use crate::extensions::{AuthStatus, ExtensionError};
+        use crate::tools::mcp::config::{EffectiveTransport, McpServerConfig};
+
+        let (store, dir) = make_test_store().await;
+        let manager = make_test_manager_with_dirs(
+            None,
+            dir.path().join("tools"),
+            dir.path().join("channels"),
+            Some(Arc::clone(&store)),
+        );
+        let config = McpServerConfig::new_stdio(
+            "filesystem",
+            "npx",
+            vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+            ],
+            std::collections::HashMap::new(),
+        );
+
+        manager
+            .install_mcp_config(config, "test")
+            .await
+            .expect("install stdio MCP");
+
+        let stored = crate::tools::mcp::config::load_mcp_servers_from_db(store.as_ref(), "test")
+            .await
+            .expect("load MCP config");
+        let server = stored.get("filesystem").expect("stored server");
+        assert!(matches!(
+            server.effective_transport(),
+            EffectiveTransport::Stdio { command, args, .. }
+                if command == "npx"
+                    && args == ["-y", "@modelcontextprotocol/server-filesystem"]
+        ));
+
+        let auth = manager
+            .auth("filesystem", "test")
+            .await
+            .expect("auth status");
+        assert!(matches!(auth.status, AuthStatus::NoAuthRequired));
+
+        let installed = manager
+            .list(
+                Some(crate::extensions::ExtensionKind::McpServer),
+                false,
+                "test",
+            )
+            .await
+            .expect("list installed MCP servers");
+        let listed = installed
+            .iter()
+            .find(|extension| extension.name == "filesystem")
+            .expect("listed stdio MCP server");
+        assert_eq!(listed.transport.as_deref(), Some("stdio"));
+        assert_eq!(listed.command.as_deref(), Some("npx"));
+        assert!(listed.authenticated);
+        assert!(!listed.active);
+
+        let duplicate = manager
+            .install_mcp_config(
+                McpServerConfig::new_stdio(
+                    "filesystem",
+                    "node",
+                    vec!["server.js".to_string()],
+                    std::collections::HashMap::new(),
+                ),
+                "test",
+            )
+            .await
+            .expect_err("duplicate install must fail");
+        assert!(
+            matches!(duplicate, ExtensionError::AlreadyInstalled(name) if name == "filesystem")
+        );
+
+        manager
+            .mcp_process_manager
+            .spawn_stdio(
+                "filesystem",
+                "cat",
+                Vec::<String>::new(),
+                std::collections::HashMap::new(),
+            )
+            .await
+            .expect("spawn managed test process");
+        assert_eq!(
+            manager.mcp_process_manager.managed_servers().await,
+            ["filesystem"]
+        );
+
+        manager
+            .remove("filesystem", "test")
+            .await
+            .expect("remove stdio MCP server");
+        assert!(
+            manager
+                .mcp_process_manager
+                .managed_servers()
+                .await
+                .is_empty()
+        );
+        let stored = crate::tools::mcp::config::load_mcp_servers_from_db(store.as_ref(), "test")
+            .await
+            .expect("reload MCP config");
+        assert!(stored.get("filesystem").is_none());
     }
 
     #[test]

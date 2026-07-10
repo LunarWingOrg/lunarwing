@@ -68,8 +68,8 @@ pub fn parse_skill_md(content: &str) -> Result<ParsedSkill, SkillParseError> {
     let yaml_str = &after_first_line[..yaml_end];
 
     // Parse YAML frontmatter
-    let mut manifest: SkillManifest =
-        serde_yml::from_str(yaml_str).map_err(|e| SkillParseError::InvalidYaml(e.to_string()))?;
+    let mut manifest: SkillManifest = serde_norway::from_str(yaml_str)
+        .map_err(|e| SkillParseError::InvalidYaml(e.to_string()))?;
 
     // Validate skill name
     if !validate_skill_name(&manifest.name) {

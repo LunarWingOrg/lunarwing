@@ -2,15 +2,17 @@
 
 use clap::Subcommand;
 
+use crate::extensions::ExtensionSource;
 use crate::registry::catalog::RegistryCatalog;
 use crate::registry::installer::RegistryInstaller;
-use crate::registry::manifest::ManifestKind;
+use crate::registry::manifest::{ExtensionManifest, ManifestKind, McpManifestTransport};
+use crate::tools::mcp::McpServerConfig;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RegistryCommand {
     /// List available extensions in the registry
     List {
-        /// Filter by kind: "tool" or "channel"
+        /// Filter by kind: "tool", "channel", or "mcp"
         #[arg(short, long)]
         kind: Option<String>,
 
@@ -92,12 +94,7 @@ fn cmd_list(
     tag: Option<&str>,
     verbose: bool,
 ) -> anyhow::Result<()> {
-    let kind_filter = match kind {
-        Some("tool" | "tools") => Some(ManifestKind::Tool),
-        Some("channel" | "channels") => Some(ManifestKind::Channel),
-        Some(other) => anyhow::bail!("Unknown kind '{}'. Use 'tool' or 'channel'.", other),
-        None => None,
-    };
+    let kind_filter = parse_kind_filter(kind)?;
 
     let manifests = catalog.list(kind_filter, tag);
 
@@ -124,6 +121,7 @@ fn cmd_list(
                 .auth_summary
                 .as_ref()
                 .and_then(|a| a.method.as_deref())
+                .or(m.auth.as_deref())
                 .unwrap_or("none");
             println!(
                 "{:<20} {:<8} {:<8} {:<10} {}",
@@ -148,6 +146,18 @@ fn cmd_list(
     }
 
     Ok(())
+}
+
+fn parse_kind_filter(kind: Option<&str>) -> anyhow::Result<Option<ManifestKind>> {
+    Ok(match kind {
+        Some("tool" | "tools") => Some(ManifestKind::Tool),
+        Some("channel" | "channels") => Some(ManifestKind::Channel),
+        Some("mcp" | "mcp_server" | "mcp_servers" | "mcp-server" | "mcp-servers") => {
+            Some(ManifestKind::McpServer)
+        }
+        Some(other) => anyhow::bail!("Unknown kind '{}'. Use 'tool', 'channel', or 'mcp'.", other),
+        None => None,
+    })
 }
 
 fn cmd_info(catalog: &RegistryCatalog, name: &str) -> anyhow::Result<()> {
@@ -194,7 +204,23 @@ fn cmd_info(catalog: &RegistryCatalog, name: &str) -> anyhow::Result<()> {
     }
 
     if let Some(ref url) = manifest.url {
-        println!("\nMCP Server URL: {}", url);
+        println!("\nMCP Server:");
+        println!("  Transport: HTTP");
+        println!("  URL: {}", url);
+    }
+
+    if let Some(McpManifestTransport::Stdio { command, args, env }) = &manifest.transport {
+        println!("\nMCP Server:");
+        println!("  Transport: stdio");
+        println!("  Command: {}", command);
+        if !args.is_empty() {
+            println!("  Args: {}", args.join(" "));
+        }
+        if !env.is_empty() {
+            let mut names: Vec<_> = env.keys().map(String::as_str).collect();
+            names.sort_unstable();
+            println!("  Environment: {}", names.join(", "));
+        }
     }
 
     if let Some(artifact) = manifest.artifacts.get("wasm32-wasip2") {
@@ -251,6 +277,15 @@ async fn cmd_install(
     }
 
     if let Some(bundle_def) = bundle {
+        if manifests
+            .iter()
+            .any(|manifest| manifest.kind == ManifestKind::McpServer)
+        {
+            anyhow::bail!(
+                "Bundles containing MCP servers are not supported yet. Install each MCP entry individually."
+            );
+        }
+
         // Bundle install
         println!(
             "Installing bundle '{}' ({} extensions)...\n",
@@ -292,6 +327,31 @@ async fn cmd_install(
     } else {
         // Single extension
         let manifest = manifests[0];
+        if manifest.kind == ManifestKind::McpServer {
+            let config = mcp_config_from_manifest(manifest)?;
+            crate::cli::mcp::persist_server(config, force).await?;
+
+            println!("\nInstalled successfully:");
+            println!("  Name: {}", manifest.name);
+            println!("  Kind: {}", manifest.kind);
+            match (&manifest.url, &manifest.transport) {
+                (Some(_), None) => println!("  Transport: HTTP"),
+                (None, Some(McpManifestTransport::Stdio { command, args, .. })) => {
+                    println!("  Transport: stdio");
+                    println!("  Command: {}", command);
+                    if !args.is_empty() {
+                        println!("  Args: {}", args.join(" "));
+                    }
+                }
+                _ => unreachable!("validated registry MCP transport"),
+            }
+            println!(
+                "\nNext step: restart LunarWing, or activate '{}' through the web UI or conversation, to connect and load its tools.",
+                manifest.name
+            );
+            return Ok(());
+        }
+
         let outcome = installer.install(manifest, force, prefer_build).await?;
 
         println!("\nInstalled successfully:");
@@ -314,4 +374,92 @@ async fn cmd_install(
     }
 
     Ok(())
+}
+
+fn mcp_config_from_manifest(manifest: &ExtensionManifest) -> anyhow::Result<McpServerConfig> {
+    if manifest.kind != ManifestKind::McpServer {
+        anyhow::bail!("Registry entry '{}' is not an MCP server", manifest.name);
+    }
+
+    let entry = manifest.to_registry_entry().ok_or_else(|| {
+        anyhow::anyhow!(
+            "MCP registry entry '{}' must declare exactly one supported transport",
+            manifest.name
+        )
+    })?;
+    let mut config = match entry.source {
+        ExtensionSource::McpUrl { url } => McpServerConfig::new(&manifest.name, url),
+        ExtensionSource::McpStdio { command, args, env } => {
+            McpServerConfig::new_stdio(&manifest.name, command, args, env)
+        }
+        _ => anyhow::bail!("Registry entry '{}' has no MCP transport", manifest.name),
+    };
+    config.description = Some(manifest.description.clone());
+    config.validate()?;
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::registry::manifest::McpManifestTransport;
+    use crate::tools::mcp::config::EffectiveTransport;
+
+    fn stdio_manifest() -> ExtensionManifest {
+        ExtensionManifest {
+            name: "local-files".to_string(),
+            display_name: "Local Files".to_string(),
+            kind: ManifestKind::McpServer,
+            version: None,
+            description: "Read files from an approved local directory".to_string(),
+            keywords: Vec::new(),
+            source: None,
+            artifacts: HashMap::new(),
+            auth_summary: None,
+            tags: Vec::new(),
+            hidden: None,
+            url: None,
+            transport: Some(McpManifestTransport::Stdio {
+                command: "npx".to_string(),
+                args: vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-filesystem".to_string(),
+                    "/srv/data".to_string(),
+                ],
+                env: HashMap::from([("LOG_LEVEL".to_string(), "warn".to_string())]),
+            }),
+            auth: Some("none".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_parse_mcp_kind_filter() {
+        assert_eq!(
+            parse_kind_filter(Some("mcp")).expect("valid filter"),
+            Some(ManifestKind::McpServer)
+        );
+        assert_eq!(
+            parse_kind_filter(Some("mcp_server")).expect("valid filter"),
+            Some(ManifestKind::McpServer)
+        );
+    }
+
+    #[test]
+    fn test_stdio_manifest_builds_mcp_config() {
+        let config = mcp_config_from_manifest(&stdio_manifest()).expect("valid config");
+        assert_eq!(
+            config.description.as_deref(),
+            Some("Read files from an approved local directory")
+        );
+        match config.effective_transport() {
+            EffectiveTransport::Stdio { command, args, env } => {
+                assert_eq!(command, "npx");
+                assert_eq!(args.last().map(String::as_str), Some("/srv/data"));
+                assert_eq!(env.get("LOG_LEVEL").map(String::as_str), Some("warn"));
+            }
+            other => panic!("expected stdio transport, got {other:?}"),
+        }
+    }
 }

@@ -53,13 +53,7 @@ fn bootstrap_env_round_trips_llm_backend() {
     );
 
     // All other backends the wizard supports
-    for backend in &[
-        "lunarwing_cloud",
-        "openai",
-        "ollama",
-        "openai_compatible",
-        "openai_codex",
-    ] {
+    for backend in &["lunarwing_cloud", "openai", "ollama", "openai_compatible"] {
         save_bootstrap_env_to(&env_path, &[("LLM_BACKEND", backend)]).unwrap();
         let map = read_env_map(&env_path);
         assert_eq!(

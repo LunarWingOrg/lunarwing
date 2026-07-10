@@ -37,7 +37,6 @@ impl LlmConfig {
                 smart_routing_cascade: false,
             },
             provider: None,
-            openai_codex: None,
             request_timeout_secs: 120,
             llm_turn_budget_secs: 370,
             cheap_model: None,
@@ -77,9 +76,6 @@ impl LlmConfig {
         // Validate the backend is known
         let backend_lower = backend.to_lowercase();
         let is_lunarwing_cloud = backend_lower == "lunarwing_cloud";
-        let is_openai_codex = backend_lower == "openai_codex"
-            || backend_lower == "openai-codex"
-            || backend_lower == "codex";
         if matches!(backend_lower.as_str(), "openai" | "open_ai") {
             return Err(ConfigError::InvalidValue {
                 key: "LLM_BACKEND".to_string(),
@@ -89,8 +85,20 @@ impl LlmConfig {
                 ),
             });
         }
+        if matches!(
+            backend_lower.as_str(),
+            "openai_codex" | "openai-codex" | "codex"
+        ) {
+            return Err(ConfigError::InvalidValue {
+                key: "LLM_BACKEND".to_string(),
+                message: format!(
+                    "LLM_BACKEND={backend} has been removed. Use \
+                     LLM_BACKEND=openai_compatible with LLM_BASE_URL and LLM_API_KEY instead."
+                ),
+            });
+        }
 
-        if !is_lunarwing_cloud && !is_openai_codex && registry.find(&backend_lower).is_none() {
+        if !is_lunarwing_cloud && registry.find(&backend_lower).is_none() {
             tracing::warn!(
                 "Unknown LLM backend '{}'. Will attempt as openai_compatible fallback.",
                 backend
@@ -165,8 +173,8 @@ impl LlmConfig {
             smart_routing_cascade: parse_optional_env("SMART_ROUTING_CASCADE", true)?,
         };
 
-        // Resolve registry provider config (for non-LunarWing Cloud, non-Codex backends)
-        let provider = if is_lunarwing_cloud || is_openai_codex {
+        // Resolve registry provider config (for non-LunarWing Cloud backends)
+        let provider = if is_lunarwing_cloud {
             None
         } else {
             Some(Self::resolve_registry_provider(
@@ -174,38 +182,6 @@ impl LlmConfig {
                 &registry,
                 settings,
             )?)
-        };
-
-        // Resolve OpenAI Codex config
-        let openai_codex = if is_openai_codex {
-            // Model: OPENAI_CODEX_MODEL > OPENAI_MODEL > settings.selected_model > default
-            let model = optional_env("OPENAI_CODEX_MODEL")?
-                .or(optional_env("OPENAI_MODEL")?)
-                .or_else(|| settings.selected_model.clone())
-                .unwrap_or_else(|| "gpt-5.3-codex".to_string());
-            let auth_endpoint = optional_env("OPENAI_CODEX_AUTH_URL")?
-                .unwrap_or_else(|| "https://auth.openai.com".to_string());
-            validate_base_url(&auth_endpoint, "OPENAI_CODEX_AUTH_URL")?;
-            let api_base_url = optional_env("OPENAI_CODEX_API_URL")?
-                .unwrap_or_else(|| "https://chatgpt.com/backend-api/codex".to_string());
-            validate_base_url(&api_base_url, "OPENAI_CODEX_API_URL")?;
-            let client_id = optional_env("OPENAI_CODEX_CLIENT_ID")?
-                .unwrap_or_else(|| "app_EMoamEEZ73f0CkXaXp7hrann".to_string());
-            let session_path = optional_env("OPENAI_CODEX_SESSION_PATH")?
-                .map(PathBuf::from)
-                .unwrap_or_else(|| lunarwing_base_dir().join("openai_codex_session.json"));
-            let token_refresh_margin_secs =
-                parse_optional_env("OPENAI_CODEX_REFRESH_MARGIN_SECS", 300)?;
-            Some(OpenAiCodexConfig {
-                model,
-                auth_endpoint,
-                api_base_url,
-                client_id,
-                session_path,
-                token_refresh_margin_secs,
-            })
-        } else {
-            None
         };
 
         let request_timeout_secs = parse_optional_env("LLM_REQUEST_TIMEOUT_SECS", 120)?;
@@ -283,8 +259,6 @@ impl LlmConfig {
         Ok(Self {
             backend: if is_lunarwing_cloud {
                 "lunarwing_cloud".to_string()
-            } else if is_openai_codex {
-                "openai_codex".to_string()
             } else if let Some(ref p) = provider {
                 p.provider_id.clone()
             } else {
@@ -293,7 +267,6 @@ impl LlmConfig {
             session,
             lunarwing_cloud,
             provider,
-            openai_codex,
             request_timeout_secs,
             llm_turn_budget_secs,
             cheap_model,
@@ -361,30 +334,8 @@ impl LlmConfig {
             )
         };
 
-        // Codex auth.json override: when LLM_USE_CODEX_AUTH=true,
-        // credentials from the Codex CLI's auth.json take highest priority
-        // (over env vars AND secrets store). In ChatGPT mode, the base URL
-        // is also overridden to the private ChatGPT backend endpoint.
-        let mut codex_base_url_override: Option<String> = None;
-        let codex_creds = if parse_optional_env("LLM_USE_CODEX_AUTH", false)? {
-            let path = optional_env("CODEX_AUTH_PATH")?
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(crate::llm::codex_auth::default_codex_auth_path);
-            crate::llm::codex_auth::load_codex_credentials(&path)
-        } else {
-            None
-        };
-
-        let codex_refresh_token = codex_creds.as_ref().and_then(|c| c.refresh_token.clone());
-        let codex_auth_path = codex_creds.as_ref().and_then(|c| c.auth_path.clone());
-
-        let api_key = if let Some(creds) = codex_creds {
-            if creds.is_chatgpt_mode {
-                codex_base_url_override = Some(creds.base_url().to_string());
-            }
-            Some(creds.token)
-        } else if let Some(env_var) = api_key_env {
-            // Resolve API key from env (including secrets store overlay)
+        // Resolve API key from env (including secrets store overlay)
+        let api_key = if let Some(env_var) = api_key_env {
             optional_env(env_var)?.map(SecretString::from)
         } else {
             None
@@ -401,9 +352,8 @@ impl LlmConfig {
             }
         }
 
-        // Resolve base URL: codex override > env var > settings (backward compat) > registry default
-        let is_codex_chatgpt = codex_base_url_override.is_some();
-        let base_url = codex_base_url_override
+        // Resolve base URL: env var > settings (backward compat) > registry default
+        let base_url = None
             .or_else(|| {
                 if let Some(env_var) = base_url_env {
                     optional_env(env_var).ok().flatten()
@@ -460,9 +410,6 @@ impl LlmConfig {
             base_url,
             model,
             extra_headers,
-            is_codex_chatgpt,
-            refresh_token: codex_refresh_token,
-            auth_path: codex_auth_path,
             unsupported_params,
         })
     }
@@ -538,7 +485,7 @@ mod tests {
 
         let settings = Settings {
             llm_backend: Some("openai_compatible".to_string()),
-            openai_compatible_base_url: Some("https://openrouter.ai/api/v1".to_string()),
+            openai_compatible_base_url: Some("http://127.0.0.1:11434/v1".to_string()),
             selected_model: Some("openai/gpt-5.1-codex".to_string()),
             ..Default::default()
         };
@@ -560,7 +507,7 @@ mod tests {
 
         let settings = Settings {
             llm_backend: Some("openai_compatible".to_string()),
-            openai_compatible_base_url: Some("https://openrouter.ai/api/v1".to_string()),
+            openai_compatible_base_url: Some("http://127.0.0.1:11434/v1".to_string()),
             selected_model: Some("openai/gpt-5.1-codex".to_string()),
             ..Default::default()
         };
@@ -781,6 +728,26 @@ mod tests {
     }
 
     #[test]
+    fn removed_openai_codex_aliases_are_rejected() {
+        let _guard = lock_env();
+        // SAFETY: The process-wide test environment is protected by ENV_MUTEX.
+        unsafe {
+            std::env::remove_var("LLM_BACKEND");
+        }
+
+        for backend in ["openai_codex", "openai-codex", "codex"] {
+            let settings = Settings {
+                llm_backend: Some(backend.to_string()),
+                ..Default::default()
+            };
+            let error = LlmConfig::resolve(&settings).expect_err("removed backend must fail");
+            let message = error.to_string();
+            assert!(message.contains(backend), "{message}");
+            assert!(message.contains("openai_compatible"), "{message}");
+        }
+    }
+
+    #[test]
     fn lunarwing_cloud_backend_has_no_registry_provider() {
         let _guard = lock_env();
         // SAFETY: Under ENV_MUTEX.
@@ -914,9 +881,16 @@ mod tests {
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::remove_var("LLM_REQUEST_TIMEOUT_SECS");
+            std::env::set_var("LUNARWING_CLOUD_AUTH_URL", "http://127.0.0.1");
+            std::env::set_var("LUNARWING_CLOUD_BASE_URL", "http://127.0.0.1");
         }
         let config = LlmConfig::resolve(&Settings::default()).expect("resolve");
         assert_eq!(config.request_timeout_secs, 120);
+        // SAFETY: Cleanup
+        unsafe {
+            std::env::remove_var("LUNARWING_CLOUD_AUTH_URL");
+            std::env::remove_var("LUNARWING_CLOUD_BASE_URL");
+        }
     }
 
     #[test]
@@ -925,167 +899,16 @@ mod tests {
         // SAFETY: Under ENV_MUTEX.
         unsafe {
             std::env::set_var("LLM_REQUEST_TIMEOUT_SECS", "300");
+            std::env::set_var("LUNARWING_CLOUD_AUTH_URL", "http://127.0.0.1");
+            std::env::set_var("LUNARWING_CLOUD_BASE_URL", "http://127.0.0.1");
         }
         let config = LlmConfig::resolve(&Settings::default()).expect("resolve");
         assert_eq!(config.request_timeout_secs, 300);
         // SAFETY: Cleanup
         unsafe {
             std::env::remove_var("LLM_REQUEST_TIMEOUT_SECS");
-        }
-    }
-
-    // ── OpenAI Codex tests ──────────────────────────────────────────
-
-    /// Clear all openai-codex-related env vars.
-    fn clear_openai_codex_env() {
-        // SAFETY: Only called under ENV_MUTEX in tests.
-        unsafe {
-            std::env::remove_var("LLM_BACKEND");
-            std::env::remove_var("OPENAI_CODEX_MODEL");
-            std::env::remove_var("OPENAI_MODEL");
-        }
-    }
-
-    #[test]
-    fn openai_codex_resolves_config() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            ..Default::default()
-        };
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        assert_eq!(cfg.backend, "openai_codex");
-        let codex = cfg.openai_codex.expect("codex config should be present");
-        assert_eq!(codex.model, "gpt-5.3-codex"); // default
-        assert!(
-            cfg.provider.is_none(),
-            "codex should not use registry provider"
-        );
-    }
-
-    #[test]
-    fn openai_codex_model_env_resolution() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("OPENAI_CODEX_MODEL", "o3-pro");
-        }
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            ..Default::default()
-        };
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let codex = cfg.openai_codex.expect("codex config should be present");
-        assert_eq!(codex.model, "o3-pro");
-
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("OPENAI_CODEX_MODEL");
-        }
-    }
-
-    #[test]
-    fn openai_codex_falls_back_to_openai_model() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("OPENAI_MODEL", "gpt-4o");
-        }
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            ..Default::default()
-        };
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let codex = cfg.openai_codex.expect("codex config should be present");
-        assert_eq!(codex.model, "gpt-4o");
-
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("OPENAI_MODEL");
-        }
-    }
-
-    #[test]
-    fn openai_codex_falls_back_to_selected_model() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            selected_model: Some("gpt-4o-mini".to_string()),
-            ..Default::default()
-        };
-
-        let cfg = LlmConfig::resolve(&settings).expect("resolve should succeed");
-        let codex = cfg.openai_codex.expect("codex config should be present");
-        assert_eq!(codex.model, "gpt-4o-mini");
-    }
-
-    /// Regression: SSRF validation on OPENAI_CODEX_API_URL (#1103).
-    #[test]
-    fn openai_codex_rejects_ssrf_api_url() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var(
-                "OPENAI_CODEX_API_URL",
-                "http://169.254.169.254/latest/meta-data",
-            );
-        }
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            ..Default::default()
-        };
-
-        let err = LlmConfig::resolve(&settings).unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("OPENAI_CODEX_API_URL"),
-            "error should reference the field name: {msg}"
-        );
-
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("OPENAI_CODEX_API_URL");
-        }
-    }
-
-    /// Regression: SSRF validation on OPENAI_CODEX_AUTH_URL (#1103).
-    #[test]
-    fn openai_codex_rejects_ssrf_auth_url() {
-        let _guard = lock_env();
-        clear_openai_codex_env();
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::set_var("OPENAI_CODEX_AUTH_URL", "http://10.0.0.1");
-        }
-
-        let settings = Settings {
-            llm_backend: Some("openai_codex".to_string()),
-            ..Default::default()
-        };
-
-        let err = LlmConfig::resolve(&settings).unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("OPENAI_CODEX_AUTH_URL"),
-            "error should reference the field name: {msg}"
-        );
-
-        // SAFETY: Under ENV_MUTEX.
-        unsafe {
-            std::env::remove_var("OPENAI_CODEX_AUTH_URL");
+            std::env::remove_var("LUNARWING_CLOUD_AUTH_URL");
+            std::env::remove_var("LUNARWING_CLOUD_BASE_URL");
         }
     }
 

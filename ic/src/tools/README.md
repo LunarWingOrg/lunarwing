@@ -122,6 +122,38 @@ Both are first-class in the extension system (`lunarwing tool install` handles b
 - Can do websockets, streaming, background polling
 - Cost: external process with full system access (no sandbox), manages own credentials, LunarWing can't prevent leaks
 
+#### Host-local stdio MCP servers
+
+LunarWing can persist and launch an MCP server as a host-local child process. The
+command and each argument are stored separately and executed without a shell.
+
+```bash
+lunarwing mcp add local-files \
+  --transport stdio \
+  --command local-files-mcp \
+  --arg /srv/data \
+  --env LOG_LEVEL=warn
+```
+
+The same structured fields are available in the web MCP settings form and the
+conversational `tool_install` tool:
+
+```json
+{
+  "name": "local-files",
+  "kind": "mcp_server",
+  "transport": "stdio",
+  "command": "local-files-mcp",
+  "args": ["/srv/data"],
+  "env": {"LOG_LEVEL": "warn"}
+}
+```
+
+Installation persists configuration only. Activation starts the child process,
+negotiates MCP, and registers its tools. Treat the executable as trusted installed
+code: stdio servers are not sandboxed. Values in `env` are plain configuration,
+not secret storage; use LunarWing's credential systems for secrets.
+
 **Decision guide:**
 
 | Scenario | Use |

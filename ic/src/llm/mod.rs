@@ -6,16 +6,12 @@
 //! - **OpenAI-compatible**: Any endpoint that speaks the OpenAI Chat Completions API
 
 pub mod circuit_breaker;
-pub(crate) mod codex_auth;
-mod codex_chatgpt;
 pub mod config;
 pub mod costs;
 pub mod error;
 pub mod failover;
 mod lunarwing_cloud_chat;
 pub mod oauth_helpers;
-pub mod openai_codex_provider;
-pub mod openai_codex_session;
 mod provider;
 mod reasoning;
 pub mod recording;
@@ -26,11 +22,7 @@ mod rig_adapter;
 pub mod session;
 pub mod smart_routing;
 mod timeout;
-mod token_refreshing;
 pub mod transcription;
-
-#[cfg(test)]
-mod codex_test_helpers;
 
 pub mod image_models;
 pub mod models;
@@ -38,14 +30,12 @@ pub mod reasoning_models;
 pub mod vision_models;
 
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider};
-pub use config::{LlmConfig, LunarWingCloudConfig, OpenAiCodexConfig, RegistryProviderConfig};
+pub use config::{LlmConfig, LunarWingCloudConfig, RegistryProviderConfig};
 pub use error::LlmError;
 pub use failover::{CooldownConfig, FailoverProvider};
 pub use lunarwing_cloud_chat::{
     DEFAULT_MODEL, LunarWingCloudChatProvider, ModelInfo, default_models,
 };
-pub use openai_codex_provider::OpenAiCodexProvider;
-pub use openai_codex_session::{OpenAiCodexSession, OpenAiCodexSessionManager};
 pub use provider::{
     ChatMessage, CompletionRequest, CompletionResponse, ContentPart, FinishReason, ImageUrl,
     LlmProvider, ModelMetadata, Role, ToolCall, ToolCompletionRequest, ToolCompletionResponse,
@@ -64,7 +54,6 @@ pub use rig_adapter::RigAdapter;
 pub use session::{SessionConfig, SessionManager, create_session_manager};
 pub use smart_routing::{SmartRoutingConfig, SmartRoutingProvider, TaskComplexity};
 pub use timeout::TimeoutProvider;
-pub use token_refreshing::TokenRefreshingProvider;
 
 use std::sync::Arc;
 
@@ -86,15 +75,6 @@ pub async fn create_llm_provider(
 
     if config.backend == "lunarwing_cloud" {
         return create_llm_provider_with_config(&config.lunarwing_cloud, session, timeout);
-    }
-
-    if config.backend == "openai_codex" {
-        return Err(LlmError::RequestFailed {
-            provider: "openai_codex".to_string(),
-            reason:
-                "OpenAI Codex uses a dedicated factory path. Use build_provider_chain() instead of create_llm_provider()."
-                    .to_string(),
-        });
     }
 
     let reg_config = config
@@ -144,47 +124,12 @@ fn create_registry_provider(
     config: &RegistryProviderConfig,
     request_timeout_secs: u64,
 ) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    // Codex ChatGPT mode: use the Responses API provider
-    if config.is_codex_chatgpt {
-        return create_codex_chatgpt_from_registry(config, request_timeout_secs);
-    }
-
     match config.protocol {
         ProviderProtocol::OpenAiCompletions => {
             create_openai_compat_from_registry(config, request_timeout_secs)
         }
         ProviderProtocol::Ollama => create_ollama_from_registry(config, request_timeout_secs),
     }
-}
-
-fn create_codex_chatgpt_from_registry(
-    config: &RegistryProviderConfig,
-    request_timeout_secs: u64,
-) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    let api_key = config
-        .api_key
-        .as_ref()
-        .cloned()
-        .ok_or_else(|| LlmError::AuthFailed {
-            provider: "codex_chatgpt".to_string(),
-        })?;
-
-    tracing::info!(
-        configured_model = %config.model,
-        base_url = %config.base_url,
-        "Using Codex ChatGPT provider (Responses API) — model detection deferred to first call"
-    );
-
-    let provider = codex_chatgpt::CodexChatGptProvider::with_lazy_model(
-        &config.base_url,
-        api_key,
-        &config.model,
-        config.refresh_token.clone(),
-        config.auth_path.clone(),
-        request_timeout_secs,
-    );
-
-    Ok(Arc::new(provider))
 }
 
 fn create_openai_compat_from_registry(
@@ -305,47 +250,6 @@ fn create_ollama_from_registry(
     Ok(Arc::new(adapter))
 }
 
-/// Create an OpenAI Codex provider with OAuth authentication.
-///
-/// This is async because it needs to ensure authentication before
-/// creating the provider (which requires a valid Bearer token).
-///
-/// Uses the Responses API (`chatgpt.com/backend-api/codex/responses`)
-/// instead of the Chat Completions API, matching OpenClaw's approach.
-async fn create_openai_codex_provider(
-    config: &LlmConfig,
-) -> Result<Arc<dyn LlmProvider>, LlmError> {
-    let codex = config
-        .openai_codex
-        .as_ref()
-        .ok_or_else(|| LlmError::AuthFailed {
-            provider: "openai_codex".to_string(),
-        })?;
-
-    let session_mgr = Arc::new(OpenAiCodexSessionManager::new(codex.clone())?);
-    session_mgr.ensure_authenticated().await?;
-
-    let token = session_mgr.get_access_token().await?;
-
-    let provider = Arc::new(OpenAiCodexProvider::new(
-        &codex.model,
-        &codex.api_base_url,
-        token.expose_secret(),
-        config.request_timeout_secs,
-    )?);
-
-    tracing::info!(
-        "Using OpenAI Codex (Responses API, model: {}, base: {})",
-        codex.model,
-        codex.api_base_url,
-    );
-
-    Ok(Arc::new(TokenRefreshingProvider::new(
-        provider,
-        session_mgr,
-    )))
-}
-
 /// Create a cheap/fast LLM provider for lightweight tasks (heartbeat, routing, evaluation).
 ///
 /// Resolution order:
@@ -424,11 +328,7 @@ pub async fn build_provider_chain(
     ),
     LlmError,
 > {
-    let llm: Arc<dyn LlmProvider> = if config.backend == "openai_codex" {
-        create_openai_codex_provider(config).await?
-    } else {
-        create_llm_provider(config, session.clone()).await?
-    };
+    let llm: Arc<dyn LlmProvider> = create_llm_provider(config, session.clone()).await?;
     tracing::debug!("LLM provider initialized: {}", llm.model_name());
 
     // 1. Retry
@@ -624,7 +524,6 @@ mod tests {
             llm_turn_budget_secs: 270,
             cheap_model: None,
             smart_routing_cascade: true,
-            openai_codex: None,
         }
     }
 

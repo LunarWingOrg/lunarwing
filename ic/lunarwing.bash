@@ -2969,7 +2969,7 @@ _lunarwing() {
             return 0
             ;;
         lunarwing__subcmd__login)
-            opts="-m -c -h --openai-codex --cli-only --no-db --message --config --no-onboard --auto-approve --supervised --help"
+            opts="-m -c -h --cli-only --no-db --message --config --no-onboard --auto-approve --supervised --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
