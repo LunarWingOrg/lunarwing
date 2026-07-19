@@ -367,13 +367,13 @@ https://blog.lunarwing.org/
 
 ## Important Information
 
-This is the v1 branch of LunarWing, which will be supported and updated for at least some period of time.
+This is the v1 repo of LunarWing, which will no longer be supported.
 
-However, going forward, new features will be carried forth in version 2:
+However, going forward, new features/fixes will be carried forth in version 2:
 
 Development repo for version 2 can be found [here](https://codeberg.org/LunarWing/LunarWing_v2)
 
-Upgrades to v2 from v1 (1.1.9.0+) will be completely supported.
+Upgrades to v2 from v1 (1.1.9.0+) will be supported and some attempts will be made in order to ensure versions older than 1.1.9.0 can also be upgraded straight to v2.
 
 ## LunarWing v1 mirrored to Codeberg
 
