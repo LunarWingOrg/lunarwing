@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 /// Points in the agent lifecycle where hooks can be attached.
@@ -45,6 +46,10 @@ pub enum HookEvent {
         user_id: String,
         channel: String,
         content: String,
+        /// Attachments on the inbound message, if any. Populated by the agent
+        /// loop so hooks (e.g. LunarVision) can inspect image/document
+        /// attachments before the message reaches the LLM.
+        attachments: Vec<AttachmentSummary>,
         thread_id: Option<String>,
     },
     /// A tool call about to be executed.
@@ -171,7 +176,63 @@ pub enum HookError {
     Rejected { reason: String },
 }
 
-/// Context passed to hooks alongside the event.
+/// A lightweight, serializable summary of an attachment on an inbound message.
+///
+/// Carried on [`HookEvent::Inbound`] so hooks (e.g. LunarVision) can inspect
+/// attachments without owning the full `IncomingAttachment` (which includes
+/// raw bytes). The `data_b64` field is populated only for small images that
+/// the channel has already downloaded; for large or un-downloaded attachments
+/// it is `None` and the hook must use `source_url` if it needs the bytes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentSummary {
+    /// What kind of content this is: `"image"`, `"audio"`, or `"document"`.
+    pub kind: String,
+    /// MIME type (e.g. `"image/jpeg"`, `"audio/ogg"`, `"application/pdf"`).
+    pub mime_type: String,
+    /// Original filename, if known.
+    pub filename: Option<String>,
+    /// File size in bytes, if known.
+    pub size_bytes: Option<u64>,
+    /// URL to download the file from the channel's API, if available.
+    pub source_url: Option<String>,
+    /// Base64-encoded raw file data, populated for small files already in memory.
+    /// `None` for large attachments or those not yet downloaded.
+    pub data_b64: Option<String>,
+    /// Text already extracted from this attachment (e.g. audio transcript, PDF
+    /// text). Empty if no extraction has been performed.
+    pub extracted_text: Option<String>,
+}
+
+impl AttachmentSummary {
+    /// Build a summary from a full `IncomingAttachment`, base64-encoding the
+    /// data field if it is non-empty.
+    pub fn from_incoming(
+        attachment: &crate::channels::IncomingAttachment,
+    ) -> Self {
+        let kind = match attachment.kind {
+            crate::channels::AttachmentKind::Audio => "audio",
+            crate::channels::AttachmentKind::Image => "image",
+            crate::channels::AttachmentKind::Document => "document",
+        };
+        let data_b64 = if attachment.data.is_empty() {
+            None
+        } else {
+            Some(base64::engine::general_purpose::STANDARD.encode(&attachment.data))
+        };
+
+        Self {
+            kind: kind.to_string(),
+            mime_type: attachment.mime_type.clone(),
+            filename: attachment.filename.clone(),
+            size_bytes: attachment.size_bytes,
+            source_url: attachment.source_url.clone(),
+            data_b64,
+            extracted_text: attachment.extracted_text.clone(),
+        }
+    }
+}
+
+/// Contextual data carried with each hook invocation.
 pub struct HookContext {
     /// Arbitrary metadata hooks can use.
     pub metadata: serde_json::Value,

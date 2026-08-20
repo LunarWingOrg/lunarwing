@@ -15,11 +15,15 @@
 pub mod bootstrap;
 pub mod bundled;
 pub mod hook;
+pub mod lunarvision;
 pub mod registry;
 
 pub use bootstrap::{HookBootstrapSummary, bootstrap_hooks};
 pub use bundled::{
     HookBundleConfig, HookRegistrationSummary, register_bundle, register_bundled_hooks,
 };
-pub use hook::{Hook, HookContext, HookError, HookEvent, HookFailureMode, HookOutcome, HookPoint};
+pub use hook::{
+    AttachmentSummary, Hook, HookContext, HookError, HookEvent, HookFailureMode, HookOutcome,
+    HookPoint,
+};
 pub use registry::HookRegistry;
